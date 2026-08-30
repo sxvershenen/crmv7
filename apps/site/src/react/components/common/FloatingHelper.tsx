@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Send } from 'lucide-react';
 
 interface FloatingHelperProps {
@@ -6,8 +6,21 @@ interface FloatingHelperProps {
 }
 
 export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    const expandTimer = window.setTimeout(() => setIsExpanded(true), 60_000);
+    const collapseTimer = window.setTimeout(() => setIsExpanded(false), 120_000);
+    return () => {
+      window.clearTimeout(expandTimer);
+      window.clearTimeout(collapseTimer);
+    };
+  }, []);
+
   const handleManagerChat = () => {
-    window.open('https://vk.com/im?sel=-123456789&message=' + encodeURIComponent('Здравствуйте! Подскажите, пожалуйста, по поводу отдыха в «Свистоплясово»'), '_blank');
+    if (window.confirm('Перейти в ВКонтакте и написать менеджеру?')) {
+      window.open('https://vk.com/im?sel=-123456789&message=' + encodeURIComponent('Здравствуйте! Подскажите, пожалуйста, по поводу отдыха в «Свистоплясово»'), '_blank');
+    }
   };
 
   return (
@@ -16,7 +29,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
       <div className="hidden lg:flex fixed bottom-6 right-6 z-40 items-center">
         <button
           onClick={handleManagerChat}
-          className="flex items-center gap-3 p-2.5 pr-4 rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 hover:scale-[1.02] transition-all group cursor-pointer"
+          className={`flex items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 hover:scale-[1.02] transition-all duration-500 group cursor-pointer ${isExpanded ? 'gap-3 p-2.5 pr-4' : 'w-14 h-14 p-2'}`}
         >
           {/* Avatar with pulsing online dot */}
           <div className="relative">
@@ -28,7 +41,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#2B9E47] border-2 border-white animate-pulse-dot"></span>
           </div>
 
-          <div className="text-left">
+          <div className={`text-left whitespace-nowrap transition-all duration-300 ${isExpanded ? 'max-w-[190px] opacity-100' : 'max-w-0 opacity-0 overflow-hidden'}`}>
             <div className="text-[12px] font-semibold text-[#18191b] flex items-center gap-1.5 leading-none mb-1">
               Нужна помощь?
               <span className="text-[10px] font-normal text-[#2B9E47] bg-[#2B9E47]/10 px-1.5 py-0.5 rounded-full">онлайн</span>
@@ -38,7 +51,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             </div>
           </div>
 
-          <div className="w-7 h-7 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-colors ml-1">
+          <div className={`w-7 h-7 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-colors ${isExpanded ? 'ml-1' : 'hidden'}`}>
             <Send className="w-3.5 h-3.5 -rotate-12" />
           </div>
         </button>
