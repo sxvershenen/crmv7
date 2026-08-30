@@ -1,0 +1,54 @@
+---
+import { siteIdentity } from "../lib/content"
+import "../styles/global.css"
+
+interface Props {
+  title?: string
+  description?: string
+  canonical?: string
+  noindex?: boolean
+}
+
+const {
+  title = siteIdentity.title,
+  description = siteIdentity.description,
+  canonical = new URL(Astro.url.pathname, Astro.site).toString(),
+  noindex = false,
+} = Astro.props
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: siteIdentity.name,
+  url: new URL("/", Astro.site).toString(),
+}
+---
+
+<!doctype html>
+<html lang={siteIdentity.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content={siteIdentity.locale} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+  </head>
+  <body>
+    <div class="min-h-screen bg-[#f7f7f7] text-[#18191b] font-inter antialiased flex flex-col selection:bg-[#2B9E47]/20 selection:text-[#2B9E47]">
+      <slot />
+    </div>
+  </body>
+</html>

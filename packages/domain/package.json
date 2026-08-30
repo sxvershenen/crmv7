@@ -1,0 +1,28 @@
+{
+  "name": "@crm/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./intervals": "./src/intervals.ts",
+    "./availability": "./src/availability.ts",
+    "./tasks": "./src/tasks.ts",
+    "./capabilities": "./src/capabilities.ts",
+    "./money": "./src/money.ts",
+    "./idempotency": "./src/idempotency.ts",
+    "./phones": "./src/phones.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint src test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

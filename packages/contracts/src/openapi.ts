@@ -1,0 +1,222 @@
+import { OpenAPIRegistry, OpenApiGeneratorV31, extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+import { z } from "zod";
+import type { ZodType } from "zod";
+import { AvailabilityResultSchema } from "./availability.js";
+import { ApiErrorSchema } from "./errors.js";
+import { ChangePasswordInputSchema, LoginRequestSchema, SessionUserSchema } from "./auth.js";
+import { SavedViewArchiveSchema, SavedViewCreateSchema, SavedViewDtoSchema, SavedViewUpdateSchema } from "./saved-views.js";
+import { TaskArchiveSchema, TaskAssignSelfSchema, TaskCreateSchema, TaskDtoSchema, TaskListQuerySchema, TaskUpdateSchema } from "./tasks.js";
+import { BookingArchiveSchema, BookingCreateSchema, BookingDetailResponseSchema, BookingDtoSchema, BookingIntervalUpdateSchema, BookingListQuerySchema, BookingListResponseSchema, BookingProjectionQuerySchema, BookingProjectionResponseSchema, BookingResponseSchema, BookingTransitionSchema, BookingUpdateSchema } from "./bookings.js";
+import { PaymentDtoSchema, PaymentListQuerySchema, PaymentListResponseSchema, PaymentOperationSchema, PaymentSummarySchema } from "./payments.js";
+import { ResourceAllocationCreateSchema, ResourceAllocationDtoSchema, ResourceAllocationsQuerySchema, ResourceArchiveSchema, ResourceAvailabilityByCodeQuerySchema, ResourceAvailabilityQuerySchema, ResourceBlockCancelSchema, ResourceBlockCreateSchema, ResourceBlockDtoSchema, ResourceCreateSchema, ResourceDtoSchema, ResourceListQuerySchema, ResourceListResponseSchema, ResourceUpdateSchema } from "./resources.js";
+import { EventArchiveSchema, EventCreateSchema, EventDtoSchema, EventListQuerySchema, EventTransitionSchema, EventUpdateSchema } from "./events.js";
+import { ProgramOccurrenceArchiveSchema, ProgramOccurrenceCreateSchema, ProgramOccurrenceDtoSchema, ProgramOccurrenceListQuerySchema, ProgramOccurrenceTransitionSchema, ProgramOccurrenceUpdateSchema, ProgramRegistrationArchiveSchema, ProgramRegistrationCreateSchema, ProgramRegistrationDtoSchema, ProgramRegistrationListQuerySchema, ProgramRegistrationTransitionSchema, ProgramRegistrationUpdateSchema, ProgramTemplateArchiveSchema, ProgramTemplateCreateSchema, ProgramTemplateDtoSchema, ProgramTemplateListQuerySchema, ProgramTemplateUpdateSchema } from "./programs.js";
+import { CustomerArchiveSchema, CustomerCreateSchema, CustomerDtoSchema, CustomerListQuerySchema, CustomerListResponseSchema, CustomerUpdateSchema } from "./customers.js";
+import { LeadArchiveSchema, LeadCreateSchema, LeadDtoSchema, LeadListQuerySchema, LeadListResponseSchema, LeadTransitionSchema, LeadUpdateSchema } from "./leads.js";
+import { FinanceDatasetDtoSchema, FinanceQuerySchema } from "./finance.js";
+import { SearchQuerySchema, SearchResultSchema } from "./search.js";
+
+extendZodWithOpenApi(z);
+const registry = new OpenAPIRegistry();
+// `index.ts` exports these schemas before this module runs. Zod 4.5 snapshots
+// the prototype on construction, so retrofit the library's official method on
+// those already-created instances before registering them.
+const openApiMethod = (z.object({}) as z.ZodType & { openapi: unknown }).openapi;
+function register<T extends ZodType>(name: string, schema: T): T {
+  if (typeof (schema as T & { openapi?: unknown }).openapi !== "function") {
+    Object.defineProperty(schema, "openapi", { configurable: true, value: openApiMethod });
+  }
+  return registry.register(name, schema);
+}
+
+const apiError = register("ApiError", ApiErrorSchema);
+const sessionUser = register("SessionUser", SessionUserSchema);
+const taskDto = register("TaskDto", TaskDtoSchema);
+const taskCreate = register("TaskCreate", TaskCreateSchema);
+const taskUpdate = register("TaskUpdate", TaskUpdateSchema);
+const taskListQuery = register("TaskListQuery", TaskListQuerySchema);
+const taskArchive = register("TaskArchive", TaskArchiveSchema);
+const savedViewDto = register("SavedViewDto", SavedViewDtoSchema);
+const savedViewCreate = register("SavedViewCreate", SavedViewCreateSchema);
+const savedViewUpdate = register("SavedViewUpdate", SavedViewUpdateSchema);
+const loginRequest = register("LoginRequest", LoginRequestSchema);
+const changePasswordInput = register("ChangePasswordInput", ChangePasswordInputSchema);
+const resourceDto = register("ResourceDto", ResourceDtoSchema);
+const resourceCreate = register("ResourceCreate", ResourceCreateSchema);
+const resourceUpdate = register("ResourceUpdate", ResourceUpdateSchema);
+const resourceListQuery = register("ResourceListQuery", ResourceListQuerySchema);
+register("ResourceListResponse", ResourceListResponseSchema);
+const resourceArchive = register("ResourceArchive", ResourceArchiveSchema);
+const resourceAvailabilityQuery = register("ResourceAvailabilityQuery", ResourceAvailabilityQuerySchema);
+const resourceAvailabilityByCodeQuery = register("ResourceAvailabilityByCodeQuery", ResourceAvailabilityByCodeQuerySchema);
+const resourceAvailabilityResponse = register("ResourceAvailabilityResponse", AvailabilityResultSchema);
+const resourceAllocationCreate = register("ResourceAllocationCreate", ResourceAllocationCreateSchema);
+const resourceAllocationDto = register("ResourceAllocationDto", ResourceAllocationDtoSchema);
+const resourceAllocationsQuery = register("ResourceAllocationsQuery", ResourceAllocationsQuerySchema);
+const resourceBlockCreate = register("ResourceBlockCreate", ResourceBlockCreateSchema);
+const resourceBlockCancel = register("ResourceBlockCancel", ResourceBlockCancelSchema);
+const resourceBlockDto = register("ResourceBlockDto", ResourceBlockDtoSchema);
+const bookingDto = register("BookingDto", BookingDtoSchema);
+const bookingListQuery = register("BookingListQuery", BookingListQuerySchema);
+const bookingCreate = register("BookingCreate", BookingCreateSchema);
+const bookingUpdate = register("BookingUpdate", BookingUpdateSchema);
+const bookingTransition = register("BookingTransition", BookingTransitionSchema);
+const bookingArchive = register("BookingArchive", BookingArchiveSchema);
+const bookingProjectionQuery = register("BookingProjectionQuery", BookingProjectionQuerySchema);
+const bookingProjection = register("BookingProjectionResponse", BookingProjectionResponseSchema);
+const bookingDetail = register("BookingDetailResponse", BookingDetailResponseSchema);
+const bookingIntervalUpdate = register("BookingIntervalUpdate", BookingIntervalUpdateSchema);
+register("BookingResponse", BookingResponseSchema);
+register("BookingListResponse", BookingListResponseSchema);
+const paymentDto = register("PaymentDto", PaymentDtoSchema);
+const paymentListQuery = register("PaymentListQuery", PaymentListQuerySchema);
+register("PaymentListResponse", PaymentListResponseSchema);
+const paymentOperation = register("PaymentOperation", PaymentOperationSchema);
+const paymentSummary = register("PaymentSummary", PaymentSummarySchema);
+const programTemplateDto = register("ProgramTemplateDto", ProgramTemplateDtoSchema);
+const programTemplateCreate = register("ProgramTemplateCreate", ProgramTemplateCreateSchema);
+const programTemplateUpdate = register("ProgramTemplateUpdate", ProgramTemplateUpdateSchema);
+const programTemplateArchive = register("ProgramTemplateArchive", ProgramTemplateArchiveSchema);
+const programOccurrenceDto = register("ProgramOccurrenceDto", ProgramOccurrenceDtoSchema);
+const programOccurrenceCreate = register("ProgramOccurrenceCreate", ProgramOccurrenceCreateSchema);
+const programOccurrenceUpdate = register("ProgramOccurrenceUpdate", ProgramOccurrenceUpdateSchema);
+const programOccurrenceTransition = register("ProgramOccurrenceTransition", ProgramOccurrenceTransitionSchema);
+const programOccurrenceArchive = register("ProgramOccurrenceArchive", ProgramOccurrenceArchiveSchema);
+const programRegistrationDto = register("ProgramRegistrationDto", ProgramRegistrationDtoSchema);
+const programRegistrationCreate = register("ProgramRegistrationCreate", ProgramRegistrationCreateSchema);
+const programRegistrationUpdate = register("ProgramRegistrationUpdate", ProgramRegistrationUpdateSchema);
+const programRegistrationTransition = register("ProgramRegistrationTransition", ProgramRegistrationTransitionSchema);
+const programRegistrationArchive = register("ProgramRegistrationArchive", ProgramRegistrationArchiveSchema);
+const eventDto = register("EventDto", EventDtoSchema);
+const eventCreate = register("EventCreate", EventCreateSchema);
+const eventUpdate = register("EventUpdate", EventUpdateSchema);
+const eventTransition = register("EventTransition", EventTransitionSchema);
+const eventArchive = register("EventArchive", EventArchiveSchema);
+register("AvailabilityResult", AvailabilityResultSchema);
+const customerDto = register("CustomerDto", CustomerDtoSchema);
+const customerCreate = register("CustomerCreate", CustomerCreateSchema);
+const customerUpdate = register("CustomerUpdate", CustomerUpdateSchema);
+const customerListQuery = register("CustomerListQuery", CustomerListQuerySchema);
+register("CustomerListResponse", CustomerListResponseSchema);
+const customerArchive = register("CustomerArchive", CustomerArchiveSchema);
+const leadDto = register("LeadDto", LeadDtoSchema);
+const leadCreate = register("LeadCreate", LeadCreateSchema);
+const leadUpdate = register("LeadUpdate", LeadUpdateSchema);
+const leadListQuery = register("LeadListQuery", LeadListQuerySchema);
+register("LeadListResponse", LeadListResponseSchema);
+const leadTransition = register("LeadTransition", LeadTransitionSchema);
+const leadArchive = register("LeadArchive", LeadArchiveSchema);
+const financeQuery = register("FinanceQuery", FinanceQuerySchema);
+const financeDataset = register("FinanceDatasetDto", FinanceDatasetDtoSchema);
+const searchQuery = register("SearchQuery", SearchQuerySchema);
+const searchResult = register("SearchResult", SearchResultSchema);
+const searchResponse = register("SearchResponse", z.array(searchResult));
+
+const authUserResponse = registry.register("AuthUserResponse", z.object({ user: sessionUser }).strict());
+const okResponse = registry.register("OkResponse", z.object({ ok: z.literal(true) }).strict());
+const healthResponse = registry.register("HealthResponse", z.object({
+  status: z.literal("ok"), database: z.literal("ok"), timestamp: z.string().datetime({ offset: true }),
+}).strict());
+const liveEvent = registry.register("LiveEvent", z.object({
+  entityType: z.string().min(1), entityId: z.string().min(1), event: z.string().min(1), version: z.number().int().positive(),
+}).strict());
+const taskCodeParams = registry.register("TaskCodeParams", z.object({ code: z.string().regex(/^T-[0-9]+$/) }).strict());
+const savedViewIdParams = registry.register("SavedViewIdParams", z.object({ id: z.string().uuid() }).strict());
+const resourceCodeParams = registry.register("ResourceCodeParams", z.object({ code: z.string().min(1).max(120) }).strict());
+const bookingIdParams = registry.register("BookingIdParams", z.object({ id: z.string().min(1).max(120) }).strict());
+const customerIdParams = registry.register("CustomerIdParams", z.object({ id: z.string().uuid() }).strict());
+const leadIdParams = registry.register("LeadIdParams", z.object({ id: z.string().uuid() }).strict());
+
+const json = (schema: ZodType<unknown>) => ({ "application/json": { schema } });
+const errorResponse = (description: string) => ({ description, content: json(apiError) });
+const privateRoute = { security: [{ sessionCookie: [] as string[] }] };
+const publicRoute = { security: [] };
+registry.registerComponent("securitySchemes", "sessionCookie", { type: "apiKey", in: "cookie", name: "sv_session", description: "HTTP-only secure internal session cookie." });
+
+registry.registerPath({ method: "post", path: "/auth/login", ...publicRoute, summary: "Create an internal cookie session", tags: ["Auth"], request: { body: { required: true, content: json(loginRequest) } }, responses: { 200: { description: "Authenticated user", content: json(authUserResponse) }, 400: errorResponse("Invalid credentials payload"), 401: errorResponse("Invalid credentials") } });
+registry.registerPath({ method: "post", path: "/auth/logout", ...privateRoute, summary: "End the current internal session", tags: ["Auth"], responses: { 200: { description: "Session ended", content: json(okResponse) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "get", path: "/auth/session", ...privateRoute, summary: "Get the current session user", tags: ["Auth"], responses: { 200: { description: "Current session", content: json(authUserResponse) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/auth/change-password", ...privateRoute, summary: "Change the current user's password", tags: ["Auth"], request: { body: { required: true, content: json(changePasswordInput) } }, responses: { 200: { description: "Password changed and sessions revoked", content: json(okResponse) }, 400: errorResponse("Invalid password payload"), 401: errorResponse("Current password is incorrect") } });
+registry.registerPath({ method: "get", path: "/tasks", ...privateRoute, summary: "List tasks", tags: ["Tasks"], request: { query: taskListQuery }, responses: { 200: { description: "Tasks", content: json(z.array(taskDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "get", path: "/customers", ...privateRoute, summary: "List customers", tags: ["Customers"], request: { query: customerListQuery }, responses: { 200: { description: "Customers", content: json(z.array(customerDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/customers", ...privateRoute, summary: "Create a customer", tags: ["Customers"], request: { body: { required: true, content: json(customerCreate) } }, responses: { 201: { description: "Customer created", content: json(customerDto) }, 400: errorResponse("Invalid customer"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/customers/{id}", ...privateRoute, summary: "Get a customer", tags: ["Customers"], request: { params: customerIdParams }, responses: { 200: { description: "Customer", content: json(customerDto) }, 401: errorResponse("Session required"), 404: errorResponse("Customer not found") } });
+registry.registerPath({ method: "patch", path: "/customers/{id}", ...privateRoute, summary: "Update a customer", tags: ["Customers"], request: { params: customerIdParams, body: { required: true, content: json(customerUpdate) } }, responses: { 200: { description: "Customer updated", content: json(customerDto) }, 400: errorResponse("Invalid customer"), 401: errorResponse("Session required"), 404: errorResponse("Customer not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/customers/{id}/archive", ...privateRoute, summary: "Archive a customer", tags: ["Customers"], request: { params: customerIdParams, body: { required: true, content: json(customerArchive) } }, responses: { 200: { description: "Customer archived", content: json(customerDto) }, 401: errorResponse("Session required"), 404: errorResponse("Customer not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "get", path: "/leads", ...privateRoute, summary: "List leads", tags: ["Leads"], request: { query: leadListQuery }, responses: { 200: { description: "Leads", content: json(z.array(leadDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/leads", ...privateRoute, summary: "Create a lead", tags: ["Leads"], request: { body: { required: true, content: json(leadCreate) } }, responses: { 201: { description: "Lead created", content: json(leadDto) }, 400: errorResponse("Invalid lead"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/leads/{id}", ...privateRoute, summary: "Get a lead", tags: ["Leads"], request: { params: leadIdParams }, responses: { 200: { description: "Lead", content: json(leadDto) }, 401: errorResponse("Session required"), 404: errorResponse("Lead not found") } });
+registry.registerPath({ method: "patch", path: "/leads/{id}", ...privateRoute, summary: "Update a lead", tags: ["Leads"], request: { params: leadIdParams, body: { required: true, content: json(leadUpdate) } }, responses: { 200: { description: "Lead updated", content: json(leadDto) }, 400: errorResponse("Invalid lead"), 401: errorResponse("Session required"), 404: errorResponse("Lead not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/leads/{id}/transition", ...privateRoute, summary: "Transition a lead", tags: ["Leads"], request: { params: leadIdParams, body: { required: true, content: json(leadTransition) } }, responses: { 200: { description: "Lead transitioned", content: json(leadDto) }, 400: errorResponse("Invalid transition"), 401: errorResponse("Session required"), 404: errorResponse("Lead not found"), 409: errorResponse("State or version conflict") } });
+registry.registerPath({ method: "post", path: "/leads/{id}/archive", ...privateRoute, summary: "Archive a lead", tags: ["Leads"], request: { params: leadIdParams, body: { required: true, content: json(leadArchive) } }, responses: { 200: { description: "Lead archived", content: json(leadDto) }, 401: errorResponse("Session required"), 404: errorResponse("Lead not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/tasks", ...privateRoute, summary: "Create a task", tags: ["Tasks"], request: { body: { required: true, content: json(taskCreate) } }, responses: { 201: { description: "Task created", content: json(taskDto) }, 400: errorResponse("Invalid task"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/tasks/{code}", ...privateRoute, summary: "Get one task", tags: ["Tasks"], request: { params: taskCodeParams }, responses: { 200: { description: "Task", content: json(taskDto) }, 401: errorResponse("Session required"), 404: errorResponse("Task not found") } });
+registry.registerPath({ method: "patch", path: "/tasks/{code}", ...privateRoute, summary: "Update a task", tags: ["Tasks"], request: { params: taskCodeParams, body: { required: true, content: json(taskUpdate) } }, responses: { 200: { description: "Task updated", content: json(taskDto) }, 400: errorResponse("Invalid task"), 401: errorResponse("Session required"), 404: errorResponse("Task not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/tasks/{code}/archive", ...privateRoute, summary: "Archive a task", tags: ["Tasks"], request: { params: taskCodeParams, body: { required: true, content: json(taskArchive) } }, responses: { 200: { description: "Task archived", content: json(taskDto) }, 401: errorResponse("Session required"), 404: errorResponse("Task not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/tasks/{code}/assign-self", ...privateRoute, summary: "Assign a task to the current user", tags: ["Tasks"], request: { params: taskCodeParams, body: { required: true, content: json(register("TaskAssignSelf", TaskAssignSelfSchema)) } }, responses: { 200: { description: "Task assigned", content: json(taskDto) }, 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 404: errorResponse("Task not found"), 409: errorResponse("Version conflict") } });
+
+registry.registerPath({ method: "get", path: "/resources", ...privateRoute, summary: "List resources", tags: ["Resources"], request: { query: resourceListQuery }, responses: { 200: { description: "Resources", content: json(z.array(resourceDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/resources", ...privateRoute, summary: "Create a resource", tags: ["Resources"], request: { body: { required: true, content: json(resourceCreate) } }, responses: { 201: { description: "Resource created", content: json(resourceDto) }, 400: errorResponse("Invalid resource"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/resources/availability", ...privateRoute, summary: "Check resource availability", tags: ["Resources"], request: { query: resourceAvailabilityQuery }, responses: { 200: { description: "Availability result", content: json(resourceAvailabilityResponse) }, 400: errorResponse("Invalid availability query"), 401: errorResponse("Session required"), 404: errorResponse("Resource not found") } });
+registry.registerPath({ method: "get", path: "/resources/{code}", ...privateRoute, summary: "Get a resource", tags: ["Resources"], request: { params: resourceCodeParams }, responses: { 200: { description: "Resource", content: json(resourceDto) }, 401: errorResponse("Session required"), 404: errorResponse("Resource not found") } });
+registry.registerPath({ method: "get", path: "/resources/{code}/allocations", ...privateRoute, summary: "List resource allocations", tags: ["Resources"], request: { params: resourceCodeParams, query: resourceAllocationsQuery }, responses: { 200: { description: "Resource allocations", content: json(resourceAllocationDto.array()) }, 401: errorResponse("Session required"), 404: errorResponse("Resource not found") } });
+registry.registerPath({ method: "get", path: "/resources/{code}/blocks", ...privateRoute, summary: "List resource blocks", tags: ["Resources"], request: { params: resourceCodeParams, query: resourceAllocationsQuery }, responses: { 200: { description: "Resource blocks", content: json(resourceBlockDto.array()) }, 401: errorResponse("Session required"), 404: errorResponse("Resource not found") } });
+registry.registerPath({ method: "get", path: "/resources/{code}/availability", ...privateRoute, summary: "Check availability by resource code", tags: ["Resources"], request: { params: resourceCodeParams, query: resourceAvailabilityByCodeQuery }, responses: { 200: { description: "Availability result", content: json(resourceAvailabilityResponse) }, 400: errorResponse("Invalid availability query"), 401: errorResponse("Session required"), 404: errorResponse("Resource not found") } });
+registry.registerPath({ method: "patch", path: "/resources/{code}", ...privateRoute, summary: "Update a resource", tags: ["Resources"], request: { params: resourceCodeParams, body: { required: true, content: json(resourceUpdate) } }, responses: { 200: { description: "Resource updated", content: json(resourceDto) }, 400: errorResponse("Invalid resource"), 401: errorResponse("Session required"), 404: errorResponse("Resource not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/resources/{code}/archive", ...privateRoute, summary: "Archive a resource", tags: ["Resources"], request: { params: resourceCodeParams, body: { required: true, content: json(resourceArchive) } }, responses: { 200: { description: "Resource archived", content: json(resourceDto) }, 401: errorResponse("Session required"), 404: errorResponse("Resource not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/resources/allocations", ...privateRoute, summary: "Create a resource allocation", tags: ["Resources"], request: { body: { required: true, content: json(resourceAllocationCreate) } }, responses: { 201: { description: "Allocation created", content: json(resourceAllocationDto) }, 400: errorResponse("Invalid allocation"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 409: errorResponse("Availability or idempotency conflict") } });
+registry.registerPath({ method: "post", path: "/resources/{code}/blocks", ...privateRoute, summary: "Create a resource block", tags: ["Resources"], request: { params: resourceCodeParams, body: { required: true, content: json(resourceBlockCreate) } }, responses: { 201: { description: "Resource block created", content: json(resourceAllocationDto) }, 400: errorResponse("Invalid block"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 409: errorResponse("Availability or version conflict") } });
+registry.registerPath({ method: "post", path: "/resources/{code}/blocks/{blockId}/cancel", ...privateRoute, summary: "Cancel a resource block", tags: ["Resources"], request: { params: registry.register("ResourceBlockParams", z.object({ code: z.string().min(1).max(120), blockId: z.string().uuid() }).strict()), body: { required: true, content: json(resourceBlockCancel) } }, responses: { 200: { description: "Resource block cancelled", content: json(resourceBlockDto) }, 400: errorResponse("Invalid block cancellation"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 404: errorResponse("Resource block not found"), 409: errorResponse("Version conflict") } });
+
+registry.registerPath({ method: "get", path: "/bookings", ...privateRoute, summary: "List bookings", tags: ["Bookings"], request: { query: bookingListQuery }, responses: { 200: { description: "Bookings", content: json(z.array(bookingDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "get", path: "/bookings/projection", ...privateRoute, summary: "Read the authoritative booking agenda/scheduler projection", tags: ["Bookings"], request: { query: bookingProjectionQuery }, responses: { 200: { description: "Booking operational projection", content: json(bookingProjection) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "get", path: "/bookings/{id}", ...privateRoute, summary: "Get an enriched booking", tags: ["Bookings"], request: { params: bookingIdParams }, responses: { 200: { description: "Booking with customer, resource and payment data", content: json(bookingDetail) }, 401: errorResponse("Session required"), 404: errorResponse("Booking not found") } });
+registry.registerPath({ method: "post", path: "/bookings", ...privateRoute, summary: "Create a booking", tags: ["Bookings"], request: { body: { required: true, content: json(bookingCreate) } }, responses: { 201: { description: "Booking created", content: json(bookingDto) }, 400: errorResponse("Invalid booking"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 409: errorResponse("Availability, idempotency or currency conflict") } });
+registry.registerPath({ method: "patch", path: "/bookings/{id}", ...privateRoute, summary: "Update a booking", tags: ["Bookings"], request: { params: bookingIdParams, body: { required: true, content: json(bookingUpdate) } }, responses: { 200: { description: "Booking updated", content: json(bookingDto) }, 400: errorResponse("Invalid booking"), 401: errorResponse("Session required"), 404: errorResponse("Booking not found"), 409: errorResponse("Version or availability conflict") } });
+registry.registerPath({ method: "patch", path: "/bookings/{id}/interval", ...privateRoute, summary: "Move or resize a booking interval", tags: ["Bookings"], request: { params: bookingIdParams, body: { required: true, content: json(bookingIntervalUpdate) } }, responses: { 200: { description: "Booking interval updated", content: json(bookingDto) }, 400: errorResponse("Invalid interval"), 401: errorResponse("Session required"), 404: errorResponse("Booking not found"), 409: errorResponse("Version, availability or idempotency conflict") } });
+registry.registerPath({ method: "post", path: "/bookings/{id}/transition", ...privateRoute, summary: "Transition a booking", tags: ["Bookings"], request: { params: bookingIdParams, body: { required: true, content: json(bookingTransition) } }, responses: { 200: { description: "Booking transitioned", content: json(bookingDto) }, 400: errorResponse("Invalid transition"), 401: errorResponse("Session required"), 404: errorResponse("Booking not found"), 409: errorResponse("State, version or idempotency conflict") } });
+registry.registerPath({ method: "post", path: "/bookings/{id}/archive", ...privateRoute, summary: "Archive a booking", tags: ["Bookings"], request: { params: bookingIdParams, body: { required: true, content: json(bookingArchive) } }, responses: { 200: { description: "Booking archived", content: json(bookingDto) }, 400: errorResponse("Invalid archive command"), 401: errorResponse("Session required"), 404: errorResponse("Booking not found"), 409: errorResponse("Version or state conflict") } });
+
+const programIdParams = registry.register("ProgramIdParams", z.object({ id: z.string().min(1).max(120) }).strict());
+const eventIdParams = registry.register("EventIdParams", z.object({ id: z.string().min(1).max(120) }).strict());
+registry.registerPath({ method: "get", path: "/programs/templates", ...privateRoute, summary: "List program templates", tags: ["Programs"], request: { query: register("ProgramTemplateListQuery", ProgramTemplateListQuerySchema) }, responses: { 200: { description: "Program templates", content: json(z.object({ items: z.array(programTemplateDto), nextCursor: z.string().nullable() }).strict()) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/programs/templates", ...privateRoute, summary: "Create program template", tags: ["Programs"], request: { body: { required: true, content: json(programTemplateCreate) } }, responses: { 201: { description: "Program template", content: json(programTemplateDto) }, 400: errorResponse("Invalid program template"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/programs/templates/{id}", ...privateRoute, summary: "Get program template", tags: ["Programs"], request: { params: programIdParams }, responses: { 200: { description: "Program template", content: json(programTemplateDto) }, 404: errorResponse("Not found") } });
+registry.registerPath({ method: "patch", path: "/programs/templates/{id}", ...privateRoute, summary: "Update program template", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programTemplateUpdate) } }, responses: { 200: { description: "Program template", content: json(programTemplateDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/programs/templates/{id}/archive", ...privateRoute, summary: "Archive program template", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programTemplateArchive) } }, responses: { 200: { description: "Program template", content: json(programTemplateDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "get", path: "/programs/occurrences", ...privateRoute, summary: "List program occurrences", tags: ["Programs"], request: { query: register("ProgramOccurrenceListQuery", ProgramOccurrenceListQuerySchema) }, responses: { 200: { description: "Program occurrences", content: json(z.object({ items: z.array(programOccurrenceDto), nextCursor: z.string().nullable() }).strict()) } } });
+registry.registerPath({ method: "post", path: "/programs/occurrences", ...privateRoute, summary: "Create program occurrence", tags: ["Programs"], request: { body: { required: true, content: json(programOccurrenceCreate) } }, responses: { 201: { description: "Program occurrence", content: json(programOccurrenceDto) }, 409: errorResponse("Conflict") } });
+registry.registerPath({ method: "get", path: "/programs/occurrences/{id}", ...privateRoute, summary: "Get program occurrence", tags: ["Programs"], request: { params: programIdParams }, responses: { 200: { description: "Program occurrence", content: json(programOccurrenceDto) } } });
+registry.registerPath({ method: "patch", path: "/programs/occurrences/{id}", ...privateRoute, summary: "Update program occurrence", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programOccurrenceUpdate) } }, responses: { 200: { description: "Program occurrence", content: json(programOccurrenceDto) }, 409: errorResponse("Conflict") } });
+registry.registerPath({ method: "post", path: "/programs/occurrences/{id}/transition", ...privateRoute, summary: "Transition program occurrence", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programOccurrenceTransition) } }, responses: { 200: { description: "Program occurrence", content: json(programOccurrenceDto) }, 409: errorResponse("Invalid transition") } });
+registry.registerPath({ method: "post", path: "/programs/occurrences/{id}/archive", ...privateRoute, summary: "Archive program occurrence", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programOccurrenceArchive) } }, responses: { 200: { description: "Program occurrence", content: json(programOccurrenceDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "get", path: "/programs/registrations", ...privateRoute, summary: "List program registrations", tags: ["Programs"], request: { query: register("ProgramRegistrationListQuery", ProgramRegistrationListQuerySchema) }, responses: { 200: { description: "Program registrations", content: json(z.object({ items: z.array(programRegistrationDto), nextCursor: z.string().nullable() }).strict()) } } });
+registry.registerPath({ method: "post", path: "/programs/registrations", ...privateRoute, summary: "Create program registration", tags: ["Programs"], request: { body: { required: true, content: json(programRegistrationCreate) } }, responses: { 201: { description: "Program registration", content: json(programRegistrationDto) }, 409: errorResponse("Capacity conflict") } });
+registry.registerPath({ method: "patch", path: "/programs/registrations/{id}", ...privateRoute, summary: "Update program registration", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programRegistrationUpdate) } }, responses: { 200: { description: "Program registration", content: json(programRegistrationDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/programs/registrations/{id}/transition", ...privateRoute, summary: "Transition program registration", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programRegistrationTransition) } }, responses: { 200: { description: "Program registration", content: json(programRegistrationDto) }, 409: errorResponse("Invalid transition") } });
+registry.registerPath({ method: "post", path: "/programs/registrations/{id}/archive", ...privateRoute, summary: "Archive program registration", tags: ["Programs"], request: { params: programIdParams, body: { required: true, content: json(programRegistrationArchive) } }, responses: { 200: { description: "Program registration", content: json(programRegistrationDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "get", path: "/events", ...privateRoute, summary: "List events", tags: ["Events"], request: { query: register("EventListQuery", EventListQuerySchema) }, responses: { 200: { description: "Events", content: json(z.object({ items: z.array(eventDto), nextCursor: z.string().nullable() }).strict()) } } });
+registry.registerPath({ method: "post", path: "/events", ...privateRoute, summary: "Create event", tags: ["Events"], request: { body: { required: true, content: json(eventCreate) } }, responses: { 201: { description: "Event", content: json(eventDto) }, 409: errorResponse("Conflict") } });
+registry.registerPath({ method: "get", path: "/events/{id}", ...privateRoute, summary: "Get event", tags: ["Events"], request: { params: eventIdParams }, responses: { 200: { description: "Event", content: json(eventDto) }, 404: errorResponse("Event not found") } });
+registry.registerPath({ method: "patch", path: "/events/{id}", ...privateRoute, summary: "Update event", tags: ["Events"], request: { params: eventIdParams, body: { required: true, content: json(eventUpdate) } }, responses: { 200: { description: "Event", content: json(eventDto) }, 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "post", path: "/events/{id}/transition", ...privateRoute, summary: "Transition event", tags: ["Events"], request: { params: eventIdParams, body: { required: true, content: json(eventTransition) } }, responses: { 200: { description: "Event", content: json(eventDto) }, 409: errorResponse("Invalid transition") } });
+registry.registerPath({ method: "post", path: "/events/{id}/archive", ...privateRoute, summary: "Archive event", tags: ["Events"], request: { params: eventIdParams, body: { required: true, content: json(eventArchive) } }, responses: { 200: { description: "Event", content: json(eventDto) }, 409: errorResponse("Version conflict") } });
+
+registry.registerPath({ method: "get", path: "/payments", ...privateRoute, summary: "List booking payments", tags: ["Payments"], request: { query: paymentListQuery }, responses: { 200: { description: "Payments", content: json(z.array(paymentDto)) }, 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/payments/summary", ...privateRoute, summary: "Get booking payment summary", tags: ["Payments"], request: { query: z.object({ bookingId: z.string().uuid() }).strict() }, responses: { 200: { description: "Payment summary", content: json(paymentSummary) }, 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 404: errorResponse("Booking not found") } });
+registry.registerPath({ method: "post", path: "/payments", ...privateRoute, summary: "Record a charge, refund or adjustment", tags: ["Payments"], request: { body: { required: true, content: json(paymentOperation) } }, responses: { 201: { description: "Payment operation recorded", content: json(paymentDto) }, 400: errorResponse("Invalid payment operation"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied"), 409: errorResponse("Payment, version, currency or idempotency conflict") } });
+registry.registerPath({ method: "get", path: "/finance", ...privateRoute, summary: "Get the authoritative CRM finance projection", tags: ["Finance"], request: { query: financeQuery }, responses: { 200: { description: "Finance dataset", content: json(financeDataset) }, 400: errorResponse("Invalid finance query"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+registry.registerPath({ method: "get", path: "/saved-views", ...privateRoute, summary: "List saved views", tags: ["Saved views"], request: { query: z.object({ entityType: z.string().min(1).max(64).optional() }).strict() }, responses: { 200: { description: "Saved views", content: json(z.array(savedViewDto)) }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "post", path: "/saved-views", ...privateRoute, summary: "Create a saved view", tags: ["Saved views"], request: { body: { required: true, content: json(savedViewCreate) } }, responses: { 201: { description: "Saved view created", content: json(savedViewDto) }, 400: errorResponse("Invalid saved view"), 401: errorResponse("Session required") } });
+registry.registerPath({ method: "patch", path: "/saved-views/{id}", ...privateRoute, summary: "Update a saved view", tags: ["Saved views"], request: { params: savedViewIdParams, body: { required: true, content: json(savedViewUpdate) } }, responses: { 200: { description: "Saved view updated", content: json(savedViewDto) }, 400: errorResponse("Invalid saved view"), 401: errorResponse("Session required"), 404: errorResponse("Saved view not found") } });
+registry.registerPath({ method: "delete", path: "/saved-views/{id}", ...privateRoute, summary: "Archive a saved view", tags: ["Saved views"], request: { params: savedViewIdParams, query: register("SavedViewArchive", SavedViewArchiveSchema) }, responses: { 200: { description: "Saved view archived", content: json(okResponse) }, 400: errorResponse("Version is required"), 401: errorResponse("Session required"), 404: errorResponse("Saved view not found"), 409: errorResponse("Version conflict") } });
+registry.registerPath({ method: "get", path: "/health", ...publicRoute, summary: "Check API and database health", tags: ["Health"], responses: { 200: { description: "Healthy", content: json(healthResponse) }, 503: errorResponse("Database unavailable") } });
+registry.registerPath({ method: "get", path: "/live/events", ...privateRoute, summary: "Subscribe to live CRM updates", tags: ["Live"], request: { query: z.object({ entityType: z.string().min(1).max(64).optional() }).strict() }, responses: { 200: { description: "Server-sent live events", content: { "text/event-stream": { schema: liveEvent } } }, 401: errorResponse("Session required") } });
+registry.registerPath({ method: "get", path: "/search", ...privateRoute, summary: "Search CRM entities", tags: ["Search"], request: { query: searchQuery }, responses: { 200: { description: "Search result projections", content: json(searchResponse) }, 400: errorResponse("Invalid search query"), 401: errorResponse("Session required"), 403: errorResponse("Permission denied") } });
+
+export const internalOpenApiDocument = new OpenApiGeneratorV31(registry.definitions).generateDocument({
+  openapi: "3.1.0",
+  info: { title: "CRM Internal API", version: "1.0.0", description: "Internal CRM API contracts generated from canonical Zod schemas." },
+  servers: [{ url: "/api/internal/v1" }],
+  security: [{ sessionCookie: [] }],
+});

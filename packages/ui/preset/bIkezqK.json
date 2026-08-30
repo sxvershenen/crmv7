@@ -1,0 +1,18 @@
+{
+  "code": "bIkezqK",
+  "version": "b",
+  "values": {
+    "menuColor": "default",
+    "menuAccent": "subtle",
+    "radius": "default",
+    "font": "roboto",
+    "iconLibrary": "lucide",
+    "theme": "neutral",
+    "baseColor": "neutral",
+    "style": "vega",
+    "chartColor": "neutral",
+    "fontHeading": "inherit"
+  },
+  "derived": [],
+  "url": "https://ui.shadcn.com/create?preset=bIkezqK"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@crm/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./primitives": "./src/primitives.ts",
+    "./auth": "./src/auth.ts",
+    "./capabilities": "./src/capabilities.ts",
+    "./tasks": "./src/tasks.ts",
+    "./saved-views": "./src/saved-views.ts",
+    "./availability": "./src/availability.ts",
+    "./bookings": "./src/bookings.ts",
+    "./payments": "./src/payments.ts",
+    "./resources": "./src/resources.ts",
+    "./customers": "./src/customers.ts",
+    "./leads": "./src/leads.ts",
+    "./openapi": "./src/openapi.ts",
+    "./operations": "./src/operations.ts",
+    "./programs": "./src/programs.ts",
+    "./events": "./src/events.ts",
+    "./finance": "./src/finance.ts",
+    "./search": "./src/search.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint src test"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "zod": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: crm_v7
+      POSTGRES_PASSWORD: crm
+      POSTGRES_USER: crm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm_v7"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5433:5432"
+    volumes:
+      - crm_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  crm_postgres_data:

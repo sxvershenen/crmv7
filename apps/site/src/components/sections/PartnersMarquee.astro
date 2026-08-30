@@ -1,0 +1,30 @@
+---
+import { Building2 } from "lucide-react";
+import { PARTNERS_LIST } from "../../data/resortData";
+
+const partners = [...PARTNERS_LIST, ...PARTNERS_LIST];
+---
+
+<div class="w-full py-8 overflow-hidden select-none">
+  <div class="text-center mb-4">
+    <span class="text-[10px] uppercase font-semibold tracking-wider text-[#6b7280]">
+      Нам доверяют корпоративные клиенты региона
+    </span>
+  </div>
+
+  <div class="relative w-full overflow-hidden">
+    <div class="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#f7f7f7] to-transparent z-10 pointer-events-none"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#f7f7f7] to-transparent z-10 pointer-events-none"></div>
+
+    <div class="animate-marquee flex items-center gap-6">
+      {partners.map((partner) => (
+        <div
+          class="flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-white shrink-0 text-[#18191b] hover:bg-neutral-100 transition-colors"
+        >
+          <Building2 className="w-4 h-4 text-[#2B9E47]" />
+          <span class="text-[13px] font-semibold tracking-tight">{partner}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>

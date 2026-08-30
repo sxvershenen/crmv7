@@ -1,0 +1,48 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro"
+import { publicRoute, siteIdentity } from "../lib/content"
+import NavigationIsland from "../components/islands/NavigationIsland"
+import HeroIsland from "../components/islands/HeroIsland"
+import EventsIsland from "../components/islands/EventsIsland"
+import HousesIsland from "../components/islands/HousesIsland"
+import SaunaChanIsland from "../components/islands/SaunaChanIsland"
+import ProgramsIsland from "../components/islands/ProgramsIsland"
+import VenuesIsland from "../components/islands/VenuesIsland"
+import ReviewsIsland from "../components/islands/ReviewsIsland"
+import TerritoryMapIsland from "../components/islands/TerritoryMapIsland"
+import FaqLocationIsland from "../components/islands/FaqLocationIsland"
+import BookingQuizIsland from "../components/islands/BookingQuizIsland"
+import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
+import ModalHub from "../components/islands/ModalHub"
+import WhyUsSection from "../components/sections/WhyUsSection.astro"
+import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
+import Footer from "../components/sections/Footer.astro"
+
+const canonical = new URL(publicRoute("/").pathname, Astro.site).toString()
+---
+
+<BaseLayout title={siteIdentity.title} description={siteIdentity.description} canonical={canonical}>
+  <NavigationIsland client:load />
+
+  <div id="site-content" class="flex-1 transition-all duration-300 ease-in-out lg:pl-[280px]">
+    <main class="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-12">
+      <HeroIsland client:load />
+      <EventsIsland client:visible />
+      <HousesIsland client:visible />
+      <SaunaChanIsland client:visible />
+      <ProgramsIsland client:visible />
+      <VenuesIsland client:visible />
+      <WhyUsSection />
+      <ReviewsIsland client:visible />
+      <TerritoryMapIsland client:visible />
+      <FaqLocationIsland client:visible />
+      <BookingQuizIsland client:visible />
+      <PartnersMarquee />
+    </main>
+
+    <Footer />
+  </div>
+
+  <FloatingHelperIsland client:idle />
+  <ModalHub client:load />
+</BaseLayout>

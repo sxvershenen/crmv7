@@ -1,0 +1,20 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro"
+import { publicRoute, siteIdentity } from "../lib/content"
+
+const title = `Политика обработки персональных данных — ${siteIdentity.name}`
+const description = "Информация об обработке персональных данных при обращении через сайт «Свистоплясово»."
+const canonical = new URL(publicRoute("/privacy").pathname, Astro.site).toString()
+---
+
+<BaseLayout {title} {description} {canonical}>
+  <main class="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 lg:py-20">
+    <a class="text-sm text-[#2B9E47] underline-offset-4 hover:underline" href="/">На главную</a>
+    <article class="mt-6 rounded-2xl bg-white p-6 shadow-sm sm:p-10">
+      <h1 class="text-3xl text-[#18191b]">Политика обработки персональных данных</h1>
+      <p class="mt-6 text-sm leading-6 text-[#6b7280]">
+        Страница будет дополнена утверждённым текстом политики до запуска публичной формы.
+      </p>
+    </article>
+  </main>
+</BaseLayout>

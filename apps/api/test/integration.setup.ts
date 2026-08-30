@@ -1,0 +1,5 @@
+process.env.APP_ENV = "test"
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql:///crm_v7_test"
+process.env.CORS_ORIGIN = "http://localhost:5173"
+process.env.LOG_LEVEL = "silent"
+process.env.RUN_MIGRATIONS = "false"

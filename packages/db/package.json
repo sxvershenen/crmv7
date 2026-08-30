@@ -1,0 +1,28 @@
+{
+  "name": "@crm/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./data-source": "./src/data-source.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "migration:run": "typeorm-ts-node-esm migration:run -d src/data-source.ts",
+    "migration:revert": "typeorm-ts-node-esm migration:revert -d src/data-source.ts"
+  },
+  "dependencies": {
+    "@crm/config": "workspace:*",
+    "pg": "^8.23.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.28"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "@crm/ui/theme.css";
+
+@source ".";
+@source "../../../packages/ui/src";
+
+@layer base {
+  html {
+    min-width: 320px;
+    background: var(--surface-sunken);
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    overflow-x: hidden;
+    font-size: 12px;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
