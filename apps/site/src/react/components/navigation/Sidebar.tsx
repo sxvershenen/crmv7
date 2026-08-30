@@ -49,8 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "houses",
       label: "Глэмпинг и дома",
-      icon: <Home className="w-4 h-4 text-[#2B9E47]" />,
-      badge: "2 дома",
+      icon: <Home className="w-4 h-4" />,
       megaTitle: "Уютный глэмпинг в соснах",
       megaDesc: "Дизайнерские дома с панорамным видом, сибирским чаном и террасами.",
       subcategories: [
@@ -62,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "sauna",
       label: "Баня и чан",
-      icon: <Flame className="w-4 h-4 text-[#EE2F2E]" />,
+      icon: <Flame className="w-4 h-4" />,
       megaTitle: "СПА-комплекс на живом огне",
       megaDesc: "Березовые дрова, пихта, цитрусы и аромат сибирского кедра.",
       subcategories: [
@@ -74,8 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "programs",
       label: "Программы праздников",
-      icon: <Sparkles className="w-4 h-4 text-[#FAAB2B]" />,
-      badge: "80+ сюжетов",
+      icon: <Sparkles className="w-4 h-4" />,
       megaTitle: "Event-команда «Зажигай»",
       megaDesc: "Организация любых праздников «под ключ» без посредников.",
       subcategories: [
@@ -88,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "venues",
       label: "Площадки и залы",
-      icon: <Layers className="w-4 h-4 text-[#18191b]" />,
+      icon: <Layers className="w-4 h-4" />,
       megaTitle: "Локации для любого формата",
       megaDesc: "От камерных беседок до масштабного банкетного зала и сцены.",
       subcategories: [
@@ -100,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "events",
       label: "Ближайшие события",
-      icon: <CalendarDays className="w-4 h-4 text-[#2B9E47]" />,
+      icon: <CalendarDays className="w-4 h-4" />,
       megaTitle: "Афиша мероприятий",
       megaDesc: "Повод выбраться из города на выходные уже есть.",
       subcategories: [
@@ -112,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "map",
       label: "Карта базы (12 га)",
-      icon: <Compass className="w-4 h-4 text-[#18191b]" />,
+      icon: <Compass className="w-4 h-4" />,
       megaTitle: "Территория «Свистоплясово»",
       megaDesc: "12 гектаров соснового бора на берегу реки.",
       subcategories: [
@@ -123,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "location",
       label: "Как добраться и FAQ",
-      icon: <MapPin className="w-4 h-4 text-[#18191b]" />,
+      icon: <MapPin className="w-4 h-4" />,
       megaTitle: "30 минут от Кирова",
       megaDesc: "Асфальт до ворот, парковка на 60 авто, навигация.",
       subcategories: [
@@ -141,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }`}
     >
       {/* Sidebar Header */}
-      <div className="h-[72px] flex items-center justify-between px-5 border-b border-neutral-100 shrink-0">
+      <div className="relative h-[72px] flex items-center px-5 border-b border-neutral-100 shrink-0">
         {!isCollapsed ? (
           <div 
             onClick={() => onNavigate('hero')}
@@ -169,10 +167,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Collapse Toggle Button */}
+        {/* Collapse Toggle sits on the boundary between navigation and content. */}
         <button
           onClick={onToggleCollapse}
-          className="w-8 h-8 rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[#18191b] flex items-center justify-center transition-colors"
+          className="absolute -right-4 top-5 z-[60] w-8 h-8 rounded-full bg-white border border-neutral-200 shadow-sm hover:bg-[#f7f7f7] text-[#18191b] flex items-center justify-center transition-colors"
           title={isCollapsed ? "Развернуть меню" : "Свернуть меню"}
         >
           {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -199,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center gap-3">
                   {/* Icon with square pill wrapper */}
-                  <div className="w-8 h-8 rounded-xl bg-[#f7f7f7] group-hover:bg-white flex items-center justify-center shrink-0 transition-colors">
+                  <div className="w-8 h-8 rounded-xl bg-[#f7f7f7] text-neutral-500 group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
                     {item.icon}
                   </div>
 
@@ -210,11 +208,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {!isCollapsed && (
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {item.badge && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-[#6b7280]">
-                        {item.badge}
-                      </span>
-                    )}
                     <ChevronRight className="w-3.5 h-3.5 text-neutral-400 group-hover:text-[#18191b] group-hover:translate-x-0.5 transition-all" />
                   </div>
                 )}
@@ -224,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {isHovered && (
                 <div 
                   className={`fixed ${
-                    isCollapsed ? 'left-[106px]' : 'left-[288px]'
+                    isCollapsed ? 'left-[98px]' : 'left-[280px]'
                   } top-auto w-[340px] bg-white rounded-3xl p-5 border border-neutral-200/70 shadow-2xl z-[100] animate-in fade-in slide-in-from-left-2 duration-150`}
                   style={{ top: 'max(80px, min(calc(100vh - 420px), 160px))' }}
                 >
@@ -289,10 +282,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="relative">
               <button
                 onClick={() => setBookingDropdownOpen(!bookingDropdownOpen)}
-                className="w-full h-[42px] px-3.5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center justify-between hover:bg-[#23823a] transition-all group"
+                className="w-full h-[48px] px-3.5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center justify-between hover:bg-[#23823a] transition-all group"
               >
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                  <CalendarDays className="w-4 h-4" />
                   <span>Забронировать</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -330,13 +323,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Secondary: Call Modal Button (with 2 numbers) */}
             <button
               onClick={onOpenCallModal}
-              className="w-full h-[38px] px-3.5 rounded-full bg-[#f7f7f7] text-[#18191b] text-[13px] font-medium flex items-center justify-between hover:bg-neutral-200 transition-colors group"
+              className="w-full h-[48px] px-3.5 rounded-full bg-[#eaf5ec] text-[#237c39] text-[13px] font-medium flex items-center justify-between hover:bg-[#dcefe0] transition-colors group"
             >
               <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#6b7280] group-hover:text-[#18191b]" />
+                <Phone className="w-3.5 h-3.5" />
                 <span>Позвонить</span>
               </div>
-              <span className="text-[11px] text-[#6b7280]">2 линии</span>
+              <span className="text-[11px] text-[#237c39]">2 линии</span>
             </button>
 
             {/* Tertiary: VK Community Link */}
@@ -344,13 +337,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               href="https://vk.com"
               target="_blank"
               rel="noreferrer"
-              className="w-full h-[38px] px-3.5 rounded-full bg-[#f7f7f7] text-[#18191b] text-[13px] font-medium flex items-center justify-between hover:bg-neutral-200 transition-colors group"
+              className="w-full h-[48px] px-3.5 rounded-full bg-[#eaf3ff] text-[#2876c9] text-[13px] font-medium flex items-center justify-between hover:bg-[#dceaff] transition-colors group"
             >
               <div className="flex items-center gap-2">
-                <Send className="w-3.5 h-3.5 text-[#2B9E47] -rotate-12" />
+                <span className="w-4 h-4 rounded-md bg-[#2876c9] text-white text-[8px] font-bold flex items-center justify-center">VK</span>
                 <span>Мы ВКонтакте</span>
               </div>
-              <span className="text-[10px] font-semibold text-[#2B9E47] bg-[#2B9E47]/10 px-1.5 py-0.5 rounded-full">
+              <span className="text-[10px] font-semibold text-[#2876c9] bg-[#2876c9]/10 px-1.5 py-0.5 rounded-full">
                 14.8k
               </span>
             </a>
