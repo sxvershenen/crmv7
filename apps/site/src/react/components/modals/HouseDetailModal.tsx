@@ -149,7 +149,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
               onClose();
               onBook(house.title);
             }}
-            className="w-full sm:flex-1 h-[46px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium flex items-center justify-center gap-3 hover:bg-[#23823a] transition-all group"
+            className="w-full sm:flex-1 h-[48px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium flex items-center justify-center gap-3 hover:bg-[#23823a] transition-all group"
           >
             <span>Забронировать {house.title}</span>
             <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -159,7 +159,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
           
           <button
             onClick={onClose}
-            className="w-full sm:w-auto h-[46px] px-6 rounded-full bg-[#f7f7f7] text-[#18191b] text-[13px] font-medium hover:bg-neutral-200 transition-colors"
+            className="w-full sm:w-auto h-[48px] px-6 rounded-full bg-[#f7f7f7] text-[#18191b] text-[13px] font-medium hover:bg-neutral-200 transition-colors"
           >
             Закрыть
           </button>

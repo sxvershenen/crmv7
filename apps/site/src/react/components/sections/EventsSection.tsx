@@ -37,7 +37,7 @@ export const EventsSection: React.FC<EventsSectionProps> = ({ onOpenBookingModal
       {/* Block Header */}
       <div className="mb-6">
         {/* Eyebrow */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[10px] font-semibold tracking-wider uppercase text-[#18191b] mb-2.5">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#eaf5ec] text-[10px] font-semibold tracking-wider uppercase text-[#237c39] mb-2.5">
           <Calendar className="w-3 h-3 text-[#2B9E47]" />
           Афиша на весну
         </div>
@@ -175,7 +175,7 @@ export const EventsSection: React.FC<EventsSectionProps> = ({ onOpenBookingModal
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-5 w-full h-[42px] px-4 rounded-full bg-white text-[#2B9E47] text-[13px] font-medium flex items-center justify-center gap-2 hover:bg-neutral-100 transition-colors"
+            className="mt-5 w-full h-[48px] px-4 rounded-full bg-white text-[#2B9E47] text-[13px] font-medium flex items-center justify-center gap-2 hover:bg-neutral-100 transition-colors"
           >
             <Send className="w-3.5 h-3.5 -rotate-12" />
             <span>Перейти в сообщество</span>

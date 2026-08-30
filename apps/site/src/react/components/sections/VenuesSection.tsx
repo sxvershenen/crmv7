@@ -27,14 +27,7 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ onOpenBookingModal
             Локации для аренды
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
-            <h2 className="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">
-              Площадки и залы
-            </h2>
-            <p className="hidden md:block text-[13px] text-[#6b7280] max-w-md font-normal leading-relaxed">
-              От уютных лесных беседок у мангала до панорамного банкетного зала на 150 гостей
-            </p>
-          </div>
+          <h2 className="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">Площадки и залы</h2>
         </div>
 
         {/* Dropdown Sort by Capacity & Format */}
@@ -163,11 +156,6 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ onOpenBookingModal
               </div>
             </div>
 
-            {/* Bottom action trigger */}
-            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-medium text-[#2B9E47] px-1">
-              <span>Забронировать зал</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </div>
           </div>
         ))}
       </div>

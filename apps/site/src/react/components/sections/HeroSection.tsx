@@ -130,7 +130,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setBookingDropdownOpen(!bookingDropdownOpen)}
-                  className="h-[44px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-[#23823a] transition-all group shadow-sm"
+                  className="h-[48px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-[#23823a] transition-all group shadow-sm"
                 >
                   <span>Забронировать</span>
                   <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -179,7 +179,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Secondary CTA: Мероприятия */}
               <button
                 onClick={() => onNavigate('programs')}
-                className="h-[44px] px-6 rounded-full bg-white/20 backdrop-blur-md text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-white/30 transition-all group"
+                className="h-[48px] px-6 rounded-full bg-white/20 backdrop-blur-md text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-white/30 transition-all group"
               >
                 <span>Мероприятия</span>
                 <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -190,14 +190,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           </div>
 
           {/* Right Column: Vertical CTA Cards on Desktop over Hero */}
-          <div className="hidden lg:flex lg:col-span-4 flex-col gap-3">
+          <div className="hidden lg:flex lg:col-span-4 max-w-[300px] justify-self-end flex-col gap-3">
             {/* Card 1: Выбрать домик */}
             <div
               onClick={() => onNavigate('houses')}
               className="p-3 rounded-2xl bg-white text-[#18191b] flex items-center justify-between cursor-pointer hover:scale-[1.02] transition-transform group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-16 h-14 rounded-xl overflow-hidden bg-neutral-100 shrink-0">
+                <div className="w-14 h-14 aspect-square rounded-xl overflow-hidden bg-neutral-100 shrink-0">
                   <img
                     src={RESORT_IMAGES.houseGnezdo1}
                     alt="Выбрать домик"
@@ -209,7 +209,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     Выбрать домик
                   </div>
                   <div className="text-[12px] text-[#6b7280] mt-0.5">
-                    «Гнездо» и «Дом на дереве»
+                    С баней и чаном
                   </div>
                 </div>
               </div>
@@ -224,7 +224,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               className="p-3 rounded-2xl bg-white text-[#18191b] flex items-center justify-between cursor-pointer hover:scale-[1.02] transition-transform group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-16 h-14 rounded-xl overflow-hidden bg-neutral-100 shrink-0">
+                <div className="w-14 h-14 aspect-square rounded-xl overflow-hidden bg-neutral-100 shrink-0">
                   <img
                     src={RESORT_IMAGES.venueBanquet}
                     alt="Провести мероприятие"
@@ -236,7 +236,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     Провести мероприятие
                   </div>
                   <div className="text-[12px] text-[#6b7280] mt-0.5">
-                    Свадьба, банкет, квест, корпоратив
+                    Площадки и праздники
                   </div>
                 </div>
               </div>

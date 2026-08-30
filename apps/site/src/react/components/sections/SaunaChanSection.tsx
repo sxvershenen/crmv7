@@ -92,11 +92,6 @@ export const SaunaChanSection: React.FC<SaunaChanSectionProps> = ({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                  {/* Tag */}
-                  <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-xs text-[11px] font-semibold text-[#18191b]">
-                    {tag}
-                  </div>
-
                   {/* Photo Dash Indicators */}
                   <div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 z-10">
                     {data.photos.map((_, pIdx) => (

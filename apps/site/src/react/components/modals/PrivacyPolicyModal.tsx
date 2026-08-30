@@ -64,7 +64,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
         <div className="mt-6 pt-4 border-t border-neutral-100 flex justify-end">
           <button
             onClick={onClose}
-            className="h-[42px] px-6 rounded-full bg-[#18191b] text-white text-[13px] font-medium hover:bg-neutral-800 transition-colors"
+            className="h-[48px] px-6 rounded-full bg-[#18191b] text-white text-[13px] font-medium hover:bg-neutral-800 transition-colors"
           >
             Понятно и согласен
           </button>

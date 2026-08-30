@@ -8,23 +8,21 @@ interface ProgramsSectionProps {
 
 export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingModal }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'default' | 'duration'>('default');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(4);
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
 
   const filteredPrograms = POPULAR_PROGRAMS.filter((p) => {
     if (selectedCategory === 'all') return true;
     return p.category === selectedCategory;
   });
 
-  const sortedPrograms = [...filteredPrograms].sort((a, b) => {
-    if (sortBy === 'duration') {
-      return a.duration.localeCompare(b.duration);
-    }
-    return 0;
-  });
-
-  const displayedPrograms = sortedPrograms.slice(0, visibleCount);
+  const pageSize = 4;
+  const pageCount = Math.max(1, Math.ceil(filteredPrograms.length / pageSize));
+  const displayedPrograms = showAll ? filteredPrograms : filteredPrograms.slice((page - 1) * pageSize, page * pageSize);
+  const activeCategoryLabel = selectedCategory === 'all'
+    ? 'Все категории'
+    : PROGRAM_CATEGORIES.find((category) => category.id === selectedCategory)?.title ?? 'Все категории';
 
   return (
     <section id="programs" className="w-full py-8">
@@ -53,36 +51,16 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
             className="h-[40px] px-4 rounded-full bg-white text-[#18191b] text-[13px] font-medium inline-flex items-center gap-2 hover:bg-neutral-100 transition-colors"
           >
             <Filter className="w-4 h-4 text-[#FAAB2B]" />
-            <span className="hidden sm:inline">
-              {sortBy === 'default' ? 'По популярности' : 'По длительности'}
-            </span>
+            <span className="hidden sm:inline">{activeCategoryLabel}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${sortDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {sortDropdownOpen && (
             <div className="absolute right-0 top-[46px] w-48 bg-white rounded-2xl p-2 border border-neutral-200 shadow-xl z-30 animate-in fade-in zoom-in-95 duration-150">
-              <button
-                onClick={() => {
-                  setSortBy('default');
-                  setSortDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  sortBy === 'default' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                По популярности
-              </button>
-              <button
-                onClick={() => {
-                  setSortBy('duration');
-                  setSortDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  sortBy === 'duration' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                По длительности
-              </button>
+              <button onClick={() => { setSelectedCategory('all'); setPage(1); setShowAll(false); setSortDropdownOpen(false); }} className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${selectedCategory === 'all' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'}`}>Все категории</button>
+              {PROGRAM_CATEGORIES.map((category) => (
+                <button key={category.id} onClick={() => { setSelectedCategory(category.id); setPage(1); setShowAll(false); setSortDropdownOpen(false); }} className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${selectedCategory === category.id ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'}`}>{category.title}</button>
+              ))}
             </div>
           )}
         </div>
@@ -99,7 +77,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
               return (
                 <div
                   key={cat.id}
-                  onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
+                  onClick={() => { setSelectedCategory(isSelected ? 'all' : cat.id); setPage(1); setShowAll(false); }}
                   className={`relative aspect-square rounded-3xl overflow-hidden cursor-pointer group p-3.5 flex flex-col justify-between transition-all ${
                     isSelected ? 'ring-2 ring-[#2B9E47]' : ''
                   }`}
@@ -111,15 +89,8 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/20" />
 
-                  {/* Top: arrow pill */}
-                  <div className="relative z-10 flex justify-end">
-                    <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-xs group-hover:bg-white text-white group-hover:text-[#18191b] flex items-center justify-center transition-colors">
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-
                   {/* Bottom: Title & Count */}
-                  <div className="relative z-10 text-white">
+                  <div className="relative z-10 mt-auto text-white">
                     <div className="text-[14px] sm:text-[15px] font-semibold leading-tight">
                       {cat.title}
                     </div>
@@ -157,9 +128,6 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
                   alt={prog.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
-                <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[10px] font-medium text-white">
-                  {prog.categoryLabel}
-                </span>
               </div>
 
               {/* Information */}
@@ -197,23 +165,16 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
             </div>
           ))}
 
-          {/* Toggle All Programs Button */}
-          {visibleCount < sortedPrograms.length ? (
-            <button
-              onClick={() => setVisibleCount(sortedPrograms.length)}
-              className="w-full h-[42px] rounded-full bg-white hover:bg-neutral-200 text-[#18191b] text-[13px] font-medium flex items-center justify-center gap-2 transition-colors"
-            >
-              <span>Все программы ({sortedPrograms.length})</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-1.5" aria-label="Пагинация программ">
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+                <button key={pageNumber} onClick={() => { setPage(pageNumber); setShowAll(false); }} className={`w-9 h-9 rounded-full text-[12px] font-semibold transition-colors ${page === pageNumber && !showAll ? 'bg-[#2B9E47] text-white' : 'bg-white text-[#18191b] hover:bg-neutral-100'}`}>{pageNumber}</button>
+              ))}
+            </div>
+            <button onClick={() => { setSelectedCategory('all'); setPage(1); setShowAll(true); }} className="h-[48px] px-5 rounded-full bg-white hover:bg-neutral-200 text-[#18191b] text-[13px] font-medium inline-flex items-center gap-2 transition-colors">
+              <span>Все программы</span><ArrowRight className="w-3.5 h-3.5" />
             </button>
-          ) : sortedPrograms.length > 4 ? (
-            <button
-              onClick={() => setVisibleCount(4)}
-              className="w-full h-[38px] rounded-full bg-white hover:bg-neutral-200 text-[#6b7280] text-[12px] font-medium flex items-center justify-center transition-colors"
-            >
-              Свернуть список
-            </button>
-          ) : null}
+          </div>
         </div>
       </div>
     </section>

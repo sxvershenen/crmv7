@@ -143,7 +143,7 @@ export const HousesSection: React.FC<HousesSectionProps> = ({ onSelectHouse }) =
               {/* Bottom Row: Large Price & Action Arrow */}
               <div className="pt-3 border-t border-neutral-100 flex items-center justify-between px-1.5">
                 <div>
-                  <div className="text-[10px] uppercase font-semibold text-[#6b7280] tracking-wider">
+                  <div className="text-[10px] font-medium text-[#6b7280] tracking-normal">
                     Стоимость суток
                   </div>
                   <div className="text-[22px] font-semibold text-[#18191b] tracking-tight">

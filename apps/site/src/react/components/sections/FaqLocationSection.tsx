@@ -97,7 +97,7 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
                 <Car className="w-4 h-4 text-[#2B9E47]" />
               </div>
               <div>
-                <div className="text-[13px] font-semibold text-[#18191b]">
+                <div className="text-[13px] font-semibold text-[#2B9E47]">
                   30 минут на авто от Театральной площади
                 </div>
                 <div className="text-[12px] text-[#6b7280] mt-0.5 leading-snug">
@@ -121,46 +121,40 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
             </div>
 
             {/* Direct Contacts List */}
-            <div className="pt-3 border-t border-neutral-100 space-y-2">
+            <div className="pt-3 border-t border-neutral-100 space-y-1">
               <button
                 onClick={onOpenCallModal}
-                className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-[#f7f7f7] hover:bg-neutral-200 transition-colors text-left group"
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left group"
               >
-                <div className="flex items-center gap-2.5">
-                  <Phone className="w-4 h-4 text-[#2B9E47]" />
-                  <span className="text-[13px] font-medium text-[#18191b]">
-                    +7 (8332) 77-55-11
-                  </span>
+                <div className="w-9 h-9 rounded-xl bg-[#eaf5ec] text-[#2B9E47] flex items-center justify-center shrink-0"><Phone className="w-4 h-4" /></div>
+                <div>
+                  <div className="text-[13px] font-semibold text-[#18191b]">+7 (8332) 74-55-10</div>
+                  <div className="text-[11px] text-[#6b7280]">Бронирование домиков</div>
                 </div>
-                <span className="text-[11px] text-[#6b7280]">Позвонить</span>
               </button>
 
               <a
                 href="https://vk.com"
                 target="_blank"
                 rel="noreferrer"
-                className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-[#f7f7f7] hover:bg-neutral-200 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left"
               >
-                <div className="flex items-center gap-2.5">
-                  <Send className="w-4 h-4 text-[#2B9E47] -rotate-12" />
-                  <span className="text-[13px] font-medium text-[#18191b]">
-                    vk.com/svistoplyasovo
-                  </span>
+                <div className="w-9 h-9 rounded-xl bg-[#eaf3ff] text-[#2876c9] flex items-center justify-center shrink-0"><Send className="w-4 h-4 -rotate-12" /></div>
+                <div>
+                  <div className="text-[13px] font-semibold text-[#18191b]">Связаться ВКонтакте</div>
+                  <div className="text-[11px] text-[#6b7280]">vk.com/svistoplyasovo</div>
                 </div>
-                <span className="text-[11px] text-[#2B9E47] font-medium">Диалог</span>
               </a>
 
               <a
                 href="mailto:info@svistoplyasovo.ru"
-                className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-[#f7f7f7] hover:bg-neutral-200 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left"
               >
-                <div className="flex items-center gap-2.5">
-                  <Mail className="w-4 h-4 text-[#6b7280]" />
-                  <span className="text-[13px] font-medium text-[#18191b]">
-                    info@svistoplyasovo.ru
-                  </span>
+                <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0"><Mail className="w-4 h-4" /></div>
+                <div>
+                  <div className="text-[13px] font-semibold text-[#18191b]">Написать на почту</div>
+                  <div className="text-[11px] text-[#6b7280]">info@svistoplyasovo.ru</div>
                 </div>
-                <span className="text-[11px] text-[#6b7280]">Почта</span>
               </a>
             </div>
           </div>
