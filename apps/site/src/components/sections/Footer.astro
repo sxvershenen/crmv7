@@ -1,132 +1,23 @@
 ---
-import { ArrowUpRight, Mail, MapPin, Phone, Send, Sparkles } from "lucide-react";
-
+import { Mail, MapPin, Phone, Send } from "lucide-react";
 const currentYear = new Date().getFullYear();
 ---
 
-<footer class="w-full bg-[#18191b] text-white pt-14 pb-24 lg:pb-14 border-t border-neutral-800">
+<footer class="w-full bg-[#121514] text-white pt-12 pb-24 lg:pb-10 border-t border-white/10">
   <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-12 border-b border-neutral-800">
-      <div class="lg:col-span-2 space-y-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-[#2B9E47] text-white flex items-center justify-center font-bold text-base tracking-tighter">
-            СВ
-          </div>
-          <div>
-            <div class="text-[17px] font-semibold tracking-tight text-white">
-              СВИСТОПЛЯСОВО
-            </div>
-            <div class="text-[11px] text-neutral-400">
-              Глэмпинг &amp; База отдыха в Кирове
-            </div>
-          </div>
-        </div>
-
-        <p class="text-[13px] text-neutral-400 leading-relaxed max-w-sm font-normal">
-          Уютное пространство для перезагрузки среди векового соснового бора. Дома с личным сибирским чаном, кедровая русская баня, банкетный зал и авторские праздники команды «Зажигай».
-        </p>
-
-        <div class="pt-2">
-          <a
-            href="https://vk.com"
-            target="_blank"
-            rel="noreferrer"
-            class="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#2B9E47] hover:bg-[#23823a] text-white text-[12px] font-medium transition-colors"
-          >
-            <Send className="w-3.5 h-3.5 -rotate-12" />
-            <span>Сообщество ВКонтакте (14.8k)</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </a>
-        </div>
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-8 pb-10 border-b border-white/10">
+      <div class="max-w-xl space-y-4">
+        <div class="flex items-center gap-3"><div class="w-12 h-12 rounded-2xl bg-[#2B9E47] text-white flex items-center justify-center font-bold text-lg">С</div><div><div class="text-[22px] font-semibold tracking-tight">СВИСТОПЛЯСОВО</div><div class="text-[13px] text-[#2B9E47]">Глэмпинг &amp; База отдыха под Кировом</div></div></div>
+        <p class="text-[15px] text-neutral-400 leading-relaxed">Уютные дома с горячим чаном и баней в 30 минутах от Кирова.<br />Организация душевных праздников от команды «Зажигай».</p>
       </div>
-
-      <div class="space-y-3 text-[13px]">
-        <div class="text-[11px] uppercase font-semibold text-[#2B9E47] tracking-wider mb-1 flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3" />
-          Проживание и СПА
-        </div>
-        <ul class="space-y-2.5 text-neutral-300">
-          <li><a href="#houses" class="hover:text-white transition-colors text-left">Дом «Гнездо» (A-frame)</a></li>
-          <li><a href="#houses" class="hover:text-white transition-colors text-left">«Дом на дереве» на высоте 3м</a></li>
-          <li><a href="#sauna" class="hover:text-white transition-colors text-left">Сибирский чан с пихтой</a></li>
-          <li><a href="#sauna" class="hover:text-white transition-colors text-left">Кедровая баня на дровах</a></li>
-          <li><a href="#quiz" class="hover:text-white transition-colors text-left">Калькулятор бронирования</a></li>
-        </ul>
-      </div>
-
-      <div class="space-y-3 text-[13px]">
-        <div class="text-[11px] uppercase font-semibold text-[#FAAB2B] tracking-wider mb-1 flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-[#FAAB2B]" />
-          Мероприятия
-        </div>
-        <ul class="space-y-2.5 text-neutral-300">
-          <li><a href="#programs" class="hover:text-white transition-colors text-left">Корпоративы и тимбилдинг</a></li>
-          <li><a href="#programs" class="hover:text-white transition-colors text-left">Свадьбы на природе</a></li>
-          <li><a href="#programs" class="hover:text-white transition-colors text-left">Школьные выпускные</a></li>
-          <li><a href="#venues" class="hover:text-white transition-colors text-left">Банкетный зал (до 150)</a></li>
-          <li><a href="#venues" class="hover:text-white transition-colors text-left">Панорамная веранда и юрта</a></li>
-        </ul>
-      </div>
-
-      <div class="space-y-3 text-[13px]">
-        <div class="text-[11px] uppercase font-semibold text-white tracking-wider mb-1">
-          Контакты базы
-        </div>
-        <ul class="space-y-3 text-neutral-300">
-          <li class="flex items-start gap-2.5">
-            <Phone className="w-4 h-4 text-[#2B9E47] shrink-0 mt-0.5" />
-            <div>
-              <button data-site-action="call" class="text-white font-medium hover:text-[#2B9E47] text-left">
-                +7 (8332) 77-55-11
-              </button>
-              <div class="text-[11px] text-neutral-400">Бронирование домиков</div>
-            </div>
-          </li>
-          <li class="flex items-start gap-2.5">
-            <Phone className="w-4 h-4 text-[#FAAB2B] shrink-0 mt-0.5" />
-            <div>
-              <a href="tel:+79229953322" class="text-white font-medium hover:text-[#FAAB2B]">
-                +7 (922) 995-33-22
-              </a>
-              <div class="text-[11px] text-neutral-400">Организация событий</div>
-            </div>
-          </li>
-          <li class="flex items-start gap-2.5">
-            <MapPin className="w-4 h-4 text-[#EE2F2E] shrink-0 mt-0.5" />
-            <span class="text-[12px]">
-              Кировская обл., д. Свистоплясово (30 мин от Кирова)
-            </span>
-          </li>
-          <li class="flex items-center gap-2.5">
-            <Mail className="w-4 h-4 text-neutral-400 shrink-0" />
-            <a href="mailto:info@svistoplyasovo.ru" class="text-[12px] hover:text-white">
-              info@svistoplyasovo.ru
-            </a>
-          </li>
-        </ul>
-      </div>
+      <div class="flex flex-wrap gap-3 shrink-0"><a href="https://vk.com" target="_blank" rel="noreferrer" class="h-[48px] px-5 rounded-full bg-[#1677f2] hover:bg-[#0866d5] inline-flex items-center gap-2 text-[14px] font-medium"><Send className="w-4 h-4 -rotate-12" />Мы ВКонтакте ↗</a><button data-site-action="call" class="h-[48px] px-5 rounded-full bg-white/10 hover:bg-white/15 inline-flex items-center gap-2 text-[14px] font-medium"><Phone className="w-4 h-4 text-[#2B9E47]" />Связаться с нами</button></div>
     </div>
-
-    <div class="pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-[12px] text-neutral-400">
-      <div class="space-y-1">
-        <div class="text-neutral-300 font-medium">
-          ИП Норсеева Ирина Михайловна
-        </div>
-        <div>ИНН: 431900639521 • ОГРНИП: 318435000012345</div>
-        <div>© {currentYear} База отдыха и глэмпинг «Свистоплясово». Все права защищены.</div>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-4 text-[11px]">
-        <button data-site-action="privacy" class="hover:text-white underline transition-colors text-left">
-          Политика обработки персональных данных
-        </button>
-        <button data-site-action="privacy" class="hover:text-white underline transition-colors text-left">
-          Согласие на обработку персональных данных
-        </button>
-        <button data-site-action="booking" class="text-[#2B9E47] font-medium hover:underline">
-          Забронировать отдых
-        </button>
-      </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 py-10 border-b border-white/10 text-[14px]">
+      <div><h3 class="font-semibold mb-4">ГЛЭМПИНГ И ДОМА</h3><ul class="space-y-3 text-neutral-400"><li><a href="#houses">Домик «Гнездо» с чаном</a></li><li><a href="#houses">Двухэтажный дом на дереве</a></li><li><a href="#sauna">Лесное шале с сауной</a></li><li><a href="#sauna">Сибирский чан на дровах</a></li><li><a href="#sauna">Русская баня на березе</a></li></ul></div>
+      <div><h3 class="font-semibold mb-4">МЕРОПРИЯТИЯ</h3><ul class="space-y-3 text-neutral-400"><li><a href="#programs">Корпоративы и тимбилдинги</a></li><li><a href="#programs">Свадьбы и выездные регистрации</a></li><li><a href="#programs">Школьные выпускные</a></li><li><a href="#venues">Банкетный зал «Свистопляс»</a></li><li><a href="#venues">Панорамная веранда у леса</a></li></ul></div>
+      <div><h3 class="font-semibold mb-4">ИНФОРМАЦИЯ</h3><ul class="space-y-3 text-neutral-400"><li><a href="#map">Интерактивная карта базы</a></li><li><a href="#location">Правила заезда и проживания</a></li><li><a href="#quiz">Онлайн-калькулятор бронирования</a></li><li><button data-site-action="privacy">Политика конфиденциальности</button></li><li><button data-site-action="privacy">Согласие на обработку данных</button></li></ul></div>
+      <div><h3 class="font-semibold mb-4">ПРЯМЫЕ КОНТАКТЫ</h3><ul class="space-y-3 text-neutral-300"><li class="flex gap-2"><MapPin className="w-5 h-5 text-[#2B9E47] shrink-0" />Кировская область, Кирово-Чепецкий район, д. Свистоплясово, ул. Лесная, 12</li><li class="flex gap-2"><Phone className="w-5 h-5 text-[#2B9E47] shrink-0" /><span>+7 (8332) 74-55-10<br /><small class="text-neutral-500">Бронирование домиков</small></span></li><li class="flex gap-2"><Phone className="w-5 h-5 text-[#FAAB2B] shrink-0" /><span>+7 (922) 995-33-22<br /><small class="text-neutral-500">Мероприятия</small></span></li><li class="flex gap-2"><Mail className="w-5 h-5 text-[#2B9E47] shrink-0" /><a href="mailto:info@svistoplyasovo.ru">info@svistoplyasovo.ru</a></li></ul></div>
     </div>
+    <div class="pt-8 flex flex-col lg:flex-row gap-4 justify-between text-[12px] text-neutral-500"><div>© {currentYear} База отдыха и глэмпинг «Свистоплясово». Все права защищены.<br />ИП Норсеева Ирина Михайловна · ИНН: 431900639521</div><div class="flex flex-wrap gap-4"><button data-site-action="privacy">Политика обработки персональных данных</button><span>•</span><button data-site-action="privacy">Согласие на обработку данных</button></div></div>
   </div>
 </footer>
