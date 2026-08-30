@@ -9,8 +9,8 @@ import {
   Send,
   MessageCircle,
   ArrowRight,
-  ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Gift
 } from 'lucide-react';
 import { HOUSES, VENUES, POPULAR_PROGRAMS, PROMO_CODES } from '../../data/resortData';
 import { fireConfetti } from '../../utils/confetti';
@@ -243,19 +243,15 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                         <div
                           key={house.id}
                           onClick={() => setSelectedHouseId(house.id)}
-                          className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
+                          className={`relative aspect-video overflow-hidden rounded-2xl border-2 transition-all cursor-pointer ${
                             isSelected
-                              ? 'border-[#2B9E47] bg-[#eaf5ec]'
-                              : 'border-transparent bg-[#f7f7f7] hover:bg-neutral-200'
+                              ? 'border-[#2B9E47] ring-2 ring-[#2B9E47]/20'
+                              : 'border-transparent hover:border-neutral-300'
                           }`}
                         >
-                          <div className="aspect-video w-full rounded-xl overflow-hidden mb-2.5">
-                            <img src={house.photos[0]} alt={house.title} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[14px] font-semibold text-[#18191b]">{house.title}</span>
-                            <span className="text-[12px] font-semibold text-[#2B9E47]">от {house.priceFrom} ₽</span>
-                          </div>
+                          <img src={house.photos[0]} alt={house.title} className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                          <span className="absolute bottom-3 left-3 right-3 truncate text-[14px] font-semibold text-white">{house.title}</span>
                         </div>
                       );
                     })}
@@ -491,7 +487,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                 Предварительная стоимость
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-[32px] font-semibold text-[#18191b] tracking-tight">
+                <span className="text-[32px] font-semibold text-[#2B9E47] tracking-tight">
                   {finalTotal.toLocaleString('ru-RU')} ₽
                 </span>
                 {appliedPromo && (
@@ -506,32 +502,22 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
             </div>
 
             {/* Promo Code Input Box */}
-            <div className="p-3 rounded-2xl bg-[#f7f7f7] space-y-2">
-              <div className="text-[11px] font-semibold text-[#18191b] flex items-center justify-between">
-                <span>Промокод на скидку:</span>
-                {appliedPromo && (
-                  <span className="text-[#2B9E47] font-semibold">
-                    -{appliedPromo.discount.toLocaleString('ru-RU')} ₽
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-2xl bg-[#f7f7f7] px-3 py-2">
                 <input
                   type="text"
-                  placeholder="Например: GLAMP3000"
+                  placeholder="Введите промокод"
                   value={promoInput}
                   onChange={(e) => setPromoInput(e.target.value)}
-                  className="flex-1 h-[38px] px-3 rounded-xl bg-white text-[12px] uppercase font-mono text-[#18191b] focus:outline-none focus:ring-1 focus:ring-[#2B9E47]"
+                  className="flex-1 h-[40px] bg-transparent text-[12px] uppercase font-mono text-[#18191b] placeholder:normal-case placeholder:font-sans placeholder:text-[#6b7280] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleApplyPromo}
-                  className="h-[38px] px-4 rounded-xl bg-[#18191b] text-white text-[12px] font-medium hover:bg-neutral-800 transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#2B9E47] text-white flex items-center justify-center hover:bg-[#23823a] transition-colors"
+                  title="Применить промокод"
                 >
-                  Применить
+                  <Gift className="w-4 h-4" />
                 </button>
-              </div>
             </div>
 
             {/* Form */}
@@ -633,7 +619,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  className="w-full h-[46px] rounded-full bg-[#2B9E47] hover:bg-[#23823a] text-white text-[14px] font-medium flex items-center justify-center gap-2 transition-all shadow-sm"
+                  className="w-full h-[48px] rounded-full bg-[#2B9E47] hover:bg-[#23823a] text-white text-[14px] font-medium flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
                   <span>Забронировать расчет</span>
                   <ArrowRight className="w-4 h-4" />
@@ -660,10 +646,6 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-[10px] text-[#6b7280] pt-2 border-t border-neutral-100">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#2B9E47]" />
-              <span>Никаких скрытых доплат. Фиксация цены при бронировании.</span>
-            </div>
           </div>
         </div>
       </div>
