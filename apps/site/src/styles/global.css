@@ -31,6 +31,20 @@
   * {
     box-sizing: border-box;
   }
+
+  button, a, [role="button"], [tabindex="0"] {
+    cursor: pointer;
+  }
+}
+
+/* Shared section eyebrow: pale accent surface with accent copy and icon. */
+main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"][class*="mb-2.5"] {
+  background-color: #2b9e471a !important;
+  color: #2b9e47 !important;
+}
+
+main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"][class*="mb-2.5"] svg {
+  color: #2b9e47 !important;
 }
 
 /* Swiss typography utilities */
@@ -97,7 +111,7 @@
 /* Pulse online dot */
 @keyframes pulseDot {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.3); }
+  50% { opacity: 1; transform: scale(1.12); }
 }
 
 .animate-pulse-dot {

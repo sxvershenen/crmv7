@@ -80,11 +80,8 @@ export const EventsSection: React.FC<EventsSectionProps> = ({ onOpenBookingModal
                   <span>{item.dayMonth}</span>
                 </div>
 
-                {/* Time & Seats */}
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[11px] text-white">
-                  <span className="px-2 py-1 rounded-lg bg-black/50 backdrop-blur-xs">
-                    {item.time}
-                  </span>
+                {/* Remaining seats */}
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-end text-[11px] text-white">
                   <span className="px-2 py-1 rounded-lg bg-[#2B9E47] text-white font-medium">
                     Осталось {item.seatsLeft} мест
                   </span>
@@ -93,9 +90,6 @@ export const EventsSection: React.FC<EventsSectionProps> = ({ onOpenBookingModal
 
               {/* Title and Short Description */}
               <div className="px-1">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2B9E47] mb-1">
-                  {item.category}
-                </div>
                 <h3 className="text-[16px] font-semibold text-[#18191b] leading-snug group-hover:text-[#2B9E47] transition-colors line-clamp-2">
                   {item.title}
                 </h3>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Home,
   Flame,
@@ -43,7 +43,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate
 }) => {
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+  const [flyoutTop, setFlyoutTop] = useState(84);
   const [bookingDropdownOpen, setBookingDropdownOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openFlyout = (itemId: string, element: HTMLElement) => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    const rect = element.getBoundingClientRect();
+    setFlyoutTop(Math.max(76, Math.min(rect.top - 8, window.innerHeight - 360)));
+    setHoveredItemId(itemId);
+  };
+
+  const scheduleFlyoutClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setHoveredItemId(null), 320);
+  };
+
+  const keepFlyoutOpen = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  };
 
   const menuItems: MenuItem[] = [
     {
@@ -186,8 +204,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div
               key={item.id}
               className="relative"
-              onMouseEnter={() => setHoveredItemId(item.id)}
-              onMouseLeave={() => setHoveredItemId(null)}
+              onMouseEnter={(event) => openFlyout(item.id, event.currentTarget)}
+              onMouseLeave={scheduleFlyoutClose}
             >
               <button
                 onClick={() => onNavigate(item.id)}
@@ -216,25 +234,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Mega-Menu Flyout (Visible on hover with high z-index) */}
               {isHovered && (
                 <div 
+                  onMouseEnter={keepFlyoutOpen}
+                  onMouseLeave={scheduleFlyoutClose}
                   className={`fixed ${
                     isCollapsed ? 'left-[98px]' : 'left-[280px]'
-                  } top-auto w-[340px] bg-white rounded-3xl p-5 border border-neutral-200/70 shadow-2xl z-[100] animate-in fade-in slide-in-from-left-2 duration-150`}
-                  style={{ top: 'max(80px, min(calc(100vh - 420px), 160px))' }}
+                  } w-[320px] bg-white rounded-3xl p-2.5 border border-neutral-200/70 shadow-2xl z-[100] animate-in fade-in slide-in-from-left-2 duration-150`}
+                  style={{ top: flyoutTop }}
                 >
-                  <div className="mb-3.5">
-                    <div className="text-[10px] uppercase font-semibold text-[#2B9E47] tracking-wider mb-1 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#2B9E47]"></span>
-                      {item.label}
-                    </div>
-                    <div className="text-[15px] font-semibold text-[#18191b] leading-tight">
-                      {item.megaTitle}
-                    </div>
-                    <p className="text-[12px] text-[#6b7280] mt-1 leading-snug">
-                      {item.megaDesc}
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2 border-t border-neutral-100">
+                  <div className="space-y-1">
                     {item.subcategories.map((sub, sIdx) => (
                       <div
                         key={sIdx}
@@ -242,30 +249,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           onNavigate(sub.targetId);
                           setHoveredItemId(null);
                         }}
-                        className="p-2.5 rounded-xl hover:bg-[#f7f7f7] cursor-pointer transition-colors group/sub"
+                        className="p-2.5 rounded-2xl hover:bg-[#f7f7f7] cursor-pointer transition-colors group/sub flex items-center gap-3"
                       >
-                        <div className="text-[13px] font-medium text-[#18191b] flex items-center justify-between">
-                          <span>{sub.title}</span>
-                          <ArrowRight className="w-3 h-3 text-neutral-400 opacity-0 group-hover/sub:opacity-100 group-hover/sub:translate-x-0.5 transition-all" />
+                        <div className="w-9 h-9 rounded-xl bg-[#2B9E47]/10 text-[#2B9E47] flex items-center justify-center shrink-0">
+                          <ArrowRight className="w-4 h-4" />
                         </div>
-                        <div className="text-[11px] text-[#6b7280] mt-0.5 leading-snug">
-                          {sub.desc}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-medium text-[#18191b] truncate">{sub.title}</div>
+                          <div className="text-[11px] text-[#6b7280] mt-0.5 leading-snug line-clamp-1">{sub.desc}</div>
                         </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-neutral-100">
-                    <button
-                      onClick={() => {
-                        onNavigate(item.id);
-                        setHoveredItemId(null);
-                      }}
-                      className="w-full h-[36px] rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[#18191b] text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>Перейти в раздел</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
                   </div>
                 </div>
               )}
@@ -323,7 +317,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Secondary: Call Modal Button (with 2 numbers) */}
             <button
               onClick={onOpenCallModal}
-              className="w-full h-[48px] px-3.5 rounded-full bg-[#eaf5ec] text-[#237c39] text-[13px] font-medium flex items-center justify-between hover:bg-[#dcefe0] transition-colors group"
+              className="w-full h-[48px] px-3.5 rounded-full bg-[#eaf5ec] text-[#237c39] text-[13px] font-medium flex items-center justify-between hover:bg-[#dcefe0] transition-colors group cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5" />

@@ -3,7 +3,6 @@ import {
   MapPin,
   ArrowRight,
   ChevronDown,
-  Sparkles,
   Copy,
   Check,
   Send,
@@ -111,11 +110,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end mt-auto">
           {/* Left Column: Heading + Tagline + Main CTAs */}
           <div className="lg:col-span-8 space-y-4">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#2B9E47]/90 text-[10px] font-semibold tracking-wider uppercase text-white">
-              <Sparkles className="w-3 h-3" />
-              База отдыха и глэмпинг
-            </div>
-
             <h1 className="text-[28px] sm:text-[36px] lg:text-[44px] font-semibold text-white leading-[1.08] tracking-tight max-w-2xl">
               Глэмпинг в&nbsp;Кирове — дома с&nbsp;чаном и&nbsp;баней
             </h1>
@@ -130,7 +124,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setBookingDropdownOpen(!bookingDropdownOpen)}
-                  className="h-[48px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-[#23823a] transition-all group shadow-sm"
+                  className="h-[48px] pl-6 pr-3.5 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-[#23823a] transition-all group shadow-sm"
                 >
                   <span>Забронировать</span>
                   <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -179,7 +173,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Secondary CTA: Мероприятия */}
               <button
                 onClick={() => onNavigate('programs')}
-                className="h-[48px] px-6 rounded-full bg-white/20 backdrop-blur-md text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-white/30 transition-all group"
+                className="h-[48px] pl-6 pr-3.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[14px] font-medium inline-flex items-center gap-3 hover:bg-white/30 transition-all group"
               >
                 <span>Мероприятия</span>
                 <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -256,7 +250,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           return (
             <div
               key={promo.id}
-              className="p-4 rounded-2xl bg-white flex items-center justify-between transition-all group"
+              onClick={() => handleCopyPromo(promo.code, promo.amount)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') handleCopyPromo(promo.code, promo.amount);
+              }}
+              role="button"
+              tabIndex={0}
+              className="p-4 rounded-2xl bg-white flex items-center justify-between transition-all group hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#2B9E47]/30"
             >
               <div className="flex items-center gap-3.5">
                 {/* Square pill emoji icon */}
@@ -285,7 +285,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
               {/* Copy button with icon without text, confetti trigger */}
               <button
-                onClick={() => handleCopyPromo(promo.code, promo.amount)}
+                onClick={(event) => { event.stopPropagation(); handleCopyPromo(promo.code, promo.amount); }}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 ml-2 ${
                   isCopied
                     ? 'bg-[#2B9E47] text-white'

@@ -67,16 +67,23 @@ export const SaunaChanSection: React.FC<SaunaChanSectionProps> = ({
 
       {/* 2 Blocks Side-by-Side on Desktop / Swiper on Mobile */}
       <div className="flex md:grid md:grid-cols-2 gap-6 overflow-x-auto md:overflow-visible pb-4 md:pb-0 snap-swiper no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-        {items.map(({ key, data, tag }) => {
+        {items.map(({ key, data }) => {
           const activeTab = activeTabs[key] || "perks";
           const activePhoto = hoveredPhotoIdx[key] || 0;
           const isAdded = addedItems[key];
           const activeTabContent = data.tabs.find((t) => t.id === activeTab)?.content;
+          const priceNumber = data.priceFrom.match(/\d[\d\s]*/)?.[0]?.trim() ?? data.priceFrom;
 
           return (
             <div
               key={key}
-              className="w-[300px] sm:w-[360px] md:w-auto shrink-0 snap-swiper-card p-3 md:p-3.5 rounded-3xl bg-white flex flex-col justify-between"
+              onClick={() => window.location.assign(`/resources/${key}`)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') window.location.assign(`/resources/${key}`);
+              }}
+              role="button"
+              tabIndex={0}
+              className="w-[300px] sm:w-[360px] md:w-auto shrink-0 snap-swiper-card p-3 md:p-3.5 rounded-3xl bg-white flex flex-col justify-between cursor-pointer group focus:outline-none focus:ring-2 focus:ring-[#2B9E47]/30"
             >
               <div>
                 {/* Photo with hover segments */}
@@ -107,7 +114,7 @@ export const SaunaChanSection: React.FC<SaunaChanSectionProps> = ({
 
                 {/* Content */}
                 <div className="px-1.5">
-                  <h3 className="text-[19px] font-semibold text-[#18191b] leading-snug mb-2">
+                  <h3 className="text-[20px] font-semibold text-[#18191b] group-hover:text-[#2B9E47] transition-colors leading-tight mb-2">
                     {data.title}
                   </h3>
 
@@ -121,7 +128,7 @@ export const SaunaChanSection: React.FC<SaunaChanSectionProps> = ({
                       {data.tabs.map((tab) => (
                         <button
                           key={tab.id}
-                          onClick={() => setActiveTabs((prev) => ({ ...prev, [key]: tab.id }))}
+                          onClick={(event) => { event.stopPropagation(); setActiveTabs((prev) => ({ ...prev, [key]: tab.id })); }}
                           className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-medium transition-all ${
                             activeTab === tab.id
                               ? 'bg-white text-[#18191b] shadow-xs'
@@ -144,17 +151,17 @@ export const SaunaChanSection: React.FC<SaunaChanSectionProps> = ({
               {/* Bottom: Price + CTA Добавить [+] */}
               <div className="pt-3 border-t border-neutral-100 flex items-center justify-between px-1.5">
                 <div>
-                  <div className="text-[10px] uppercase font-semibold text-[#6b7280] tracking-wider">
-                    Стоимость
+                  <div className="text-[10px] font-medium text-[#6b7280] tracking-normal">
+                    стоимость от
                   </div>
-                  <div className="text-[20px] font-semibold text-[#18191b] tracking-tight">
-                    {data.priceFrom}
+                  <div className="text-[22px] font-semibold text-[#2B9E47] tracking-tight">
+                    {priceNumber} ₽
                   </div>
                 </div>
 
                 {/* Add CTA */}
                 <button
-                  onClick={() => handleAdd(data.title, key)}
+                  onClick={(event) => { event.stopPropagation(); handleAdd(data.title, key); }}
                   className={`h-[40px] px-4 rounded-full text-[13px] font-medium flex items-center gap-2 transition-all ${
                     isAdded
                       ? 'bg-[#2B9E47] text-white'

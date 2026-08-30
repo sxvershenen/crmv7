@@ -91,13 +91,13 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
           </div>
 
           {/* Travel Details & Drive Proof */}
-          <div className="p-5 rounded-3xl bg-white space-y-3.5">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#f7f7f7] flex items-center justify-center shrink-0">
-                <Car className="w-4 h-4 text-[#2B9E47]" />
+          <div className="p-3 rounded-3xl bg-white space-y-1">
+            <div className="flex items-start gap-3 p-2.5 rounded-2xl">
+              <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0">
+                <Car className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[13px] font-semibold text-[#2B9E47]">
+                <div className="text-[13px] font-semibold text-[#18191b]">
                   30 минут на авто от Театральной площади
                 </div>
                 <div className="text-[12px] text-[#6b7280] mt-0.5 leading-snug">
@@ -106,9 +106,9 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
               </div>
             </div>
 
-            <div className="flex items-start gap-3 pt-3 border-t border-neutral-100">
-              <div className="w-9 h-9 rounded-xl bg-[#f7f7f7] flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4 text-[#FAAB2B]" />
+            <div className="flex items-start gap-3 p-2.5 rounded-2xl border-t border-neutral-100">
+              <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
               </div>
               <div>
                 <div className="text-[13px] font-semibold text-[#18191b]">
@@ -121,7 +121,7 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
             </div>
 
             {/* Direct Contacts List */}
-            <div className="pt-3 border-t border-neutral-100 space-y-1">
+            <div className="pt-1 border-t border-neutral-100 space-y-1">
               <button
                 onClick={onOpenCallModal}
                 className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left group"
@@ -168,19 +168,19 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
             return (
               <div
                 key={faq.id}
-                className="rounded-3xl bg-white transition-all overflow-hidden"
+                className={`rounded-3xl transition-all overflow-hidden ${isOpen ? 'bg-[#18191b]' : 'bg-white'}`}
               >
                 {/* Large Tap Zone Header */}
                 <button
                   onClick={() => toggleFaq(faq.id)}
                   className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3 group"
                 >
-                  <span className="text-[14px] sm:text-[15px] font-semibold text-[#18191b] group-hover:text-[#2B9E47] transition-colors leading-snug">
+                  <span className={`text-[14px] sm:text-[15px] font-semibold transition-colors leading-snug ${isOpen ? 'text-white' : 'text-[#18191b] group-hover:text-[#2B9E47]'}`}>
                     {faq.question}
                   </span>
                   <div
-                    className={`w-7 h-7 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-all shrink-0 ${
-                      isOpen ? 'rotate-180 bg-[#2B9E47] text-white' : ''
+                    className={`w-7 h-7 rounded-full group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center transition-all shrink-0 ${
+                      isOpen ? 'rotate-180 bg-[#2B9E47] text-white' : 'bg-[#f7f7f7] text-[#18191b]'
                     }`}
                   >
                     <ChevronDown className="w-4 h-4" />
@@ -189,7 +189,7 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCa
 
                 {/* Answer Content */}
                 {isOpen && (
-                  <div className="px-4 pb-5 sm:px-5 text-[13px] text-[#2d3134] leading-relaxed animate-in fade-in duration-150">
+                  <div className="px-4 pb-5 sm:px-5 text-[13px] text-neutral-300 leading-relaxed animate-in fade-in duration-150">
                     <p>{faq.answer}</p>
                   </div>
                 )}

@@ -1,5 +1,5 @@
 ---
-import { Award, MapPin, ShieldCheck, Sparkles, Trees, Users } from "lucide-react";
+import { Award, MapPin, ShieldCheck, Sparkles, Trees } from "lucide-react";
 import { RESORT_IMAGES, WHY_US_FACTS } from "../../data/resortData";
 
 const getFactIcon = (id: string) => {
@@ -51,7 +51,7 @@ const getFactIconClass = (id: string) =>
                 <div class="w-10 h-10 rounded-2xl bg-[#f7f7f7] flex items-center justify-center">
                   <FactIcon className={factIconClass} />
                 </div>
-                <span class="text-[24px] font-semibold text-[#18191b] tracking-tight">
+                <span class="text-[24px] font-semibold text-[#2B9E47] tracking-tight">
                   {fact.number}
                 </span>
               </div>
@@ -79,16 +79,9 @@ const getFactIconClass = (id: string) =>
         <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
 
         <div class="absolute bottom-3 left-3 right-3 text-white">
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#2B9E47] text-[10px] font-semibold uppercase mb-1">
-            <Users className="w-3 h-3" />
-            Наша команда
-          </div>
           <div class="text-[16px] font-semibold leading-tight">
             Event-команда «Зажигай»
           </div>
-          <p class="text-[11px] text-white/90 mt-0.5">
-            12 профессиональных аниматоров, ведущих и звукорежиссёров
-          </p>
         </div>
       </div>
 

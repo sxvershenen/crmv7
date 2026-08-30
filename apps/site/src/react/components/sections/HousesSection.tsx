@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Users, ArrowRight, Sparkles } from 'lucide-react';
+import { Home, Users, ArrowRight } from 'lucide-react';
 import { HOUSES, HouseItem } from '../../data/resortData';
 
 interface HousesSectionProps {
@@ -99,11 +99,6 @@ export const HousesSection: React.FC<HousesSectionProps> = ({ onSelectHouse }) =
                     </div>
                   )}
 
-                  {/* Hover hint */}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-xs text-[11px] font-medium text-[#18191b] flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-[#2B9E47]" />
-                    <span>Наведите для фото</span>
-                  </div>
                 </div>
 
                 {/* Content */}
@@ -144,10 +139,10 @@ export const HousesSection: React.FC<HousesSectionProps> = ({ onSelectHouse }) =
               <div className="pt-3 border-t border-neutral-100 flex items-center justify-between px-1.5">
                 <div>
                   <div className="text-[10px] font-medium text-[#6b7280] tracking-normal">
-                    Стоимость суток
+                    стоимость от
                   </div>
-                  <div className="text-[22px] font-semibold text-[#18191b] tracking-tight">
-                    от {house.priceFrom.toLocaleString('ru-RU')} ₽
+                  <div className="text-[22px] font-semibold text-[#2B9E47] tracking-tight">
+                    {house.priceFrom.toLocaleString('ru-RU')} ₽
                   </div>
                 </div>
 

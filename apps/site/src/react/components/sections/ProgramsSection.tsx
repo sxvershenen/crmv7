@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, ArrowUpRight, Filter, ChevronDown, Clock, Calendar, Users } from 'lucide-react';
+import { Sparkles, ArrowRight, Filter, ChevronDown, Clock, Calendar, Users } from 'lucide-react';
 import { POPULAR_PROGRAMS, PROGRAM_CATEGORIES, ProgramItem } from '../../data/resortData';
 
 interface ProgramsSectionProps {
@@ -119,7 +119,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
             <div
               key={prog.id}
               onClick={() => onOpenBookingModal(`Программа: ${prog.title}`)}
-              className="p-3 rounded-3xl bg-white flex flex-col sm:flex-row items-center gap-4 cursor-pointer group transition-transform"
+              className="relative p-3 pr-14 rounded-3xl bg-white flex flex-col sm:flex-row items-center gap-4 cursor-pointer group transition-transform"
             >
               {/* 1:1 Preview Photo with 8-12px padding look */}
               <div className="relative w-full sm:w-28 h-28 shrink-0 rounded-2xl overflow-hidden bg-neutral-100">
@@ -159,8 +159,8 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
               </div>
 
               {/* Right arrow pill */}
-              <div className="w-8 h-8 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-colors shrink-0 self-end sm:self-center">
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-colors shrink-0">
+                <ArrowRight className="w-3.5 h-3.5" />
               </div>
             </div>
           ))}

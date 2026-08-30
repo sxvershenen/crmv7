@@ -314,7 +314,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                     onClick={() => setCurrentStep(2)}
                     className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
                   >
-                    <span>Далее: Дата и гости</span>
+                    <span>Далее</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -381,7 +381,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                 <div className="pt-3 flex items-center justify-between">
                   <button
                     onClick={() => setCurrentStep(1)}
-                    className="text-[13px] text-[#6b7280] hover:text-[#18191b]"
+                    className="h-[40px] px-5 rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[13px] text-[#6b7280] hover:text-[#18191b] transition-colors"
                   >
                     Назад
                   </button>
@@ -389,7 +389,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                     onClick={() => setCurrentStep(3)}
                     className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
                   >
-                    <span>Далее: Дополнительные опции</span>
+                    <span>Далее</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -449,7 +449,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                 <div className="pt-3 flex items-center justify-between">
                   <button
                     onClick={() => setCurrentStep(2)}
-                    className="text-[13px] text-[#6b7280] hover:text-[#18191b]"
+                    className="h-[40px] px-5 rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[13px] text-[#6b7280] hover:text-[#18191b] transition-colors"
                   >
                     Назад
                   </button>
@@ -457,7 +457,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                     onClick={() => setCurrentStep(4)}
                     className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
                   >
-                    <span>Перейти к оформлению</span>
+                    <span>Далее</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -488,7 +488,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-[32px] font-semibold text-[#2B9E47] tracking-tight">
-                  {finalTotal.toLocaleString('ru-RU')} ₽
+                  от {finalTotal.toLocaleString('ru-RU')} ₽
                 </span>
                 {appliedPromo && (
                   <span className="text-[14px] text-neutral-400 line-through">
@@ -534,8 +534,8 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
                       onClick={() => setContactMethod('phone')}
                       className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
                         contactMethod === 'phone'
-                          ? 'bg-[#18191b] text-white'
-                          : 'bg-[#f7f7f7] text-[#18191b] hover:bg-neutral-200'
+                          ? 'bg-[#2B9E47] text-white'
+                          : 'bg-[#2B9E47]/10 text-[#237c39] hover:bg-[#2B9E47]/15'
                       }`}
                     >
                       <Phone className="w-3 h-3" />
@@ -544,28 +544,28 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => setContactMethod('telegram')}
+                      onClick={() => setContactMethod('max')}
                       className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        contactMethod === 'telegram'
-                          ? 'bg-[#2B9E47] text-white'
-                          : 'bg-[#f7f7f7] text-[#18191b] hover:bg-neutral-200'
+                        contactMethod === 'max'
+                          ? 'bg-[#6557e8] text-white'
+                          : 'bg-[#6557e8]/10 text-[#5548c8] hover:bg-[#6557e8]/15'
                       }`}
                     >
-                      <Send className="w-3 h-3 -rotate-12" />
-                      <span>Telegram</span>
+                      <MessageCircle className="w-3 h-3" />
+                      <span>MAX</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setContactMethod('max')}
+                      onClick={() => setContactMethod('telegram')}
                       className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        contactMethod === 'max'
-                          ? 'bg-[#FAAB2B] text-white'
-                          : 'bg-[#f7f7f7] text-[#18191b] hover:bg-neutral-200'
+                        contactMethod === 'telegram'
+                          ? 'bg-[#229ED9] text-white'
+                          : 'bg-[#229ED9]/10 text-[#167fb0] hover:bg-[#229ED9]/15'
                       }`}
                     >
-                      <MessageCircle className="w-3 h-3" />
-                      <span>ВКонтакте</span>
+                      <Send className="w-3 h-3 -rotate-12" />
+                      <span>Telegram</span>
                     </button>
                   </div>
                 </div>

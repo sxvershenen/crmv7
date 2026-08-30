@@ -149,19 +149,18 @@ export const ReviewsSection: React.FC = () => {
                 <button
                   key={vid.id}
                   onClick={() => setActiveVideoIdx(idx)}
-                  className={`p-1.5 rounded-2xl bg-white text-left transition-all ${
-                    isActive ? 'ring-2 ring-[#2B9E47]' : 'opacity-80 hover:opacity-100'
+                  className={`relative aspect-video rounded-2xl overflow-hidden text-left transition-all ${
+                    isActive ? 'ring-2 ring-[#2B9E47]' : 'opacity-80 hover:opacity-100 hover:ring-2 hover:ring-neutral-300'
                   }`}
                 >
-                  <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-neutral-100 mb-1">
-                    <img src={vid.thumbnail} alt="" className="w-full h-full object-cover" />
-                    {isActive && (
-                      <span className="absolute inset-0 bg-[#2B9E47]/30 flex items-center justify-center">
-                        <Play className="w-3.5 h-3.5 text-white fill-white" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] font-medium text-[#18191b] truncate px-0.5">
+                  <img src={vid.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent" />
+                  {isActive && (
+                    <span className="absolute inset-0 bg-[#2B9E47]/20 flex items-center justify-center">
+                      <Play className="w-3.5 h-3.5 text-white fill-white" />
+                    </span>
+                  )}
+                  <div className="absolute bottom-1.5 left-2 right-2 text-[10px] font-medium text-white truncate">
                     {vid.tag}
                   </div>
                 </button>
