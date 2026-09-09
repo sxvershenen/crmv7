@@ -458,3 +458,11 @@
 - CLI, seed и API переведены на единый ordered migration registry. Integration/E2E setup отказывается от TRUNCATE/seed без явной одноразовой `_test_<run>` базы и ограниченной test-роли; фиксированная dev-БД удалена из API Playwright config.
 - На отдельной PostgreSQL базе применены 27 migrations; повторный run не имел pending work и сохранил контрольные данные. Targeted relation integration и API-backed Playwright `2/2` прошли.
 - Общие `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build` прошли. Полный API integration завершился `35/37`: отдельными долгами остались auth HTTP parse и price-calendar status `409` вместо `422`. Fixture Playwright завершился `53 passed / 22 skipped / 3 failed` на прежних leads/resource labels.
+
+## 2026-09-09 — Program offering dossier и typed template preview
+
+- Добавлен atomic prepare flow для program commercial dossier: exact ProgramTemplate binding, reusable CatalogOffering/PriceBook runtime и canonical `program_detail` CMS draft с безопасным legacy promotion.
+- Реализованы explicit `per_person`/`flat_package` pricing, duration-aware deterministic rule selection и immutable `template_preview` с pinned versions, expiry и `acceptanceReady=false`; public output остаётся fail-closed.
+- CRM `/programs/:id?tab=commercial` получил operator-facing тариф, readiness, server quote и reload/dirty/conflict states без показа internal IDs/lifecycle. После подготовки legacy `basePrice/published` больше не редактируются.
+- Regression triage закрыл устаревшие calendar dates и fixture labels; canonical UUID и numeric decimal DTO serialization защищены API/CRM tests.
+- Gate: workspace unit/typecheck/lint/build, PostgreSQL integration `38/38`, fixture Playwright `58 passed / 22 skipped`, API Playwright `3/3`. Fresh restricted-role database применила 28 migrations; повторный run не имел pending work.
