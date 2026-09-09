@@ -1,5 +1,7 @@
 # IMPLEMENTATION LOG
 
+Краткая append-only хронология крупных завершённых инкрементов. Подробные Phase 4 scope, команды, failures и risks находятся в `07-phase-4-cms/logs/`; текущий план — в `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md`. Этот файл не является спецификацией или backlog.
+
 ## 2026-08-23 — Phase 1 frontend foundation
 
 - Создан pnpm workspace с `apps/crm` и `packages/ui`; настроены strict TypeScript, Vite, React Router, Tailwind CSS, ESLint, Vitest и Playwright.
@@ -292,3 +294,167 @@
 - `WhyUsSection`, `PartnersMarquee` и `Footer` перенесены в чистые Astro-компоненты. Общие Tailwind 4 стили, Inter и точные классы/DOM исходного шаблона сохранены; desktop/sidebar и mobile layout визуально не перепроектировались.
 - Локальные данные выделены в site-local content fixture; будущий content source/public API не связан с CRM fixtures или внутренним API. Демонстрационный калькулятор не считается authoritative бронированием.
 - Gate нового сайта: Astro check `0 errors / 0 warnings / 0 hints`, ESLint, production build. Browser QA на `1440×900` и `390×844` подтвердил исходную композицию, отсутствие horizontal overflow, работу sidebar collapse и booking modal; console errors отсутствуют.
+
+## 2026-08-31 — Phase 3 backend + PostgreSQL + CRM integration
+
+- Добавлены shared Zod-контракты и OpenAPI для auth, клиентов, заявок, броней, ресурсов, программ, мероприятий, категорий, задач, платежей, сохранённых представлений, поиска, уведомлений и workspace; TypeORM entities покрыты последовательностью из 12 migrations без `synchronize`.
+- NestJS internal API подключён к PostgreSQL. Capability guards, серверные status transitions, optimistic versions, mutation idempotency, ChangeLog и Outbox образуют общий authoritative boundary; session/cookie auth, CSRF и password flow сохранены.
+- Клиенты и заявки получили CRUD/archive, ответственных, канонические телефоны, UTM/consent metadata и транзакционные counters. Ручная Lead↔Booking связь получила FK, active-link invariant, permissions, idempotency и audit history.
+- Бронирования используют серверную проверку интервалов и exclusion constraint ресурсов, authoritative назначения и projection detail. Платежи сведены в serializable ledger для Booking, Event и ProgramRegistration с refund/version/idempotency и пересчётом payment state.
+- Программы, проведения, регистрации, мероприятия и категории сохраняются через API; связи ресурсов reconciled через общий allocation boundary. Отмена allocation проверяет version/capability и пишет audit/outbox.
+- Персистентные notification reads, live invalidation, global search, saved views и workspace/profile/team/settings подключены к API. Сервер агрегирует Dashboard и открытую нагрузку, а неподдерживаемые назначения не маскируются локальным UI-state.
+- Production/API-режим очищен от статических operational preview-данных; `VITE_DATA_MODE=fixtures` оставлен только как явный deterministic UI-regression boundary. Исправлена регрессия, при которой Booking repository игнорировал этот флаг в Playwright.
+- Миграции применены к dev/test PostgreSQL, повторный seed идемпотентен. Gate: monorepo typecheck/lint/unit/build, API unit, contracts/domain tests, `16/16` PostgreSQL integration, `1/1` API-backed Playwright и fixture Playwright `56 passed / 22 intentional viewport skips`.
+- На границе Phase 4 работа остановлена: существующий Astro-фундамент не расширялся; public intake, public/admin API, CMS, публикация и integration health остаются следующим этапом.
+
+## 2026-08-31 — Public site mobile cards и blog section
+
+- Mobile header временно снят с рендера; bottom navigation сохранена. Drawer закрывается по backdrop, а нижние CTA выровнены влево.
+- Ленты событий, домиков, бани/чана и площадок получили единые mobile gutters, `gap-4`, адаптивную ширину до `380px` и общую scroll-into-view swipe hint для resource-секций.
+- После проверки в реальном preview отрицательный левый margin у mobile rail убран: на compact mobile rail начинается с `margin-left: 0`, а отрицательный край оставлен только справа.
+- Фильтры программ и площадок выровнены по правому краю напротив заголовка. Список программ пересобран без preview-фото: равная высота, title/description, ограниченные баблы и правая arrow action.
+- Между площадками и блоком «Почему выбирают» добавлен Astro blog section: 4 image cards, mobile swiper, 6 compact desktop-анонсов в две колонки и отдельный `/blog` route.
+
+## 2026-08-31 — Phase 4 foundation: public UI kit и CMS frontend
+
+- Создан независимый versioned `packages/site-ui`; весь существующий public frontend, включая 14 homepage-секций, маршруты, навигацию, footer и модальные сценарии, переведён на semantic tokens и reusable components.
+- Добавлены primitives/compositions, public cards/listings/media/forms/overlays/feedback, accessible date-range/guest/booking flow, section registry, AI artifact manifest и noindex `/dev/site-ui`.
+- Public architecture gate запрещает `@crm/ui`, DB/internal API imports, локальные semantic colors, radii, shadows и typography utilities; gate прошёл 14/14 секций.
+- Создан отдельный `apps/admin` на CRM design system: responsive shell, content tree/lists, route-driven editors, inheritance/effective diff, media/release/analytics/code/SEO/settings/audit flows и `/dev/ui/admin`.
+- CMS frontend использует typed fixture repository и явно не выдаёт preview upload/publish/code/analytics за backend authority.
+
+## 2026-08-31 — Phase 4 contracts, persistence и API topology
+
+- В `packages/contracts` добавлены strict Content/SEO/Media/Publication/Public Site/Public Intake/Analytics/Admin Capability schemas и отдельные Admin/Public OpenAPI 3.1 registries.
+- Public contract non-leak tests запрещают draft/media-admin/raw-analytics DTO; публичный intake создаёт только Lead, а operational Event не является public profile kind.
+- Добавлена migration `1788116800000-cms-content-releases` и TypeORM entities для nodes, immutable revisions, releases/items, public profiles и singleton active-release CAS pointer.
+- Nest global prefix разделён на `/api`; прежние CRM modules сохранены под `/internal/v1`, добавлены `/admin/v1/openapi.json` и `/public/v1/openapi.json`.
+- Gate после content/public slice: contracts 26/26, API unit 26/26, PostgreSQL integration 17/17; 13 migrations применены к чистой PostgreSQL 16.10 в Colima. Runtime закреплён на Node 24 (`>=24.0.0 <25`).
+
+## 2026-08-31 — Phase 4 CMS content и public read boundary
+
+- Реализован authenticated content-node lifecycle с immutable revisions, review/return/archive, granular RBAC, CAS/idempotency и ChangeLog/Outbox.
+- Canonical routes выводятся из parent + slug; duplicate drafts разрешены, а path uniqueness перенесена в atomic release gate.
+- Public resolver читает materialized `resolved_content` одним snapshot-consistent query и не отдаёт drafts, relations, audit и authoring policies.
+- Signed preview token аудируется; до inheritance materializer preview честно помечен `renderable=false`.
+- Live PostgreSQL gate выявил и исправил Nest wrapper routing: все Phase 3 child modules снова гарантированно доступны под `/api/internal/v1`.
+
+## 2026-08-31 — Phase 4 atomic publication core и CMS API integration
+
+- CMS frontend переведён на admin API по умолчанию; fixtures остались явным изолированным режимом. List/search/filter/detail/create/update/review/return/archive и optimistic conflict UI работают через typed repository.
+- Backend получил approve, immutable release build/get, CAS activate и rollback clone. Materializer фиксирует resolved public config и все inherited parent dependencies; public API не видит authoring policy.
+- Build/activate/rollback используют SERIALIZABLE, active-release CAS, idempotency, ChangeLog и typed Outbox. Unknown removals, route conflicts, archived nodes, unresolved CRM projections и missing inheritance bases блокируют release.
+- Persisted `site default` / `page type default`, render-ready preview, delivery/cache invalidation и release UI остаются P4.3b; текущая реализация не фабрикует глобальные defaults.
+- Gate: contracts `26/26`, API unit `30/30`, PostgreSQL integration `17/17`, admin `15/15`, CRM `176/176`; public UI architecture `14/14`, Astro check/build и workspace typecheck/lint/build проходят.
+
+## 2026-08-31 — Public homepage regression recovery
+
+- Восстановлены точные pre-migration DOM/classes/assets и сценарии Hero, навигации, Events/Houses/Sauna/Venues, footer и четырёх modal flows из commit `9cd146a`; намеренные более поздние mobile rails, Programs, filters и Blog сохранены.
+- Semantic tokens приведены к исходным цветам, типографике, теням, glass/divider и motion ролям; глобальный `.site-theme` больше не переопределяет локальную baseline-типографику.
+- ModalHub перенесён в `BaseLayout`, поэтому booking/call/privacy работают на blog/privacy/resource routes; footer/root anchors и cross-page navigation ведут к `/#section`.
+- Dialogs получили role/labels, initial focus, focus trap, Escape, backdrop close и scroll lock; toast получил live region и реальное закрытие.
+- Исправлена потеря ранних cross-island действий: typed event runtime хранит событие до регистрации ModalHub listener.
+- Найдена окруженческая причина «пропавшей функциональности»: два Astro dev-сервера одного checkout конкурентно перезаписывали общий Vite optimize cache, после чего React падал на `_jsxDEV is not a function`. Контрольный сервер остановлен, cache безопасно изолирован и dev server поднят заново.
+- Добавлен `apps/site/e2e/homepage-regression.spec.ts`: 6/6 desktop/mobile Chromium scenarios проверяют структуру, typography, hydration, booking, Escape/scroll lock, Sauna tabs, внутренние modal actions и cross-page anchors.
+- Финальный public gate: Astro/typecheck `0` diagnostics, `@crm/site-ui` typecheck, architecture `14/14`, production build `6` routes, Playwright `6/6`, `git diff --check`.
+
+## 2026-08-31 — Public visual closure и CMS authenticated shell
+
+- Sol High повторно сравнил homepage с `9cd146a`; устранён поздний `font: inherit`, стиравший Tailwind typography у form controls. Сохранено только наследование font-family, поэтому фильтры, табы, CTA, footer и calculator снова используют исходные размеры и weights.
+- Закрыты остаточные visual deltas Houses/Sauna/Programs/Venues: desktop gaps, card captions, reset button, legacy border/disabled/hover colors, selection и layout-neutral Toast close.
+- CMS получила API login/session/logout, real user shell, dev `/api` proxy, безопасные retry/auth-event policies, re-auth поверх смонтированного редактора, access-denied state и capability-aware navigation/routes/actions.
+- Auth ответы вынесены в canonical contracts, Nest auth mutations приведены к документированному HTTP 200. Локальная PostgreSQL повторно заполнена идемпотентным seed для browser QA.
+- Gate: public Playwright `6/6`, Astro check/build и architecture `14/14`; admin `22/22`, typecheck/lint/build; API unit `30/30`, PostgreSQL integration `17/17`, contracts `26/26`, `git diff --check`.
+
+## 2026-08-31 — Documentation context reset
+
+- Корневой контекст обновлён под фактический проект: свистоплясово.рф, SEO-first public site, CMS, CRM и единый backend с явным ownership данных и сквозными notifications/audit/delivery flows.
+- `AGENTS.md` теперь фиксирует текущую Phase 4, минимальную маршрутизацию и единые места для roadmap, logs, решений и краткой истории.
+- `00-core`, `01-design-system` и `02-screens` очищены от исторических phase-инструкций, черновых формулировок, дублированной editor/scheduler anatomy и устаревшего «backend позже»; уникальные CRM UX-инварианты сохранены.
+- `MANIFEST.md`, `README.md` и `UX_IMPROVEMENTS.md` превращены соответственно в карту контекста, актуальный human entry point и только открытый cross-cutting backlog.
+
+## 2026-08-31 — Public source authoring и единый styling/SEO contract
+
+- CMS page model разделён на standard Astro templates с typed CMS fields и уникальные Codex-authored artifacts в allowlisted `apps/site/src/managed/**`; arbitrary drag-and-drop/classes/TSX из БД не используются.
+- `@crm/site-ui` закреплён как единственный visual authority: page Tailwind ограничен layout, отличающийся существующий UI становится named variant и проходит real consumer → v2 gallery → desktop/mobile regression.
+- Добавлены общие Astro page shell/frame и React/Astro section header; пять локальных heading copies и class-fragment global CSS hack удалены без pixel drift.
+- Tailwind cascade исправлен через стандартный `components` layer, animation foundation подключён в kit, architecture gate защищает новые boundaries.
+- BaseLayout серверно принимает release social/JSON-LD; home/catch-all используют CMS robots/custom canonical/social/structured data, 404 получает noindex.
+- Незавершённая privacy page временно исключена из индекса и sitemap вместо публикации thin placeholder.
+- Gate: site-ui/site typecheck, architecture 14/14, production build и fresh Playwright 24/24 desktop/mobile green.
+
+## 2026-08-31 — Offering catalog architecture и operational non-leak gate
+
+- Phase 4 CMS пересобрана вокруг шести направлений: домики, кемпинги, допы, площадки, мероприятия под заказ и программы; generic профили/категории оставлены technical registry, а основной target UX перенесён в `/offers/*`.
+- Зафиксированы CRM-owned `CatalogOffering`, EventServiceTemplate, versioned price books/rules/business calendar/add-on assignments/quote snapshots и multi-surface single-authority editing через один application service.
+- P4.5 разбит на P4.5A–P4.5F: product/schema lock → pricing core → CRM editors → CMS workspaces → safe public projections → route migration по одному направлению.
+- Закрыт non-leak gap: comments конкретных Event/ProgramOccurrence не попадают в CMS draft, а source-aware publish/activate/rollback fail closed без allowlisted public offering/profile projection.
+- Gate: API unit `35/35`, PostgreSQL integration `21/21`, API typecheck/lint и `git diff --check` прошли.
+
+## 2026-08-31 — P4.5A offering contracts и additive schema foundation
+
+- Подтверждённая продуктовая семантика превращена в strict contracts для шести offering kinds, двух campground sales units, производственного календаря, versioned price books/rate plans/rules, reusable/offering-specific add-ons, segmented editor concurrency и safe quote/public projections.
+- Добавлена forward migration `1788118000000-offering-catalog-foundation` и TypeORM entities для catalog/bindings, ResourceGroup, EventServiceTemplate, typed campground/add-on terms, business calendar, pricing и searchable add-on assignments.
+- Допы унифицированы как `CatalogOffering(kind=addon)`; assignment выбирает stable rate-plan key и не копирует цену. Текущие Resource/Program readers, API routes и public delivery не переключались.
+- Gate: contracts `36/36`, API unit `35/35`, PostgreSQL integration `21/21`, contracts/DB/API typecheck+lint; чистые 16 migrations и P4.5A revert→run прошли, DB invariant probes подтвердили ключевые запреты.
+
+## 2026-09-01 — P4.5B house pricing core
+
+- Реализован первый backend-only vertical slice для домика: один CRM/CMS application service, versioned draft/activation/scheduling, deterministic per-night quote и immutable provenance.
+- Добавлены runtime migration guards для immutable PriceBook graph и quote snapshots, независимые consumer checkpoints Outbox и scheduled activation worker.
+- Internal/Admin маршруты используют один authority и cross-surface idempotency; Public API pricing commands не получил. Read-only legacy dry-run ничего не мигрирует без явного календаря и ручного решения неоднозначных типов/цен программ.
+- Gate: contracts `39/39`, domain `22/22`, API unit `37/37`, PostgreSQL integration `24/24`, typecheck/lint всех затронутых packages; final Sol High architecture review findings for lifecycle, calendar gaps, outbox lease recovery, subject versions, rule IDs, CORS and UUID paths were resolved.
+
+## 2026-09-01 — P4.5B calendar, bindings and reusable add-ons
+
+- Добавлены единый Internal/Admin Business Calendar API, atomic house bindings, searchable reusable add-ons и offering-specific create-and-assign без второго CRM/CMS authority.
+- Calendar/binding/add-on mutations используют serializable transactions, segmented CAS, cross-surface idempotency, audit и consumer-scoped projection invalidations; public commands не раскрыты.
+- Gate: contracts `43/43`, domain `26/26`, API unit `40/40`, PostgreSQL integration `25/25`, typecheck/lint и применённая `OfferingConfigurationRuntime1788118800000`; Sol High findings по idempotency, request-only invalidation и DB immutability закрыты.
+
+## 2026-09-01 — P4.5B accepted house quote links
+
+- House quote snapshot получил pinned operational context, а подтверждение Booking — атомарную immutable связь quote с точным `BookingItem`, exact replay, audit и typed Outbox.
+- SQL boundary самостоятельно валидирует context/resource/version/item/period/amount и wall-clock expiry; Event/ProgramRegistration остаются fail-closed до typed pricing resolvers.
+- Gate: contracts `46/46`, domain `29/29`, API unit `40/40`, PostgreSQL integration `26/26`, migration revert→run, typecheck/lint/diff check; повторный Sol High review не нашёл P0/P1 в expiry, DB boundary и lock order.
+
+## 2026-09-01 — P4.5B offering projection delivery runtime
+
+- Typed offering invalidations получили единый fenced consumer runtime: monotonic generation/receipt, durable provider-neutral `database_epoch` cache effect, bounded retry/DLQ и восстановление зависших lease без двойного поколения.
+- Admin-only observability/replay не раскрывает payload/error, использует capability, exact idempotency и ABA-safe CAS по status/epoch/attempts; database guards блокируют успех без applied receipt и изменение delivery identity.
+- Gate: contracts `50/50`, domain `31/31`, API unit `52/52`, PostgreSQL integration `28/28`, typecheck/lint/diff check; targeted Sol High re-review после трёх исправлений не нашёл P0/P1.
+
+## 2026-09-01 — P4.5C/D shared house editor
+
+- Добавлен единый transport-neutral `@crm/offering-editor` и два тонких host-адаптера: Internal API для CRM и Admin API для CMS; оба открывают один `CatalogOffering`, owner versions и capabilities без operational-копии в CMS.
+- Первый vertical slice реализует реестр домиков, route-driven overview/pricing, полную create/replace работу с PriceBook draft, segmented CAS/conflict recovery и server-authoritative quote simulator с immutable provenance.
+- Development seed создаёт локальный домик, binding, календарь и активный тариф только вне production; CMS content/publication, activation/scheduling и binding/add-on mutation оставлены следующими bounded slices.
+
+## 2026-09-01 — CMS runtime recovery and house editor density
+
+- CMS dashboard переведён с fixture-only ошибки на strict Admin API и PostgreSQL aggregates; analytics остаётся честно помеченной как не подключённая.
+- Development seed идемпотентно добавляет пять валидных CMS-страниц и draft-навигацию, не перезаписывает existing canonical data и имеет двойной production guard.
+- Shared house editor для CRM/CMS получил compact summary, semantic field widths, тарифы как читаемые коммерческие формулы, двухпанельный quote result и единые readonly/conflict recovery states.
+- Gate: contracts `52/52`, API unit `55/55`, PostgreSQL integration `28/28`, focused shared-editor/admin tests, typecheck/lint и live Admin API probes.
+
+## 2026-09-01 — Agent context budget optimization
+
+- Корневой `AGENTS.md` больше не требует обязательного pre-read core/status/roadmap и маршрутизирует агента к одной primary spec и одной зависимости.
+- CRM, CMS, public UI и managed-page инварианты перенесены в scoped `AGENTS.md`; мёртвые ссылки на удалённые historical UI specs убраны.
+- Phase 4 README стал единым compact current-status/next-step; roadmap, decisions и logs читаются только по релевантному heading.
+- Добавлена безопасная Terra/Luna delegation policy: bounded task packets, disjoint ownership, main-agent architecture/integration/gates и запрет worker-изменений planning/history files.
+
+## 2026-09-01 — P4.5B/C/D campground operational slice
+
+- Общий pricing/editor application service расширен на owned tents и shared-capacity own-tent area без второго CRM/CMS authority; ResourceGroup остаётся только operational grouping.
+- CRM и CMS получили `/offers/campgrounds` и route-driven dossier с компактными subtype/capacity карточками, binding/add-on/pricing panels и server quote preview; CMS использует canonical `catalog_offering` editorial locator.
+- PostgreSQL guards фиксируют совместимость terms, Resource capacity mode и единственный активный membership. Quote проверяет форму quantities и capacity, умножает per-night цену общей зоны на units и сохраняет fail-closed immutable snapshot без operational acceptance context.
+- Development seed добавляет группу, отдельную палатку на 4 гостей, shared-зону на 15 палаточных мест, активные тарифы и CMS drafts. Gate: contracts `58/58`, domain `34/34`, API unit `58/58`, PostgreSQL integration `34/34`, offering editor `13/13`, CRM `190/190`, Admin `44/44`, typecheck/lint и `git diff --check`.
+
+## 2026-09-09 — Phase 3 Booking↔Lead API closure и test DB safety
+
+- Ручная связь брони с заявкой завершена сквозным command flow: canonical booking scope, capability checks, optimistic version, typed idempotency, link/relink/unlink/history и преобразование unique race в domain conflict.
+- Связь, booking version, append-only history, audit и outbox записываются одной транзакцией; no-op после проверки версии не создаёт side effects. Добавлены stateful unit-тесты concurrency, rollback, replay и invalid targets.
+- CRM repository и editor используют отдельные relation commands, сохраняют dirty draft и server version, показывают pending/403/409/error/history states и не теряют `preparationMinutes`. Fixture adapter подчиняется общему data-mode.
+- CLI, seed и API переведены на единый ordered migration registry. Integration/E2E setup отказывается от TRUNCATE/seed без явной одноразовой `_test_<run>` базы и ограниченной test-роли; фиксированная dev-БД удалена из API Playwright config.
+- На отдельной PostgreSQL базе применены 27 migrations; повторный run не имел pending work и сохранил контрольные данные. Targeted relation integration и API-backed Playwright `2/2` прошли.
+- Общие `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build` прошли. Полный API integration завершился `35/37`: отдельными долгами остались auth HTTP parse и price-calendar status `409` вместо `422`. Fixture Playwright завершился `53 passed / 22 skipped / 3 failed` на прежних leads/resource labels.

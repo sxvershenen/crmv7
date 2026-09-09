@@ -1,78 +1,69 @@
-# AGENTS.md — CRM v7 «Свистоплясово»
+# AGENTS.md — платформа «Свистоплясово»
 
-Этот файл — **единственная обязательная точка входа** для ИИ-агента.
-Не читать весь каталог документации «на всякий случай»: сначала определить тип задачи и открыть только указанные ниже файлы.
+Монорепозиторий связывает SEO-first public site, CMS, CRM и NestJS/PostgreSQL backend. Активна Phase 4: CMS, public delivery, media, intake, analytics и SEO expansion.
 
-## 1. Источники истины
+## Authority
 
-Всегда сначала прочитать:
+- Backend/CRM владеет operational facts: статусы, availability/capacity, цены, брони, оплаты, права и concurrency.
+- CMS владеет editorial content, SEO, media, composition и publication.
+- Public site читает только published public API/projections, не обращается к БД/internal API, не публикует draft/internal/PII и не подтверждает бронь.
+- Один бизнес-факт не имеет двух authority; границы проходят через typed contracts, audit/outbox, notifications и cache invalidation.
 
-1. `00-core/source-of-truth.md`;
-2. `00-core/development-order.md`;
-3. только документы своей задачи из таблицы ниже.
+Приоритет при конфликте: явная задача пользователя → актуальное решение в `DECISIONS.md` → рабочая спецификация контура → код как свидетельство реализованного состояния. `reference/*` — только архив для разрешения конкретной неоднозначности.
 
-`reference/*` — архив исходников. **Не читать**, если рабочие документы не содержат явной неоднозначности.
+## Контекстный бюджет
 
-## 2. Маршрутизация контекста
+1. Определить контур и проверить dirty worktree; затем либо открыть релевантный код/тесты для собственной работы, либо делегировать discovery без дублирующего чтения.
+2. До кода читать одну primary spec и максимум одну зависимую; остальное — только по выявленной границе.
+3. Не читать целиком human README/MANIFEST, `DECISIONS.md`, `IMPLEMENTATION_LOG.md`, roadmap или `logs/`: найти heading через `rg` и открыть только его диапазон.
+4. При изменении scoped-каталога один раз прочитать его ближайший `AGENTS.md`; не перечитывать уже переданный в task контекст.
 
-| Задача | Читать |
+## Маршруты
+
+| Задача | Основной контекст |
 |---|---|
-| Дизайн-система / UI kit | `01-design-system/README.md` и перечисленные там файлы |
-| Shell / navigation | `01-design-system/visual-foundation.md`, `01-design-system/shell-navigation.md`, `01-design-system/data-display-and-controls.md` |
-| Scheduler / timeline / agenda / DnD | `01-design-system/visual-foundation.md`, `01-design-system/scheduler.md`, затем нужный экран из `02-screens/` |
-| Конкретный CRM-экран | `01-design-system/visual-foundation.md`, `01-design-system/data-display-and-controls.md`, соответствующий `02-screens/*.md` |
-| Create/edit страница | `01-design-system/editor-layout.md` + соответствующий `02-screens/editors-*.md` |
-| Frontend architecture | `00-core/stack.md`, `03-frontend/architecture.md`, `03-frontend/routing-state-responsive.md` |
-| Backend/domain | `04-domain-backend/domain-model.md` + только нужный backend-документ |
-| PostgreSQL | `04-domain-backend/database-postgres.md` + релевантный domain-документ |
+| Общий scope / стек | `00-core/project-scope.md` / `00-core/stack.md` — только нужный из них |
+| CRM UI | `apps/crm/AGENTS.md`, затем текущие page/components/tests |
+| CMS UI | `apps/admin/AGENTS.md`, затем нужный раздел `07-phase-4-cms/CMS-UX-SPEC.md` |
+| Backend/domain/PostgreSQL | `04-domain-backend/domain-model.md`, затем один профильный backend-документ |
 | API/auth/concurrency | `04-domain-backend/api-auth-concurrency.md` |
-| Live updates/notifications | `04-domain-backend/live-notifications.md` |
-| Public site/admin | `05-site-admin/public-site-admin.md` + релевантные domain/API docs |
-| Тесты/security/release | `06-quality-process/testing-security.md`, `06-quality-process/stage-deliverables.md` |
+| Live/notifications | `04-domain-backend/live-notifications.md` |
+| Public UI/sections/booking | `packages/site-ui/AGENTS.md`, затем текущий consumer |
+| Managed public page | `apps/site/src/managed/AGENTS.md` |
+| Offering/pricing/CRM↔CMS | только нужный раздел `07-phase-4-cms/OFFERING-CATALOG-ARCHITECTURE.md` |
+| CMS/publication/media/delivery | `07-phase-4-cms/README.md`, затем один документ из его индекса |
+| Public intake/integration | `07-phase-4-cms/PLATFORM-ARCHITECTURE.md` + релевантные contracts/code |
+| SEO/site structure/content | один из `07-phase-4-cms/SEO-STRATEGY.md` / `07-phase-4-cms/SITE-STRUCTURE.md`; live-выводы только по source evidence |
+| Analytics/я.Метрика | `07-phase-4-cms/ANALYTICS.md` |
+| Tests/security/release | один из `06-quality-process/testing-security.md` / `06-quality-process/stage-deliverables.md` |
 
-## 3. Приоритет правил
+Текущий статус и следующий инкремент находятся только в `07-phase-4-cms/README.md`. `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md` открывать точечно при изменении порядка или проверке acceptance gate.
 
-При конфликте:
+## Реализация
 
-1. текущая явная задача пользователя;
-2. `00-core/source-of-truth.md` и `DECISIONS.md`;
-3. рабочие UI-спеки из `01-design-system/` и `02-screens/` для внешнего вида/UX;
-4. архитектурные документы `03-*` / `04-*` / `05-*`;
-5. `reference/original-ui-visual.md`;
-6. `reference/original-fullstack.md`.
+- Не откатывать чужие dirty changes; использовать shared contracts/design systems/repository boundaries без второй authority.
+- Для затронутых границ проверять `authority → contract/API → consumer → audit/notification/cache`.
+- Public frontend сохраняет Astro-first HTML, crawlability, metadata/accessibility и минимальную hydration; fixtures только в явном dev/test mode.
+- Проверки пропорциональны риску; UI включает desktop/mobile, overflow, keyboard и ключевые states.
 
-Не пытаться «усреднить» конфликтующие требования.
+## Делегирование
 
-## 4. Текущий порядок разработки
+Простую последовательную задачу main делает сам; bounded implementation, независимые подзадачи и шумную read-only/механическую работу можно делегировать.
 
-**Design system → frontend → backend + интеграция CRM → public site/admin.**
+- До worker - main ограничивается instructions, `git status` и `rg`; broad source discovery не делает.
+- Предпочитать узкого worker'а с циклом discovery → edit → targeted tests вместо цепочки ролей.
+- worker возвращает evidence map: paths/symbols/lines, dependencies, relevant tests/spec section, unknowns; без source dumps.
+- После worker - main читает только critical boundaries или спорные факты; owned source читает worker.
+- Integration review: worker summary + `git diff`; source перечитывать только при необходимости.
+- Параллельная запись только в disjoint owned files, обычно ≤2 workers.
+- Task packet: цель, owned files, одна spec/section, ограничения, acceptance commands.
+- Workers не меняют roadmap, `DECISIONS.md`, `IMPLEMENTATION_LOG.md` и logs; документацию после интеграции обновляет main.
 
-Старое требование делать каждый UI-этап сразу full-stack vertical slice больше не определяет порядок текущей разработки. Детали — `00-core/development-order.md`.
+## Планы и логи
 
-## 5. Базовые правила работы агента
-
-- Перед реализацией проверить существующий код и не ломать уже работающие части.
-- Не придумывать новые бизнес-факты. Если данных не хватает — проектировать расширяемую механику, а не выдумывать предметные правила.
-- UI/UX не исполнять механически: проверять плотность, иерархию, переполнение, mobile, empty/loading/error/disabled/conflict states.
-- Не дублировать один паттерн разными визуальными реализациями без причины.
-- Для UI использовать дизайн-систему и общие компоненты; экран не должен становиться локальной «второй дизайн-системой».
-- В backend после его появления бизнес-правила authoritative на сервере.
-- Значимые изменения фиксировать в `DECISIONS.md`.
-
-## 6. Ключевые UX-решения, которые нельзя откатывать
-
-- Create/edit сущности — отдельные route-driven страницы внутри основного CRM layout (sidebar/topbar сохраняются), не modal/overlay.
-- Editor page: основной контент + правый sidebar, fixed top bar, tabs, fixed bottom action bar.
-- Поля в editor сразу редактируемые.
-- Один глобальный визуальный язык и компактная информационная плотность.
-- Важные/resource-иконки — с подложкой; ресурс/категория — цветная иконка + оттеночная подложка.
-- Ответственные — аватары `24×24`; если нет — `+ Назначить`.
-- Карточки кликабельны; табличные колонки сортируемы там, где сортировка осмысленна.
-- Размер элемента должен соответствовать типу и ожидаемой длине данных.
-- Не строить «карточка внутри карточки внутри карточки»: предпочитать секции и divider.
-- Mobile — отдельная адаптация, а не уменьшенный desktop.
-
-## 7. Что читать при сомнении
-
-Если рабочий документ кажется неполным, сначала открыть `reference/conflict-map.md`.
-Только затем — соответствующий оригинал из `reference/`.
+- Task plan — во встроенном plan. Roadmap менять только при изменении scope/order/gate, Phase 4 status — в её README.
+- Main agent обновляет один `07-phase-4-cms/logs/YYYY-MM-DD-<track>.md` только при значимом acceptance change.
+- `DECISIONS.md` — durable решения, `IMPLEMENTATION_LOG.md` — крупные milestones; README/spec/AGENTS не progress log.
+- После каждого завершённого изменения, выполненного по запросу пользователя, создавать отдельный git-коммит с понятным сообщением.
+- Не включать в коммит чужие или unrelated dirty changes.
+- `git push` выполнять только по прямому запросу пользователя.

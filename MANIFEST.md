@@ -1,43 +1,18 @@
-# Manifest
+# Карта документации
 
-- `00-core/development-order.md`
-- `00-core/project-scope.md`
-- `00-core/source-of-truth.md`
-- `00-core/stack.md`
-- `01-design-system/README.md`
-- `01-design-system/component-inventory.md`
-- `01-design-system/data-display-and-controls.md`
-- `01-design-system/dev-ui.md`
-- `01-design-system/editor-layout.md`
-- `01-design-system/scheduler.md`
-- `01-design-system/shadcn-preset.md`
-- `01-design-system/shell-navigation.md`
-- `01-design-system/visual-foundation.md`
-- `02-screens/bookings.md`
-- `02-screens/customers.md`
-- `02-screens/dashboard.md`
-- `02-screens/editors-booking.md`
-- `02-screens/editors-lead-customer-task.md`
-- `02-screens/editors-resources-programs-events.md`
-- `02-screens/events.md`
-- `02-screens/finance.md`
-- `02-screens/leads.md`
-- `02-screens/programs.md`
-- `02-screens/resources.md`
-- `02-screens/tasks.md`
-- `03-frontend/architecture.md`
-- `03-frontend/routing-state-responsive.md`
-- `04-domain-backend/api-auth-concurrency.md`
-- `04-domain-backend/availability-bookings-payments.md`
-- `04-domain-backend/database-postgres.md`
-- `04-domain-backend/domain-model.md`
-- `04-domain-backend/live-notifications.md`
-- `05-site-admin/public-site-admin.md`
-- `06-quality-process/stage-deliverables.md`
-- `06-quality-process/testing-security.md`
-- `AGENTS.md`
-- `DECISIONS.md`
-- `README.md`
-- `reference/conflict-map.md`
-- `reference/original-fullstack.md`
-- `reference/original-ui-visual.md`
+Human navigation only. ИИ-агент начинает с `AGENTS.md` и не читает эту карту по умолчанию.
+
+| Раздел | Назначение |
+|---|---|
+| `00-core/` | product scope, stack и human summaries authority/order |
+| `04-domain-backend/` | domain, PostgreSQL, API/auth/concurrency, live updates |
+| `05-site-admin/` | compatibility pointer на Phase 4 |
+| `06-quality-process/` | testing, security и acceptance gates |
+| `07-phase-4-cms/README.md` | единый current status и следующий инкремент |
+| `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md` | долговременный порядок и gates; читать по разделам |
+| `07-phase-4-cms/logs/` | фактические журналы треков; не читать весь каталог |
+| `DECISIONS.md` | durable decisions; находить по ID/ключевому слову |
+| `IMPLEMENTATION_LOG.md` | крупные historical milestones, не current context |
+| `reference/` | архив, только для разрешения неоднозначности |
+
+Близкие к коду instructions: `apps/crm/AGENTS.md`, `apps/admin/AGENTS.md`, `packages/site-ui/AGENTS.md`, `apps/site/src/managed/AGENTS.md`.

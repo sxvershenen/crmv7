@@ -1,43 +1,64 @@
-# CRM v7 — декомпозированная документация
+# «Свистоплясово» — web platform
 
-Документация переразложена из двух исходных ТЗ так, чтобы ИИ-агент получал минимальный релевантный контекст.
+Монорепозиторий нового веб-проекта для **свистоплясово.рф**: SEO-first публичный сайт загородного глэмпинга/кемпинга, CMS, операционная CRM и единый NestJS/PostgreSQL backend.
 
-## Начало работы
+## Состав
 
-Для агента: открыть **только `AGENTS.md`** и следовать таблице маршрутизации.
+- `apps/site` — публичный Astro frontend;
+- `apps/admin` — CMS;
+- `apps/crm` — операционная CRM;
+- `apps/api` — Internal/Admin/Public API;
+- `packages/site-ui` — публичная дизайн-система;
+- `packages/ui` — CRM/CMS дизайн-система;
+- `packages/contracts`, `domain`, `db`, `config` — общие контракты и backend foundation.
 
-Для человека:
+Public site, CMS и CRM связаны через типизированные API, projections, audit/outbox и notifications. Public site не читает БД/internal API и не создаёт подтверждённую бронь; CMS не дублирует operational authority CRM.
 
-- `00-core/` — приоритеты, scope, порядок разработки, stack;
-- `01-design-system/` — дизайн-система и общие UI-паттерны;
-- `02-screens/` — экранные спецификации, преимущественно сохранённые из визуального ТЗ;
-- `03-frontend/` — архитектура frontend;
-- `04-domain-backend/` — предметная модель, API, PostgreSQL, concurrency;
-- `05-site-admin/` — будущая интеграция публичного сайта и админки;
-- `06-quality-process/` — тесты, security, критерии этапа;
-- `reference/` — исходные файлы без изменений + карта разрешённых конфликтов.
+## Текущий этап
 
-## Почему исходники оставлены
+CRM и основной backend реализованы. Публичный frontend почти завершён. Активная работа идёт в Phase 4: CMS/public delivery, media, intake, analytics и SEO expansion.
 
-`reference/original-ui-visual.md` и `reference/original-fullstack.md` сохранены без редактирования для проверки потерь. Они не предназначены для чтения на каждом шаге.
+- актуальный статус: `07-phase-4-cms/README.md`;
+- roadmap и acceptance gates: `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md`;
+- вход для ИИ-агентов: `AGENTS.md`;
+- карта документации: `MANIFEST.md`.
 
-## Phase 1 frontend
+## Локальный запуск
 
-```bash
-pnpm install
-pnpm dev
-```
-
-- CRM Dashboard: `http://localhost:5173/`
-- UI gallery: `http://localhost:5173/dev/ui`
-- Проверки: `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e`
-
-## Public site (Astro)
+Требуются Node 24, pnpm 11 и PostgreSQL; значения окружения описаны в `.env.example`.
 
 ```bash
 pnpm install
-pnpm dev:site
+pnpm db:migrate
+pnpm db:seed
+pnpm dev:api
 ```
 
-- Публичный сайт: `http://localhost:4321/`
-- Проверки: `pnpm --filter @crm/site typecheck && pnpm --filter @crm/site lint && pnpm --filter @crm/site build`
+В отдельных терминалах:
+
+```bash
+pnpm dev         # CRM: http://localhost:5173
+pnpm dev:admin   # CMS: http://localhost:5174
+pnpm dev:site    # Public site: http://localhost:4321
+```
+
+OpenAPI:
+
+- Internal: `http://localhost:3000/api/internal/v1/openapi.json`;
+- Admin: `http://localhost:3000/api/admin/v1/openapi.json`;
+- Public: `http://localhost:3000/api/public/v1/openapi.json`.
+
+## Проверки
+
+Полный базовый gate:
+
+```bash
+pnpm -r typecheck
+pnpm -r lint
+pnpm -r test
+pnpm -r build
+```
+
+Дополнительно: `pnpm test:integration`, `pnpm test:e2e`, `pnpm test:e2e:api` и `pnpm --filter @crm/site test:e2e` для затронутых runtime flows.
+
+UI galleries: CRM `/dev/ui`, CMS `/dev/ui/admin`, public canonical `/dev/site-ui-v2`. Отклонённая v1-галерея удалена.
