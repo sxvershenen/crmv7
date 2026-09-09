@@ -90,13 +90,29 @@ export async function ensureCatalogOfferingEditorialDraft(
 ): Promise<{ status: "linked" | "created" | "promoted"; link: CmsSourceLinkEntity } | { status: "report_only"; report: LegacyCatalogOfferingPromotionReport | LegacyProgramOfferingPromotionReport }> {
   const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: input.offeringId })
   if (!offering || offering.archivedAt !== null) throw new Error(`Active catalog offering ${input.offeringId} was not found`)
-  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "program") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
+  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "program" && offering.kind !== "event_service") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
 
   const links = manager.getRepository(CmsSourceLinkEntity)
   const existing = await links.findOneBy({ sourceKind: "catalog_offering", sourceId: offering.id })
   if (existing) {
-    await assertEditorialNode(manager, existing, offering.kind === "program" ? "program_detail" : "resource_detail")
+    await assertEditorialNode(manager, existing, offering.kind === "program" ? "program_detail" : offering.kind === "event_service" ? "event_detail" : "resource_detail")
     return { status: "linked", link: existing }
+  }
+
+  if (offering.kind === "event_service") {
+    const primary = await manager.query(`
+      SELECT event_service_template_id AS "eventServiceTemplateId"
+      FROM offering_bindings
+      WHERE offering_id = $1 AND role = 'primary' AND archived_at IS NULL AND event_service_template_id IS NOT NULL
+      ORDER BY id ASC
+    `, [offering.id]) as Array<{ eventServiceTemplateId: string }>
+    if (primary.length !== 1) throw new Error(`Event-service offering ${offering.id} requires one exact primary EventServiceTemplate binding`)
+    const link = await createCmsSourceDraft(manager, {
+      sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
+      title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
+      pathPart: "event-services", pageKind: "event_detail",
+    })
+    return { status: "created", link }
   }
 
   const primary = await manager.query(`
@@ -162,7 +178,7 @@ export async function ensureCatalogOfferingEditorialDraft(
   return { status: "created", link }
 }
 
-async function assertEditorialNode(manager: EntityManager, link: CmsSourceLinkEntity, kind: "resource_detail" | "program_detail") {
+async function assertEditorialNode(manager: EntityManager, link: CmsSourceLinkEntity, kind: "resource_detail" | "program_detail" | "event_detail") {
   const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: link.nodeId })
   if (!node || node.kind !== kind) throw new Error(`CMS source link ${link.id} does not target a ${kind} node`)
 }

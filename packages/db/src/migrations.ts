@@ -27,6 +27,7 @@ import { CompositeQuoteAcceptance1788122000000 } from "./migrations/178812200000
 import { MarketingPromotions1788122400000 } from "./migrations/1788122400000-marketing-promotions.js"
 import { ProgramOfferingCore1788122800000 } from "./migrations/1788122800000-program-offering-core.js"
 import { ProgramRegistrationQuoteAcceptance1788123200000 } from "./migrations/1788123200000-program-registration-quote-acceptance.js"
+import { EventServiceOfferingCore1788123600000 } from "./migrations/1788123600000-event-service-offering-core.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -59,4 +60,5 @@ export const databaseMigrations = [
   MarketingPromotions1788122400000,
   ProgramOfferingCore1788122800000,
   ProgramRegistrationQuoteAcceptance1788123200000,
+  EventServiceOfferingCore1788123600000,
 ]

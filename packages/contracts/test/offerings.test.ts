@@ -6,6 +6,16 @@ import {
   AddOnCatalogItemSchema,
   AddOnOfferingCreateBodySchema,
   AddOnOfferingListQuerySchema,
+  EventServiceFormatSchema,
+  EventServiceOfferingLookupResultSchema,
+  EventServiceOfferingQuotePreviewBodySchema,
+  EventServiceOfferingQuoteResultSchema,
+  EventServiceRatePlanDraftSchema,
+  EventServiceTemplateCreateBodySchema,
+  EventServiceTemplateMutationBodySchema,
+  EventServiceTemplateRegistryQuerySchema,
+  EventServiceTemplateRegistryResponseSchema,
+  EventServiceTemplateReopenBodySchema,
   AddOnServiceTermsSchema,
   AddOnTermsMutationBodySchema,
   BusinessCalendarCreateSchema,
@@ -83,6 +93,171 @@ function offeringCreate(fulfillment: Record<string, unknown>) {
 }
 
 describe("P4.5A offering contracts", () => {
+  it("defines an event-service dossier with separate technical and commercial codes", () => {
+    const created = EventServiceTemplateCreateBodySchema.parse({
+      ...operation,
+      templateCode: "EVT-WEDDING",
+      offeringCode: "WEDDING-PACKAGE",
+      operationalName: "Свадебное мероприятие",
+      timezone: "Europe/Moscow",
+      businessCalendarId: secondId,
+      format: "wedding",
+      defaultDurationMinutes: 360,
+      minimumGuests: 10,
+      maximumGuests: 120,
+    });
+    expect(created).toMatchObject({ templateCode: "EVT-WEDDING", offeringCode: "WEDDING-PACKAGE", preparationBeforeMinutes: 0 });
+    expect(EventServiceFormatSchema.options).toEqual(["wedding", "corporate", "birthday", "other"]);
+    expect(EventServiceTemplateCreateBodySchema.safeParse({ ...created, minimumGuests: 121, maximumGuests: 120 }).success).toBe(false);
+
+    expect(EventServiceTemplateMutationBodySchema.parse({
+      ...operation,
+      expectedSubjectVersion: 4,
+      format: "corporate",
+      defaultDurationMinutes: 240,
+      minimumGuests: null,
+      maximumGuests: null,
+      preparationBeforeMinutes: 30,
+      preparationAfterMinutes: 30,
+    }).expectedSubjectVersion).toBe(4);
+    expect(EventServiceTemplateMutationBodySchema.safeParse({
+      ...operation,
+      expectedSubjectVersion: 4,
+      code: "another-technical-code",
+      format: "corporate",
+      defaultDurationMinutes: 240,
+      minimumGuests: null,
+      maximumGuests: null,
+      preparationBeforeMinutes: 0,
+      preparationAfterMinutes: 0,
+    }).success).toBe(false);
+    expect(EventServiceTemplateReopenBodySchema.parse({ ...operation, expectedSubjectVersion: 5 }).expectedSubjectVersion).toBe(5);
+    expect(EventServiceTemplateRegistryQuerySchema.parse({ format: "birthday" })).toMatchObject({ format: "birthday", limit: 25 });
+    expect(EventServiceTemplateRegistryResponseSchema.parse({ items: [], nextCursor: null }).items).toEqual([]);
+  });
+
+  it("keeps event-service package pricing named, guest-based and fail-closed above inclusion", () => {
+    const packageDraft = EventServiceRatePlanDraftSchema.parse({
+      key: "standard",
+      label: "Стандарт",
+      pricingBasis: "flat_package",
+      quantityMetric: "guests",
+      baseAmount: 150_000,
+      includedQuantity: 50,
+      baseExtraUnitAmount: null,
+      minQuantity: 10,
+      maxQuantity: 120,
+      minDurationMinutes: null,
+      maxDurationMinutes: null,
+      isDefault: true,
+      displayOrder: 0,
+      rules: [],
+    });
+    expect(packageDraft.pricingBasis).toBe("flat_package");
+    expect(EventServiceRatePlanDraftSchema.safeParse({ ...packageDraft, pricingBasis: "per_hour" }).success).toBe(false);
+    expect(EventServiceRatePlanDraftSchema.safeParse({ ...packageDraft, quantityMetric: "participants" }).success).toBe(false);
+    expect(EventServiceRatePlanDraftSchema.safeParse({ ...packageDraft, includedQuantity: null }).success).toBe(false);
+  });
+
+  it("pins event-service interval previews without program identity", () => {
+    const body = EventServiceOfferingQuotePreviewBodySchema.parse({
+      ...operation,
+      ratePlanKey: "standard",
+      startsAt: "2027-06-12T10:00:00+03:00",
+      endsAt: "2027-06-12T16:00:00+03:00",
+      guests: 50,
+      currency: "RUB",
+    });
+    expect(body.quoteType).toBe("event_service_preview");
+    expect(EventServiceOfferingQuotePreviewBodySchema.safeParse({ ...body, endsAt: body.startsAt }).success).toBe(false);
+    expect(EventServiceOfferingQuotePreviewBodySchema.safeParse({ ...body, startsAt: "2027-06-12T10:00:00" }).success).toBe(false);
+
+    const result = EventServiceOfferingQuoteResultSchema.parse({
+      quoteType: "event_service_preview",
+      acceptanceReady: false,
+      quoteId: id,
+      offeringId: secondId,
+      eventServiceTemplateId: thirdId,
+      calculatedAt: timestamp,
+      validUntil: "2026-08-31T12:15:00+03:00",
+      leadDays: 10,
+      currency: "RUB",
+      inputs: {
+        startsAt: "2027-06-12T10:00:00+03:00",
+        endsAt: "2027-06-12T16:00:00+03:00",
+        serviceDate: "2027-06-12",
+        durationMinutes: 360,
+        guests: 50,
+        timezone: "Europe/Moscow",
+        ratePlanKey: "standard",
+      },
+      lines: [{
+        kind: "base",
+        label: "Стандарт",
+        serviceDate: "2027-06-12",
+        quantity: 1,
+        unitAmount: { amountMinor: 150_000, currency: "RUB" },
+        amount: { amountMinor: 150_000, currency: "RUB" },
+        ratePlanId: secondId,
+        ratePlanVersion: 2,
+        matchedRuleId: null,
+        matchedRuleVersion: null,
+        explanation: "Base package",
+      }],
+      total: { amountMinor: 150_000, currency: "RUB" },
+      provenance: {
+        offeringVersion: 3,
+        subjectVersion: 4,
+        eventServiceTemplateVersion: 4,
+        offeringBindingId: id,
+        offeringBindingVersion: 2,
+        pricingVersion: 2,
+        addOnsVersion: 1,
+        priceBookId: secondId,
+        priceBookVersion: 2,
+        businessCalendarId: thirdId,
+        businessCalendarVersion: 5,
+        businessCalendarSourceVersion: "ru-2027",
+        businessCalendarDateId: id,
+        businessCalendarDateVersion: 3,
+        businessCalendarDateOverrideId: null,
+        businessCalendarDateOverrideVersion: null,
+        preparationBeforeMinutes: 60,
+        preparationAfterMinutes: 30,
+        preparationStartsAt: "2027-06-12T09:00:00+03:00",
+        preparationEndsAt: "2027-06-12T16:30:00+03:00",
+        matchedRuleIds: [],
+      },
+      immutableSnapshot: true,
+    });
+    expect(result).toMatchObject({ quoteType: "event_service_preview", acceptanceReady: false, immutableSnapshot: true });
+    expect((result as Record<string, unknown>).programTemplateId).toBeUndefined();
+  });
+
+  it("reports ambiguous event-service identity instead of selecting a candidate", () => {
+    const summary = {
+      offeringId: id,
+      offeringVersion: 1,
+      state: "draft" as const,
+      subjectVersion: 1,
+      pricingVersion: 1,
+      addOnAssignmentsVersion: 1,
+      eventServiceTemplateId: thirdId,
+      eventServiceTemplateVersion: 1,
+      cmsReady: true,
+      publicReady: false as const,
+      editorialNodeId: null,
+      operationalName: "Событие",
+      code: "EVENT-1",
+    };
+    expect(EventServiceOfferingLookupResultSchema.parse({
+      resolution: "ambiguous",
+      eventServiceTemplateId: thirdId,
+      eventServiceTemplateVersion: 1,
+      candidates: [summary, { ...summary, offeringId: secondId, code: "EVENT-2" }],
+    }).resolution).toBe("ambiguous");
+  });
+
   it("accepts a unique recurring weekday set for stay pricing", () => {
     expect(PriceDateSelectorSchema.parse({ type: "recurring_weekdays", days: ["fri", "sat", "sun"] })).toEqual({ type: "recurring_weekdays", days: ["fri", "sat", "sun"] });
     expect(PriceDateSelectorSchema.safeParse({ type: "recurring_weekdays", days: ["fri", "fri"] }).success).toBe(false);

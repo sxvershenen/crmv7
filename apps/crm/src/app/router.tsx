@@ -44,6 +44,15 @@ const AddOnOfferingsPage = lazy(() =>
 const AddOnOfferingEditorPage = lazy(() =>
   import("@app/pages/addon-offering-editor-page").then((module) => ({ default: module.AddOnOfferingEditorPage })),
 )
+const EventServiceOfferingsPage = lazy(() =>
+  import("@app/pages/event-service-offerings-page").then((module) => ({ default: module.EventServiceOfferingsPage })),
+)
+const EventServiceCreatePage = lazy(() =>
+  import("@app/pages/event-service-offerings-page").then((module) => ({ default: module.EventServiceCreatePage })),
+)
+const EventServiceOfferingEditorPage = lazy(() =>
+  import("@app/pages/event-service-offering-editor-page").then((module) => ({ default: module.EventServiceOfferingEditorPage })),
+)
 const ProgramsPage = lazy(() =>
   import("@app/pages/programs-page").then((module) => ({ default: module.ProgramsPage })),
 )
@@ -76,14 +85,8 @@ const FinancePage = lazy(() =>
 )
 const MarketingPage = lazy(() => import("@app/pages/marketing-page").then(module => ({ default: module.MarketingPage })))
 const PromotionEditorPage = lazy(() => import("@app/pages/promotion-editor-page").then(module => ({ default: module.PromotionEditorPage })))
-const EventCategoriesPage = lazy(() =>
-  import("@app/pages/event-categories-page").then((module) => ({ default: module.EventCategoriesPage })),
-)
 const ProgramCategoryEditorPage = lazy(() =>
   import("@app/pages/program-category-editor-page").then((module) => ({ default: module.ProgramCategoryEditorPage })),
-)
-const EventCategoryEditorPage = lazy(() =>
-  import("@app/pages/event-category-editor-page").then((module) => ({ default: module.EventCategoryEditorPage })),
 )
 const PlaceholderPage = lazy(() =>
   import("@app/pages/placeholder-page").then((module) => ({ default: module.PlaceholderPage })),
@@ -131,6 +134,10 @@ export function AppRouter() {
           <Route element={<LazyRoute><StayOfferingResourceRedirectPage /></LazyRoute>} path="offers/campgrounds/:offeringId" />
           <Route element={<LazyRoute><AddOnOfferingsPage /></LazyRoute>} path="offers/addons" />
           <Route element={<LazyRoute><AddOnOfferingEditorPage /></LazyRoute>} path="offers/addons/:offeringId" />
+          <Route element={<Navigate replace to="/events/categories" />} path="offers/event-services" />
+          <Route element={<Navigate replace to="/events/categories/new" />} path="offers/event-services/new" />
+          <Route element={<LazyRoute><EventServiceOfferingEditorPage /></LazyRoute>} path="offers/event-services/templates/:offeringId" />
+          <Route element={<LazyRoute><EventServiceOfferingEditorPage /></LazyRoute>} path="offers/event-services/:offeringId" />
           <Route element={<LazyRoute><ProgramsPage /></LazyRoute>} path="programs" />
           <Route element={<LazyRoute><ProgramCategoriesPage /></LazyRoute>} path="programs/categories" />
           <Route element={<LazyRoute><EventsPage /></LazyRoute>} path="events" />
@@ -141,10 +148,10 @@ export function AppRouter() {
           <Route element={<LazyRoute><ProfilePage /></LazyRoute>} path="profile" />
           <Route element={<LazyRoute><TeamPage /></LazyRoute>} path="team" />
           <Route element={<LazyRoute><SettingsPage /></LazyRoute>} path="settings" />
-          <Route element={<LazyRoute><EventCategoriesPage /></LazyRoute>} path="events/categories" />
+          <Route element={<LazyRoute><EventServiceOfferingsPage /></LazyRoute>} path="events/categories" />
           <Route element={<LazyRoute><EventEditorPage /></LazyRoute>} path="events/new" />
-          <Route element={<LazyRoute><EventCategoryEditorPage /></LazyRoute>} path="events/categories/new" />
-          <Route element={<LazyRoute><EventCategoryEditorPage /></LazyRoute>} path="events/categories/:id" />
+          <Route element={<LazyRoute><EventServiceCreatePage /></LazyRoute>} path="events/categories/new" />
+          <Route element={<LazyRoute><EventServiceOfferingEditorPage /></LazyRoute>} path="events/categories/:offeringId" />
           <Route element={<LazyRoute><ProgramCategoryEditorPage /></LazyRoute>} path="programs/categories/new" />
           <Route element={<LazyRoute><ProgramCategoryEditorPage /></LazyRoute>} path="programs/categories/:id" />
           <Route element={<LazyRoute><ProgramRunEditorPage /></LazyRoute>} path="programs/runs/:id" />

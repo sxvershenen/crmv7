@@ -80,6 +80,7 @@ import {
   validateHousePricingForActivation,
   validateAddOnPricingForActivation,
   validateProgramPricingForActivation,
+  validateEventServicePricingForActivation,
   type HousePricingSnapshot,
   type HouseRatePlan,
   type ProgramPricingSnapshot,
@@ -284,7 +285,7 @@ export class OfferingEditorApplicationService {
       const addOnTerms = offering.kind === "addon" ? await this.requireAddOnTerms(manager, offering.id) : undefined
       const bindings = offering.kind === "addon" ? [] : await manager.find(OfferingBindingEntity, { where: { offeringId }, order: { createdAt: "ASC" } })
       const activeBindings = bindings.filter((item) => item.archivedAt === null)
-      const bindingTargets = offering.kind === "program" ? [] : await this.boundResourceTargets(manager, activeBindings)
+      const bindingTargets = offering.kind === "program" || offering.kind === "event_service" ? [] : await this.boundResourceTargets(manager, activeBindings)
       const priceBooks = await this.loadPriceBooks(manager, offeringId)
       const assignments = offering.kind === "addon" ? [] : await manager.find(OfferingAddonAssignmentEntity, { where: { offeringId }, order: { displayOrder: "ASC", id: "ASC" } })
       const activeAssignments = assignments.filter((item) => item.archivedAt === null)
@@ -353,7 +354,7 @@ export class OfferingEditorApplicationService {
     const blockers: Array<"offering_not_active" | "cms_node_archived" | "cms_node_kind_incompatible" | "public_profile_missing" | "public_profile_mismatch" | "revision_relation_missing" | "revision_relation_mismatch" | "safe_public_projection_missing"> = []
     if (offering.state !== "active" || offering.archivedAt !== null) blockers.push("offering_not_active")
     if (node.status !== "active" || node.archivedAt !== null) blockers.push("cms_node_archived")
-    const expectedNodeKind = offering.kind === "addon" ? "addon_detail" : offering.kind === "program" ? "program_detail" : "resource_detail"
+    const expectedNodeKind = offering.kind === "addon" ? "addon_detail" : offering.kind === "program" ? "program_detail" : offering.kind === "event_service" ? "event_detail" : "resource_detail"
     if (node.kind !== expectedNodeKind) blockers.push("cms_node_kind_incompatible")
     if (!exactProfile) blockers.push(profiles.length === 0 ? "public_profile_missing" : "public_profile_mismatch")
     const relations = current?.relations.filter((relation) => relation.kind === "catalog_offering") ?? []
@@ -850,7 +851,7 @@ export class OfferingEditorApplicationService {
       updatedBy: actorId, version: () => '"version" + 1', updatedAt: () => "now()",
     }).where("id = :id AND state IN ('draft','scheduled')", { id: book.id }).execute()
     if (transition.affected !== 1) throw conflict("PRICE_BOOK_NOT_DRAFT", "Прайс-лист уже активирован или изменён")
-    const activateOnFirstPriceBook = (offering.kind === "addon" || offering.kind === "program") && offering.state === "draft"
+    const activateOnFirstPriceBook = (offering.kind === "addon" || offering.kind === "program" || offering.kind === "event_service") && offering.state === "draft"
     const updateResult = await manager.query(`
       UPDATE catalog_offerings
       SET active_price_book_id = $1, pricing_version = pricing_version + 1,
@@ -879,7 +880,9 @@ export class OfferingEditorApplicationService {
     }
     const toExclusive = book.validToExclusive && book.validToExclusive <= addDays(lastDate, 1) ? book.validToExclusive : addDays(lastDate, 1)
     const snapshot = await this.loadHousePricingSnapshot(manager, offering, book, book.validFrom, toExclusive)
-    const issues = offering.kind === "program"
+    const issues = offering.kind === "event_service"
+      ? validateEventServicePricingForActivation(await this.loadEventServicePricingSnapshot(manager, offering, book, snapshot), { from: book.validFrom, toExclusive })
+      : offering.kind === "program"
       ? validateProgramPricingForActivation(await this.loadProgramPricingSnapshot(manager, offering, snapshot), book.validFrom, toExclusive)
       : offering.kind === "addon"
       ? validateAddOnPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireAddOnTerms(manager, offering.id)).serviceType as "quantity_service" | "person_service")
@@ -887,6 +890,21 @@ export class OfferingEditorApplicationService {
       ? validateCampgroundPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireCampgroundTerms(manager, offering.id)).sellableUnit as "owned_tent" | "own_tent_pitch")
       : validateHousePricingForActivation(snapshot, { from: book.validFrom, toExclusive })
     if (issues.length > 0) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Прайс-лист не готов к активации", { issues })
+  }
+
+  private async loadEventServicePricingSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, book: PriceBookEntity, snapshot: HousePricingSnapshot) {
+    const bindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary" } })
+    const live = bindings.filter((binding) => binding.archivedAt === null && binding.eventServiceTemplateId !== null)
+    if (live.length !== 1) throw unprocessable("EVENT_SERVICE_OFFERING_AMBIGUOUS", "Для event-service нужен ровно один primary EventServiceTemplate binding")
+    const template = await manager.findOne(EventServiceTemplateEntity, { where: { id: live[0]!.eventServiceTemplateId! } })
+    if (!template || template.archivedAt !== null) throw unprocessable("EVENT_SERVICE_TEMPLATE_MISMATCH", "Primary EventServiceTemplate недоступен")
+    return {
+      offering: { ...snapshot.offering, subjectVersion: offering.subjectVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion },
+      template: { id: template.id, version: template.version, defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests },
+      priceBook: snapshot.priceBook,
+      ratePlans: snapshot.ratePlans,
+      calendar: snapshot.calendar,
+    }
   }
 
   private async loadHousePricingSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, book: PriceBookEntity, from: string, toExclusive: string): Promise<HousePricingSnapshot> {
@@ -1060,6 +1078,10 @@ export class OfferingEditorApplicationService {
         if (plan.quantityMetric !== "participants") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Программа использует quantityMetric=participants")
         if (plan.pricingBasis === "per_person" && (plan.includedQuantity !== null || plan.baseExtraUnitAmount !== null)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Per-person тариф не использует included/extra")
         if (plan.pricingBasis === "flat_package" && ((plan.includedQuantity === null) !== (plan.baseExtraUnitAmount === null))) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Package extra требует одновременно includedQuantity и extraUnitAmount")
+      } else if (offering.kind === "event_service") {
+        if (plan.pricingBasis !== "flat_package") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Мероприятие поддерживает только flat_package")
+        if (plan.quantityMetric !== "guests") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Тариф мероприятия использует quantityMetric=guests")
+        if (plan.includedQuantity === null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Пакет мероприятия требует includedQuantity")
       } else if (plan.pricingBasis !== "per_night") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Проживание поддерживает только цену за ночь")
       if (offering.kind === "house" && plan.quantityMetric !== null && plan.quantityMetric !== "guests") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Домик может учитывать только guest quantity")
       if (campgroundTerms) {
@@ -1074,7 +1096,7 @@ export class OfferingEditorApplicationService {
         if (rule.id && ruleIds.has(rule.id)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "ID правил должны быть уникальны", { id: rule.id })
         if (rule.id) ruleIds.add(rule.id)
         if (offering.kind === "addon" && (rule.durationMinutes !== null || rule.quantityRange !== null || rule.bookingLeadDays !== null)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Первый add-on slice не поддерживает quantity/duration/lead rules")
-        if (offering.kind !== "addon" && offering.kind !== "program" && rule.durationMinutes !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Duration-правила не поддерживаются для проживания")
+        if (offering.kind !== "addon" && offering.kind !== "program" && offering.kind !== "event_service" && rule.durationMinutes !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Duration-правила не поддерживаются для проживания")
         if (offering.kind === "program" && plan.pricingBasis === "per_person" && rule.extraUnitAmount !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Per-person правило не использует extra-unit цену")
         if (offering.kind === "program" && plan.pricingBasis === "flat_package" && rule.extraUnitAmount !== null && plan.includedQuantity === null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Package extra требует includedQuantity")
       }
@@ -1168,6 +1190,8 @@ export class OfferingEditorApplicationService {
       }
       : row.kind === "program"
         ? { kind: "program" }
+        : row.kind === "event_service"
+          ? { kind: "event_service" }
         : { kind: "house", stayPricing: "sum_each_local_night" }
     return {
       id: row.id, code: row.code, version: row.version, kind: row.kind as CatalogOffering["kind"],
@@ -1496,7 +1520,7 @@ export class OfferingEditorApplicationService {
   private async findOffering(manager: EntityManager, offeringId: string) {
     const offering = await manager.findOne(CatalogOfferingEntity, { where: { id: offeringId } })
     if (!offering || offering.archivedAt !== null) throw new NotFoundException({ code: "OFFERING_NOT_FOUND", message: "Предложение не найдено" })
-    if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "addon" && offering.kind !== "program") throw unprocessable("OFFERING_KIND_UNSUPPORTED", "Редактор не поддерживает этот тип предложения")
+    if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "addon" && offering.kind !== "program" && offering.kind !== "event_service") throw unprocessable("OFFERING_KIND_UNSUPPORTED", "Редактор не поддерживает этот тип предложения")
     return offering
   }
 
@@ -1510,7 +1534,7 @@ export class OfferingEditorApplicationService {
   private async lockPricedOffering(manager: EntityManager, offeringId: string) {
     const offering = await manager.createQueryBuilder(CatalogOfferingEntity, "offering").setLock("pessimistic_write").where("offering.id = :offeringId", { offeringId }).getOne()
     if (!offering || offering.archivedAt !== null) throw new NotFoundException({ code: "OFFERING_NOT_FOUND", message: "Предложение не найдено" })
-    if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "addon" && offering.kind !== "program") throw unprocessable("OFFERING_KIND_UNSUPPORTED", "Ценообразование не поддерживается для этого типа предложения")
+    if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "addon" && offering.kind !== "program" && offering.kind !== "event_service") throw unprocessable("OFFERING_KIND_UNSUPPORTED", "Ценообразование не поддерживается для этого типа предложения")
     if (offering.kind === "addon") await this.requireAddOnTerms(manager, offering.id)
     return offering
   }

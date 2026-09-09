@@ -419,3 +419,11 @@ Acceptance-ready `program_registration` quote привязан к exact ProgramT
 Confirmation в одной транзакции блокирует occurrence, повторно проверяет capacity, меняет status/version, копирует server total, создаёт accepted link, audit/outbox и idempotency result. Одинаковый intent replay-ится без новых effects; другой payload с тем же key конфликтует. Capacity защищена при create, participants/occurrence update, confirmation и снижении occurrence limits; accepted occurrence/participants/amount/discount/currency/pricing mode неизменяемы в service и PostgreSQL.
 
 Новая exact-offering registration получает `quote_required` и не доверяет client total/discount. Неоднозначные legacy registrations остаются `legacy_unpriced` с прежним operator total; автоконверсии и переноса между pricing modes нет. CRM сохраняет operational dirty draft отдельно от quote intent и после acceptance показывает immutable server snapshot.
+
+## D-085 — Event-service dossier переиспользует workspace категорий
+
+Единственный user-facing registry постоянных форматов мероприятий остаётся на привычном CRM route `/events/categories`; отдельного пункта «Форматы мероприятий» нет. Registry/create/dossier на этом route используют `EventServiceTemplate` и exact `CatalogOffering`; infrastructure route `/offers/event-services` может оставаться только compatibility redirect/deep link.
+
+Существующая `EventCategory` пока остаётся legacy taxonomy фактического customer `Event`: её API и selector совместимы, но она не становится вторым commercial registry. Legacy category ID/name никогда не интерпретируются как template identity, а связь/миграция отложена до customer Event acceptance gate.
+
+`EventServiceTemplate` владеет format, default duration, guest bounds и preparation; `CatalogOffering` — единственным видимым operational name/commercial code; PriceBook — named `flat_package` тарифами. `event_service_preview` принимает offset-bearing same-local-date interval, не ценит preparation отдельно, фиксирует exact source/binding/calendar/preparation pins и всегда имеет `acceptanceReady=false`. CMS mapping ограничен `catalog_offering(event_service) → event_detail`; locator не снимает public/acceptance guards.

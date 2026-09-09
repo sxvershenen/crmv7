@@ -72,7 +72,7 @@ test("desktop event scenario supports drag reordering", async ({ page, isMobile 
   await expect(page.locator('input[value="Второй этап"]')).toHaveCount(1)
 })
 
-test("program and event category editors share responsive chrome and related navigation", async ({ page, isMobile }) => {
+test("program categories and the event category dossier keep responsive route-driven chrome", async ({ page, isMobile }) => {
   await page.goto("/programs/categories/family")
   await expect(page.locator('[data-slot="editor-frame"]')).toBeVisible()
   await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveValue("Семейные")
@@ -84,9 +84,11 @@ test("program and event category editors share responsive chrome and related nav
     await expect(page.locator('[data-slot="editor-nav-fade"]')).toBeVisible()
   }
 
-  await page.goto("/events/categories/wedding")
-  await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveValue("Свадьба")
-  await page.getByRole("tab", { name: "Мероприятия" }).click()
-  await expect(page.getByRole("button", { name: /Свадьба Анны и Михаила/ })).toBeVisible()
+  await page.goto("/events/categories")
+  await expect(page.getByRole("heading", { name: "Категории мероприятий" })).toBeVisible()
+  await page.getByRole("button", { name: "Открыть Категория мероприятия" }).click()
+  await expect(page.locator('[data-slot="editor-frame"]')).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "Формат" })).toContainText("Свадьба")
+  await expect(page.getByText("Public закрыт")).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

@@ -571,9 +571,7 @@ export const ResourceGroupMemberSchema = z.object({
 export type ResourceGroupMember = z.infer<typeof ResourceGroupMemberSchema>;
 
 export const EventServiceFormatSchema = z.enum(["wedding", "corporate", "birthday", "other"]);
-export const EventServiceTemplateSchema = z.object({
-  id: IdSchema,
-  version: VersionSchema,
+const EventServiceTemplateEditableFieldsSchema = z.object({
   code: z.string().trim().min(1).max(120),
   format: EventServiceFormatSchema,
   defaultDurationMinutes: z.number().int().positive().max(525_600),
@@ -581,6 +579,11 @@ export const EventServiceTemplateSchema = z.object({
   maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
   preparationBeforeMinutes: z.number().int().nonnegative().max(10_080),
   preparationAfterMinutes: z.number().int().nonnegative().max(10_080),
+}).strict();
+
+export const EventServiceTemplateSchema = EventServiceTemplateEditableFieldsSchema.extend({
+  id: IdSchema,
+  version: VersionSchema,
   archivedAt: DateTimeSchema.nullable(),
   createdAt: DateTimeSchema,
   updatedAt: DateTimeSchema,
@@ -589,6 +592,100 @@ export const EventServiceTemplateSchema = z.object({
   { path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" },
 );
 export type EventServiceTemplate = z.infer<typeof EventServiceTemplateSchema>;
+
+/**
+ * Event-service templates keep a technical code of their own. It is not a
+ * second user-facing name and is deliberately separate from the commercial
+ * CatalogOffering code; the create command may receive equal values but no
+ * synchronization invariant exists between them.
+ */
+export const EventServiceTemplateCreateBodySchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+  templateCode: z.string().trim().min(1).max(120),
+  offeringCode: z.string().trim().min(1).max(120),
+  operationalName: z.string().trim().min(1).max(500),
+  internalComment: z.string().max(20_000).default(""),
+  salesMode: OfferingSalesModeSchema.default("quoted"),
+  priceDisplayMode: PriceDisplayModeSchema.default("from"),
+  currency: CurrencySchema.default("RUB"),
+  timezone: z.string().trim().min(1).max(100),
+  taxMode: OfferingTaxModeSchema.default("tax_included"),
+  businessCalendarId: IdSchema,
+  format: EventServiceFormatSchema,
+  defaultDurationMinutes: z.number().int().positive().max(525_600),
+  minimumGuests: z.number().int().nonnegative().max(1_000_000).nullable().default(null),
+  maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable().default(null),
+  preparationBeforeMinutes: z.number().int().nonnegative().max(10_080).default(0),
+  preparationAfterMinutes: z.number().int().nonnegative().max(10_080).default(0),
+}).strict().superRefine((value, context) => {
+  if (value.minimumGuests !== null && value.maximumGuests !== null && value.minimumGuests > value.maximumGuests) {
+    context.addIssue({ code: "custom", path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" });
+  }
+});
+export type EventServiceTemplateCreateBody = z.infer<typeof EventServiceTemplateCreateBodySchema>;
+
+export const EventServiceTemplateMutationBodySchema = OfferingSubjectMutationMetaSchema.extend({
+  format: EventServiceFormatSchema,
+  defaultDurationMinutes: z.number().int().positive().max(525_600),
+  minimumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
+  maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
+  preparationBeforeMinutes: z.number().int().nonnegative().max(10_080),
+  preparationAfterMinutes: z.number().int().nonnegative().max(10_080),
+}).strict().superRefine((value, context) => {
+  if (value.minimumGuests !== null && value.maximumGuests !== null && value.minimumGuests > value.maximumGuests) {
+    context.addIssue({ code: "custom", path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" });
+  }
+});
+export type EventServiceTemplateMutationBody = z.infer<typeof EventServiceTemplateMutationBodySchema>;
+
+export const EventServiceTemplateMutationResultSchema = z.object({
+  template: EventServiceTemplateSchema,
+  subjectVersion: VersionSchema,
+}).strict();
+export type EventServiceTemplateMutationResult = z.infer<typeof EventServiceTemplateMutationResultSchema>;
+
+export const EventServiceTemplateReopenBodySchema = OfferingSubjectMutationMetaSchema;
+export type EventServiceTemplateReopenBody = z.infer<typeof EventServiceTemplateReopenBodySchema>;
+
+export const EventServiceTemplateReopenResultSchema = EventServiceTemplateMutationResultSchema;
+export type EventServiceTemplateReopenResult = z.infer<typeof EventServiceTemplateReopenResultSchema>;
+
+export const EventServiceOfferingSummarySchema = z.object({
+  offeringId: IdSchema,
+  offeringVersion: VersionSchema,
+  state: CatalogOfferingStateSchema,
+  subjectVersion: VersionSchema,
+  pricingVersion: VersionSchema,
+  addOnAssignmentsVersion: VersionSchema,
+  eventServiceTemplateId: IdSchema,
+  eventServiceTemplateVersion: VersionSchema,
+  cmsReady: z.boolean(),
+  publicReady: z.literal(false),
+  editorialNodeId: IdSchema.nullable(),
+}).strict();
+export type EventServiceOfferingSummary = z.infer<typeof EventServiceOfferingSummarySchema>;
+
+export const EventServiceTemplateRegistryItemSchema = z.object({
+  template: EventServiceTemplateSchema,
+  offering: EventServiceOfferingSummarySchema.nullable(),
+}).strict();
+export type EventServiceTemplateRegistryItem = z.infer<typeof EventServiceTemplateRegistryItemSchema>;
+
+export const EventServiceTemplateRegistryQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200).optional(),
+  format: EventServiceFormatSchema.optional(),
+  state: CatalogOfferingStateSchema.optional(),
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type EventServiceTemplateRegistryQuery = z.infer<typeof EventServiceTemplateRegistryQuerySchema>;
+
+export const EventServiceTemplateRegistryResponseSchema = z.object({
+  items: z.array(EventServiceTemplateRegistryItemSchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+}).strict();
+export type EventServiceTemplateRegistryResponse = z.infer<typeof EventServiceTemplateRegistryResponseSchema>;
 
 export const BusinessCalendarStateSchema = z.enum(["draft", "active", "retired"]);
 export type BusinessCalendarState = z.infer<typeof BusinessCalendarStateSchema>;
@@ -896,6 +993,27 @@ export const RatePlanDraftSchema = RatePlanFieldsSchema.extend({
   rules: z.array(PriceRuleDraftSchema).max(10_000).default([]),
 }).strict().superRefine(validateRatePlan);
 export type RatePlanDraft = z.infer<typeof RatePlanDraftSchema>;
+
+/** Event-service pricing is intentionally narrower than the shared rate-plan vocabulary. */
+function validateEventServiceFlatPackage(
+  value: z.infer<typeof RatePlanFieldsSchema>,
+  context: z.RefinementCtx,
+) {
+  if (value.pricingBasis !== "flat_package") {
+    context.addIssue({ code: "custom", path: ["pricingBasis"], message: "Event-service packages must use flat_package pricing" });
+  }
+  if (value.quantityMetric !== "guests") {
+    context.addIssue({ code: "custom", path: ["quantityMetric"], message: "Event-service packages must use guests as the quantity metric" });
+  }
+  if (value.includedQuantity === null) {
+    context.addIssue({ code: "custom", path: ["includedQuantity"], message: "Event-service packages require an included guest limit" });
+  }
+}
+
+export const EventServiceRatePlanDraftSchema = RatePlanDraftSchema.superRefine(validateEventServiceFlatPackage);
+export type EventServiceRatePlanDraft = z.infer<typeof EventServiceRatePlanDraftSchema>;
+export const EventServiceRatePlanSchema = RatePlanSchema.superRefine(validateEventServiceFlatPackage);
+export type EventServiceRatePlan = z.infer<typeof EventServiceRatePlanSchema>;
 
 const PriceBookFieldsSchema = z.object({
   name: z.string().trim().min(1).max(240),
@@ -1424,7 +1542,7 @@ export const OfferingEditorialLocatorSchema = z.object({
   node: z.object({
     id: IdSchema,
     version: VersionSchema,
-    kind: z.enum(["resource_detail", "addon_detail", "program_detail"]),
+    kind: z.enum(["resource_detail", "addon_detail", "program_detail", "event_detail"]),
     status: z.enum(["active", "archived"]),
   }).strict(),
   currentRevision: OfferingEditorialRevisionSummarySchema.nullable(),
@@ -1472,6 +1590,66 @@ export const AddOnOfferingCreateResultSchema = z.object({
   }
 });
 export type AddOnOfferingCreateResult = z.infer<typeof AddOnOfferingCreateResultSchema>;
+
+/**
+ * CRM-only operational dossier. It joins the one commercial identity to its
+ * EventServiceTemplate and editorial locator without exposing internal binding
+ * rows as ordinary form fields. `publicReady` is deliberately fail-closed.
+ */
+export const EventServiceOfferingDossierSchema = z.object({
+  offering: CatalogOfferingSchema,
+  template: EventServiceTemplateSchema,
+  subjectVersion: VersionSchema,
+  pricingVersion: VersionSchema,
+  addOnAssignmentsVersion: VersionSchema,
+  cmsReady: z.boolean(),
+  publicReady: z.literal(false),
+  editorial: OfferingEditorialLocatorSchema.nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.offering.kind !== "event_service" || value.offering.fulfillment.kind !== "event_service") {
+    context.addIssue({ code: "custom", path: ["offering", "kind"], message: "Expected an event-service offering" });
+  }
+});
+export type EventServiceOfferingDossier = z.infer<typeof EventServiceOfferingDossierSchema>;
+
+export const EventServiceOfferingCreateResultSchema = EventServiceOfferingDossierSchema;
+export type EventServiceOfferingCreateResult = z.infer<typeof EventServiceOfferingCreateResultSchema>;
+
+export const EventServiceOfferingPrepareBodySchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+  expectedEventServiceTemplateVersion: VersionSchema,
+}).strict();
+export type EventServiceOfferingPrepareBody = z.infer<typeof EventServiceOfferingPrepareBodySchema>;
+
+export const EventServiceOfferingPrepareResultSchema = EventServiceOfferingDossierSchema;
+export type EventServiceOfferingPrepareResult = z.infer<typeof EventServiceOfferingPrepareResultSchema>;
+
+export const EventServiceOfferingLookupItemSchema = EventServiceOfferingSummarySchema.extend({
+  operationalName: z.string().min(1).max(500),
+  code: z.string().min(1).max(120),
+}).strict();
+export type EventServiceOfferingLookupItem = z.infer<typeof EventServiceOfferingLookupItemSchema>;
+
+/** Explicitly reports legacy ambiguity; callers must not choose the first row. */
+export const EventServiceOfferingLookupResultSchema = z.discriminatedUnion("resolution", [
+  z.object({
+    resolution: z.literal("unprepared"),
+    eventServiceTemplateId: IdSchema,
+    eventServiceTemplateVersion: VersionSchema,
+  }).strict(),
+  z.object({
+    resolution: z.literal("linked"),
+    offering: EventServiceOfferingLookupItemSchema,
+  }).strict(),
+  z.object({
+    resolution: z.literal("ambiguous"),
+    eventServiceTemplateId: IdSchema,
+    eventServiceTemplateVersion: VersionSchema,
+    candidates: z.array(EventServiceOfferingLookupItemSchema).min(2).max(100),
+  }).strict(),
+]);
+export type EventServiceOfferingLookupResult = z.infer<typeof EventServiceOfferingLookupResultSchema>;
 
 export const OfferingQuotePeriodSchema = z.discriminatedUnion("type", [
   z.object({
@@ -1748,6 +1926,94 @@ export const ProgramOfferingQuoteResultSchema = z.object({
 }).strict();
 export type ProgramOfferingQuoteResult = z.infer<typeof ProgramOfferingQuoteResultSchema>;
 
+export const EventServiceQuoteTypeSchema = z.literal("event_service_preview");
+export type EventServiceQuoteType = z.infer<typeof EventServiceQuoteTypeSchema>;
+
+/** Private server-authoritative interval preview; no acceptance payload is accepted here. */
+export const EventServiceOfferingQuotePreviewBodySchema = z.object({
+  quoteType: EventServiceQuoteTypeSchema.default("event_service_preview"),
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120),
+  startsAt: DateTimeSchema,
+  endsAt: DateTimeSchema,
+  guests: z.number().int().positive().max(1_000_000),
+  currency: CurrencySchema,
+  addOns: z.tuple([]).default([]),
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+}).strict().superRefine((value, context) => {
+  if (value.startsAt >= value.endsAt) {
+    context.addIssue({ code: "custom", path: ["endsAt"], message: "Invalid event-service interval" });
+  }
+});
+export type EventServiceOfferingQuotePreviewBody = z.infer<typeof EventServiceOfferingQuotePreviewBodySchema>;
+
+export const EventServiceOfferingQuoteLineSchema = z.object({
+  kind: z.enum(["base", "extra_unit"]),
+  label: z.string().min(1).max(500),
+  serviceDate: DateSchema,
+  quantity: z.number().int().positive(),
+  unitAmount: NonNegativeMoneySchema,
+  amount: NonNegativeMoneySchema,
+  ratePlanId: IdSchema,
+  ratePlanVersion: VersionSchema,
+  matchedRuleId: IdSchema.nullable(),
+  matchedRuleVersion: VersionSchema.nullable(),
+  explanation: z.string().max(1000),
+}).strict();
+export type EventServiceOfferingQuoteLine = z.infer<typeof EventServiceOfferingQuoteLineSchema>;
+
+export const EventServiceOfferingQuoteResultSchema = z.object({
+  quoteType: EventServiceQuoteTypeSchema,
+  acceptanceReady: z.literal(false),
+  quoteId: IdSchema,
+  offeringId: IdSchema,
+  eventServiceTemplateId: IdSchema,
+  calculatedAt: DateTimeSchema,
+  validUntil: DateTimeSchema,
+  leadDays: z.number().int().nonnegative().nullable(),
+  currency: CurrencySchema,
+  inputs: z.object({
+    startsAt: DateTimeSchema,
+    endsAt: DateTimeSchema,
+    serviceDate: DateSchema,
+    durationMinutes: z.number().int().positive(),
+    guests: z.number().int().positive(),
+    timezone: z.string().min(1).max(100),
+    ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120),
+  }).strict(),
+  lines: z.array(EventServiceOfferingQuoteLineSchema).min(1).max(2),
+  total: NonNegativeMoneySchema,
+  provenance: z.object({
+    offeringVersion: VersionSchema,
+    subjectVersion: VersionSchema,
+    eventServiceTemplateVersion: VersionSchema,
+    offeringBindingId: IdSchema,
+    offeringBindingVersion: VersionSchema,
+    pricingVersion: VersionSchema,
+    addOnsVersion: VersionSchema,
+    priceBookId: IdSchema,
+    priceBookVersion: VersionSchema,
+    businessCalendarId: IdSchema,
+    businessCalendarVersion: VersionSchema,
+    businessCalendarSourceVersion: z.string().min(1).max(120),
+    businessCalendarDateId: IdSchema,
+    businessCalendarDateVersion: VersionSchema,
+    businessCalendarDateOverrideId: IdSchema.nullable(),
+    businessCalendarDateOverrideVersion: VersionSchema.nullable(),
+    preparationBeforeMinutes: z.number().int().nonnegative().max(10_080),
+    preparationAfterMinutes: z.number().int().nonnegative().max(10_080),
+    preparationStartsAt: DateTimeSchema,
+    preparationEndsAt: DateTimeSchema,
+    matchedRuleIds: z.array(IdSchema).max(10_000),
+  }).strict(),
+  immutableSnapshot: z.literal(true),
+}).strict();
+export type EventServiceOfferingQuoteResult = z.infer<typeof EventServiceOfferingQuoteResultSchema>;
+
+/** Reload returns the same immutable representation and never recalculates it. */
+export const EventServiceOfferingQuoteSnapshotSchema = EventServiceOfferingQuoteResultSchema;
+export type EventServiceOfferingQuoteSnapshot = z.infer<typeof EventServiceOfferingQuoteSnapshotSchema>;
+
 const ProgramRegistrationAddOnSelectionSchema = z.object({
   assignmentId: IdSchema,
   quantity: z.number().int().positive().max(1_000_000),
@@ -1867,6 +2133,7 @@ export const OfferingConfigurationOutboxEventSchema = z.object({
     "crm.offering.custom_addon_created",
     "crm.offering.created_from_resource",
     "crm.offering.program_prepared",
+    "crm.offering.event_service_prepared",
     "public.offering_projection.invalidated",
   ]),
   occurredAt: DateTimeSchema,

@@ -13,10 +13,10 @@ test("desktop customers supports URL-backed sort, filters and row navigation", a
   await expect(page).toHaveURL(/flags=debt/)
 
   const assignButtons = table.getByRole("button", { name: "+ Назначить" })
-  await expect(assignButtons.first()).toBeVisible()
-  const assignCount = await assignButtons.count()
-  await assignButtons.first().click()
-  await expect(assignButtons).toHaveCount(assignCount - 1)
+  const assignButton = assignButtons.first()
+  await expect(assignButton).toBeVisible()
+  await assignButton.click()
+  await expect(page.getByText(/Марина Кириллова назначена клиенту #/)).toBeVisible()
 
   await table.getByRole("row", { name: /Открыть клиента/ }).first().press("Enter")
   await expect(page).toHaveURL(/\/customers\/\d+/)

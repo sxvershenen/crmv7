@@ -5,6 +5,7 @@ import { AdminOfferingConfigurationController } from "./offering-configuration.c
 import { AdminOfferingsController } from "./admin-offerings.controller.js"
 import { OfferingsModule } from "./offerings.module.js"
 import { AdminProgramOfferingController } from "./program-offering.controller.js"
+import { AdminEventServiceController } from "./event-service.controller.js"
 
-@Module({ imports: [OfferingsModule], controllers: [AdminOfferingsController, AdminBusinessCalendarController, AdminOfferingConfigurationController, AdminProgramOfferingController] })
+@Module({ imports: [OfferingsModule], controllers: [AdminOfferingsController, AdminBusinessCalendarController, AdminOfferingConfigurationController, AdminProgramOfferingController, AdminEventServiceController] })
 export class OfferingsAdminModule {}

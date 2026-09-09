@@ -24,4 +24,19 @@ describe("program offering OpenAPI isolation", () => {
     expect(adminOpenApiDocument.paths?.[path]).toBeUndefined()
     expect(publicOpenApiDocument.paths?.[path]).toBeUndefined()
   })
+
+  it("keeps event-service dossier and preview routes private", () => {
+    for (const path of [
+      "/event-services",
+      "/event-services/templates/{templateId}",
+      "/event-services/templates/{templateId}/prepare",
+      "/event-services/{offeringId}/quotes/preview",
+      "/event-services/quotes/{quoteId}",
+    ] as const) {
+      expect(internalOpenApiDocument.paths?.[path]).toBeDefined()
+      expect(adminOpenApiDocument.paths?.[path]).toBeDefined()
+      expect(publicOpenApiDocument.paths?.[path]).toBeUndefined()
+    }
+    expect(JSON.stringify(publicOpenApiDocument)).not.toContain("EventServiceOfferingQuoteResult")
+  })
 })

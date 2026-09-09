@@ -1341,6 +1341,10 @@ export class OfferingQuoteSnapshotEntity {
   @Column({ name: "subject_version", type: "integer", nullable: true }) subjectVersion!: number | null
   @Column({ name: "program_template_id", type: "uuid", nullable: true }) programTemplateId!: string | null
   @Column({ name: "program_template_version", type: "integer", nullable: true }) programTemplateVersion!: number | null
+  @Column({ name: "event_service_template_id", type: "uuid", nullable: true }) eventServiceTemplateId!: string | null
+  @Column({ name: "event_service_template_version", type: "integer", nullable: true }) eventServiceTemplateVersion!: number | null
+  @Column({ name: "offering_binding_id", type: "uuid", nullable: true }) offeringBindingId!: string | null
+  @Column({ name: "offering_binding_version", type: "integer", nullable: true }) offeringBindingVersion!: number | null
   @Column({ name: "request_payload", type: "jsonb" }) requestPayload!: Record<string, unknown>
   @Column({ name: "result_payload", type: "jsonb" }) resultPayload!: Record<string, unknown>
   @Column({ type: "jsonb" }) provenance!: Record<string, unknown>
