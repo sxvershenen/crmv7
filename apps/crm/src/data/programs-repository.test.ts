@@ -140,6 +140,20 @@ describe("ProgramsRepository API adapter", () => {
     expect(post).toHaveBeenCalledWith(expect.stringContaining("/programs/occurrences/occurrence-1/transition"), expect.objectContaining({ version: 3, status: "completed", operationId: expect.any(String), idempotencyKey: expect.any(String) }), expect.anything())
   })
 
+  it("fails fast when a paginated API repeats the same cursor", async () => {
+    const getWithMeta = vi.fn(async (path: string) => ({
+      data: path.includes("templates") ? { items: [template], nextCursor: null }
+        : path.includes("occurrences") ? { items: [occurrence], nextCursor: null }
+          : path.includes("registrations") ? { items: [registration], nextCursor: "repeated-cursor" }
+            : { items: [], nextCursor: null },
+      headers: new Headers(), status: 200,
+    }))
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta, patch: vi.fn(), post: vi.fn(), request: vi.fn() } as never)
+
+    await expect(repository.list(baseQuery)).rejects.toThrow("Сервер повторил курсор")
+    expect(getWithMeta.mock.calls.filter(([path]) => String(path).includes("registrations"))).toHaveLength(2)
+  })
+
   it("maps template editor settings to canonical money/stages and versioned patch", async () => {
     const patch = vi.fn(async () => template)
     const client = {

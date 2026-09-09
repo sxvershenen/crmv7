@@ -1079,6 +1079,7 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
 
   private async listAll<T>(path: string, schema: z.ZodType<Page<T>>) {
     const items: T[] = []
+    const seenCursors = new Set<string>()
     const basePath = path
     let nextPath = basePath
     for (let page = 0; page < 100; page += 1) {
@@ -1086,6 +1087,8 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
       items.push(...response.data.items)
       const cursor = response.headers.get("x-next-cursor") ?? response.data.nextCursor
       if (!cursor) return items
+      if (seenCursors.has(cursor)) throw new Error("Сервер повторил курсор списка программ")
+      seenCursors.add(cursor)
       nextPath = `${basePath}&cursor=${encodeURIComponent(cursor)}`
     }
     throw new Error("Не удалось загрузить все программы")

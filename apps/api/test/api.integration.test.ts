@@ -327,6 +327,36 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect(await dataSource.getRepository(OutboxDeliveryEntity).countBy({ eventId: event.id, consumer: "sse", status: "pending" })).toBe(1)
   })
 
+  it("paginates program registrations with a stable createdAt/id cursor", async () => {
+    const templateId = randomUUID(), occurrenceId = randomUUID(), createdAt = new Date("2026-09-09T12:00:00.000Z")
+    await dataSource.getRepository(ProgramTemplateEntity).save({
+      id: templateId, code: "P-REGISTRATION-PAGE", name: "Paginated program", categoryId: null, durationMinutes: 60,
+      minimumParticipants: 1, participantLimit: 10, registrationCloseHours: null, basePriceAmount: 1_000, currency: "RUB",
+      description: "", publication: "draft", assigneeIds: [], stages: [], createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(ProgramOccurrenceEntity).save({
+      id: occurrenceId, code: "PO-REGISTRATION-PAGE", templateId, name: "Paginated run",
+      startsAt: new Date("2026-09-20T09:00:00.000Z"), endsAt: new Date("2026-09-20T10:00:00.000Z"),
+      participantLimit: 10, registrationLimit: 10, status: "open", currency: "RUB", comment: "", assigneeIds: [],
+      createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(ProgramRegistrationEntity).save([0, 1, 2].map((index) => ({
+      id: randomUUID(), code: `PR-REGISTRATION-PAGE-${index}`, occurrenceId, customerId: null, phone: "", participantCount: 1,
+      participantNames: "", totalAmount: 1_000, discountAmount: 0, paidAmount: 0, currency: "RUB", pricingMode: "legacy_unpriced",
+      status: "new", promo: "", source: "", comment: "", createdAt, updatedAt: createdAt, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })))
+    await dataSource.query("UPDATE program_registrations SET created_at = '2026-09-09T12:00:00.123456Z' WHERE occurrence_id = $1", [occurrenceId])
+
+    const first = await adminAgent.get("/api/internal/v1/programs/registrations?archived=false&limit=2").expect(200)
+    expect(first.body.items).toHaveLength(2)
+    expect(first.body.nextCursor).toEqual(expect.any(String))
+    const second = await adminAgent.get(`/api/internal/v1/programs/registrations?archived=false&limit=2&cursor=${encodeURIComponent(first.body.nextCursor)}`).expect(200)
+    expect(second.body.items).toHaveLength(1)
+    expect(second.body.nextCursor).toBeNull()
+    expect(new Set([...first.body.items, ...second.body.items].map((item: { id: string }) => item.id)).size).toBe(3)
+    await adminAgent.get("/api/internal/v1/programs/registrations?archived=false&limit=2&cursor=broken").expect(400)
+  })
+
   it("prepares and recovers one program dossier transactionally, promotes legacy CMS content and persists private previews", async () => {
     const anchor = new Date()
     anchor.setUTCHours(12, 0, 0, 0)

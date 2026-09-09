@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
+import { Buffer } from "node:buffer"
 
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common"
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common"
 import { Brackets, DataSource, type EntityManager } from "typeorm"
 
 import { ProgramRegistrationQuoteResultSchema, type SessionUser } from "@crm/contracts"
@@ -70,7 +71,21 @@ export class ProgramsService {
   async transitionOccurrence(idOrCode: string, input: ProgramOccurrenceTransition, actor: SessionUser, requestId: string) { this.assert(actor, "canChangeStatus"); return this.transitionEntity(idOrCode, input, actor, requestId, "occurrence") }
   async archiveOccurrence(idOrCode: string, input: ProgramOccurrenceArchive, actor: SessionUser, requestId: string) { return this.archiveEntity(idOrCode, input, actor, requestId, "occurrence") }
 
-  async listRegistrations(query: ProgramRegistrationListQuery, actor: SessionUser) { this.assert(actor, "canView"); const builder = this.dataSource.getRepository(ProgramRegistrationEntity).createQueryBuilder("registration").where(query.archived === true ? "registration.archived_at IS NOT NULL" : "registration.archived_at IS NULL"); if (query.occurrenceId) builder.andWhere("registration.occurrence_id = :occurrenceId", { occurrenceId: query.occurrenceId }); if (query.customerId) builder.andWhere("registration.customer_id = :customerId", { customerId: query.customerId }); if (query.status) builder.andWhere("registration.status = :status", { status: query.status }); builder.orderBy("registration.created_at", "DESC").take(query.limit + 1); const rows = await builder.getMany(); const page = rows.slice(0, query.limit); return { items: await Promise.all(page.map((row) => this.registrationDto(this.dataSource.manager, row, actor))), nextCursor: rows.length > query.limit ? page.at(-1)?.createdAt.toISOString() ?? null : null } }
+  async listRegistrations(query: ProgramRegistrationListQuery, actor: SessionUser) {
+    this.assert(actor, "canView")
+    const builder = this.dataSource.getRepository(ProgramRegistrationEntity).createQueryBuilder("registration")
+      .where(query.archived === true ? "registration.archived_at IS NOT NULL" : "registration.archived_at IS NULL")
+    if (query.occurrenceId) builder.andWhere("registration.occurrence_id = :occurrenceId", { occurrenceId: query.occurrenceId })
+    if (query.customerId) builder.andWhere("registration.customer_id = :customerId", { customerId: query.customerId })
+    if (query.status) builder.andWhere("registration.status = :status", { status: query.status })
+    if (query.cursor) {
+      const cursor = this.decodeRegistrationCursor(query.cursor)
+      builder.andWhere("(date_trunc('milliseconds', registration.created_at) < :cursorCreatedAt OR (date_trunc('milliseconds', registration.created_at) = :cursorCreatedAt AND registration.id < :cursorId))", cursor)
+    }
+    builder.orderBy("date_trunc('milliseconds', registration.created_at)", "DESC").addOrderBy("registration.id", "DESC").take(query.limit + 1)
+    const rows = await builder.getMany(); const page = rows.slice(0, query.limit)
+    return { items: await Promise.all(page.map((row) => this.registrationDto(this.dataSource.manager, row, actor))), nextCursor: rows.length > query.limit && page.length ? this.encodeRegistrationCursor(page.at(-1)!) : null }
+  }
   async getRegistration(idOrCode: string, actor: SessionUser) { this.assert(actor, "canView"); return this.registrationDto(this.dataSource.manager, await this.findRegistration(this.dataSource.manager, idOrCode), actor) }
   async createRegistration(input: ProgramRegistrationCreate, actor: SessionUser, requestId: string) {
     this.assert(actor, "canCreate")
@@ -130,6 +145,18 @@ export class ProgramsService {
   private async findTemplate(manager: EntityManager, idOrCode: string) { const row = await manager.getRepository(ProgramTemplateEntity).findOne({ where: /^[0-9a-f-]{36}$/i.test(idOrCode) ? { id: idOrCode } : { code: idOrCode } }); if (!row) throw new NotFoundException({ code: "PROGRAM_TEMPLATE_NOT_FOUND", message: "Шаблон программы не найден" }); return row }
   private async findOccurrence(manager: EntityManager, idOrCode: string) { const row = await manager.getRepository(ProgramOccurrenceEntity).findOne({ where: /^[0-9a-f-]{36}$/i.test(idOrCode) ? { id: idOrCode } : { code: idOrCode } }); if (!row) throw new NotFoundException({ code: "PROGRAM_OCCURRENCE_NOT_FOUND", message: "Проведение программы не найдено" }); return row }
   private async findRegistration(manager: EntityManager, idOrCode: string) { const row = await manager.getRepository(ProgramRegistrationEntity).findOne({ where: /^[0-9a-f-]{36}$/i.test(idOrCode) ? { id: idOrCode } : { code: idOrCode } }); if (!row) throw new NotFoundException({ code: "PROGRAM_REGISTRATION_NOT_FOUND", message: "Регистрация не найдена" }); return row }
+  private encodeRegistrationCursor(row: ProgramRegistrationEntity) { return Buffer.from(JSON.stringify({ cursorCreatedAt: row.createdAt.toISOString(), cursorId: row.id }), "utf8").toString("base64url") }
+  private decodeRegistrationCursor(value: string): { cursorCreatedAt: Date; cursorId: string } {
+    try {
+      const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { cursorCreatedAt?: unknown; cursorId?: unknown }
+      const cursorCreatedAt = new Date(String(parsed.cursorCreatedAt ?? ""))
+      const cursorId = String(parsed.cursorId ?? "")
+      if (Number.isNaN(cursorCreatedAt.getTime()) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursorId)) throw new Error("invalid cursor")
+      return { cursorCreatedAt, cursorId }
+    } catch {
+      throw new BadRequestException({ code: "INVALID_CURSOR", message: "Курсор регистраций неверен" })
+    }
+  }
   private async next(manager: EntityManager, sequence: string) { const result = await manager.query(`SELECT nextval('${sequence}')::text AS nextval`) as Array<{ nextval: string }>; return result[0]!.nextval }
   private async lockOccurrences(manager: EntityManager, ids: readonly string[]) { const unique = [...new Set(ids)].sort(); return manager.createQueryBuilder(ProgramOccurrenceEntity, "occurrence").setLock("pessimistic_write").where("occurrence.id IN (:...ids)", { ids: unique }).orderBy("occurrence.id", "ASC").getMany() }
   private async assertOccurrenceLimits(manager: EntityManager, occurrenceId: string, participantLimit: number, registrationLimit: number) { const aggregate = await manager.getRepository(ProgramRegistrationEntity).createQueryBuilder("registration").select("COALESCE(SUM(participant_count),0)", "participants").addSelect("COUNT(id)", "registrations").where("occurrence_id = :occurrenceId AND archived_at IS NULL AND status <> 'cancelled'", { occurrenceId }).getRawOne<{ participants: string; registrations: string }>(); if (participantLimit < Number(aggregate?.participants ?? 0) || registrationLimit < Number(aggregate?.registrations ?? 0)) throw new ConflictException({ code: "CAPACITY_EXCEEDED", message: "Лимиты не могут быть ниже текущей занятости" }) }
