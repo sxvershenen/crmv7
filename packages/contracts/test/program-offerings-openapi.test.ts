@@ -17,4 +17,11 @@ describe("program offering OpenAPI isolation", () => {
     expect(JSON.stringify(publicOpenApiDocument)).not.toContain("ProgramOfferingQuoteResult")
     expect(internalOpenApiDocument.paths?.["/programs/{programTemplateId}/offering/quotes/preview"]?.post?.summary).toContain("non-acceptance-ready")
   })
+
+  it("documents occurrence acceptance quotes only in the operational internal namespace", () => {
+    const path = "/programs/occurrences/{programOccurrenceId}/offering/quotes/registration"
+    expect(internalOpenApiDocument.paths?.[path]?.post).toBeDefined()
+    expect(adminOpenApiDocument.paths?.[path]).toBeUndefined()
+    expect(publicOpenApiDocument.paths?.[path]).toBeUndefined()
+  })
 })

@@ -1,6 +1,9 @@
 import type {
   ProgramRegistration,
+  ProgramRegistrationAddOnOption,
+  ProgramRegistrationAddOnSelection,
   ProgramRegistrationEditorRecord,
+  ProgramRegistrationQuote,
   ProgramRegistrationSortKey,
   ProgramRegistrationStatus,
   ProgramRun,
@@ -36,6 +39,8 @@ import {
   ProgramOfferingPrepareResultSchema,
   ProgramOfferingQuotePreviewBodySchema,
   ProgramOfferingQuoteResultSchema,
+  ProgramRegistrationQuoteBodySchema,
+  ProgramRegistrationQuoteResultSchema,
   ProgramRegistrationDtoSchema,
   ProgramTemplateDtoSchema,
   ResourceAllocationDtoSchema,
@@ -90,9 +95,12 @@ export interface ProgramRunEditorRepository {
 }
 
 export interface ProgramRegistrationEditorRepository {
+  createRegistrationDraft(run?: ProgramRun): Promise<ProgramRegistrationEditorRecord>
   getRegistration(id: string): Promise<ProgramRegistrationEditorRecord | null>
   listRegistrationRuns(): Promise<ProgramRun[]>
   saveRegistration(registration: ProgramRegistrationEditorRecord): Promise<ProgramRegistrationEditorRecord>
+  quoteRegistration(registration: ProgramRegistrationEditorRecord, addOns: ProgramRegistrationAddOnSelection[]): Promise<ProgramRegistrationQuote>
+  confirmRegistration(registration: ProgramRegistrationEditorRecord, quote: ProgramRegistrationQuote): Promise<ProgramRegistrationEditorRecord>
 }
 
 export interface ProgramCategoryEditorRepository {
@@ -425,8 +433,16 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
     const run = this.data.runs.find((item) => item.id === registration.runId) ?? null
     const runDetail = this.runEditorData.get(registration.runId)?.registrations.find((item) => item.id === id)
     const editor = toRegistrationEditorRecord(runDetail ?? toRunEditorRegistration(registration), run)
+    if (id === "5009") {
+      editor.pricingMode = "quote_required"
+      editor.availableAddOns = [{ assignmentId: "fixture-breakfast", label: "Завтрак", serviceType: "person_service", required: false, minQuantity: 1, maxQuantity: 20, defaultQuantity: 1 }]
+    }
     this.registrationEditorData.set(id, editor)
     return Promise.resolve(structuredClone(editor))
+  }
+
+  async createRegistrationDraft(run?: ProgramRun) {
+    return Promise.resolve(createEmptyProgramRegistration(run))
   }
 
   async listRegistrationRuns(): Promise<ProgramRun[]> {
@@ -455,6 +471,36 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
       run.participantCount = Math.max(0, run.participantCount - (previousEditor?.participantCount ?? 0) + (next.participantCount ?? 0))
       if (!previousCompact) run.registrationCount += 1
     }
+    return Promise.resolve(structuredClone(next))
+  }
+
+
+  async quoteRegistration(registration: ProgramRegistrationEditorRecord, addOns: ProgramRegistrationAddOnSelection[]): Promise<ProgramRegistrationQuote> {
+    const total = Math.max(0, (registration.participantCount ?? 1) * 2500 + addOns.reduce((sum, item) => sum + item.quantity * 500, 0))
+    return Promise.resolve({
+      quoteId: `fixture-quote-${registration.runId}`,
+      occurrenceId: registration.runId,
+      occurrenceVersion: registration.occurrenceVersion ?? 1,
+      calculatedAt: new Date().toISOString(),
+      validUntil: new Date(Date.now() + 15 * 60_000).toISOString(),
+      participants: Math.max(1, registration.participantCount ?? 1),
+      total,
+      currency: registration.currency,
+      addOns: structuredClone(addOns),
+      lines: [{ kind: "base", label: "Участники", quantity: Math.max(1, registration.participantCount ?? 1), amount: total }],
+    })
+  }
+
+  async confirmRegistration(registration: ProgramRegistrationEditorRecord, quote: ProgramRegistrationQuote): Promise<ProgramRegistrationEditorRecord> {
+    const next = {
+      ...structuredClone(registration),
+      version: registration.version + 1,
+      status: "confirmed" as const,
+      total: quote.total,
+      debt: Math.max(0, quote.total - registration.paid),
+      acceptedQuote: { quoteId: quote.quoteId, acceptedAt: new Date().toISOString(), total: quote.total, currency: quote.currency, addOns: structuredClone(quote.addOns), lines: structuredClone(quote.lines) },
+    }
+    this.registrationEditorData.set(next.id, next)
     return Promise.resolve(structuredClone(next))
   }
 }
@@ -504,7 +550,7 @@ function mapCategoryDetail(dto: ReturnType<typeof ProgramCategoryDetailSchema.pa
 
 function mapRun(dto: ReturnType<typeof ProgramOccurrenceDtoSchema.parse>, template?: ProgramTemplate): ProgramRun {
   return {
-    id: dto.id, templateId: dto.templateId, name: dto.name, categoryId: template?.categoryId ?? "uncategorized", categoryIcon: template?.categoryIcon ?? "sparkles",
+    id: dto.id, version: dto.version, currency: dto.revenue.currency, templateId: dto.templateId, name: dto.name, categoryId: template?.categoryId ?? "uncategorized", categoryIcon: template?.categoryIcon ?? "sparkles",
     categoryTone: template?.categoryTone ?? "violet", startsAt: dto.startsAt, endsAt: dto.endsAt, participantCount: dto.participantCount, participantLimit: dto.participantLimit,
     registrationCount: dto.registrationCount, registrationLimit: dto.registrationLimit, status: runStatusFromApi[dto.status], revenue: dto.revenue.amountMinor / 100,
     paid: dto.paid.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId),
@@ -531,7 +577,11 @@ function toApiRunEditorRegistration(dto: ReturnType<typeof ProgramRegistrationDt
   }
 }
 
-function toApiRegistrationEditorRecord(dto: ReturnType<typeof ProgramRegistrationDtoSchema.parse>, run: ProgramRun | null, payments: ProgramRegistrationEditorRecord["payments"] = []): ProgramRegistrationEditorRecord {
+function quoteLines(lines: ReturnType<typeof ProgramRegistrationQuoteResultSchema.parse>["lines"]): ProgramRegistrationQuote["lines"] {
+  return lines.map((line) => ({ kind: line.kind, label: line.label, quantity: line.quantity, amount: line.amount.amountMinor / 100 }))
+}
+
+function toApiRegistrationEditorRecord(dto: ReturnType<typeof ProgramRegistrationDtoSchema.parse>, run: ProgramRun | null, payments: ProgramRegistrationEditorRecord["payments"] = [], availableAddOns: ProgramRegistrationAddOnOption[] = []): ProgramRegistrationEditorRecord {
   const compact: ProgramRunEditorRegistration = {
     ...mapRegistration(dto, run ?? undefined),
     discount: dto.discount.amountMinor / 100,
@@ -541,7 +591,26 @@ function toApiRegistrationEditorRecord(dto: ReturnType<typeof ProgramRegistratio
     promo: dto.promo,
     source: dto.source,
   }
-  return { ...compact, customerId: dto.customerId, internalComments: [], payments, run }
+  return {
+    ...compact,
+    version: dto.version,
+    occurrenceVersion: run?.version ?? null,
+    pricingMode: dto.pricingMode,
+    currency: dto.total.currency,
+    acceptedQuote: dto.acceptedQuote ? {
+      quoteId: dto.acceptedQuote.quoteId,
+      acceptedAt: dto.acceptedQuote.acceptedAt,
+      total: dto.acceptedQuote.total.amountMinor / 100,
+      currency: dto.acceptedQuote.total.currency,
+      addOns: dto.acceptedQuote.addOns.map((item) => ({ ...item })),
+      lines: quoteLines(dto.acceptedQuote.lines),
+    } : null,
+    availableAddOns,
+    customerId: dto.customerId,
+    internalComments: [],
+    payments,
+    run,
+  }
 }
 
 export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplateEditorRepository, ProgramRunEditorRepository, ProgramRegistrationEditorRepository, ProgramCategoryEditorRepository {
@@ -829,7 +898,17 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
     const occurrence = await this.occurrenceDto(dto.occurrenceId).catch(() => null)
     const template = occurrence ? await this.templateDto(occurrence.templateId).catch(() => null) : null
     const run = occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null
-    return toApiRegistrationEditorRecord(dto, run, await this.listRegistrationPayments(dto.id))
+    const availableAddOns = template ? await this.availableRegistrationAddOns(template.id) : []
+    return toApiRegistrationEditorRecord(dto, run, await this.listRegistrationPayments(dto.id), availableAddOns)
+  }
+
+  async createRegistrationDraft(run?: ProgramRun) {
+    const draft = createEmptyProgramRegistration(run)
+    if (!run?.templateId) return draft
+    const resolution = await this.resolveProgramOffering(run.templateId)
+    if (resolution.resolution === "ambiguous") throw new Error("Для программы найдено несколько offering")
+    if (resolution.resolution === "unprepared") return draft
+    return { ...draft, pricingMode: "quote_required" as const, availableAddOns: registrationAddOns(resolution.editor) }
   }
 
   async listRegistrationRuns(): Promise<ProgramRun[]> {
@@ -841,24 +920,27 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
   }
 
   async saveRegistration(record: ProgramRegistrationEditorRecord): Promise<ProgramRegistrationEditorRecord> {
-    const money = (value: number) => ({ amountMinor: Math.round(value * 100), currency: "RUB" })
-    const common = {
+    const money = (value: number) => ({ amountMinor: Math.round(value * 100), currency: record.currency })
+    const mutableContext = record.acceptedQuote ? {} : {
       occurrenceId: record.runId,
+      participantCount: Math.max(1, record.participantCount ?? 1),
+    }
+    const editable = {
+      ...mutableContext,
       customerId: record.customerId,
       phone: record.phone,
-      participantCount: Math.max(1, record.participantCount ?? 1),
       participantNames: record.participantNames,
-      total: money(record.total),
-      discount: money(record.discount),
       promo: record.promo,
       source: record.source,
       comment: record.comment,
     }
+    const legacyPrice = record.pricingMode === "legacy_unpriced" ? { total: money(record.total), discount: money(record.discount) } : {}
+    const common = { ...editable, ...legacyPrice }
     let updated = record.id === "new"
-      ? await this.client.post("/programs/registrations", { ...common, status: record.status, operationId: operationId(), idempotencyKey: idempotencyKey("program-registration-create") }, ProgramRegistrationDtoSchema)
-      : await this.client.patch(`/programs/registrations/${encodeURIComponent(record.id)}`, { ...common, version: (await this.registrationDto(record.id)).version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-${record.id}`) }, ProgramRegistrationDtoSchema)
+      ? await this.client.post("/programs/registrations", { ...common, status: record.status === "confirmed" && record.pricingMode === "quote_required" ? "new" : record.status, operationId: operationId(), idempotencyKey: idempotencyKey("program-registration-create") }, ProgramRegistrationDtoSchema)
+      : await this.client.patch(`/programs/registrations/${encodeURIComponent(record.id)}`, { ...common, version: record.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-${record.id}`) }, ProgramRegistrationDtoSchema)
     this.registrations.set(updated.id, updated)
-    if (record.id !== "new" && updated.status !== record.status) {
+    if (record.pricingMode === "legacy_unpriced" && record.id !== "new" && updated.status !== record.status) {
       updated = await this.client.post(`/programs/registrations/${encodeURIComponent(updated.id)}/transition`, { version: updated.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-transition-${updated.id}`), status: record.status }, ProgramRegistrationDtoSchema)
       this.registrations.set(updated.id, updated)
     }
@@ -866,7 +948,59 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
     const template = occurrence ? await this.templateDto(occurrence.templateId).catch(() => null) : null
     await this.reconcileRegistrationPayments(updated.id, record.payments)
     const authoritative = await this.registrationDto(updated.id)
-    return toApiRegistrationEditorRecord(authoritative, occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null, await this.listRegistrationPayments(updated.id))
+    const availableAddOns = template ? await this.availableRegistrationAddOns(template.id) : []
+    return toApiRegistrationEditorRecord(authoritative, occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null, await this.listRegistrationPayments(updated.id), availableAddOns)
+  }
+
+  async quoteRegistration(registration: ProgramRegistrationEditorRecord, addOns: ProgramRegistrationAddOnSelection[]): Promise<ProgramRegistrationQuote> {
+    if (registration.pricingMode !== "quote_required" || registration.occurrenceVersion === null) throw new Error("Серверный расчёт для этой регистрации недоступен")
+    const input = {
+      expectedOccurrenceVersion: registration.occurrenceVersion,
+      ratePlanKey: null,
+      participants: Math.max(1, registration.participantCount ?? 1),
+      currency: registration.currency,
+      addOns: [...addOns].sort((left, right) => left.assignmentId.localeCompare(right.assignmentId)),
+    }
+    const scope = `program-registration-quote:${registration.runId}`
+    const intent = this.commandIntent(scope, input)
+    const body = ProgramRegistrationQuoteBodySchema.parse({ ...input, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey })
+    const result = await this.client.post(`/programs/occurrences/${encodeURIComponent(registration.runId)}/offering/quotes/registration`, body, ProgramRegistrationQuoteResultSchema)
+    this.commandIntents.delete(scope)
+    return {
+      quoteId: result.quoteId,
+      occurrenceId: result.programOccurrenceId,
+      occurrenceVersion: result.programOccurrenceVersion,
+      calculatedAt: result.calculatedAt,
+      validUntil: result.validUntil,
+      participants: result.inputs.participants,
+      total: result.total.amountMinor / 100,
+      currency: result.currency,
+      addOns: result.inputs.addOns.map((item) => ({ ...item })),
+      lines: quoteLines(result.lines),
+    }
+  }
+
+  async confirmRegistration(registration: ProgramRegistrationEditorRecord, quote: ProgramRegistrationQuote): Promise<ProgramRegistrationEditorRecord> {
+    if (registration.id === "new") throw new Error("Сначала сохраните черновик")
+    const input = { version: registration.version, status: "confirmed" as const, quoteAcceptance: { quoteSnapshotId: quote.quoteId } }
+    const scope = `program-registration-confirm:${registration.id}`
+    const intent = this.commandIntent(scope, input)
+    const updated = await this.client.post(`/programs/registrations/${encodeURIComponent(registration.id)}/transition`, { ...input, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, ProgramRegistrationDtoSchema)
+    this.commandIntents.delete(scope)
+    this.registrations.set(updated.id, updated)
+    const occurrence = await this.occurrenceDto(updated.occurrenceId).catch(() => null)
+    const template = occurrence ? await this.templateDto(occurrence.templateId).catch(() => null) : null
+    const availableAddOns = template ? await this.availableRegistrationAddOns(template.id) : []
+    return toApiRegistrationEditorRecord(updated, occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null, await this.listRegistrationPayments(updated.id), availableAddOns)
+  }
+
+  private async availableRegistrationAddOns(templateId: string): Promise<ProgramRegistrationAddOnOption[]> {
+    try {
+      const resolution = await this.resolveProgramOffering(templateId)
+      return resolution.resolution === "linked" ? registrationAddOns(resolution.editor) : []
+    } catch {
+      return []
+    }
   }
 
   private async listRegistrationPayments(registrationId: string): Promise<ProgramRegistrationEditorRecord["payments"]> {
@@ -881,14 +1015,14 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
     const ids = new Map<string, string>()
     for (const payment of pending.filter((payment) => payment.kind === "payment")) {
       const current = await this.refreshRegistrationDto(registrationId)
-      const saved = await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "charge", amount: { amountMinor: Math.round(payment.amount * 100), currency: "RUB" }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId: null, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-payment-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
+      const saved = await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "charge", amount: { amountMinor: Math.round(payment.amount * 100), currency: current.total.currency }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId: null, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-payment-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
       ids.set(payment.id, saved.id)
     }
     for (const payment of pending.filter((payment) => payment.kind === "refund")) {
       const sourcePaymentId = payment.sourcePaymentId ? ids.get(payment.sourcePaymentId) ?? payment.sourcePaymentId : undefined
       if (!sourcePaymentId) throw new Error("Для возврата нужна сохранённая исходная оплата")
       const current = await this.refreshRegistrationDto(registrationId)
-      await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "refund", amount: { amountMinor: Math.round(payment.amount * 100), currency: "RUB" }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-refund-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
+      await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "refund", amount: { amountMinor: Math.round(payment.amount * 100), currency: current.total.currency }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-refund-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
     }
   }
 
@@ -1041,11 +1175,32 @@ function toRunEditorRegistration(registration: ProgramRegistration, detail?: Pro
 function toRegistrationEditorRecord(registration: ProgramRunEditorRegistration, run: ProgramRun | null): ProgramRegistrationEditorRecord {
   return {
     ...structuredClone(registration),
+    version: 1,
+    occurrenceVersion: run?.version ?? 1,
+    pricingMode: "legacy_unpriced",
+    currency: run?.currency ?? "RUB",
+    acceptedQuote: null,
+    availableAddOns: [],
     customerId: null,
     internalComments: [{ id: `registration-comment-${registration.id}-1`, author: "Марина Кириллова", createdLabel: "Сегодня, 13:48", text: "Клиент подтвердил состав группы и получил памятку участника." }, { id: `registration-comment-${registration.id}-2`, author: "Алексей Воронов", createdLabel: "23 авг, 18:12", text: "Проверил промокод и итоговую стоимость." }],
     payments: registration.paid > 0 ? [{ amount: registration.paid, comment: "Предоплата", date: "2026-08-23", id: `registration-payment-${registration.id}-1`, kind: "payment", method: "card" }] : [],
     run: run ? structuredClone(run) : null,
   }
+}
+
+function registrationAddOns(editor: InternalOfferingEditor): ProgramRegistrationAddOnOption[] {
+  const catalog = new Map(editor.addOnCatalog.map((item) => [item.offering.id, item]))
+  return editor.addOnAssignments
+    .filter((assignment) => assignment.enabled)
+    .sort((left, right) => left.displayOrder - right.displayOrder || left.id.localeCompare(right.id))
+    .flatMap((assignment) => {
+      const item = catalog.get(assignment.addOnOfferingId)
+      if (!item || item.availability.status !== "available" || item.offering.archived || item.offering.state !== "active" || (item.serviceType !== "quantity_service" && item.serviceType !== "person_service")) return []
+      const minQuantity = Math.max(1, assignment.minQuantityOverride ?? 1)
+      const maxQuantity = assignment.maxQuantityOverride
+      const defaultQuantity = Math.max(minQuantity, Math.min(maxQuantity ?? Number.MAX_SAFE_INTEGER, assignment.defaultQuantityOverride ?? minQuantity))
+      return [{ assignmentId: assignment.id, label: assignment.labelOverride ?? item.offering.operationalName, serviceType: item.serviceType, required: assignment.required, minQuantity, maxQuantity, defaultQuantity }]
+    })
 }
 
 function toListRun(record: ProgramRunEditorRecord): ProgramRun {

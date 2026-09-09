@@ -51,16 +51,18 @@ import {
 import { formatProgramDateTime } from "@app/components/programs/program-format";
 import { ProgramIcon } from "@app/components/programs/program-presentation";
 import {
-  createEmptyProgramRegistration,
   programsRepository,
   type ProgramRegistrationEditorRepository,
 } from "@app/data/programs-repository";
+import { ApiClientError } from "@app/lib/api-client";
 import { useDirectoryAssignees, useDirectoryCustomers } from "@app/features/use-directory-data";
 import {
   programRegistrationStatuses,
   programRegistrationStatusMeta,
   type ProgramRegistrationEditorRecord,
+  type ProgramRegistrationAddOnSelection,
   type ProgramRegistrationPaymentMethod,
+  type ProgramRegistrationQuote,
   type ProgramRegistrationStatus,
   type ProgramRun,
 } from "@app/entities/programs";
@@ -123,6 +125,19 @@ export function ProgramRegistrationEditorPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorSaveState>("saved");
+  const [quote, setQuote] = useState<ProgramRegistrationQuote | null>(null);
+  const [quotePending, setQuotePending] = useState(false);
+  const [confirmPending, setConfirmPending] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
+  const [addOnSelections, setAddOnSelections] = useState<ProgramRegistrationAddOnSelection[]>([]);
+  const [clock, setClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!quote) return;
+    setClock(Date.now());
+    const timer = window.setInterval(() => setClock(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [quote]);
 
   useEffect(() => {
     let active = true;
@@ -133,10 +148,9 @@ export function ProgramRegistrationEditorPage({
       .then(async (nextRuns) => {
         const initialRun =
           nextRuns.find((run) => run.id === requestedRunId) ?? nextRuns[0];
-        const registration =
-          id === "new"
-            ? createEmptyProgramRegistration(initialRun)
-            : await repository.getRegistration(id);
+        const registration = id === "new"
+          ? await repository.createRegistrationDraft(initialRun)
+          : await repository.getRegistration(id);
         if (!active) return;
         setRuns(nextRuns);
         if (!registration) {
@@ -145,6 +159,8 @@ export function ProgramRegistrationEditorPage({
           return;
         }
         setDraft(registration);
+        setQuote(null);
+        setAddOnSelections(registration.availableAddOns.filter((item) => item.required).map((item) => ({ assignmentId: item.assignmentId, quantity: item.defaultQuantity })));
         setLoading(false);
       })
       .catch((reason: unknown) => {
@@ -198,13 +214,18 @@ export function ProgramRegistrationEditorPage({
               ...current,
               categoryIcon: run.categoryIcon,
               categoryTone: run.categoryTone,
+              currency: run.currency ?? current.currency,
+              occurrenceVersion: run.version ?? null,
               programName: run.name,
               programStartsAt: run.startsAt,
               run: structuredClone(run),
               runId,
+              availableAddOns: [],
             }
           : current,
       );
+      setQuote(null);
+      setAddOnSelections([]);
       setSaveState("dirty");
     },
     [runs],
@@ -269,28 +290,83 @@ export function ProgramRegistrationEditorPage({
     if (!draft) return;
     setSaveState("saving");
     try {
-      await repository.saveRegistration(draft);
+      const wasNew = draft.id === "new";
+      const saved = await repository.saveRegistration(draft);
+      setDraft(saved);
+      setAddOnSelections((current) => {
+        const options = new Map(saved.availableAddOns.map((item) => [item.assignmentId, item]));
+        const valid = current.filter((item) => options.has(item.assignmentId));
+        for (const option of saved.availableAddOns.filter((item) => item.required)) {
+          if (!valid.some((item) => item.assignmentId === option.assignmentId)) valid.push({ assignmentId: option.assignmentId, quantity: option.defaultQuantity });
+        }
+        return valid;
+      });
       setSaveState("saved");
-    } catch {
+      setPricingError(null);
+      if (wasNew && saved.id !== "new") navigate(`/programs/registrations/${saved.id}`, { replace: true });
+    } catch (reason) {
+      setPricingError(apiMessage(reason, "Не удалось сохранить черновик"));
       setSaveState("conflict");
     }
   };
 
+  const requestQuote = async () => {
+    if (!draft) return;
+    setQuotePending(true);
+    setPricingError(null);
+    try {
+      setQuote(await repository.quoteRegistration(draft, addOnSelections));
+    } catch (reason) {
+      setPricingError(apiMessage(reason, "Не удалось рассчитать стоимость"));
+    } finally {
+      setQuotePending(false);
+    }
+  };
+
+  const quoteMatchesDraft = Boolean(draft && quote
+    && quote.occurrenceId === draft.runId
+    && quote.occurrenceVersion === draft.occurrenceVersion
+    && quote.participants === Math.max(1, draft.participantCount ?? 1)
+    && sameAddOns(quote.addOns, addOnSelections)
+    && new Date(quote.validUntil).getTime() > clock);
+  const quoteExpired = Boolean(quote && new Date(quote.validUntil).getTime() <= clock);
+
+  const confirm = async () => {
+    if (!draft || !quote || !quoteMatchesDraft || saveState !== "saved") return;
+    setConfirmPending(true);
+    setPricingError(null);
+    try {
+      const confirmed = await repository.confirmRegistration(draft, quote);
+      setDraft(confirmed);
+      setQuote(null);
+      setSaveState("saved");
+    } catch (reason) {
+      setPricingError(apiMessage(reason, "Не удалось подтвердить регистрацию"));
+    } finally {
+      setConfirmPending(false);
+    }
+  };
+
   const draftStatus = draft?.status;
+  const pricedConfirmationRequired = draft?.pricingMode === "quote_required" && !draft.acceptedQuote;
   const statusControl = useMemo(
     () =>
       draftStatus ? (
         <FilterSelect
           className="w-28 max-w-28 sm:w-36 sm:max-w-36"
           label="Статус регистрации"
-          onValueChange={(value) =>
-            setStatus(value as ProgramRegistrationStatus)
-          }
+          onValueChange={(value) => {
+            if (value === "confirmed" && pricedConfirmationRequired) {
+              setPricingError("Для priced registration используйте «Подтвердить по расчёту».");
+              return;
+            }
+            setStatus(value as ProgramRegistrationStatus);
+          }}
           options={statusOptions}
           value={draftStatus}
         />
       ) : undefined,
-    [draftStatus, setStatus],
+    [draftStatus, pricedConfirmationRequired, setStatus],
   );
   const title = draft?.clientName ?? "Регистрация";
   const editorChrome = useMemo(
@@ -346,16 +422,27 @@ export function ProgramRegistrationEditorPage({
       }
       footerActions={
         <>
-          <Button onClick={() => navigate(-1)} size="sm" variant="outline">
+          <Button className="hidden sm:inline-flex" onClick={() => navigate(-1)} size="sm" variant="outline">
             Закрыть
           </Button>
           <Button
+            aria-label="Сохранить черновик"
             disabled={!draft || saveState === "saving"}
             onClick={() => void save()}
             size="sm"
           >
-            Сохранить
+            <span className="sm:hidden">Сохранить</span><span className="hidden sm:inline">Сохранить черновик</span>
           </Button>
+          {draft?.pricingMode === "quote_required" && !draft.acceptedQuote ? (
+            <>
+              <Button aria-label={quote ? "Пересчитать" : "Рассчитать"} disabled={quotePending || saveState !== "saved" || draft.id === "new"} onClick={() => void requestQuote()} size="sm" variant="outline">
+                <span className="sm:hidden">{quotePending ? "Считаем…" : "Расчёт"}</span><span className="hidden sm:inline">{quotePending ? "Рассчитываем…" : quote ? "Пересчитать" : "Рассчитать"}</span>
+              </Button>
+              <Button aria-label="Подтвердить по расчёту" disabled={confirmPending || !quoteMatchesDraft || saveState !== "saved"} onClick={() => void confirm()} size="sm">
+                <span className="sm:hidden">{confirmPending ? "Ждите…" : "Подтвердить"}</span><span className="hidden sm:inline">{confirmPending ? "Подтверждаем…" : "Подтвердить по расчёту"}</span>
+              </Button>
+            </>
+          ) : null}
         </>
       }
       mobileActions={
@@ -408,10 +495,16 @@ export function ProgramRegistrationEditorPage({
       ) : null}
       {draft && tab === "payment" ? (
         <RegistrationPayments
+          addOnSelections={addOnSelections}
           draft={draft}
           onAdd={addPayment}
           onRefund={refundPayment}
           onTotalChange={setTotal}
+          onAddOnSelectionsChange={setAddOnSelections}
+          pricingError={pricingError}
+          quote={quote}
+          quoteExpired={quoteExpired}
+          quoteMatchesDraft={quoteMatchesDraft}
           update={update}
         />
       ) : null}
@@ -423,6 +516,22 @@ export function ProgramRegistrationEditorPage({
       ) : null}
     </EditorFrame>
   );
+}
+
+function sameAddOns(left: ProgramRegistrationAddOnSelection[], right: ProgramRegistrationAddOnSelection[]) {
+  const canonical = (items: ProgramRegistrationAddOnSelection[]) => [...items].sort((a, b) => a.assignmentId.localeCompare(b.assignmentId));
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function apiMessage(reason: unknown, fallback: string) {
+  if (!(reason instanceof Error)) return fallback;
+  if (reason instanceof ApiClientError) {
+    if (reason.status === 403) return "Нет прав на расчёт или подтверждение";
+    if (reason.rawCode === "QUOTE_EXPIRED") return "Срок действия расчёта истёк. Пересчитайте стоимость.";
+    if (reason.rawCode === "CAPACITY_EXCEEDED") return "На проведении нет мест для этой группы.";
+    if (reason.status === 409 || reason.rawCode === "QUOTE_CONTEXT_MISMATCH") return "Данные или условия изменились. Обновите страницу и повторите расчёт.";
+  }
+  return reason.message || fallback;
 }
 
 function RegistrationOverflow({
@@ -559,16 +668,20 @@ function RegistrationMain({
             htmlFor="registration-run"
             label="Проведение"
           >
-            <EntityCombobox
-              label="Проведение программы"
-              onValueChange={onRunChange}
-              options={runs.map((run) => ({
-                label: run.name,
-                secondary: formatProgramDateTime(run.startsAt),
-                value: run.id,
-              }))}
-              value={draft.runId}
-            />
+            {draft.acceptedQuote ? (
+              <Input aria-label="Проведение программы" disabled value={`${draft.programName} · ${formatProgramDateTime(draft.programStartsAt)}`} />
+            ) : (
+              <EntityCombobox
+                label="Проведение программы"
+                onValueChange={onRunChange}
+                options={runs.map((run) => ({
+                  label: run.name,
+                  secondary: formatProgramDateTime(run.startsAt),
+                  value: run.id,
+                }))}
+                value={draft.runId}
+              />
+            )}
           </FormField>
           <FormField
             className="sm:col-span-4"
@@ -655,6 +768,7 @@ function RegistrationParticipants({
           label="Количество участников"
         >
           <Input
+            disabled={Boolean(draft.acceptedQuote)}
             id="registration-participant-count"
             min="1"
             onChange={(event) =>
@@ -682,12 +796,19 @@ function RegistrationParticipants({
 }
 
 function RegistrationPayments({
+  addOnSelections,
   draft,
   onAdd,
+  onAddOnSelectionsChange,
   onRefund,
   onTotalChange,
+  pricingError,
+  quote,
+  quoteExpired,
+  quoteMatchesDraft,
   update,
 }: {
+  addOnSelections: ProgramRegistrationAddOnSelection[];
   draft: ProgramRegistrationEditorRecord;
   onAdd: (
     amount: number,
@@ -695,8 +816,13 @@ function RegistrationPayments({
     date: string,
     comment: string,
   ) => void;
+  onAddOnSelectionsChange: (value: ProgramRegistrationAddOnSelection[]) => void;
   onRefund: (id: string) => void;
   onTotalChange: (value: number) => void;
+  pricingError: string | null;
+  quote: ProgramRegistrationQuote | null;
+  quoteExpired: boolean;
+  quoteMatchesDraft: boolean;
   update: <K extends keyof ProgramRegistrationEditorRecord>(
     key: K,
     value: ProgramRegistrationEditorRecord[K],
@@ -706,29 +832,27 @@ function RegistrationPayments({
     <div className="space-y-3">
       <EditorSection title="Стоимость регистрации">
         <div className="grid items-start gap-3">
-          <FormField htmlFor="registration-total" label="Стоимость">
-            <Input
-              id="registration-total"
-              min="0"
-              onChange={(event) =>
-                onTotalChange(inputNumber(event.target.value))
-              }
-              type="number"
-              value={draft.total}
+          {draft.pricingMode === "legacy_unpriced" ? (
+            <>
+              <FormField htmlFor="registration-total" label="Стоимость">
+                <Input id="registration-total" min="0" onChange={(event) => onTotalChange(inputNumber(event.target.value))} type="number" value={draft.total} />
+              </FormField>
+              <FormField htmlFor="registration-discount" label="Скидка, %">
+                <Input id="registration-discount" max="100" min="0" onChange={(event) => update("discount", inputNumber(event.target.value))} type="number" value={draft.discount} />
+              </FormField>
+              <p className="text-[11px] text-muted-foreground">Устаревший режим: стоимость задаёт оператор.</p>
+            </>
+          ) : (
+            <ServerPricing
+              addOnSelections={addOnSelections}
+              draft={draft}
+              onAddOnSelectionsChange={onAddOnSelectionsChange}
+              pricingError={pricingError}
+              quote={quote}
+              quoteExpired={quoteExpired}
+              quoteMatchesDraft={quoteMatchesDraft}
             />
-          </FormField>
-          <FormField htmlFor="registration-discount" label="Скидка, %">
-            <Input
-              id="registration-discount"
-              max="100"
-              min="0"
-              onChange={(event) =>
-                update("discount", inputNumber(event.target.value))
-              }
-              type="number"
-              value={draft.discount}
-            />
-          </FormField>
+          )}
           <FormField htmlFor="registration-promo" label="Промокод">
             <Input
               id="registration-promo"
@@ -744,6 +868,68 @@ function RegistrationPayments({
         onAdd={onAdd}
         onRefund={onRefund}
       />
+    </div>
+  );
+}
+
+function ServerPricing({
+  addOnSelections,
+  draft,
+  onAddOnSelectionsChange,
+  pricingError,
+  quote,
+  quoteExpired,
+  quoteMatchesDraft,
+}: {
+  addOnSelections: ProgramRegistrationAddOnSelection[];
+  draft: ProgramRegistrationEditorRecord;
+  onAddOnSelectionsChange: (value: ProgramRegistrationAddOnSelection[]) => void;
+  pricingError: string | null;
+  quote: ProgramRegistrationQuote | null;
+  quoteExpired: boolean;
+  quoteMatchesDraft: boolean;
+}) {
+  const shown = draft.acceptedQuote ?? quote;
+  const updateQuantity = (assignmentId: string, quantity: number, required: boolean) => {
+    const rest = addOnSelections.filter((item) => item.assignmentId !== assignmentId);
+    onAddOnSelectionsChange(quantity > 0 || required ? [...rest, { assignmentId, quantity: Math.max(1, quantity) }] : rest);
+  };
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <p className="text-xs font-medium">Цену фиксирует серверный расчёт</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">Сохраните черновик, рассчитайте точное проведение и состав группы, затем подтвердите.</p>
+      </div>
+      {!draft.acceptedQuote && draft.availableAddOns.length ? (
+        <div className="space-y-3" aria-label="Дополнительные услуги">
+          {draft.availableAddOns.map((option) => {
+            const selected = addOnSelections.find((item) => item.assignmentId === option.assignmentId);
+            return (
+              <FormField key={option.assignmentId} htmlFor={`registration-addon-${option.assignmentId}`} label={`${option.label}${option.required ? " (обязательно)" : ""}`}>
+                <Input
+                  id={`registration-addon-${option.assignmentId}`}
+                  min={option.required ? option.minQuantity : 0}
+                  max={option.maxQuantity ?? undefined}
+                  onChange={(event) => updateQuantity(option.assignmentId, inputNumber(event.target.value), option.required)}
+                  type="number"
+                  value={selected?.quantity ?? 0}
+                />
+              </FormField>
+            );
+          })}
+        </div>
+      ) : <p className="text-[11px] text-muted-foreground">Доступных дополнений нет.</p>}
+      {pricingError ? <p className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs text-danger-foreground" role="alert">{pricingError}</p> : null}
+      {shown ? (
+        <div className="space-y-2 rounded-lg border p-3" aria-label={draft.acceptedQuote ? "Принятый расчёт" : "Текущий расчёт"}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium">{draft.acceptedQuote ? "Принятая стоимость" : "Рассчитанная стоимость"}</span>
+            <span className="font-medium tabular-nums">{money.format(shown.total)}</span>
+          </div>
+          {shown.lines.map((line, index) => <div className="flex justify-between gap-3 text-[11px] text-muted-foreground" key={`${line.kind}-${line.label}-${index}`}><span>{line.label} × {line.quantity}</span><span className="tabular-nums">{money.format(line.amount)}</span></div>)}
+          {draft.acceptedQuote ? <p className="border-t pt-2 text-[11px] text-muted-foreground">Снимок цены и дополнений зафиксирован {new Date(draft.acceptedQuote.acceptedAt).toLocaleString("ru-RU")}.</p> : quoteExpired ? <p className="border-t pt-2 text-[11px] text-warning-foreground">Срок действия расчёта истёк. Пересчитайте стоимость.</p> : !quoteMatchesDraft ? <p className="border-t pt-2 text-[11px] text-warning-foreground">Расчёт устарел: проведение, участники или дополнения изменились.</p> : <p className="border-t pt-2 text-[11px] text-muted-foreground">Действует до {new Date(quote!.validUntil).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}.</p>}
+        </div>
+      ) : null}
     </div>
   );
 }

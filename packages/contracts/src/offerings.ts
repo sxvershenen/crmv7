@@ -1748,6 +1748,84 @@ export const ProgramOfferingQuoteResultSchema = z.object({
 }).strict();
 export type ProgramOfferingQuoteResult = z.infer<typeof ProgramOfferingQuoteResultSchema>;
 
+const ProgramRegistrationAddOnSelectionSchema = z.object({
+  assignmentId: IdSchema,
+  quantity: z.number().int().positive().max(1_000_000),
+}).strict();
+
+export const ProgramRegistrationQuoteBodySchema = z.object({
+  quoteType: z.literal("program_registration").default("program_registration"),
+  expectedOccurrenceVersion: VersionSchema,
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120).nullable(),
+  participants: z.number().int().positive().max(1_000_000),
+  currency: CurrencySchema,
+  addOns: z.array(ProgramRegistrationAddOnSelectionSchema).max(100).default([]),
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+}).strict().superRefine((value, context) => {
+  const ids = new Set<string>();
+  value.addOns.forEach((selection, index) => {
+    if (ids.has(selection.assignmentId)) context.addIssue({ code: "custom", path: ["addOns", index, "assignmentId"], message: "An add-on assignment may be selected once" });
+    ids.add(selection.assignmentId);
+  });
+});
+export type ProgramRegistrationQuoteBody = z.infer<typeof ProgramRegistrationQuoteBodySchema>;
+
+const ProgramRegistrationQuoteAddOnLineSchema = z.object({
+  kind: z.literal("addon"),
+  label: z.string().min(1).max(500),
+  serviceDate: DateSchema,
+  quantity: z.number().int().positive(),
+  unitAmount: NonNegativeMoneySchema,
+  amount: NonNegativeMoneySchema,
+  ratePlanId: IdSchema,
+  ratePlanVersion: VersionSchema,
+  matchedRuleId: IdSchema.nullable(),
+  matchedRuleVersion: VersionSchema.nullable(),
+  addOnAssignmentId: IdSchema,
+  addOnOfferingId: IdSchema,
+  explanation: z.string().max(1000),
+}).strict();
+
+export const ProgramRegistrationQuoteResultSchema = z.object({
+  quoteType: z.literal("program_registration"),
+  acceptanceReady: z.literal(true),
+  quoteId: IdSchema,
+  offeringId: IdSchema,
+  programTemplateId: IdSchema,
+  programOccurrenceId: IdSchema,
+  programOccurrenceVersion: VersionSchema,
+  calculatedAt: DateTimeSchema,
+  validUntil: DateTimeSchema,
+  leadDays: z.number().int().nonnegative(),
+  currency: CurrencySchema,
+  inputs: z.object({
+    serviceDate: DateSchema,
+    startsAt: DateTimeSchema,
+    endsAt: DateTimeSchema,
+    participants: z.number().int().positive(),
+    durationMinutes: z.number().int().positive(),
+    addOns: z.array(ProgramRegistrationAddOnSelectionSchema).max(100),
+  }).strict(),
+  lines: z.array(z.union([ProgramOfferingQuoteLineSchema, ProgramRegistrationQuoteAddOnLineSchema])).min(1).max(102),
+  total: NonNegativeMoneySchema,
+  provenance: ProgramOfferingQuoteResultSchema.shape.provenance.extend({
+    addOns: z.array(z.object({
+      assignmentId: IdSchema,
+      addOnOfferingId: IdSchema,
+      serviceType: z.enum(["quantity_service", "person_service"]),
+      offeringVersion: VersionSchema,
+      pricingVersion: VersionSchema,
+      priceBookId: IdSchema,
+      priceBookVersion: VersionSchema,
+      businessCalendarId: IdSchema,
+      businessCalendarVersion: VersionSchema,
+    }).strict()).max(100),
+  }).strict(),
+  immutableSnapshot: z.literal(true),
+}).strict();
+export type ProgramRegistrationQuoteResult = z.infer<typeof ProgramRegistrationQuoteResultSchema>;
+
 export const OfferingEntrySurfaceSchema = z.enum(["internal", "admin", "scheduler"]);
 export const OfferingPricingOutboxEventSchema = z.object({
   eventId: IdSchema,

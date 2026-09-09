@@ -348,6 +348,7 @@ export class ProgramRegistrationEntity extends MutableEntity {
   @Column({ name: "discount_amount", type: "integer", default: 0 }) discountAmount!: number
   @Column({ name: "paid_amount", type: "integer", default: 0 }) paidAmount!: number
   @Column({ type: "text", default: "RUB" }) currency!: string
+  @Column({ name: "pricing_mode", type: "text", default: "legacy_unpriced" }) pricingMode!: string
   @Column({ type: "text", default: "new" }) status!: string
   @Column({ type: "text", default: "" }) promo!: string
   @Column({ type: "text", default: "" }) source!: string

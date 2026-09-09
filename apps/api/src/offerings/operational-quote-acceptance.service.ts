@@ -6,8 +6,11 @@ import { type EntityManager } from "typeorm"
 import {
   InternalOfferingQuoteRequestSchema,
   InternalOfferingQuoteResultSchema,
-  OfferingQuoteOperationalContextSchema,
+  HouseStayQuoteOperationalContextSchema,
   OperationalQuoteAcceptanceOutboxEventSchema,
+  ProgramRegistrationQuoteOperationalContextSchema,
+  ProgramRegistrationQuoteResultSchema,
+  ProgramRegistrationQuoteBodySchema,
   type BookingItemQuoteAcceptance,
   type SessionUser,
 } from "@crm/contracts"
@@ -21,15 +24,22 @@ import {
   OfferingQuoteSnapshotEntity,
   OutboxDeliveryEntity,
   OutboxEventEntity,
+  ProgramOccurrenceEntity,
+  ProgramRegistrationEntity,
+  ProgramTemplateEntity,
   ResourceEntity,
 } from "@crm/db"
 
 type PreparedAcceptance = {
   item: BookingItemEntity
   quote: OfferingQuoteSnapshotEntity
-  context: ReturnType<typeof OfferingQuoteOperationalContextSchema.parse>
+  context: ReturnType<typeof HouseStayQuoteOperationalContextSchema.parse>
   request: ReturnType<typeof InternalOfferingQuoteRequestSchema.parse>
   result: ReturnType<typeof InternalOfferingQuoteResultSchema.parse>
+}
+export type PreparedProgramRegistrationAcceptance = {
+  quote: OfferingQuoteSnapshotEntity
+  result: ReturnType<typeof ProgramRegistrationQuoteResultSchema.parse>
 }
 
 @Injectable()
@@ -80,8 +90,41 @@ export class OperationalQuoteAcceptanceService {
     for (const entry of prepared) await this.acceptOne(manager, booking, entry, offeringById, bindingByOffering, resourceById, actor, requestId, operationId, now)
   }
 
+  async prepareProgramRegistration(manager: EntityManager, registration: ProgramRegistrationEntity, occurrence: ProgramOccurrenceEntity, quoteSnapshotId: string): Promise<PreparedProgramRegistrationAcceptance> {
+    const quote = await manager.createQueryBuilder(OfferingQuoteSnapshotEntity, "quote").setLock("pessimistic_write").where("quote.id = :id", { id: quoteSnapshotId }).getOne()
+    if (!quote) throw new NotFoundException({ code: "QUOTE_NOT_FOUND", message: "Расчёт не найден" })
+    if (quote.quoteType !== "program_registration") throw failure("QUOTE_NOT_ACCEPTANCE_READY", "Template preview нельзя принять как регистрацию", { quoteSnapshotId })
+    const context = ProgramRegistrationQuoteOperationalContextSchema.safeParse(quote.operationalContext)
+    const request = ProgramRegistrationQuoteBodySchema.safeParse(quote.requestPayload)
+    const result = ProgramRegistrationQuoteResultSchema.safeParse(quote.resultPayload)
+    if (!context.success || !request.success || !result.success) throw failure("QUOTE_SNAPSHOT_INVALID", "Сохранённый расчёт регистрации имеет неверный формат")
+    const offering = await manager.createQueryBuilder(CatalogOfferingEntity, "offering").setLock("pessimistic_write").where("offering.id = :id", { id: quote.offeringId }).getOne()
+    const template = await manager.createQueryBuilder(ProgramTemplateEntity, "template").setLock("pessimistic_write").where("template.id = :id", { id: occurrence.templateId }).getOne()
+    const existing = await manager.createQueryBuilder(AcceptedOfferingQuoteLinkEntity, "link").setLock("pessimistic_write").where("link.quote_snapshot_id = :quoteId OR link.program_registration_id = :registrationId", { quoteId: quote.id, registrationId: registration.id }).getOne()
+    if (existing) throw failure("QUOTE_ALREADY_ACCEPTED", "Расчёт или регистрация уже приняты", { quoteSnapshotId: quote.id, programRegistrationId: registration.id })
+    const now = await this.databaseNow(manager)
+    const exact = result.data.quoteId === quote.id && result.data.offeringId === quote.offeringId
+      && result.data.programOccurrenceId === occurrence.id && result.data.programOccurrenceVersion === occurrence.version
+      && result.data.programTemplateId === occurrence.templateId && request.data.expectedOccurrenceVersion === occurrence.version
+      && result.data.inputs.participants === registration.participantCount
+      && result.data.inputs.startsAt === occurrence.startsAt.toISOString() && result.data.inputs.endsAt === occurrence.endsAt.toISOString()
+      && context.data.programOccurrenceId === occurrence.id && context.data.programOccurrenceVersion === occurrence.version
+      && context.data.programTemplateId === occurrence.templateId && context.data.programTemplateVersion === quote.programTemplateVersion
+    if (!exact || !offering || offering.kind !== "program" || offering.state !== "active" || offering.archivedAt !== null || offering.version !== quote.offeringVersion || offering.subjectVersion !== context.data.subjectVersion || offering.pricingVersion !== quote.pricingVersion || offering.addonAssignmentsVersion !== quote.addOnAssignmentsVersion || offering.activePriceBookId !== quote.priceBookId || !template || template.archivedAt !== null || template.version !== context.data.programTemplateVersion || quote.validUntil <= now) throw failure(quote.validUntil <= now ? "QUOTE_EXPIRED" : "QUOTE_CONTEXT_MISMATCH", quote.validUntil <= now ? "Срок действия расчёта истёк" : "Расчёт не соответствует регистрации или проведение изменилось", { quoteSnapshotId: quote.id })
+    return { quote, result: result.data }
+  }
+
+  async recordProgramRegistration(manager: EntityManager, registration: ProgramRegistrationEntity, prepared: PreparedProgramRegistrationAcceptance, actor: SessionUser, requestId: string, operationId: string) {
+    const now = await this.databaseNow(manager)
+    const link = await manager.save(manager.create(AcceptedOfferingQuoteLinkEntity, { id: randomUUID(), quoteSnapshotId: prepared.quote.id, bookingItemId: null, eventId: null, programRegistrationId: registration.id, targetVersion: registration.version, acceptedAt: now, acceptedBy: actor.id, operationId, requestId, entrySurface: "internal" }))
+    const event = OperationalQuoteAcceptanceOutboxEventSchema.parse({ schemaVersion: 1, eventId: randomUUID(), eventType: "crm.operational_quote.accepted", occurredAt: link.acceptedAt.toISOString(), actorId: actor.id, requestId, operationId, entrySurface: "internal", target: { type: "program_registration", id: registration.id, aggregateId: registration.occurrenceId, version: registration.version }, quote: { quoteSnapshotId: prepared.quote.id, offeringId: prepared.quote.offeringId, offeringVersion: prepared.quote.offeringVersion, pricingVersion: prepared.quote.pricingVersion, addOnsVersion: prepared.quote.addOnAssignmentsVersion, priceBookVersion: prepared.quote.priceBookVersion, calendarVersion: prepared.quote.businessCalendarVersion, currency: prepared.result.currency } })
+    await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "program_registration", entityId: registration.id, action: "quote_accepted", actorId: actor.id, requestId, changes: { quoteSnapshotId: prepared.quote.id, acceptanceId: link.id, occurrenceId: registration.occurrenceId, registrationVersion: registration.version }, createdAt: link.acceptedAt }))
+    await manager.save(manager.create(OutboxEventEntity, { id: event.eventId, topic: event.eventType, aggregateType: "program_registration", aggregateId: registration.id, payload: event as unknown as Record<string, unknown>, availableAt: link.acceptedAt, processedAt: null, attempts: 0, createdAt: link.acceptedAt }))
+    await manager.save(manager.create(OutboxDeliveryEntity, { eventId: event.eventId, consumer: "sse", status: "pending", attempts: 0, availableAt: link.acceptedAt, processedAt: null, lastError: null, createdAt: link.acceptedAt, updatedAt: link.acceptedAt }))
+  }
+
   private prepare(item: BookingItemEntity, quote: OfferingQuoteSnapshotEntity): PreparedAcceptance {
-    const context = quote.operationalContext === null ? null : OfferingQuoteOperationalContextSchema.safeParse(quote.operationalContext)
+    const context = quote.operationalContext === null ? null : HouseStayQuoteOperationalContextSchema.safeParse(quote.operationalContext)
     if (!context?.success) throw failure("QUOTE_NOT_ACCEPTANCE_READY", "Расчёт не содержит совместимого operational context", { quoteSnapshotId: quote.id })
     const request = InternalOfferingQuoteRequestSchema.safeParse(quote.requestPayload)
     const result = InternalOfferingQuoteResultSchema.safeParse(quote.resultPayload)

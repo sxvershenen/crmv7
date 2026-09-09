@@ -4,6 +4,7 @@ import { CapabilitiesSchema } from "./capabilities.js"
 import { DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "./primitives.js"
 import { IdempotencyKeySchema, OperationIdSchema } from "./operations.js"
 import { QuoteAcceptanceReferenceSchema } from "./operational-quote-acceptance.js"
+import { ProgramRegistrationQuoteResultSchema } from "./offerings.js"
 
 export const ProgramTemplatePublicationSchema = z.enum(["draft", "published", "archived"])
 export type ProgramTemplatePublication = z.infer<typeof ProgramTemplatePublicationSchema>
@@ -11,6 +12,15 @@ export const ProgramOccurrenceStatusSchema = z.enum(["draft", "open", "closed", 
 export type ProgramOccurrenceStatus = z.infer<typeof ProgramOccurrenceStatusSchema>
 export const ProgramRegistrationStatusSchema = z.enum(["new", "confirmed", "paid", "visited", "cancelled"])
 export type ProgramRegistrationStatus = z.infer<typeof ProgramRegistrationStatusSchema>
+export const ProgramRegistrationPricingModeSchema = z.enum(["legacy_unpriced", "quote_required"])
+export type ProgramRegistrationPricingMode = z.infer<typeof ProgramRegistrationPricingModeSchema>
+const ProgramRegistrationAcceptedQuoteSchema = z.object({
+  quoteId: IdSchema,
+  acceptedAt: DateTimeSchema,
+  total: NonNegativeMoneySchema,
+  lines: ProgramRegistrationQuoteResultSchema.shape.lines,
+  addOns: ProgramRegistrationQuoteResultSchema.shape.inputs.shape.addOns,
+}).strict()
 
 const AssigneeIdsSchema = z.array(IdSchema).max(100).default([])
 const StageSchema = z.object({
@@ -84,13 +94,13 @@ export type ProgramOccurrenceListQuery = z.infer<typeof ProgramOccurrenceListQue
 export const ProgramRegistrationCapabilitiesSchema = CapabilitiesSchema.pick({ canView: true, canCreate: true, canEdit: true, canArchive: true, canChangeStatus: true, canAddPayment: true, canRefund: true }).strict()
 export const ProgramRegistrationSchema = z.object({
   id: IdSchema, version: VersionSchema, code: z.string().min(1).max(120), occurrenceId: IdSchema, customerId: IdSchema.nullable(), phone: z.string(), participantCount: z.number().int().positive(), participantNames: z.string(),
-  total: NonNegativeMoneySchema, discount: NonNegativeMoneySchema, paid: NonNegativeMoneySchema, status: ProgramRegistrationStatusSchema, promo: z.string(), source: z.string(), comment: z.string(), archived: z.boolean(), createdAt: DateTimeSchema, updatedAt: DateTimeSchema,
+  total: NonNegativeMoneySchema, discount: NonNegativeMoneySchema, paid: NonNegativeMoneySchema, pricingMode: ProgramRegistrationPricingModeSchema, acceptedQuote: ProgramRegistrationAcceptedQuoteSchema.nullable(), status: ProgramRegistrationStatusSchema, promo: z.string(), source: z.string(), comment: z.string(), archived: z.boolean(), createdAt: DateTimeSchema, updatedAt: DateTimeSchema,
   capabilities: ProgramRegistrationCapabilitiesSchema,
 }).strict()
 export type ProgramRegistration = z.infer<typeof ProgramRegistrationSchema>
 export const ProgramRegistrationDtoSchema = ProgramRegistrationSchema
 export type ProgramRegistrationDto = ProgramRegistration
-export const ProgramRegistrationCreateSchema = z.object({ code: z.string().trim().min(1).max(120).optional(), occurrenceId: IdSchema, customerId: IdSchema.nullable().default(null), phone: z.string().max(64).default(""), participantCount: z.number().int().positive(), participantNames: z.string().max(20_000).default(""), total: NonNegativeMoneySchema, discount: NonNegativeMoneySchema.default({ amountMinor: 0, currency: "RUB" }), status: ProgramRegistrationStatusSchema.default("new"), promo: z.string().max(120).default(""), source: z.string().max(120).default(""), comment: z.string().max(20_000).default(""), operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict()
+export const ProgramRegistrationCreateSchema = z.object({ code: z.string().trim().min(1).max(120).optional(), occurrenceId: IdSchema, customerId: IdSchema.nullable().default(null), phone: z.string().max(64).default(""), participantCount: z.number().int().positive(), participantNames: z.string().max(20_000).default(""), currency: z.string().regex(/^[A-Z]{3}$/).default("RUB"), total: NonNegativeMoneySchema.optional(), discount: NonNegativeMoneySchema.optional(), status: ProgramRegistrationStatusSchema.default("new"), promo: z.string().max(120).default(""), source: z.string().max(120).default(""), comment: z.string().max(20_000).default(""), operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict()
 export type ProgramRegistrationCreate = z.infer<typeof ProgramRegistrationCreateSchema>
 export const ProgramRegistrationUpdateSchema = z.object({ version: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema, occurrenceId: IdSchema.optional(), customerId: IdSchema.nullable().optional(), phone: z.string().max(64).optional(), participantCount: z.number().int().positive().optional(), participantNames: z.string().max(20_000).optional(), total: NonNegativeMoneySchema.optional(), discount: NonNegativeMoneySchema.optional(), promo: z.string().max(120).optional(), source: z.string().max(120).optional(), comment: z.string().max(20_000).optional() }).strict()
 export type ProgramRegistrationUpdate = z.infer<typeof ProgramRegistrationUpdateSchema>

@@ -13,6 +13,7 @@ test("desktop customers supports URL-backed sort, filters and row navigation", a
   await expect(page).toHaveURL(/flags=debt/)
 
   const assignButtons = table.getByRole("button", { name: "+ Назначить" })
+  await expect(assignButtons.first()).toBeVisible()
   const assignCount = await assignButtons.count()
   await assignButtons.first().click()
   await expect(assignButtons).toHaveCount(assignCount - 1)

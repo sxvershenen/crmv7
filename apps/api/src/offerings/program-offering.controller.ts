@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Req } from "@nestjs/common"
 
-import { ProgramOfferingPrepareBodySchema, ProgramOfferingQuotePreviewBodySchema, type ProgramOfferingPrepareBody, type ProgramOfferingQuotePreviewBody } from "@crm/contracts"
+import { ProgramOfferingPrepareBodySchema, ProgramOfferingQuotePreviewBodySchema, ProgramRegistrationQuoteBodySchema, type ProgramOfferingPrepareBody, type ProgramOfferingQuotePreviewBody, type ProgramRegistrationQuoteBody } from "@crm/contracts"
 
 import { RequireCapabilities } from "../common/require-capability.decorator.js"
 import type { AuthenticatedRequest } from "../common/request-context.js"
@@ -13,6 +13,7 @@ abstract class ProgramOfferingControllerBase {
   lookup(programTemplateId: string, request: AuthenticatedRequest) { return this.programs.lookup(programTemplateId, this.context(request)) }
   prepare(programTemplateId: string, body: ProgramOfferingPrepareBody, request: AuthenticatedRequest) { return this.programs.prepare(programTemplateId, body, this.context(request)) }
   preview(programTemplateId: string, body: ProgramOfferingQuotePreviewBody, request: AuthenticatedRequest) { return this.programs.preview(programTemplateId, body, this.context(request)) }
+  registrationQuote(programOccurrenceId: string, body: ProgramRegistrationQuoteBody, request: AuthenticatedRequest) { return this.programs.registrationQuote(programOccurrenceId, body, this.context(request)) }
 }
 
 @Controller("programs")
@@ -26,6 +27,9 @@ export class InternalProgramOfferingController extends ProgramOfferingController
   @Post(":programTemplateId/offering/quotes/preview")
   @HttpCode(HttpStatus.OK)
   previewRoute(@Param("programTemplateId", new ParseUUIDPipe({ version: "4" })) id: string, @Body(new ZodValidationPipe(ProgramOfferingQuotePreviewBodySchema)) body: ProgramOfferingQuotePreviewBody, @Req() request: AuthenticatedRequest) { return this.preview(id, body, request) }
+  @Post("occurrences/:programOccurrenceId/offering/quotes/registration")
+  @HttpCode(HttpStatus.OK)
+  registrationQuoteRoute(@Param("programOccurrenceId", new ParseUUIDPipe({ version: "4" })) id: string, @Body(new ZodValidationPipe(ProgramRegistrationQuoteBodySchema)) body: ProgramRegistrationQuoteBody, @Req() request: AuthenticatedRequest) { return this.registrationQuote(id, body, request) }
   protected context(request: AuthenticatedRequest) { return { actor: request.sessionUser!, requestId: request.requestId, entrySurface: "internal" as const } }
 }
 

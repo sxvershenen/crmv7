@@ -13,7 +13,7 @@ test("program offering survives API reload and remains public fail-closed", asyn
 
   const prepare = page.getByRole("button", { name: "Подготовить продажи и CMS-страницу" })
   const cmsDraft = page.getByText("CMS-черновик", { exact: true })
-  await expect(prepare.or(cmsDraft)).toBeVisible()
+  await expect(prepare.or(cmsDraft).first()).toBeVisible()
   if (await prepare.isVisible()) {
     const response = page.waitForResponse((item) => item.request().method() === "POST" && /\/programs\/[0-9a-f-]+\/offering$/i.test(new URL(item.url()).pathname))
     await prepare.click()
@@ -26,14 +26,14 @@ test("program offering survives API reload and remains public fail-closed", asyn
   const createDraft = page.getByRole("button", { name: "Создать черновик тарифа" })
   const activate = page.getByRole("button", { name: "Активировать тариф" })
   const active = page.getByText("Тариф активен")
-  await expect(createDraft.or(activate).or(active)).toBeVisible()
+  await expect(createDraft.or(activate).or(active).first()).toBeVisible()
   if (await createDraft.isVisible()) {
     const response = page.waitForResponse((item) => item.request().method() === "POST" && new URL(item.url()).pathname.endsWith("/price-books/drafts"))
     await createDraft.click()
     expect((await response).status()).toBe(201)
+    await expect(activate).toBeVisible()
   }
 
-  await expect(activate.or(active)).toBeVisible()
   if (await activate.isVisible()) {
     const response = page.waitForResponse((item) => item.request().method() === "POST" && new URL(item.url()).pathname.endsWith("/activate"))
     await activate.click()

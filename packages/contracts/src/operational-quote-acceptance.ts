@@ -19,12 +19,24 @@ export type BookingItemQuoteAcceptance = z.infer<typeof BookingItemQuoteAcceptan
  * Persisted with a quote snapshot by the pricing service. Null legacy contexts
  * are deliberately not eligible for operational acceptance.
  */
-export const OfferingQuoteOperationalContextSchema = z.object({
+export const HouseStayQuoteOperationalContextSchema = z.object({
   kind: z.literal("house_stay"),
   subjectVersion: VersionSchema,
   primaryResourceId: IdSchema,
   primaryResourceVersion: VersionSchema,
 }).strict();
+export const ProgramRegistrationQuoteOperationalContextSchema = z.object({
+  kind: z.literal("program_registration"),
+  subjectVersion: VersionSchema,
+  programTemplateId: IdSchema,
+  programTemplateVersion: VersionSchema,
+  programOccurrenceId: IdSchema,
+  programOccurrenceVersion: VersionSchema,
+}).strict();
+export const OfferingQuoteOperationalContextSchema = z.discriminatedUnion("kind", [
+  HouseStayQuoteOperationalContextSchema,
+  ProgramRegistrationQuoteOperationalContextSchema,
+]);
 export type OfferingQuoteOperationalContext = z.infer<typeof OfferingQuoteOperationalContextSchema>;
 
 export const OperationalQuoteAcceptanceTargetSchema = z.discriminatedUnion("type", [

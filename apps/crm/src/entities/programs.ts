@@ -75,6 +75,8 @@ export type ProgramTemplateEditorRecord = ProgramTemplate & {
 
 export type ProgramRun = {
   id: string
+  version?: number
+  currency?: string
   templateId: string
   name: string
   categoryId: string
@@ -154,10 +156,60 @@ export type ProgramRegistrationPayment = {
 }
 
 export type ProgramRegistrationEditorRecord = ProgramRunEditorRegistration & {
+  version: number
+  occurrenceVersion: number | null
+  pricingMode: "legacy_unpriced" | "quote_required"
+  currency: string
+  acceptedQuote: ProgramRegistrationAcceptedQuote | null
+  availableAddOns: ProgramRegistrationAddOnOption[]
   customerId: string | null
   internalComments: CommentThreadItem[]
   payments: ProgramRegistrationPayment[]
   run: ProgramRun | null
+}
+
+export type ProgramRegistrationAddOnSelection = {
+  assignmentId: string
+  quantity: number
+}
+
+export type ProgramRegistrationAddOnOption = {
+  assignmentId: string
+  label: string
+  serviceType: "quantity_service" | "person_service"
+  required: boolean
+  minQuantity: number
+  maxQuantity: number | null
+  defaultQuantity: number
+}
+
+export type ProgramRegistrationQuoteLine = {
+  kind: "base" | "extra_unit" | "addon"
+  label: string
+  quantity: number
+  amount: number
+}
+
+export type ProgramRegistrationQuote = {
+  quoteId: string
+  occurrenceId: string
+  occurrenceVersion: number
+  calculatedAt: string
+  validUntil: string
+  participants: number
+  total: number
+  currency: string
+  addOns: ProgramRegistrationAddOnSelection[]
+  lines: ProgramRegistrationQuoteLine[]
+}
+
+export type ProgramRegistrationAcceptedQuote = {
+  quoteId: string
+  acceptedAt: string
+  total: number
+  currency: string
+  addOns: ProgramRegistrationAddOnSelection[]
+  lines: ProgramRegistrationQuoteLine[]
 }
 
 export type ProgramQuery = {

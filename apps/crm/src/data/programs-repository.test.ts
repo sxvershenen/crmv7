@@ -122,7 +122,7 @@ describe("ProgramsRepository API adapter", () => {
   const capabilities = { canView: true, canCreate: true, canEdit: true, canArchive: true, canChangeStatus: true, canOverrideConflict: true, canAddPayment: true, canRefund: true }
   const template = { id: "template-1", version: 2, code: "PT-1", name: "Программа API", categoryId: "family", durationMinutes: 120, minimumParticipants: 1, participantLimit: 12, registrationCloseHours: 2, basePrice: { amountMinor: 420000, currency: "RUB" }, description: "", publication: "published", published: true, assigneeIds: [], stages: [], nextOccurrence: null, archived: false, createdAt: "2026-08-24T08:00:00.000Z", updatedAt: "2026-08-24T08:00:00.000Z", capabilities: { canView: true, canCreate: true, canEdit: true, canArchive: true, canChangeStatus: true } }
   const occurrence = { id: "occurrence-1", version: 3, code: "PO-1", templateId: "template-1", name: "Проведение API", startsAt: "2026-08-25T10:00:00.000Z", endsAt: "2026-08-25T12:00:00.000Z", participantLimit: 12, registrationLimit: 12, participantCount: 2, registrationCount: 1, revenue: { amountMinor: 840000, currency: "RUB" }, paid: { amountMinor: 420000, currency: "RUB" }, status: "open", comment: "", assigneeIds: [], archived: false, createdAt: "2026-08-24T08:00:00.000Z", updatedAt: "2026-08-24T08:00:00.000Z", capabilities }
-  const registration = { id: "registration-1", version: 1, code: "PR-1", occurrenceId: "occurrence-1", customerId: "customer-1", phone: "+7", participantCount: 2, participantNames: "", total: { amountMinor: 840000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, paid: { amountMinor: 420000, currency: "RUB" }, status: "new", promo: "", source: "", comment: "", archived: false, createdAt: "2026-08-24T08:00:00.000Z", updatedAt: "2026-08-24T08:00:00.000Z", capabilities: { canView: true, canCreate: true, canEdit: true, canArchive: true, canChangeStatus: true, canAddPayment: true, canRefund: true } }
+  const registration = { id: "registration-1", version: 1, code: "PR-1", occurrenceId: "occurrence-1", customerId: "customer-1", phone: "+7", participantCount: 2, participantNames: "", total: { amountMinor: 840000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, paid: { amountMinor: 420000, currency: "RUB" }, pricingMode: "quote_required", acceptedQuote: null, status: "new", promo: "", source: "", comment: "", archived: false, createdAt: "2026-08-24T08:00:00.000Z", updatedAt: "2026-08-24T08:00:00.000Z", capabilities: { canView: true, canCreate: true, canEdit: true, canArchive: true, canChangeStatus: true, canAddPayment: true, canRefund: true } }
 
   it("maps canonical pages to the UI dataset and sends versioned transitions", async () => {
     const post = vi.fn(async (_path: string, _body: unknown, schema: unknown) => schema === undefined ? occurrence : occurrence)
@@ -200,6 +200,96 @@ describe("ProgramsRepository API adapter", () => {
     const first = post.mock.calls[0]?.[1] as Record<string, unknown>
     const second = post.mock.calls[1]?.[1] as Record<string, unknown>
     expect(first).toMatchObject({ expectedProgramTemplateVersion: 7, operationId: expect.any(String), idempotencyKey: expect.any(String) })
+    expect(second).toMatchObject({ operationId: first.operationId, idempotencyKey: first.idempotencyKey })
+  })
+
+  it("quotes the observed occurrence in its authoritative currency and keeps retry identity stable", async () => {
+    const fixture = new FixtureProgramsRepository()
+    const draft = await fixture.getRegistration("5011")
+    if (!draft) throw new Error("fixture registration missing")
+    Object.assign(draft, { pricingMode: "quote_required", occurrenceVersion: 7, currency: "EUR", participantCount: 3 })
+    const result = {
+      quoteType: "program_registration", acceptanceReady: true, quoteId: "11111111-1111-4111-8111-111111111111", offeringId: "22222222-2222-4222-8222-222222222222",
+      programTemplateId: "33333333-3333-4333-8333-333333333333", programOccurrenceId: draft.runId, programOccurrenceVersion: 7,
+      calculatedAt: "2026-09-09T10:00:00.000Z", validUntil: "2026-09-09T10:15:00.000Z", leadDays: 2, currency: "EUR",
+      inputs: { serviceDate: "2026-09-12", startsAt: "2026-09-12T10:00:00.000Z", endsAt: "2026-09-12T12:00:00.000Z", participants: 3, durationMinutes: 120, addOns: [] },
+      lines: [{ kind: "base", label: "Participants", serviceDate: "2026-09-12", quantity: 3, unitAmount: { amountMinor: 2500, currency: "EUR" }, amount: { amountMinor: 7500, currency: "EUR" }, ratePlanId: "44444444-4444-4444-8444-444444444444", ratePlanVersion: 1, matchedRuleId: null, matchedRuleVersion: null, explanation: "base" }],
+      total: { amountMinor: 7500, currency: "EUR" }, provenance: {}, immutableSnapshot: true,
+    }
+    const post = vi.fn().mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(result)
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta: vi.fn(), patch: vi.fn(), post, request: vi.fn() } as never)
+
+    await expect(repository.quoteRegistration(draft, [])).rejects.toThrow("network")
+    await expect(repository.quoteRegistration(draft, [])).resolves.toMatchObject({ occurrenceVersion: 7, currency: "EUR", total: 75 })
+    const first = post.mock.calls[0]?.[1] as Record<string, unknown>
+    const second = post.mock.calls[1]?.[1] as Record<string, unknown>
+    expect(first).toMatchObject({ expectedOccurrenceVersion: 7, participants: 3, currency: "EUR", operationId: expect.any(String), idempotencyKey: expect.any(String) })
+    expect(second).toMatchObject({ operationId: first.operationId, idempotencyKey: first.idempotencyKey })
+    expect(first).not.toHaveProperty("total")
+    expect(first).not.toHaveProperty("discount")
+  })
+
+  it("derives only available supported add-ons from the exact program offering", async () => {
+    const run = { ...programRunsFixture[0]!, version: 4, currency: "RUB", templateId: "template-1" }
+    const offeringId = "11111111-1111-4111-8111-111111111111"
+    const assignments = [
+      { id: "assignment-breakfast", offeringId, addOnOfferingId: "addon-breakfast", enabled: true, required: true, recommended: false, groupKey: null, ratePlanKeyOverride: null, labelOverride: "Завтрак для группы", descriptionOverride: null, minQuantityOverride: 2, maxQuantityOverride: 12, defaultQuantityOverride: 4, displayOrder: 1 },
+      { id: "assignment-schedule", offeringId, addOnOfferingId: "addon-schedule", enabled: true, required: false, recommended: false, groupKey: null, ratePlanKeyOverride: null, labelOverride: null, descriptionOverride: null, minQuantityOverride: null, maxQuantityOverride: null, defaultQuantityOverride: null, displayOrder: 2 },
+      { id: "assignment-blocked", offeringId, addOnOfferingId: "addon-blocked", enabled: true, required: false, recommended: false, groupKey: null, ratePlanKeyOverride: null, labelOverride: null, descriptionOverride: null, minQuantityOverride: null, maxQuantityOverride: null, defaultQuantityOverride: null, displayOrder: 3 },
+    ]
+    const catalog = [
+      { offering: { id: "addon-breakfast", operationalName: "Breakfast", state: "active", archived: false }, serviceType: "person_service", availability: { status: "available" } },
+      { offering: { id: "addon-schedule", operationalName: "Transfer", state: "active", archived: false }, serviceType: "scheduled_resource", availability: { status: "available" } },
+      { offering: { id: "addon-blocked", operationalName: "Blocked", state: "active", archived: false }, serviceType: "quantity_service", availability: { status: "blocked" } },
+    ]
+    const editor = { offering: { id: offeringId, kind: "program" }, bindings: [{ role: "primary", target: { type: "program_template", id: "template-1" } }], addOnAssignments: assignments, addOnCatalog: catalog }
+    const get = vi.fn(async (path: string) => path === "/programs/template-1/offering" ? { resolution: "linked", offering: { offeringId, cmsReady: true, publicReady: false } } : editor)
+    const repository = new ApiProgramsRepository({ get, getWithMeta: vi.fn(), patch: vi.fn(), post: vi.fn(), request: vi.fn() } as never)
+
+    await expect(repository.createRegistrationDraft(run)).resolves.toMatchObject({
+      pricingMode: "quote_required",
+      occurrenceVersion: 4,
+      currency: "RUB",
+      availableAddOns: [{ assignmentId: "assignment-breakfast", label: "Завтрак для группы", serviceType: "person_service", required: true, minQuantity: 2, maxQuantity: 12, defaultQuantity: 4 }],
+    })
+  })
+
+  it("omits server-owned price and accepted quote context from draft patches", async () => {
+    const fixture = new FixtureProgramsRepository()
+    const draft = await fixture.getRegistration("5011")
+    if (!draft) throw new Error("fixture registration missing")
+    Object.assign(draft, {
+      version: 9,
+      pricingMode: "quote_required",
+      acceptedQuote: { quoteId: "quote-1", acceptedAt: "2026-09-09T10:00:00.000Z", total: 7500, currency: "RUB", addOns: [], lines: [] },
+      comment: "editable note",
+    })
+    let body: Record<string, unknown> | null = null
+    const patch = vi.fn(async (_path: string, next: Record<string, unknown>) => { body = next; throw new Error("stop after capture") })
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta: vi.fn(), patch, post: vi.fn(), request: vi.fn() } as never)
+
+    await expect(repository.saveRegistration(draft)).rejects.toThrow("stop after capture")
+    expect(body).toMatchObject({ version: 9, comment: "editable note" })
+    expect(body).not.toHaveProperty("occurrenceId")
+    expect(body).not.toHaveProperty("participantCount")
+    expect(body).not.toHaveProperty("total")
+    expect(body).not.toHaveProperty("discount")
+  })
+
+  it("confirms with the observed registration version and stable retry identity", async () => {
+    const fixture = new FixtureProgramsRepository()
+    const draft = await fixture.getRegistration("5011")
+    if (!draft) throw new Error("fixture registration missing")
+    Object.assign(draft, { id: "registration-1", version: 11, pricingMode: "quote_required", status: "new" })
+    const quote = { quoteId: "11111111-1111-4111-8111-111111111111", occurrenceId: draft.runId, occurrenceVersion: draft.occurrenceVersion ?? 1, calculatedAt: "2026-09-09T10:00:00.000Z", validUntil: "2026-09-09T10:15:00.000Z", participants: 2, total: 5000, currency: "RUB", addOns: [], lines: [] }
+    const post = vi.fn().mockRejectedValue(new Error("network"))
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta: vi.fn(), patch: vi.fn(), post, request: vi.fn() } as never)
+
+    await expect(repository.confirmRegistration(draft, quote)).rejects.toThrow("network")
+    await expect(repository.confirmRegistration(draft, quote)).rejects.toThrow("network")
+    const first = post.mock.calls[0]?.[1] as Record<string, unknown>
+    const second = post.mock.calls[1]?.[1] as Record<string, unknown>
+    expect(first).toMatchObject({ version: 11, status: "confirmed", quoteAcceptance: { quoteSnapshotId: quote.quoteId }, operationId: expect.any(String), idempotencyKey: expect.any(String) })
     expect(second).toMatchObject({ operationId: first.operationId, idempotencyKey: first.idempotencyKey })
   })
 
