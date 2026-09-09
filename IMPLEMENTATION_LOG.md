@@ -466,3 +466,11 @@
 - CRM `/programs/:id?tab=commercial` получил operator-facing тариф, readiness, server quote и reload/dirty/conflict states без показа internal IDs/lifecycle. После подготовки legacy `basePrice/published` больше не редактируются.
 - Regression triage закрыл устаревшие calendar dates и fixture labels; canonical UUID и numeric decimal DTO serialization защищены API/CRM tests.
 - Gate: workspace unit/typecheck/lint/build, PostgreSQL integration `38/38`, fixture Playwright `58 passed / 22 skipped`, API Playwright `3/3`. Fresh restricted-role database применила 28 migrations; повторный run не имел pending work.
+
+## 2026-09-09 — ProgramRegistration quote acceptance
+
+- Добавлен occurrence-bound `program_registration` quote с exact versions, dates, participants, currency и quantity/person add-ons; `template_preview` остаётся непригодным для acceptance.
+- Confirmation, capacity, server total, accepted link, audit/outbox и idempotency фиксируются атомарно; PostgreSQL guards закрывают oversubscription, limit reduction и изменение accepted commercial facts.
+- CRM получил explicit draft/quote/confirm flow, stable retry identity, server-only priced totals, dirty/stale/conflict UX и immutable snapshot после reload; legacy unpriced flow сохранён.
+- Regression triage убрал fixture customer render race и API offering locator race; PostgreSQL serialization errors editorial draft теперь доходят до bounded transaction retry.
+- Gate: workspace test/typecheck/lint/build, PostgreSQL integration `38/38`, fixture Playwright `60 passed / 22 skipped`, API Playwright `4/4`. Fresh restricted-role database применила 29 migrations; repeat не имел pending work, revert→run сохранил registrations и program quote snapshots.
