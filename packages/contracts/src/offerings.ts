@@ -1424,7 +1424,7 @@ export const OfferingEditorialLocatorSchema = z.object({
   node: z.object({
     id: IdSchema,
     version: VersionSchema,
-    kind: z.enum(["resource_detail", "addon_detail"]),
+    kind: z.enum(["resource_detail", "addon_detail", "program_detail"]),
     status: z.enum(["active", "archived"]),
   }).strict(),
   currentRevision: OfferingEditorialRevisionSummarySchema.nullable(),
@@ -1642,6 +1642,112 @@ export const InternalOfferingQuoteResultSchema = z.object({
 }).strict();
 export type InternalOfferingQuoteResult = z.infer<typeof InternalOfferingQuoteResultSchema>;
 
+export const ProgramQuoteTypeSchema = z.enum(["template_preview", "program_registration"]);
+export type ProgramQuoteType = z.infer<typeof ProgramQuoteTypeSchema>;
+
+/** Atomic operational preparation for a ProgramTemplate with a named CAS. */
+export const ProgramOfferingPrepareBodySchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+  expectedProgramTemplateVersion: VersionSchema,
+}).strict();
+export type ProgramOfferingPrepareBody = z.infer<typeof ProgramOfferingPrepareBodySchema>;
+
+export const ProgramOfferingPrepareResultSchema = z.object({
+  offeringId: IdSchema,
+  offeringVersion: VersionSchema,
+  subjectVersion: VersionSchema,
+  pricingVersion: VersionSchema,
+  addOnAssignmentsVersion: VersionSchema,
+  programTemplateId: IdSchema,
+  programTemplateVersion: VersionSchema,
+  cmsReady: z.boolean(),
+  publicReady: z.literal(false),
+  editorialNodeId: IdSchema.nullable(),
+}).strict();
+export type ProgramOfferingPrepareResult = z.infer<typeof ProgramOfferingPrepareResultSchema>;
+
+export const ProgramOfferingLookupItemSchema = ProgramOfferingPrepareResultSchema.extend({
+  state: CatalogOfferingStateSchema,
+}).strict();
+export type ProgramOfferingLookupItem = z.infer<typeof ProgramOfferingLookupItemSchema>;
+
+/** Read-only recovery boundary for opening a prepared program dossier after reload. */
+export const ProgramOfferingLookupResultSchema = z.discriminatedUnion("resolution", [
+  z.object({
+    resolution: z.literal("unprepared"),
+    programTemplateId: IdSchema,
+    programTemplateVersion: VersionSchema,
+  }).strict(),
+  z.object({
+    resolution: z.literal("linked"),
+    offering: ProgramOfferingLookupItemSchema,
+  }).strict(),
+  z.object({
+    resolution: z.literal("ambiguous"),
+    programTemplateId: IdSchema,
+    programTemplateVersion: VersionSchema,
+    candidates: z.array(ProgramOfferingLookupItemSchema).min(2).max(100),
+  }).strict(),
+]);
+export type ProgramOfferingLookupResult = z.infer<typeof ProgramOfferingLookupResultSchema>;
+
+export const ProgramOfferingQuotePreviewBodySchema = z.object({
+  quoteType: z.literal("template_preview").default("template_preview"),
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120).nullable(),
+  serviceDate: DateSchema,
+  participants: z.number().int().positive().max(1_000_000),
+  currency: CurrencySchema,
+  addOns: z.tuple([]).default([]),
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+}).strict();
+export type ProgramOfferingQuotePreviewBody = z.infer<typeof ProgramOfferingQuotePreviewBodySchema>;
+
+export const ProgramOfferingQuoteLineSchema = z.object({
+  kind: z.enum(["base", "extra_unit"]),
+  label: z.string().min(1).max(500),
+  serviceDate: DateSchema,
+  quantity: z.number().int().positive(),
+  unitAmount: NonNegativeMoneySchema,
+  amount: NonNegativeMoneySchema,
+  ratePlanId: IdSchema,
+  ratePlanVersion: VersionSchema,
+  matchedRuleId: IdSchema.nullable(),
+  matchedRuleVersion: VersionSchema.nullable(),
+  explanation: z.string().max(1000),
+}).strict();
+
+export const ProgramOfferingQuoteResultSchema = z.object({
+  quoteType: z.literal("template_preview"),
+  acceptanceReady: z.literal(false),
+  quoteId: IdSchema,
+  offeringId: IdSchema,
+  programTemplateId: IdSchema,
+  calculatedAt: DateTimeSchema,
+  validUntil: DateTimeSchema,
+  leadDays: z.number().int().nonnegative(),
+  currency: CurrencySchema,
+  inputs: z.object({ serviceDate: DateSchema, participants: z.number().int().positive(), durationMinutes: z.number().int().positive() }).strict(),
+  lines: z.array(ProgramOfferingQuoteLineSchema).min(1).max(2),
+  total: NonNegativeMoneySchema,
+  provenance: z.object({
+    offeringVersion: VersionSchema,
+    subjectVersion: VersionSchema,
+    programTemplateVersion: VersionSchema,
+    pricingVersion: VersionSchema,
+    addOnsVersion: VersionSchema,
+    priceBookId: IdSchema,
+    priceBookVersion: VersionSchema,
+    businessCalendarId: IdSchema,
+    businessCalendarVersion: VersionSchema,
+    businessCalendarSourceVersion: z.string().min(1).max(120),
+    matchedRuleIds: z.array(IdSchema).max(10_000),
+  }).strict(),
+  immutableSnapshot: z.literal(true),
+}).strict();
+export type ProgramOfferingQuoteResult = z.infer<typeof ProgramOfferingQuoteResultSchema>;
+
 export const OfferingEntrySurfaceSchema = z.enum(["internal", "admin", "scheduler"]);
 export const OfferingPricingOutboxEventSchema = z.object({
   eventId: IdSchema,
@@ -1682,6 +1788,7 @@ export const OfferingConfigurationOutboxEventSchema = z.object({
     "crm.offering.addon_assignments_replaced",
     "crm.offering.custom_addon_created",
     "crm.offering.created_from_resource",
+    "crm.offering.program_prepared",
     "public.offering_projection.invalidated",
   ]),
   occurredAt: DateTimeSchema,

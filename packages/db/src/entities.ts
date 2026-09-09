@@ -331,6 +331,7 @@ export class ProgramOccurrenceEntity extends MutableEntity {
   @Column({ type: "text", default: "RUB" }) currency!: string
   @Column({ type: "text", default: "" }) comment!: string
   @Column({ name: "assignee_ids", type: "jsonb", default: () => "'[]'::jsonb" }) assigneeIds!: string[]
+  @Column({ name: "rate_plan_override_id", type: "uuid", nullable: true }) ratePlanOverrideId!: string | null
 }
 
 @Entity({ name: "program_registrations" })
@@ -1327,6 +1328,7 @@ export class OfferingAddonAssignmentEntity extends MutableEntity {
 export class OfferingQuoteSnapshotEntity {
   @PrimaryColumn({ type: "uuid" }) id!: string
   @Column({ name: "offering_id", type: "uuid" }) offeringId!: string
+  @Column({ name: "quote_type", type: "text", default: "stay_preview" }) quoteType!: string
   @Column({ name: "offering_version", type: "integer" }) offeringVersion!: number
   @Column({ name: "pricing_version", type: "integer" }) pricingVersion!: number
   @Column({ name: "addon_assignments_version", type: "integer" }) addOnAssignmentsVersion!: number
@@ -1335,6 +1337,9 @@ export class OfferingQuoteSnapshotEntity {
   @Column({ name: "business_calendar_id", type: "uuid" }) businessCalendarId!: string
   @Column({ name: "business_calendar_version", type: "integer" }) businessCalendarVersion!: number
   @Column({ name: "business_calendar_source_version", type: "text" }) businessCalendarSourceVersion!: string
+  @Column({ name: "subject_version", type: "integer", nullable: true }) subjectVersion!: number | null
+  @Column({ name: "program_template_id", type: "uuid", nullable: true }) programTemplateId!: string | null
+  @Column({ name: "program_template_version", type: "integer", nullable: true }) programTemplateVersion!: number | null
   @Column({ name: "request_payload", type: "jsonb" }) requestPayload!: Record<string, unknown>
   @Column({ name: "result_payload", type: "jsonb" }) resultPayload!: Record<string, unknown>
   @Column({ type: "jsonb" }) provenance!: Record<string, unknown>

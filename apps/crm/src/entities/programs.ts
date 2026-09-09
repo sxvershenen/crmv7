@@ -49,6 +49,13 @@ export type ProgramTemplate = {
   assignees: Assignee[]
   published: boolean
   nextRun: { id: string; startsAt: string } | null
+  capabilities?: {
+    canView: boolean
+    canCreate: boolean
+    canEdit: boolean
+    canArchive: boolean
+    canChangeStatus: boolean
+  }
 }
 
 export type ProgramTemplateStage = {

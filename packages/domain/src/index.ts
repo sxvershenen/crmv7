@@ -11,3 +11,4 @@ export * from "./offering-configuration.js";
 export * from "./operational-quote-acceptance.js";
 export * from "./outbox-delivery.js";
 export * from "./promotions.js";
+export * from "./program-pricing.js";

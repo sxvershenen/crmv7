@@ -77,6 +77,21 @@ test("program template editor follows shared chrome and keeps stage actions oper
   await expect(page.getByRole("button", { name: /Поднять этап/ })).toHaveCount(5)
 })
 
+test("program commercial dossier stays route-driven and fail-closed on desktop and mobile", async ({ page }) => {
+  await page.goto("/programs/forest-family?tab=commercial")
+  await expect(page.getByRole("tab", { name: "Продажи и цены" })).toHaveAttribute("aria-selected", "true")
+  const prepare = page.getByRole("button", { name: "Подготовить продажи и CMS-страницу" })
+  await expect(prepare).toBeVisible()
+  await prepare.focus()
+  await expect(prepare).toBeFocused()
+  await prepare.press("Enter")
+  await expect(page.getByText("CMS-черновик")).toBeVisible()
+  await expect(page.getByText("Закрыт до public gate")).toBeVisible()
+  await expect(page.getByText("Расчёт станет доступен после активации тарифа.")).toBeVisible()
+  await expect(page).toHaveURL(/tab=commercial/)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test("desktop program stages support drag reordering", async ({ page, isMobile }) => {
   test.skip(isMobile, "desktop pointer DnD coverage")
   await page.goto("/programs/forest-family?tab=content")

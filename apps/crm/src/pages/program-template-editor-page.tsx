@@ -53,7 +53,10 @@ import {
   createEmptyProgramTemplate,
   programsRepository,
   type ProgramTemplateEditorRepository,
+  type ProgramOfferingResolution,
+  type ProgramPriceBookDraftInput,
 } from "@app/data/programs-repository";
+import { ApiClientError } from "@app/lib/api-client";
 import { useDirectoryAssignees } from "@app/features/use-directory-data";
 import type {
   ProgramCategory,
@@ -63,11 +66,13 @@ import type {
   ProgramTemplateStage,
 } from "@app/entities/programs";
 import { programRunStatusMeta } from "@app/entities/programs";
+import type { ProgramOfferingQuoteResult, RatePlan, RatePlanDraft } from "@crm/contracts";
 
-const tabs = ["main", "content", "runs", "settings", "history"] as const;
+const tabs = ["main", "content", "commercial", "runs", "settings", "history"] as const;
 const tabItems = [
   { value: "main", label: "Основное" },
   { value: "content", label: "Сценарий" },
+  { value: "commercial", label: "Продажи и цены" },
   { value: "runs", label: "Проведения" },
   { value: "settings", label: "Настройки" },
   { value: "history", label: "История" },
@@ -76,6 +81,7 @@ const publicationOptions = [
   { value: "draft", label: "Черновик" },
   { value: "published", label: "Опубликовано" },
 ];
+const adminAppBaseUrl = (import.meta.env.VITE_ADMIN_APP_URL ?? (import.meta.env.DEV ? "http://localhost:5174" : "/cms")).replace(/\/$/, "");
 function oneOf<T extends string>(
   value: string | null,
   options: readonly T[],
@@ -108,6 +114,11 @@ export function ProgramTemplateEditorPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorSaveState>("saved");
+  const [offering, setOffering] = useState<ProgramOfferingResolution | null>(null);
+  const [offeringLoading, setOfferingLoading] = useState(id !== "new");
+  const [commercialBusy, setCommercialBusy] = useState<string | null>(null);
+  const [commercialError, setCommercialError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<ProgramOfferingQuoteResult | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -129,6 +140,19 @@ export function ProgramTemplateEditorPage({
         }
         setDraft(template);
         setLoading(false);
+        if (id === "new") {
+          setOffering({ resolution: "unprepared" });
+          setOfferingLoading(false);
+          return;
+        }
+        setOfferingLoading(true);
+        void repository.resolveProgramOffering(template.id).then((next) => {
+          if (active) setOffering(next);
+        }).catch((reason: unknown) => {
+          if (active) setCommercialError(errorMessage(reason, "Не удалось загрузить коммерческое предложение"));
+        }).finally(() => {
+          if (active) setOfferingLoading(false);
+        });
       })
       .catch((reason: unknown) => {
         if (active) {
@@ -271,17 +295,19 @@ export function ProgramTemplateEditorPage({
     if (!draft) return;
     setSaveState("saving");
     try {
-      await repository.saveTemplate(draft);
+      const saved = await repository.saveTemplate(draft);
+      setDraft(saved);
       setSaveState("saved");
     } catch {
       setSaveState("conflict");
     }
   };
 
+  const prepared = offering?.resolution === "linked";
   const published = draft?.published;
   const statusControl = useMemo(
     () =>
-      published === undefined ? undefined : (
+      published === undefined || prepared || draft?.capabilities?.canChangeStatus === false || draft?.capabilities?.canEdit === false ? undefined : (
         <FilterSelect
           className="w-28 max-w-28 sm:w-36 sm:max-w-36"
           label="Публикация программы"
@@ -290,7 +316,7 @@ export function ProgramTemplateEditorPage({
           value={published ? "published" : "draft"}
         />
       ),
-    [published, setPublished],
+    [draft?.capabilities?.canChangeStatus, draft?.capabilities?.canEdit, prepared, published, setPublished],
   );
   const title = draft?.name ?? "Программа";
   const editorChrome = useMemo(
@@ -323,6 +349,21 @@ export function ProgramTemplateEditorPage({
   const overflow = draft ? (
     <ProgramOverflow onOpenCategories={openCategories} />
   ) : null;
+  const refreshOffering = useCallback(async () => {
+    if (!draft || draft.id === "new") return;
+    setOffering(await repository.resolveProgramOffering(draft.id));
+  }, [draft, repository]);
+  const commercialAction = useCallback(async (name: string, action: () => Promise<void>) => {
+    setCommercialBusy(name);
+    setCommercialError(null);
+    try {
+      await action();
+    } catch (reason) {
+      setCommercialError(errorMessage(reason, "Коммерческая операция не выполнена"));
+    } finally {
+      setCommercialBusy(null);
+    }
+  }, []);
 
   return (
     <EditorFrame
@@ -347,7 +388,7 @@ export function ProgramTemplateEditorPage({
             Закрыть
           </Button>
           <Button
-            disabled={!draft || saveState === "saving"}
+            disabled={!draft || saveState === "saving" || draft.capabilities?.canEdit === false}
             onClick={() => void save()}
             size="sm"
           >
@@ -395,6 +436,8 @@ export function ProgramTemplateEditorPage({
           draft={draft}
           onCategoryChange={setCategory}
           update={update}
+          commercialPrepared={prepared}
+          disabled={draft.capabilities?.canEdit === false}
         />
       ) : null}
       {draft && tab === "content" ? (
@@ -408,6 +451,36 @@ export function ProgramTemplateEditorPage({
         />
       ) : null}
       {draft && tab === "runs" ? <ProgramRuns draft={draft} /> : null}
+      {draft && tab === "commercial" ? (
+        <ProgramCommercial
+          busy={commercialBusy}
+          draft={draft}
+          error={commercialError}
+          offering={offering}
+          offeringLoading={offeringLoading}
+          onActivate={(offeringId, priceBookId, expectedPricingVersion) => commercialAction("activate", async () => {
+            await repository.activateProgramPriceBook(offeringId, priceBookId, expectedPricingVersion);
+            await refreshOffering();
+            setQuote(null);
+          })}
+          onInvalidateQuote={() => setQuote(null)}
+          onPrepare={() => commercialAction("prepare", async () => {
+            await repository.prepareProgramOffering(draft.id, draft.version);
+            await refreshOffering();
+          })}
+          onPreview={(input) => commercialAction("preview", async () => {
+            setQuote(null);
+            setQuote(await repository.previewProgramQuote(draft.id, input));
+          })}
+          onSavePrice={(offeringId, priceBookId, expectedPricingVersion, input) => commercialAction("price", async () => {
+            if (priceBookId) await repository.replaceProgramPriceBook(offeringId, priceBookId, expectedPricingVersion, input);
+            else await repository.createProgramPriceBook(offeringId, expectedPricingVersion, input);
+            await refreshOffering();
+            setQuote(null);
+          })}
+          quote={quote}
+        />
+      ) : null}
       {draft && tab === "settings" ? (
         <ProgramSettings draft={draft} onOpenCategories={openCategories} />
       ) : null}
@@ -491,11 +564,15 @@ function ProgramMobileActions({
 
 function ProgramMain({
   categories,
+  commercialPrepared,
+  disabled,
   draft,
   onCategoryChange,
   update,
 }: {
   categories: ProgramCategory[];
+  commercialPrepared: boolean;
+  disabled: boolean;
   draft: ProgramTemplateEditorRecord;
   onCategoryChange: (id: string) => void;
   update: <K extends keyof ProgramTemplateEditorRecord>(
@@ -526,6 +603,7 @@ function ProgramMain({
             label="Иконка"
           >
             <FormSelect
+              disabled={disabled}
               id="program-icon"
               label="Иконка программы"
               onValueChange={(value) =>
@@ -541,6 +619,7 @@ function ProgramMain({
             label="Цвет"
           >
             <FormSelect
+              disabled={disabled}
               id="program-tone"
               label="Цвет программы"
               onValueChange={(value) =>
@@ -556,6 +635,7 @@ function ProgramMain({
             label="Категория"
           >
             <FormSelect
+              disabled={disabled}
               id="program-category"
               label="Категория программы"
               onValueChange={onCategoryChange}
@@ -572,6 +652,7 @@ function ProgramMain({
             label="Название"
           >
             <Input
+              disabled={disabled}
               id="program-name"
               onChange={(event) => update("name", event.target.value)}
               value={draft.name}
@@ -583,6 +664,7 @@ function ProgramMain({
             label="Описание"
           >
             <Textarea
+              disabled={disabled}
               id="program-description"
               onChange={(event) => update("description", event.target.value)}
               placeholder="Что входит в программу и для кого она предназначена"
@@ -599,6 +681,7 @@ function ProgramMain({
             label="Продолжительность, мин"
           >
             <Input
+              disabled={disabled}
               id="program-duration"
               min="0"
               onChange={(event) =>
@@ -614,6 +697,7 @@ function ProgramMain({
             label="Минимум участников"
           >
             <Input
+              disabled={disabled}
               id="program-min"
               min="0"
               onChange={(event) =>
@@ -630,6 +714,7 @@ function ProgramMain({
             label="Максимум участников"
           >
             <Input
+              disabled={disabled}
               id="program-max"
               min="0"
               onChange={(event) =>
@@ -645,6 +730,7 @@ function ProgramMain({
             label="Закрыть регистрацию за, ч"
           >
             <Input
+              disabled={disabled}
               id="program-close"
               min="0"
               onChange={(event) =>
@@ -658,25 +744,309 @@ function ProgramMain({
               value={draft.registrationCloseHours ?? ""}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-2"
-            htmlFor="program-price"
-            label="Базовая стоимость"
-          >
-            <Input
-              id="program-price"
-              min="0"
-              onChange={(event) =>
-                update("basePrice", inputNumber(event.target.value))
-              }
-              type="number"
-              value={draft.basePrice}
-            />
-          </FormField>
+          {!commercialPrepared ? (
+            <FormField
+              className="sm:col-span-2"
+              htmlFor="program-price"
+              label="Legacy стоимость"
+            >
+              <Input
+                disabled={disabled}
+                id="program-price"
+                min="0"
+                onChange={(event) =>
+                  update("basePrice", inputNumber(event.target.value))
+                }
+                type="number"
+                value={draft.basePrice}
+              />
+            </FormField>
+          ) : (
+            <div className="sm:col-span-4 rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground">
+              Цена управляется на вкладке «Продажи и цены». Legacy стоимость сохранена только для совместимости и больше не редактируется.
+            </div>
+          )}
         </div>
       </EditorSection>
     </div>
   );
+}
+
+function ProgramCommercial({
+  busy,
+  draft,
+  error,
+  offering,
+  offeringLoading,
+  onActivate,
+  onInvalidateQuote,
+  onPrepare,
+  onPreview,
+  onSavePrice,
+  quote,
+}: {
+  busy: string | null;
+  draft: ProgramTemplateEditorRecord;
+  error: string | null;
+  offering: ProgramOfferingResolution | null;
+  offeringLoading: boolean;
+  onActivate: (offeringId: string, priceBookId: string, expectedPricingVersion: number) => Promise<void>;
+  onInvalidateQuote: () => void;
+  onPrepare: () => Promise<void>;
+  onPreview: (input: { serviceDate: string; participants: number; ratePlanKey: string | null }) => Promise<void>;
+  onSavePrice: (offeringId: string, priceBookId: string | null, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) => Promise<void>;
+  quote: ProgramOfferingQuoteResult | null;
+}) {
+  if (offeringLoading) return <ProgramEditorLoading />;
+  if (offering?.resolution === "ambiguous") {
+    return (
+      <EditorSection title="Коммерческое предложение">
+        <PageState icon={IconAlertTriangle} title="Нужна ручная сверка" tone="danger">
+          Для шаблона найдено несколько предложений. Цены и CMS-страница заблокированы, пока связь не станет однозначной.
+        </PageState>
+      </EditorSection>
+    );
+  }
+  if (!offering) {
+    return (
+      <EditorSection title="Коммерческое предложение">
+        <PageState icon={IconAlertTriangle} title="Состояние предложения не подтверждено" tone="danger">
+          {error ?? "Повторите загрузку страницы. Подготовка и цены недоступны, пока сервер не подтвердит текущее состояние."}
+        </PageState>
+      </EditorSection>
+    );
+  }
+  if (offering.resolution === "unprepared") {
+    return (
+      <EditorSection
+        subtitle="Будут созданы одно program offering, точная связь с шаблоном и канонический CMS-черновик. Legacy стоимость не активируется автоматически."
+        title="Коммерческое предложение"
+      >
+        {error ? <CommercialError message={error} /> : null}
+        <Button disabled={busy !== null || draft.id === "new" || draft.capabilities?.canCreate === false || draft.capabilities?.canEdit === false} onClick={() => void onPrepare()} size="sm">
+          {busy === "prepare" ? "Подготавливаем…" : "Подготовить продажи и CMS-страницу"}
+        </Button>
+        {draft.id === "new" ? <p className="mt-2 text-xs text-muted-foreground">Сначала сохраните новый шаблон.</p> : null}
+      </EditorSection>
+    );
+  }
+
+  const { editor } = offering;
+  return (
+    <div className="space-y-3">
+      {error ? <CommercialError message={error} /> : null}
+      <ProgramOfferingReadiness cmsReady={offering.cmsReady} editor={editor} publicReady={offering.publicReady} />
+      <ProgramPriceBookEditor busy={busy} draft={draft} editor={editor} onActivate={onActivate} onSave={onSavePrice} />
+      <ProgramQuotePreview busy={busy} draft={draft} editor={editor} onInvalidateQuote={onInvalidateQuote} onPreview={onPreview} quote={quote} />
+      <EditorSection
+        subtitle="Подключённые дополнения видны как readiness-сигнал. Template preview v1 пока рассчитывается без дополнений."
+        title="Дополнения"
+      >
+        {editor.addOnAssignments.length ? (
+          <div className="divide-y rounded-lg border">
+            {editor.addOnAssignments.map((assignment) => {
+              const item = editor.addOnCatalog.find((candidate) => candidate.offering.id === assignment.addOnOfferingId);
+              return (
+                <div className="flex min-w-0 items-center justify-between gap-3 px-3 py-2 text-xs" key={assignment.id}>
+                  <span className="truncate">{assignment.labelOverride ?? item?.offering.operationalName ?? "Дополнение"}</span>
+                  <StatusBadge tone={assignment.enabled && item?.availability.status === "available" ? "success" : "warning"}>
+                    {assignment.enabled && item?.availability.status === "available" ? "Доступно" : "Не готово"}
+                  </StatusBadge>
+                </div>
+              );
+            })}
+          </div>
+        ) : <p className="text-xs text-muted-foreground">Дополнения не подключены.</p>}
+      </EditorSection>
+    </div>
+  );
+}
+
+function CommercialError({ message }: { message: string }) {
+  return <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{message}</div>;
+}
+
+function ProgramOfferingReadiness({ cmsReady, editor, publicReady }: { cmsReady: boolean; editor: Extract<ProgramOfferingResolution, { resolution: "linked" }>["editor"]; publicReady: false }) {
+  const editorial = editor.editorial;
+  const cmsHref = editorial ? `${adminAppBaseUrl}/content/tree?selected=${encodeURIComponent(editorial.node.id)}` : null;
+  return (
+    <EditorSection title="Готовность">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ReadinessItem label="Продажи" ready={editor.offering.state === "active" && Boolean(editor.offering.activePriceBookId)} readyText="Активны" waitText="Нужен активный тариф" />
+        <ReadinessItem label="CMS-черновик" ready={cmsReady && Boolean(editorial)} readyText="Готов" waitText="Нужна сверка" />
+        <ReadinessItem label="Публичный сайт" ready={publicReady} readyText="Готов" waitText="Закрыт до public gate" />
+      </div>
+      {editorial ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
+          <div className="min-w-0">
+            <p className="font-medium">{editorial.currentRevision?.title ?? "Страница программы"}</p>
+            <p className="truncate text-muted-foreground">{editorial.currentRevision?.path ?? "Черновик без маршрута"}</p>
+          </div>
+          {cmsHref ? <Button nativeButton={false} render={<a href={cmsHref} rel="noreferrer" target="_blank" />} size="sm" variant="outline"><IconExternalLink aria-hidden="true" />Открыть в CMS</Button> : null}
+        </div>
+      ) : null}
+    </EditorSection>
+  );
+}
+
+function ReadinessItem({ label, ready, readyText, waitText }: { label: string; ready: boolean; readyText: string; waitText: string }) {
+  return <div className="min-w-0 rounded-lg border bg-muted/20 p-3"><p className="text-[11px] text-muted-foreground">{label}</p><StatusBadge className="mt-2 max-w-full" tone={ready ? "success" : "warning"}>{ready ? readyText : waitText}</StatusBadge></div>;
+}
+
+function ProgramPriceBookEditor({ busy, draft, editor, onActivate, onSave }: {
+  busy: string | null;
+  draft: ProgramTemplateEditorRecord;
+  editor: Extract<ProgramOfferingResolution, { resolution: "linked" }>["editor"];
+  onActivate: (offeringId: string, priceBookId: string, expectedPricingVersion: number) => Promise<void>;
+  onSave: (offeringId: string, priceBookId: string | null, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) => Promise<void>;
+}) {
+  const priceBook = editor.priceBooks.find((item) => item.state === "draft") ?? null;
+  const activeBook = editor.priceBooks.find((item) => item.id === editor.offering.activePriceBookId) ?? null;
+  const sourceBook = priceBook ?? activeBook;
+  const sourcePlan = sourceBook?.ratePlans.find((item) => item.isDefault) ?? sourceBook?.ratePlans[0] ?? null;
+  const [basis, setBasis] = useState<"per_person" | "flat_package">(sourcePlan?.pricingBasis === "flat_package" ? "flat_package" : "per_person");
+  const [amount, setAmount] = useState(String((sourcePlan?.baseAmount ?? Math.round(draft.basePrice * 100)) / 100));
+  const [included, setIncluded] = useState(sourcePlan?.includedQuantity === null || sourcePlan?.includedQuantity === undefined ? "" : String(sourcePlan.includedQuantity));
+  const [extra, setExtra] = useState(sourcePlan?.baseExtraUnitAmount === null || sourcePlan?.baseExtraUnitAmount === undefined ? "" : String(sourcePlan.baseExtraUnitAmount / 100));
+  const [validFrom, setValidFrom] = useState(priceBook?.validFrom ?? activeBook?.validFrom ?? localDate(new Date()));
+  const writable = editor.capabilities.pricing.canEditDraft;
+  const activateAllowed = editor.capabilities.pricing.canActivate;
+  const packagePairValid = basis === "per_person" || (included === "" && extra === "") || (Number(included) > 0 && Number(extra) >= 0);
+  const amountMinor = Math.round(Number(amount) * 100);
+  const canSave = writable && busy === null && Number.isFinite(amountMinor) && amountMinor >= 0 && Boolean(validFrom) && packagePairValid;
+
+  useEffect(() => {
+    setBasis(sourcePlan?.pricingBasis === "flat_package" ? "flat_package" : "per_person");
+    setAmount(String((sourcePlan?.baseAmount ?? Math.round(draft.basePrice * 100)) / 100));
+    setIncluded(sourcePlan?.includedQuantity === null || sourcePlan?.includedQuantity === undefined ? "" : String(sourcePlan.includedQuantity));
+    setExtra(sourcePlan?.baseExtraUnitAmount === null || sourcePlan?.baseExtraUnitAmount === undefined ? "" : String(sourcePlan.baseExtraUnitAmount / 100));
+    setValidFrom(priceBook?.validFrom ?? activeBook?.validFrom ?? localDate(new Date()));
+  }, [activeBook, draft.basePrice, priceBook, sourcePlan]);
+
+  const submit = () => {
+    const packageTerms = basis === "flat_package" && included !== "" && extra !== "";
+    const plan = {
+      ...(priceBook?.ratePlans[0]?.id ? { id: priceBook.ratePlans[0].id } : {}),
+      key: sourcePlan?.key ?? "standard",
+      label: sourcePlan?.label ?? "Основной тариф",
+      pricingBasis: basis,
+      quantityMetric: "participants" as const,
+      baseAmount: amountMinor,
+      includedQuantity: packageTerms ? Number(included) : null,
+      baseExtraUnitAmount: packageTerms ? Math.round(Number(extra) * 100) : null,
+      minQuantity: draft.minimumParticipants && draft.minimumParticipants > 0 ? draft.minimumParticipants : null,
+      maxQuantity: draft.participantLimit,
+      minDurationMinutes: draft.durationMinutes,
+      maxDurationMinutes: draft.durationMinutes,
+      isDefault: true,
+      displayOrder: 0,
+      rules: sourcePlan?.rules.map((rule) => toProgramPriceRuleDraft(rule, Boolean(priceBook))) ?? [],
+    };
+    const ratePlans = sourceBook
+      ? sourceBook.ratePlans.map((candidate) => candidate.id === sourcePlan?.id ? plan : toProgramRatePlanDraft(candidate, Boolean(priceBook)))
+      : [plan];
+    void onSave(editor.offering.id, priceBook?.id ?? null, editor.ownerVersions.pricing, {
+      supersedesPriceBookId: priceBook?.supersedesPriceBookId ?? activeBook?.id ?? null,
+      name: priceBook?.name ?? `${draft.name} — тариф`, validFrom, validToExclusive: priceBook?.validToExclusive ?? null,
+      changeReason: priceBook?.changeReason || "Настройка тарифа программы", ratePlans,
+    });
+  };
+
+  return (
+    <EditorSection
+      actions={priceBook ? <StatusBadge tone="warning">Черновик</StatusBadge> : activeBook ? <StatusBadge tone="success">Тариф активен</StatusBadge> : null}
+      subtitle="Суммы показывает сервер. Для пакетной цены количество включённых участников и доплата задаются только вместе."
+      title="Тариф"
+    >
+      <div className="grid items-start gap-4 sm:grid-cols-6">
+        <FormField className="sm:col-span-2" htmlFor="program-pricing-basis" label="Способ расчёта"><FormSelect disabled={!writable} id="program-pricing-basis" label="Способ расчёта программы" onValueChange={(value) => setBasis(value as "per_person" | "flat_package")} options={[{ value: "per_person", label: "За участника" }, { value: "flat_package", label: "Пакет" }]} value={basis} /></FormField>
+        <FormField className="sm:col-span-2" htmlFor="program-pricing-amount" label={basis === "per_person" ? "Цена за участника, ₽" : "Цена пакета, ₽"}><Input disabled={!writable} id="program-pricing-amount" min="0" onChange={(event) => setAmount(event.target.value)} step="0.01" type="number" value={amount} /></FormField>
+        <FormField className="sm:col-span-2" htmlFor="program-pricing-valid" label="Действует с"><Input disabled={!writable} id="program-pricing-valid" onChange={(event) => setValidFrom(event.target.value)} type="date" value={validFrom} /></FormField>
+        {basis === "flat_package" ? <><FormField className="sm:col-span-2" htmlFor="program-pricing-included" label="Участников включено"><Input disabled={!writable} id="program-pricing-included" min="1" onChange={(event) => setIncluded(event.target.value)} placeholder="Без доплаты сверх пакета" type="number" value={included} /></FormField><FormField className="sm:col-span-2" htmlFor="program-pricing-extra" label="Доплата за участника, ₽"><Input disabled={!writable} id="program-pricing-extra" min="0" onChange={(event) => setExtra(event.target.value)} placeholder="Не задана" step="0.01" type="number" value={extra} /></FormField></> : null}
+      </div>
+      {!packagePairValid ? <p className="mt-2 text-xs text-destructive" role="alert">Укажите вместе включённое количество и доплату.</p> : null}
+      {!writable ? <p className="mt-3 text-xs text-muted-foreground">Тариф доступен только для чтения.</p> : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button disabled={!canSave} onClick={submit} size="sm">{busy === "price" ? "Сохраняем…" : priceBook ? "Сохранить тариф" : "Создать черновик тарифа"}</Button>
+          {priceBook ? <Button disabled={!activateAllowed || busy !== null} onClick={() => void onActivate(editor.offering.id, priceBook.id, editor.ownerVersions.pricing)} size="sm" variant="outline">{busy === "activate" ? "Активируем…" : "Активировать тариф"}</Button> : null}
+        </div>
+      )}
+    </EditorSection>
+  );
+}
+
+function ProgramQuotePreview({ busy, draft, editor, onInvalidateQuote, onPreview, quote }: {
+  busy: string | null;
+  draft: ProgramTemplateEditorRecord;
+  editor: Extract<ProgramOfferingResolution, { resolution: "linked" }>["editor"];
+  onInvalidateQuote: () => void;
+  onPreview: (input: { serviceDate: string; participants: number; ratePlanKey: string | null }) => Promise<void>;
+  quote: ProgramOfferingQuoteResult | null;
+}) {
+  const [serviceDate, setServiceDate] = useState(localDate(new Date()));
+  const [participants, setParticipants] = useState(Math.max(1, draft.minimumParticipants ?? 1));
+  const active = editor.priceBooks.find((item) => item.id === editor.offering.activePriceBookId);
+  const canPreview = editor.capabilities.canPreviewQuote && Boolean(active) && busy === null;
+  return (
+    <EditorSection subtitle="Это неизменяемый серверный снимок для проверки тарифа, не цена регистрации и не резерв мест." title="Пробный расчёт">
+      <div className="grid items-end gap-4 sm:grid-cols-6">
+        <FormField className="sm:col-span-2" htmlFor="program-quote-date" label="Дата программы"><Input id="program-quote-date" onChange={(event) => { setServiceDate(event.target.value); onInvalidateQuote(); }} type="date" value={serviceDate} /></FormField>
+        <FormField className="sm:col-span-2" htmlFor="program-quote-participants" label="Участники"><Input id="program-quote-participants" min="1" onChange={(event) => { setParticipants(Math.max(1, Number(event.target.value) || 1)); onInvalidateQuote(); }} type="number" value={participants} /></FormField>
+        <Button className="sm:col-span-2" disabled={!canPreview} onClick={() => void onPreview({ serviceDate, participants, ratePlanKey: active?.ratePlans.find((plan) => plan.isDefault)?.key ?? null })} size="sm">{busy === "preview" ? "Рассчитываем…" : "Рассчитать"}</Button>
+      </div>
+      {!editor.capabilities.canPreviewQuote ? <p className="mt-2 text-xs text-muted-foreground">Расчёт станет доступен после активации тарифа.</p> : null}
+      {quote ? <div className="mt-4 rounded-lg border bg-muted/20 p-3" aria-label="Результат пробного расчёта"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{money(quote.total.amountMinor, quote.currency)}</p><StatusBadge tone="warning">Не для подтверждения</StatusBadge></div><p className="mt-1 text-xs text-muted-foreground">{quote.inputs.participants} участн. · до {formatProgramDateTime(quote.validUntil)}</p><div className="mt-2 space-y-1">{quote.lines.map((line, index) => <div className="flex justify-between gap-3 text-xs" key={`${line.kind}-${index}`}><span>{line.label} × {line.quantity}</span><span className="tabular-nums">{money(line.amount.amountMinor, line.amount.currency)}</span></div>)}</div></div> : null}
+    </EditorSection>
+  );
+}
+
+function localDate(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function money(amountMinor: number, currency: string) {
+  return new Intl.NumberFormat("ru-RU", { style: "currency", currency, maximumFractionDigits: 2 }).format(amountMinor / 100);
+}
+
+function errorMessage(reason: unknown, fallback: string) {
+  if (reason instanceof ApiClientError) return reason.isConflict ? `${reason.message} Обновите данные и повторите действие.` : reason.message;
+  return reason instanceof Error ? reason.message : fallback;
+}
+
+function toProgramPriceRuleDraft(rule: RatePlan["rules"][number], preserveId: boolean) {
+  return {
+    ...(preserveId ? { id: rule.id } : {}),
+    dateSelector: rule.dateSelector,
+    quantityRange: rule.quantityRange,
+    bookingLeadDays: rule.bookingLeadDays,
+    durationMinutes: rule.durationMinutes,
+    amount: rule.amount,
+    extraUnitAmount: rule.extraUnitAmount,
+    priority: rule.priority,
+    reason: rule.reason,
+    enabled: rule.enabled,
+  };
+}
+
+function toProgramRatePlanDraft(plan: RatePlan, preserveIds: boolean): RatePlanDraft {
+  return {
+    ...(preserveIds ? { id: plan.id } : {}),
+    key: plan.key,
+    label: plan.label,
+    pricingBasis: plan.pricingBasis,
+    quantityMetric: plan.quantityMetric,
+    baseAmount: plan.baseAmount,
+    includedQuantity: plan.includedQuantity,
+    baseExtraUnitAmount: plan.baseExtraUnitAmount,
+    minQuantity: plan.minQuantity,
+    maxQuantity: plan.maxQuantity,
+    minDurationMinutes: plan.minDurationMinutes,
+    maxDurationMinutes: plan.maxDurationMinutes,
+    isDefault: plan.isDefault,
+    displayOrder: plan.displayOrder,
+    rules: plan.rules.map((rule) => toProgramPriceRuleDraft(rule, preserveIds)),
+  };
 }
 
 function ProgramContent({

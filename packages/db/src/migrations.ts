@@ -25,6 +25,7 @@ import { RecurringWeekdayPriceRules1788121200000 } from "./migrations/1788121200
 import { BookingItemAddons1788121600000 } from "./migrations/1788121600000-booking-item-addons.js"
 import { CompositeQuoteAcceptance1788122000000 } from "./migrations/1788122000000-composite-quote-acceptance.js"
 import { MarketingPromotions1788122400000 } from "./migrations/1788122400000-marketing-promotions.js"
+import { ProgramOfferingCore1788122800000 } from "./migrations/1788122800000-program-offering-core.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -55,4 +56,5 @@ export const databaseMigrations = [
   BookingItemAddons1788121600000,
   CompositeQuoteAcceptance1788122000000,
   MarketingPromotions1788122400000,
+  ProgramOfferingCore1788122800000,
 ]

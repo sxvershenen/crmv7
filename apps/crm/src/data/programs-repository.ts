@@ -21,7 +21,32 @@ import { bookingResourcesFixture } from "@app/fixtures/bookings"
 import { programCategoriesFixture, programRegistrationsFixture, programRunsFixture, programTemplatesFixture } from "@app/fixtures/programs"
 import { ApiClientError, apiClient } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
-import { PaymentListResponseSchema, ProgramCategoryDetailSchema, ProgramCategorySchema, ProgramOccurrenceDtoSchema, ProgramRegistrationDtoSchema, ProgramTemplateDtoSchema, ResourceAllocationDtoSchema, ResourceDtoSchema, SessionUserSchema } from "@crm/contracts"
+import {
+  HousePriceBookActivateBodySchema,
+  HousePriceBookDraftCreateBodySchema,
+  HousePriceBookDraftReplaceBodySchema,
+  InternalOfferingEditorSchema,
+  OfferingPricingMutationResultSchema,
+  PaymentListResponseSchema,
+  ProgramCategoryDetailSchema,
+  ProgramCategorySchema,
+  ProgramOccurrenceDtoSchema,
+  ProgramOfferingPrepareBodySchema,
+  ProgramOfferingLookupResultSchema,
+  ProgramOfferingPrepareResultSchema,
+  ProgramOfferingQuotePreviewBodySchema,
+  ProgramOfferingQuoteResultSchema,
+  ProgramRegistrationDtoSchema,
+  ProgramTemplateDtoSchema,
+  ResourceAllocationDtoSchema,
+  ResourceDtoSchema,
+  SessionUserSchema,
+  type HousePriceBookDraftCreateBody,
+  type InternalOfferingEditor,
+  type OfferingPricingMutationResult,
+  type ProgramOfferingPrepareResult,
+  type ProgramOfferingQuoteResult,
+} from "@crm/contracts"
 import { z } from "zod"
 
 export interface ProgramsRepository {
@@ -37,6 +62,24 @@ export interface ProgramTemplateEditorRepository {
   getTemplate(id: string): Promise<ProgramTemplateEditorRecord | null>
   listCategories(): Promise<ProgramCategory[]>
   saveTemplate(template: ProgramTemplateEditorRecord): Promise<ProgramTemplateEditorRecord>
+  resolveProgramOffering(programTemplateId: string): Promise<ProgramOfferingResolution>
+  prepareProgramOffering(programTemplateId: string, expectedProgramTemplateVersion: number): Promise<ProgramOfferingPrepareResult>
+  createProgramPriceBook(offeringId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput): Promise<OfferingPricingMutationResult>
+  replaceProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput): Promise<OfferingPricingMutationResult>
+  activateProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number): Promise<OfferingPricingMutationResult>
+  previewProgramQuote(programTemplateId: string, input: ProgramQuotePreviewInput): Promise<ProgramOfferingQuoteResult>
+}
+
+export type ProgramOfferingResolution =
+  | { resolution: "unprepared" }
+  | { resolution: "linked"; editor: InternalOfferingEditor; cmsReady: boolean; publicReady: false }
+  | { resolution: "ambiguous"; candidateOfferingIds: string[] }
+
+export type ProgramPriceBookDraftInput = Omit<HousePriceBookDraftCreateBody, "operationId" | "idempotencyKey" | "expectedPricingVersion">
+export type ProgramQuotePreviewInput = {
+  serviceDate: string
+  participants: number
+  ratePlanKey: string | null
 }
 
 export interface ProgramRunEditorRepository {
@@ -142,6 +185,7 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
   private runEditorData = new Map<string, ProgramRunEditorRecord>()
   private registrationEditorData = new Map<string, ProgramRegistrationEditorRecord>()
   private categoryEditorData = new Map<string, ProgramCategoryEditorRecord>()
+  private programOfferings = new Map<string, Extract<ProgramOfferingResolution, { resolution: "linked" }>>()
 
   async list(query: ProgramQuery): Promise<ProgramsDataset> {
     return Promise.resolve(selectPrograms(structuredClone(this.data), query))
@@ -204,6 +248,119 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
     if (index >= 0) this.data.templates[index] = flat
     else this.data.templates.unshift(flat)
     return Promise.resolve(structuredClone(next))
+  }
+
+  async resolveProgramOffering(programTemplateId: string): Promise<ProgramOfferingResolution> {
+    return structuredClone(this.programOfferings.get(programTemplateId) ?? { resolution: "unprepared" as const })
+  }
+
+  async prepareProgramOffering(programTemplateId: string, expectedProgramTemplateVersion: number): Promise<ProgramOfferingPrepareResult> {
+    const template = await this.getTemplate(programTemplateId)
+    if (!template) throw new Error("Шаблон программы не найден")
+    if (template.version !== expectedProgramTemplateVersion) throw new Error("Шаблон программы был изменён")
+    const offeringId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const nodeId = crypto.randomUUID()
+    const revisionId = crypto.randomUUID()
+    const editor = {
+      offering: {
+        id: offeringId, code: `PROGRAM-${programTemplateId}`, version: 1, kind: "program", state: "draft",
+        operationalName: template.name, internalComment: "", salesMode: "quoted", priceDisplayMode: "from", currency: "RUB",
+        timezone: "Europe/Moscow", taxMode: "tax_included", businessCalendarId: crypto.randomUUID(), fulfillment: { kind: "program" },
+        activePriceBookId: null, archivedAt: null, createdAt: now, updatedAt: now,
+      },
+      addOnTerms: null,
+      addOnUsages: [],
+      bindings: [],
+      bindingTargets: [],
+      priceBooks: [],
+      addOnAssignments: [],
+      addOnCatalog: [],
+      editorial: {
+        source: { sourceKind: "catalog_offering", sourceId: offeringId, sourceVersion: 1, createdAt: now },
+        node: { id: nodeId, version: 1, kind: "program_detail", status: "active" },
+        currentRevision: { id: revisionId, revision: 1, state: "draft", path: `/programs/${programTemplateId}`, title: template.name, contentHash: "a".repeat(64) },
+        latestPublished: null,
+        publication: { eligible: false, blockers: ["offering_not_active", "safe_public_projection_missing"] },
+      },
+      ownerVersions: { catalog: 1, subject: { aggregateVersion: 1, primary: { type: "program_template", id: programTemplateId, version: template.version } }, pricing: 1, draftPriceBook: null, addOnAssignments: 1, editorial: { nodeId, nodeVersion: 1, draftRevisionId: revisionId, contentHash: "a".repeat(64) } },
+      capabilities: {
+        catalog: { canEdit: false, canChangeState: false, canArchive: false }, subject: { canEdit: true, canManageBindings: true },
+        pricing: { canView: true, canEditDraft: true, canActivate: true }, addOns: { canSearch: true, canCreate: true, canAssign: true },
+        editorial: { canEdit: true, canReview: true, canPublish: true }, canPreviewQuote: false,
+      },
+    } as InternalOfferingEditor
+    this.programOfferings.set(programTemplateId, { resolution: "linked", editor, cmsReady: true, publicReady: false })
+    return { offeringId, offeringVersion: 1, subjectVersion: 1, pricingVersion: 1, addOnAssignmentsVersion: 1, programTemplateId, programTemplateVersion: template.version, cmsReady: true, publicReady: false, editorialNodeId: nodeId }
+  }
+
+  async createProgramPriceBook(offeringId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) {
+    const linked = this.fixtureOfferingById(offeringId)
+    if (linked.editor.ownerVersions.pricing !== expectedPricingVersion) throw new Error("Цены были изменены")
+    const priceBook = fixturePriceBook(offeringId, input, "draft")
+    linked.editor.priceBooks = [priceBook, ...linked.editor.priceBooks]
+    linked.editor.ownerVersions.pricing += 1
+    linked.editor.ownerVersions.draftPriceBook = { id: priceBook.id, version: priceBook.version }
+    return structuredClone({ priceBook, pricingVersion: linked.editor.ownerVersions.pricing })
+  }
+
+  async replaceProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) {
+    const linked = this.fixtureOfferingById(offeringId)
+    if (linked.editor.ownerVersions.pricing !== expectedPricingVersion) throw new Error("Цены были изменены")
+    const current = linked.editor.priceBooks.find((item) => item.id === priceBookId && item.state === "draft")
+    if (!current) throw new Error("Черновик прайс-листа не найден")
+    const priceBook = { ...fixturePriceBook(offeringId, input, "draft"), id: current.id, version: current.version + 1, revision: current.revision }
+    linked.editor.priceBooks = linked.editor.priceBooks.map((item) => item.id === priceBookId ? priceBook : item)
+    linked.editor.ownerVersions.pricing += 1
+    linked.editor.ownerVersions.draftPriceBook = { id: priceBook.id, version: priceBook.version }
+    return structuredClone({ priceBook, pricingVersion: linked.editor.ownerVersions.pricing })
+  }
+
+  async activateProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number) {
+    const linked = this.fixtureOfferingById(offeringId)
+    if (linked.editor.ownerVersions.pricing !== expectedPricingVersion) throw new Error("Цены были изменены")
+    const current = linked.editor.priceBooks.find((item) => item.id === priceBookId && item.state === "draft")
+    if (!current) throw new Error("Черновик прайс-листа не найден")
+    const activatedAt = new Date().toISOString()
+    const priceBook = { ...current, state: "active" as const, version: current.version + 1, activatedAt, updatedAt: activatedAt }
+    linked.editor.priceBooks = linked.editor.priceBooks.map((item) => item.id === priceBookId ? priceBook : { ...item, state: item.state === "active" ? "retired" as const : item.state })
+    linked.editor.offering = { ...linked.editor.offering, state: "active", activePriceBookId: priceBook.id }
+    linked.editor.ownerVersions.pricing += 1
+    linked.editor.ownerVersions.draftPriceBook = null
+    linked.editor.capabilities.canPreviewQuote = true
+    return structuredClone({ priceBook, pricingVersion: linked.editor.ownerVersions.pricing })
+  }
+
+  async previewProgramQuote(programTemplateId: string, input: ProgramQuotePreviewInput): Promise<ProgramOfferingQuoteResult> {
+    const linked = this.programOfferings.get(programTemplateId)
+    const book = linked?.editor.priceBooks.find((item) => item.state === "active")
+    const plan = book?.ratePlans.find((item) => item.key === input.ratePlanKey) ?? book?.ratePlans.find((item) => item.isDefault) ?? book?.ratePlans[0]
+    if (!linked || !book || !plan) throw new Error("Для программы нет активного тарифа")
+    const perPerson = plan.pricingBasis === "per_person"
+    const included = plan.includedQuantity ?? 0
+    const extra = perPerson ? 0 : Math.max(0, input.participants - included)
+    const baseQuantity = perPerson ? input.participants : 1
+    const baseAmount = plan.baseAmount * baseQuantity
+    const extraAmount = extra * (plan.baseExtraUnitAmount ?? 0)
+    const calculatedAt = new Date()
+    return {
+      quoteType: "template_preview", acceptanceReady: false, quoteId: crypto.randomUUID(), offeringId: linked.editor.offering.id,
+      programTemplateId, calculatedAt: calculatedAt.toISOString(), validUntil: new Date(calculatedAt.getTime() + 900_000).toISOString(), leadDays: 0,
+      currency: "RUB", inputs: { serviceDate: input.serviceDate, participants: input.participants, durationMinutes: 60 },
+      lines: [
+        { kind: "base", label: perPerson ? "Участники" : "Пакет", serviceDate: input.serviceDate, quantity: baseQuantity, unitAmount: { amountMinor: plan.baseAmount, currency: "RUB" }, amount: { amountMinor: baseAmount, currency: "RUB" }, ratePlanId: plan.id, ratePlanVersion: plan.version, matchedRuleId: null, matchedRuleVersion: null, explanation: "base" },
+        ...(extra > 0 ? [{ kind: "extra_unit" as const, label: "Дополнительные участники", serviceDate: input.serviceDate, quantity: extra, unitAmount: { amountMinor: plan.baseExtraUnitAmount ?? 0, currency: "RUB" as const }, amount: { amountMinor: extraAmount, currency: "RUB" as const }, ratePlanId: plan.id, ratePlanVersion: plan.version, matchedRuleId: null, matchedRuleVersion: null, explanation: "base" }] : []),
+      ],
+      total: { amountMinor: baseAmount + extraAmount, currency: "RUB" },
+      provenance: { offeringVersion: linked.editor.offering.version, subjectVersion: linked.editor.ownerVersions.subject.aggregateVersion, programTemplateVersion: linked.editor.ownerVersions.subject.primary?.version ?? 1, pricingVersion: linked.editor.ownerVersions.pricing, addOnsVersion: linked.editor.ownerVersions.addOnAssignments, priceBookId: book.id, priceBookVersion: book.version, businessCalendarId: linked.editor.offering.businessCalendarId, businessCalendarVersion: 1, businessCalendarSourceVersion: "fixture", matchedRuleIds: [] },
+      immutableSnapshot: true,
+    }
+  }
+
+  private fixtureOfferingById(offeringId: string) {
+    const linked = [...this.programOfferings.values()].find((item) => item.editor.offering.id === offeringId)
+    if (!linked) throw new Error("Коммерческое предложение не найдено")
+    return linked
   }
 
   async getCategory(id: string): Promise<ProgramCategoryEditorRecord | null> {
@@ -302,7 +459,7 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
   }
 }
 
-type ApiProgramsClient = Pick<typeof apiClient, "get" | "getWithMeta" | "patch" | "post">
+type ApiProgramsClient = Pick<typeof apiClient, "get" | "getWithMeta" | "patch" | "post" | "request">
 type Page<T> = { items: T[]; nextCursor: string | null }
 
 const templatePageSchema = z.object({ items: z.array(ProgramTemplateDtoSchema), nextCursor: z.string().nullable() }).strict()
@@ -333,7 +490,7 @@ function mapTemplate(dto: ReturnType<typeof ProgramTemplateDtoSchema.parse>, cat
     id: dto.id, name: dto.name, version: dto.version, updatedAt: dto.updatedAt, categoryId: dto.categoryId ?? "uncategorized",
     categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "sparkles", categoryTone: category?.tone ?? "violet", durationMinutes: dto.durationMinutes,
     participantLimit: dto.participantLimit, basePrice: dto.basePrice.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId), published: dto.published,
-    nextRun: dto.nextOccurrence ? { id: dto.nextOccurrence.id, startsAt: dto.nextOccurrence.startsAt } : null,
+    nextRun: dto.nextOccurrence ? { id: dto.nextOccurrence.id, startsAt: dto.nextOccurrence.startsAt } : null, capabilities: dto.capabilities,
   }
 }
 
@@ -391,6 +548,8 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
   private readonly templates = new Map<string, ReturnType<typeof ProgramTemplateDtoSchema.parse>>()
   private readonly occurrences = new Map<string, ReturnType<typeof ProgramOccurrenceDtoSchema.parse>>()
   private readonly registrations = new Map<string, ReturnType<typeof ProgramRegistrationDtoSchema.parse>>()
+  private readonly commandIntents = new Map<string, { fingerprint: string; operationId: string; idempotencyKey: string }>()
+  private readonly preparedProgramTemplateIds = new Set<string>()
   constructor(private readonly client: ApiProgramsClient = apiClient) {}
 
   async list(query: ProgramQuery): Promise<ProgramsDataset> {
@@ -458,7 +617,7 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
     try {
       const dto = await this.templateDto(id)
       const template = mapTemplate(dto)
-      const occurrences = await this.listAll(`/programs/occurrences?templateId=${encodeURIComponent(id)}&archived=false&limit=100`, occurrencePageSchema)
+      const occurrences = await this.listAll(`/programs/occurrences?templateId=${encodeURIComponent(dto.id)}&archived=false&limit=100`, occurrencePageSchema)
       for (const occurrence of occurrences) this.occurrences.set(occurrence.id, occurrence)
       return {
         ...template,
@@ -480,6 +639,9 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
 
   async saveTemplate(record: ProgramTemplateEditorRecord): Promise<ProgramTemplateEditorRecord> {
     const money = { amountMinor: Math.round(record.basePrice * 100), currency: "RUB" }
+    const legacyFields = record.id === "new" || !this.preparedProgramTemplateIds.has(record.id)
+      ? { basePrice: money, publication: record.published ? "published" as const : "draft" as const }
+      : {}
     const common = {
       name: record.name,
       categoryId: canonicalId(record.categoryId === "uncategorized" ? null : record.categoryId),
@@ -487,18 +649,84 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
       minimumParticipants: record.minimumParticipants,
       participantLimit: record.participantLimit,
       registrationCloseHours: record.registrationCloseHours,
-      basePrice: money,
       description: record.description,
-      publication: record.published ? "published" : "draft",
+      ...legacyFields,
       assigneeIds: record.assignees.map((assignee) => assignee.id),
       stages: record.stages.map(({ id, name, durationMinutes, comment }) => ({ ...(canonicalId(id) ? { id } : {}), name, durationMinutes, comment })),
     }
     const updated = record.id === "new"
       ? await this.client.post("/programs/templates", { ...common, operationId: operationId(), idempotencyKey: idempotencyKey("program-template-create") }, ProgramTemplateDtoSchema)
-      : await this.client.patch(`/programs/templates/${encodeURIComponent(record.id)}`, { ...common, version: (await this.templateDto(record.id)).version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-template-${record.id}`) }, ProgramTemplateDtoSchema)
+      : await this.client.patch(`/programs/templates/${encodeURIComponent(record.id)}`, { ...common, version: record.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-template-${record.id}`) }, ProgramTemplateDtoSchema)
     this.templates.set(updated.id, updated)
     const template = mapTemplate(updated)
     return { ...template, description: updated.description, minimumParticipants: updated.minimumParticipants, registrationCloseHours: updated.registrationCloseHours, stages: updated.stages.map((stage) => ({ ...stage })), relatedRuns: record.relatedRuns }
+  }
+
+  async resolveProgramOffering(programTemplateId: string): Promise<ProgramOfferingResolution> {
+    const lookup = await this.client.get(`/programs/${encodeURIComponent(programTemplateId)}/offering`, ProgramOfferingLookupResultSchema)
+    if (lookup.resolution === "unprepared") return { resolution: "unprepared" }
+    if (lookup.resolution === "ambiguous") return { resolution: "ambiguous", candidateOfferingIds: lookup.candidates.map((candidate) => candidate.offeringId) }
+    const editor = await this.client.get(`/offerings/${encodeURIComponent(lookup.offering.offeringId)}/editor`, InternalOfferingEditorSchema)
+    const primaries = editor.bindings.filter((binding) => binding.role === "primary" && binding.target.type === "program_template")
+    if (editor.offering.kind !== "program" || primaries.length !== 1 || primaries[0]?.target.id !== programTemplateId) {
+      throw new Error("Program offering не соответствует открытому шаблону")
+    }
+    this.preparedProgramTemplateIds.add(programTemplateId)
+    return { resolution: "linked", editor, cmsReady: lookup.offering.cmsReady, publicReady: lookup.offering.publicReady }
+  }
+
+  async prepareProgramOffering(programTemplateId: string, expectedProgramTemplateVersion: number) {
+    const scope = `program-offering-prepare:${programTemplateId}`
+    const input = { expectedProgramTemplateVersion }
+    const intent = this.commandIntent(scope, input)
+    const body = ProgramOfferingPrepareBodySchema.parse({ ...input, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey })
+    const result = await this.client.post(`/programs/${encodeURIComponent(programTemplateId)}/offering`, body, ProgramOfferingPrepareResultSchema)
+    this.commandIntents.delete(scope)
+    this.preparedProgramTemplateIds.add(programTemplateId)
+    return result
+  }
+
+  async createProgramPriceBook(offeringId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) {
+    const scope = `program-price-book-create:${offeringId}`
+    const intent = this.commandIntent(scope, { expectedPricingVersion, input })
+    const body = HousePriceBookDraftCreateBodySchema.parse({ ...input, expectedPricingVersion, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey })
+    const result = await this.client.post(`/offerings/${encodeURIComponent(offeringId)}/price-books/drafts`, body, OfferingPricingMutationResultSchema)
+    this.commandIntents.delete(scope)
+    return result
+  }
+
+  async replaceProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number, input: ProgramPriceBookDraftInput) {
+    const scope = `program-price-book-replace:${offeringId}:${priceBookId}`
+    const intent = this.commandIntent(scope, { expectedPricingVersion, input })
+    const replaceInput = {
+      name: input.name,
+      validFrom: input.validFrom,
+      validToExclusive: input.validToExclusive,
+      changeReason: input.changeReason,
+      ratePlans: input.ratePlans,
+    }
+    const body = HousePriceBookDraftReplaceBodySchema.parse({ ...replaceInput, expectedPricingVersion, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey })
+    const result = await this.client.request(`/offerings/${encodeURIComponent(offeringId)}/price-books/drafts/${encodeURIComponent(priceBookId)}`, { body, method: "PUT" }, OfferingPricingMutationResultSchema)
+    this.commandIntents.delete(scope)
+    return result
+  }
+
+  async activateProgramPriceBook(offeringId: string, priceBookId: string, expectedPricingVersion: number) {
+    const scope = `program-price-book-activate:${offeringId}:${priceBookId}`
+    const intent = this.commandIntent(scope, { expectedPricingVersion })
+    const body = HousePriceBookActivateBodySchema.parse({ expectedPricingVersion, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey, reason: "Тариф программы проверен оператором" })
+    const result = await this.client.post(`/offerings/${encodeURIComponent(offeringId)}/price-books/${encodeURIComponent(priceBookId)}/activate`, body, OfferingPricingMutationResultSchema)
+    this.commandIntents.delete(scope)
+    return result
+  }
+
+  async previewProgramQuote(programTemplateId: string, input: ProgramQuotePreviewInput) {
+    const scope = `program-quote-preview:${programTemplateId}`
+    const intent = this.commandIntent(scope, input)
+    const body = ProgramOfferingQuotePreviewBodySchema.parse({ quoteType: "template_preview", ...input, currency: "RUB", addOns: [], operationId: intent.operationId, idempotencyKey: intent.idempotencyKey })
+    const result = await this.client.post(`/programs/${encodeURIComponent(programTemplateId)}/offering/quotes/preview`, body, ProgramOfferingQuoteResultSchema)
+    this.commandIntents.delete(scope)
+    return result
   }
 
   async getRun(id: string): Promise<ProgramRunEditorRecord | null> {
@@ -705,6 +933,15 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
     return value
   }
 
+  private commandIntent(scope: string, input: unknown) {
+    const fingerprint = JSON.stringify(input)
+    const current = this.commandIntents.get(scope)
+    if (current?.fingerprint === fingerprint) return current
+    const next = { fingerprint, operationId: operationId(), idempotencyKey: idempotencyKey(scope.replace(/[^A-Za-z0-9._~-]/g, "-")) }
+    this.commandIntents.set(scope, next)
+    return next
+  }
+
 
   private async listAll<T>(path: string, schema: z.ZodType<Page<T>>) {
     const items: T[] = []
@@ -740,6 +977,22 @@ function toListTemplate(record: ProgramTemplateEditorRecord): ProgramTemplate {
   const flat = structuredClone(record) as ProgramTemplateEditorRecord & Record<string, unknown>
   for (const key of ["description", "minimumParticipants", "registrationCloseHours", "relatedRuns", "stages"]) delete flat[key]
   return flat as unknown as ProgramTemplate
+}
+
+function fixturePriceBook(offeringId: string, input: ProgramPriceBookDraftInput, state: "draft" | "active") {
+  const now = new Date().toISOString()
+  const priceBookId = crypto.randomUUID()
+  return {
+    id: priceBookId, offeringId, version: 1, revision: 1, state, scheduledActivationAt: null,
+    activatedAt: state === "active" ? now : null, retiredAt: null, supersedesPriceBookId: input.supersedesPriceBookId,
+    name: input.name, currency: "RUB" as const, timezone: "Europe/Moscow", validFrom: input.validFrom,
+    validToExclusive: input.validToExclusive, changeReason: input.changeReason,
+    ratePlans: input.ratePlans.map((plan) => {
+      const ratePlanId = plan.id ?? crypto.randomUUID()
+      return { ...plan, id: ratePlanId, priceBookId, version: 1, rules: plan.rules.map((rule) => ({ ...rule, id: rule.id ?? crypto.randomUUID(), ratePlanId, version: 1 })) }
+    }),
+    createdAt: now, updatedAt: now,
+  }
 }
 
 export function createEmptyProgramTemplate(): ProgramTemplateEditorRecord {

@@ -33,6 +33,13 @@ export type LegacyCatalogOfferingPromotionReport = Readonly<{
   candidateOfferingIds: string[]
 }>
 
+export type LegacyProgramOfferingPromotionReport = Readonly<{
+  status: "eligible" | "missing_legacy_link" | "no_exact_primary" | "ambiguous"
+  programTemplateId: string
+  legacyLinkId: string | null
+  candidateOfferingIds: string[]
+}>
+
 /** Read-only reconciliation used before a legacy resource link can be promoted. */
 export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManager, resourceId: string): Promise<LegacyCatalogOfferingPromotionReport> {
   const legacy = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: "resource", sourceId: resourceId })
@@ -55,6 +62,23 @@ export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManag
   }
 }
 
+/** Read-only exact-primary reconciliation for legacy ProgramTemplate drafts. */
+export async function inspectLegacyProgramOfferingPromotion(manager: EntityManager, programTemplateId: string): Promise<LegacyProgramOfferingPromotionReport> {
+  const legacy = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: "program_template", sourceId: programTemplateId })
+  if (!legacy) return { status: "missing_legacy_link", programTemplateId, legacyLinkId: null, candidateOfferingIds: [] }
+  const rows = await manager.query(`
+    SELECT offering.id
+    FROM catalog_offerings offering
+    JOIN offering_bindings binding ON binding.offering_id = offering.id
+      AND binding.role = 'primary' AND binding.archived_at IS NULL AND binding.program_template_id = $1
+    JOIN program_templates template ON template.id = binding.program_template_id AND template.archived_at IS NULL
+    WHERE offering.kind = 'program' AND offering.archived_at IS NULL
+    ORDER BY offering.id ASC
+  `, [programTemplateId]) as Array<{ id: string }>
+  const candidateOfferingIds = rows.map((row) => row.id)
+  return { status: candidateOfferingIds.length === 1 ? "eligible" : candidateOfferingIds.length === 0 ? "no_exact_primary" : "ambiguous", programTemplateId, legacyLinkId: legacy.id, candidateOfferingIds }
+}
+
 /**
  * Transaction-aware canonical offering -> CMS locator helper. Call it inside
  * the same transaction as guided offering creation. It seeds editorial-safe
@@ -63,15 +87,15 @@ export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManag
 export async function ensureCatalogOfferingEditorialDraft(
   manager: EntityManager,
   input: { offeringId: string; actorId: string; requestId: string },
-): Promise<{ status: "linked" | "created" | "promoted"; link: CmsSourceLinkEntity } | { status: "report_only"; report: LegacyCatalogOfferingPromotionReport }> {
+): Promise<{ status: "linked" | "created" | "promoted"; link: CmsSourceLinkEntity } | { status: "report_only"; report: LegacyCatalogOfferingPromotionReport | LegacyProgramOfferingPromotionReport }> {
   const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: input.offeringId })
   if (!offering || offering.archivedAt !== null) throw new Error(`Active catalog offering ${input.offeringId} was not found`)
-  if (offering.kind !== "house" && offering.kind !== "campground") throw new Error(`Catalog offering ${input.offeringId} is not a supported stay offering`)
+  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "program") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
 
   const links = manager.getRepository(CmsSourceLinkEntity)
   const existing = await links.findOneBy({ sourceKind: "catalog_offering", sourceId: offering.id })
   if (existing) {
-    await assertStayEditorialNode(manager, existing)
+    await assertEditorialNode(manager, existing, offering.kind === "program" ? "program_detail" : "resource_detail")
     return { status: "linked", link: existing }
   }
 
@@ -85,7 +109,7 @@ export async function ensureCatalogOfferingEditorialDraft(
     const report = await inspectLegacyCatalogOfferingPromotion(manager, primary[0]!.resourceId)
     if (report.status === "eligible" && report.candidateOfferingIds[0] === offering.id && report.legacyLinkId) {
       const legacy = await links.findOneByOrFail({ id: report.legacyLinkId })
-      await assertStayEditorialNode(manager, legacy)
+      await assertEditorialNode(manager, legacy, "resource_detail")
       const promoted = await manager.createQueryBuilder().update(CmsSourceLinkEntity).set({
         sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
       }).where("id = :id AND source_kind = 'resource' AND source_id = :resourceId", { id: legacy.id, resourceId: report.resourceId }).execute()
@@ -102,22 +126,50 @@ export async function ensureCatalogOfferingEditorialDraft(
     if (report.status !== "missing_legacy_link") return { status: "report_only", report }
   }
 
+
+  if (offering.kind === "program") {
+    const primary = await manager.query(`
+      SELECT program_template_id AS "programTemplateId"
+      FROM offering_bindings
+      WHERE offering_id = $1 AND role = 'primary' AND archived_at IS NULL AND program_template_id IS NOT NULL
+      ORDER BY id ASC
+    `, [offering.id]) as Array<{ programTemplateId: string }>
+    if (primary.length !== 1) throw new Error(`Program offering ${offering.id} requires one exact primary ProgramTemplate binding`)
+    const report = await inspectLegacyProgramOfferingPromotion(manager, primary[0]!.programTemplateId)
+    if (report.status === "eligible" && report.candidateOfferingIds[0] === offering.id && report.legacyLinkId) {
+      const legacy = await links.findOneByOrFail({ id: report.legacyLinkId })
+      await assertEditorialNode(manager, legacy, "program_detail")
+      const promoted = await manager.createQueryBuilder().update(CmsSourceLinkEntity).set({ sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version })
+        .where("id = :id AND source_kind = 'program_template' AND source_id = :programTemplateId", { id: legacy.id, programTemplateId: report.programTemplateId }).execute()
+      if (promoted.affected !== 1) throw new Error(`Legacy CMS source link ${legacy.id} changed during promotion`)
+      const link = await links.findOneByOrFail({ id: legacy.id })
+      await manager.save(manager.create(ChangeLogEntity, {
+        id: randomUUID(), entityType: "cms_node", entityId: link.nodeId, action: "catalog_offering_source_promoted",
+        actorId: input.actorId, requestId: input.requestId,
+        changes: { previousSourceKind: "program_template", previousSourceId: report.programTemplateId, sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version }, createdAt: new Date(),
+      }))
+      return { status: "promoted", link }
+    }
+    if (report.status !== "missing_legacy_link") return { status: "report_only", report }
+  }
+
   const link = await createCmsSourceDraft(manager, {
     sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
     title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-    pathPart: offering.kind === "campground" ? "campgrounds" : "houses",
+    pathPart: offering.kind === "program" ? "programs" : offering.kind === "campground" ? "campgrounds" : "houses",
+    pageKind: offering.kind === "program" ? "program_detail" : "resource_detail",
   })
   return { status: "created", link }
 }
 
-async function assertStayEditorialNode(manager: EntityManager, link: CmsSourceLinkEntity) {
+async function assertEditorialNode(manager: EntityManager, link: CmsSourceLinkEntity, kind: "resource_detail" | "program_detail") {
   const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: link.nodeId })
-  if (!node || node.kind !== "resource_detail") throw new Error(`CMS source link ${link.id} does not target a resource_detail node`)
+  if (!node || node.kind !== kind) throw new Error(`CMS source link ${link.id} does not target a ${kind} node`)
 }
 
 async function createCmsSourceDraft(
   manager: EntityManager,
-  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string },
+  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string; pageKind?: CmsPageKind },
 ) {
   const existing = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: input.sourceKind, sourceId: input.sourceId })
   if (existing) return existing
@@ -141,7 +193,7 @@ async function createCmsSourceDraft(
     relations: [], schemaVersion: 1,
   }
   const contentHash = hash(content)
-  await manager.save(manager.create(CmsNodeEntity, { id: nodeId, kind: mapping.pageKind, status: "active", createdBy: input.actorId, updatedBy: input.actorId, archivedAt: null }))
+  await manager.save(manager.create(CmsNodeEntity, { id: nodeId, kind: input.pageKind ?? mapping.pageKind, status: "active", createdBy: input.actorId, updatedBy: input.actorId, archivedAt: null }))
   await manager.save(manager.create(CmsNodeRevisionEntity, {
     id: revisionId, nodeId, revision: 1, state: "draft", path, slug: input.sourceId, parentNodeId: null, sortOrder: 0,
     title, summary: content.summary, hero: content.hero, sections: [], seo: content.seo, relations: [], schemaVersion: 1, contentHash, createdBy: input.actorId, createdAt: now,

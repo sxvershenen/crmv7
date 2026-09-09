@@ -143,14 +143,15 @@ describe("ProgramsRepository API adapter", () => {
   it("maps template editor settings to canonical money/stages and versioned patch", async () => {
     const patch = vi.fn(async () => template)
     const client = {
-      get: vi.fn(async (path: string) => path === "/programs/templates/template-1" ? template : occurrence),
+      get: vi.fn(async (path: string) => path.startsWith("/programs/templates/") ? template : occurrence),
       getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [], nextCursor: null }, headers: new Headers(), status: 200 })),
       patch,
       post: vi.fn(),
     }
     const repository = new ApiProgramsRepository(client as never)
-    const editor = await repository.getTemplate("template-1")
+    const editor = await repository.getTemplate("PT-1")
     if (!editor) throw new Error("API template is missing")
+    expect(client.getWithMeta).toHaveBeenCalledWith("/programs/occurrences?templateId=template-1&archived=false&limit=100", expect.anything())
     editor.name = "Обновлённая программа"
     editor.basePrice = 4500
     editor.description = "Описание"
@@ -167,4 +168,73 @@ describe("ProgramsRepository API adapter", () => {
       idempotencyKey: expect.any(String),
     }), expect.anything())
   })
+
+  it("restores the prepared offering through the typed lookup and exact editor projection", async () => {
+    const offeringId = "11111111-1111-4111-8111-111111111111"
+    const lookup = { resolution: "linked", offering: { offeringId, cmsReady: true, publicReady: false } }
+    const editor = { offering: { id: offeringId, kind: "program" }, bindings: [{ role: "primary", target: { type: "program_template", id: "template-1" } }] }
+    const get = vi.fn(async (path: string) => path === "/programs/template-1/offering" ? lookup : editor)
+    let patchBody: Record<string, unknown> | null = null
+    const patch = vi.fn(async (_path: string, body: Record<string, unknown>) => {
+      patchBody = body
+      return template
+    })
+    const repository = new ApiProgramsRepository({ get, getWithMeta: vi.fn(), patch, post: vi.fn(), request: vi.fn() } as never)
+
+    await expect(repository.resolveProgramOffering("template-1")).resolves.toMatchObject({ resolution: "linked", cmsReady: true, publicReady: false, editor })
+    expect(get).toHaveBeenNthCalledWith(1, "/programs/template-1/offering", expect.anything())
+    expect(get).toHaveBeenNthCalledWith(2, `/offerings/${offeringId}/editor`, expect.anything())
+    await repository.saveTemplate({ ...mapTestTemplate(), id: "template-1", version: 2, basePrice: 9999, published: false })
+    expect(patchBody).not.toHaveProperty("basePrice")
+    expect(patchBody).not.toHaveProperty("publication")
+  })
+
+  it("keeps prepare idempotency metadata stable for an explicit retry and sends the UI-observed version", async () => {
+    const result = { offeringId: "11111111-1111-4111-8111-111111111111", offeringVersion: 1, subjectVersion: 1, pricingVersion: 1, addOnAssignmentsVersion: 1, programTemplateId: "22222222-2222-4222-8222-222222222222", programTemplateVersion: 7, cmsReady: true, publicReady: false, editorialNodeId: "33333333-3333-4333-8333-333333333333" }
+    const post = vi.fn().mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(result)
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta: vi.fn(), patch: vi.fn(), post, request: vi.fn() } as never)
+
+    await expect(repository.prepareProgramOffering(result.programTemplateId, 7)).rejects.toThrow("network")
+    await expect(repository.prepareProgramOffering(result.programTemplateId, 7)).resolves.toEqual(result)
+
+    const first = post.mock.calls[0]?.[1] as Record<string, unknown>
+    const second = post.mock.calls[1]?.[1] as Record<string, unknown>
+    expect(first).toMatchObject({ expectedProgramTemplateVersion: 7, operationId: expect.any(String), idempotencyKey: expect.any(String) })
+    expect(second).toMatchObject({ operationId: first.operationId, idempotencyKey: first.idempotencyKey })
+  })
+
+  it("sends explicit program participant terms without leaking create-only fields into draft replacement", async () => {
+    const offeringId = "11111111-1111-4111-8111-111111111111"
+    const priceBookId = "22222222-2222-4222-8222-222222222222"
+    const input = {
+      supersedesPriceBookId: "33333333-3333-4333-8333-333333333333",
+      name: "Основной тариф",
+      validFrom: "2026-09-10",
+      validToExclusive: null,
+      changeReason: "Проверка условий",
+      ratePlans: [{ key: "standard", label: "Стандарт", pricingBasis: "flat_package" as const, quantityMetric: "participants" as const, baseAmount: 500000, includedQuantity: 5, baseExtraUnitAmount: 75000, minQuantity: 1, maxQuantity: 20, minDurationMinutes: 120, maxDurationMinutes: 120, isDefault: true, displayOrder: 0, rules: [] }],
+    }
+    let requestedBody: Record<string, unknown> | null = null
+    const request = vi.fn(async (_path: string, init: { body: Record<string, unknown> }) => {
+      requestedBody = init.body
+      return { priceBook: {}, pricingVersion: 9 }
+    })
+    const repository = new ApiProgramsRepository({ get: vi.fn(), getWithMeta: vi.fn(), patch: vi.fn(), post: vi.fn(), request } as never)
+
+    await repository.replaceProgramPriceBook(offeringId, priceBookId, 8, input)
+
+    expect(request).toHaveBeenCalledWith(`/offerings/${offeringId}/price-books/drafts/${priceBookId}`, {
+      method: "PUT",
+      body: expect.objectContaining({ expectedPricingVersion: 8, ratePlans: [expect.objectContaining({ pricingBasis: "flat_package", quantityMetric: "participants", includedQuantity: 5, baseExtraUnitAmount: 75000 })] }),
+    }, expect.anything())
+    expect(requestedBody).not.toHaveProperty("supersedesPriceBookId")
+  })
 })
+
+function mapTestTemplate() {
+  return {
+    id: "template-1", version: 2, name: "Программа API", updatedAt: "2026-08-24T08:00:00.000Z", categoryId: "family", categoryName: "Семейные",
+    categoryIcon: "sparkles" as const, categoryTone: "violet" as const, durationMinutes: 120, minimumParticipants: 1, participantLimit: 12,
+    registrationCloseHours: 2, basePrice: 4200, description: "", published: true, assignees: [], stages: [], relatedRuns: [], nextRun: null,
+  }
+}

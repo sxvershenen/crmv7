@@ -4,6 +4,7 @@ import { InternalBusinessCalendarController } from "./business-calendar.controll
 import { InternalOfferingConfigurationController } from "./offering-configuration.controller.js"
 import { InternalOfferingsController } from "./internal-offerings.controller.js"
 import { OfferingsModule } from "./offerings.module.js"
+import { InternalProgramOfferingController } from "./program-offering.controller.js"
 
-@Module({ imports: [OfferingsModule], controllers: [InternalOfferingsController, InternalBusinessCalendarController, InternalOfferingConfigurationController] })
+@Module({ imports: [OfferingsModule], controllers: [InternalOfferingsController, InternalBusinessCalendarController, InternalOfferingConfigurationController, InternalProgramOfferingController] })
 export class OfferingsInternalModule {}

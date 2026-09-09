@@ -24,7 +24,7 @@ test("desktop leads supports shareable table sort and editor navigation", async 
   await page.getByRole("button", { name: /Открыть заявку/ }).first().click()
   await expect(page).toHaveURL(/\/leads\/\d+/)
   await expect(page.locator('[data-slot="editor-frame"]')).toBeVisible()
-  await expect(page.getByLabel("Название заявки")).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "Что нужно" })).toBeVisible()
 })
 
 test("lead editor keeps shared shell chrome, route tabs and save state operational", async ({ page, isMobile }) => {

@@ -33,6 +33,7 @@ import {
   OfferingBindingEntity,
   OfferingQuoteSnapshotEntity,
   PriceBookEntity,
+  PriceRuleEntity,
   RatePlanEntity,
   ProgramCategoryEntity,
   ProgramOccurrenceEntity,
@@ -73,6 +74,21 @@ function futureStayDates() {
   const iso = (date: Date) => date.toISOString().slice(0, 10)
   const plusDays = (days: number) => new Date(arrival.getTime() + days * 24 * 60 * 60 * 1000)
   return { pricingStartDate: iso(pricingStart), arrivalDate: iso(arrival), middleDate: iso(plusDays(1)), departureDate: iso(plusDays(2)), coverageEndDate: iso(plusDays(3)) }
+}
+
+function lifecycleGateDates() {
+  const anchor = new Date()
+  anchor.setUTCHours(12, 0, 0, 0)
+  const iso = (offsetDays: number) => new Date(anchor.getTime() + offsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return {
+    coverageFrom: iso(-30),
+    gapFrom: iso(0),
+    coveredDate: iso(1),
+    coverageToExclusive: iso(2),
+    gapEndExclusive: iso(4),
+    expiredFrom: iso(-4),
+    expiredToExclusive: iso(-3),
+  }
 }
 
 describe.sequential("internal API + PostgreSQL", () => {
@@ -309,6 +325,126 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect(await dataSource.getRepository(CmsSourceLinkEntity).countBy({ sourceKind: "catalog_offering", sourceId: offeringId })).toBe(1)
     const event = await dataSource.getRepository(OutboxEventEntity).findOneByOrFail({ topic: "crm.offering.created_from_resource", aggregateId: offeringId })
     expect(await dataSource.getRepository(OutboxDeliveryEntity).countBy({ eventId: event.id, consumer: "sse", status: "pending" })).toBe(1)
+  })
+
+  it("prepares and recovers one program dossier transactionally, promotes legacy CMS content and persists private previews", async () => {
+    const anchor = new Date()
+    anchor.setUTCHours(12, 0, 0, 0)
+    const iso = (offset: number) => new Date(anchor.getTime() + offset * 86_400_000).toISOString().slice(0, 10)
+    const serviceDate = iso(30)
+    const calendarId = randomUUID()
+    await dataSource.getRepository(BusinessCalendarEntity).save({
+      id: calendarId, code: "PROGRAM-A-CORE", name: "Program A-core calendar", timezone: "Europe/Moscow", countryCode: "RU",
+      source: "official_ru", sourceVersion: "program-a-core-v1", state: "active", importedAt: new Date(), coverageFrom: iso(0), coverageToExclusive: iso(60),
+      contentHash: "a".repeat(64), createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(BusinessCalendarDateEntity).save({
+      id: randomUUID(), calendarId, localDate: serviceDate, officialClass: "weekday", officialLabel: null,
+      sourceVersion: "program-a-core-v1", createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    const saveTemplate = (id: string, code: string, durationMinutes = 120) => dataSource.getRepository(ProgramTemplateEntity).save({
+      id, code, name: `Program ${code}`, categoryId: null, durationMinutes, minimumParticipants: 1, participantLimit: 20,
+      registrationCloseHours: 12, basePriceAmount: 999_999, currency: "RUB", description: "legacy review only", publication: "published",
+      assigneeIds: [], stages: [{ type: "intro" }], createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    const templateId = randomUUID()
+    await saveTemplate(templateId, "P-A-CORE-LEGACY")
+    expect((await adminAgent.get(`/api/internal/v1/programs/templates/${templateId}`).expect(200)).body.registrationCloseHours).toBe(12)
+
+    const nodeId = randomUUID(), revisionId = randomUUID(), legacyLinkId = randomUUID()
+    const legacyContent = {
+      route: { path: "/programs/preserved", slug: "preserved", parentNodeId: null, sortOrder: 7 }, title: "Preserved program", summary: "Editorial history survives promotion",
+      hero: { mode: "disabled" as const }, sections: [],
+      seo: { title: "Preserved", description: "Preserved editorial program content", indexPolicy: "noindex_follow" as const, canonical: { mode: "self" as const }, structuredData: [] },
+      relations: [], schemaVersion: 1,
+    }
+    const legacyHash = revisionContentHash(legacyContent)
+    await dataSource.getRepository(CmsNodeEntity).save({ id: nodeId, kind: "program_detail", status: "active", createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(CmsNodeRevisionEntity).save({
+      id: revisionId, nodeId, revision: 3, state: "draft", path: legacyContent.route.path, slug: legacyContent.route.slug, parentNodeId: null, sortOrder: 7,
+      title: legacyContent.title, summary: legacyContent.summary, hero: legacyContent.hero, sections: legacyContent.sections, seo: legacyContent.seo,
+      relations: [], schemaVersion: 1, contentHash: legacyHash, createdBy: adminId, createdAt: new Date(),
+    })
+    await dataSource.getRepository(CmsSourceLinkEntity).save({ id: legacyLinkId, sourceKind: "program_template", sourceId: templateId, sourceVersion: 1, nodeId, syncState: "draft", createdAt: new Date() })
+
+    expect((await adminAgent.get(`/api/internal/v1/programs/${templateId}/offering`).expect(200)).body).toEqual({ resolution: "unprepared", programTemplateId: templateId, programTemplateVersion: 1 })
+    const prepareBody = { operationId: randomUUID(), idempotencyKey: `program-prepare-${randomUUID()}`, expectedProgramTemplateVersion: 1 }
+    const prepared = await adminAgent.post(`/api/internal/v1/programs/${templateId}/offering`).send(prepareBody)
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(201)
+    expect(prepared.body).toMatchObject({ programTemplateId: templateId, cmsReady: true, publicReady: false, editorialNodeId: nodeId })
+    expect((await adminAgent.post(`/api/admin/v1/programs/${templateId}/offering`).send(prepareBody).expect(201)).body).toEqual(prepared.body)
+    await adminAgent.post(`/api/internal/v1/programs/${templateId}/offering`).send({ ...prepareBody, expectedProgramTemplateVersion: 2 }).expect(409)
+    const offeringId = prepared.body.offeringId as string
+    expect((await adminAgent.get(`/api/admin/v1/programs/${templateId}/offering`).expect(200)).body).toMatchObject({ resolution: "linked", offering: { offeringId, state: "draft", cmsReady: true, publicReady: false, editorialNodeId: nodeId } })
+    expect((await adminAgent.get(`/api/internal/v1/offerings/${offeringId}/editor`).expect(200)).body).toMatchObject({
+      offering: { id: offeringId, kind: "program" },
+      bindings: [{ role: "primary", target: { type: "program_template", id: templateId } }],
+      editorial: { node: { id: nodeId, kind: "program_detail" }, publication: { eligible: false, blockers: expect.arrayContaining(["safe_public_projection_missing"]) } },
+    })
+    expect(await dataSource.getRepository(CatalogOfferingEntity).countBy({ id: offeringId, kind: "program" })).toBe(1)
+    expect(await dataSource.getRepository(OfferingBindingEntity).countBy({ offeringId, programTemplateId: templateId, role: "primary" })).toBe(1)
+    expect(await dataSource.getRepository(CmsSourceLinkEntity).findOneByOrFail({ id: legacyLinkId })).toMatchObject({ sourceKind: "catalog_offering", sourceId: offeringId, nodeId })
+    expect(await dataSource.getRepository(CmsNodeRevisionEntity).findOneByOrFail({ id: revisionId })).toMatchObject({ nodeId, revision: 3, path: "/programs/preserved", contentHash: legacyHash })
+
+    const priceBookId = randomUUID(), ratePlanId = randomUUID(), ruleId = randomUUID()
+    await dataSource.getRepository(PriceBookEntity).save({
+      id: priceBookId, offeringId, revision: 1, name: "Program active", currency: "RUB", timezone: "Europe/Moscow", state: "draft",
+      validFrom: iso(0), validToExclusive: iso(60), supersedesPriceBookId: null, changeReason: "integration", scheduledActivationAt: null, scheduledBy: null,
+      activatedAt: null, activatedBy: null, retiredAt: null, retiredBy: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(RatePlanEntity).save({
+      id: ratePlanId, priceBookId, key: "standard", label: "Standard", pricingBasis: "per_person", baseAmountMinor: 2_500, baseExtraUnitAmountMinor: null,
+      quantityMetric: "participants", includedQuantity: null, minimumQuantity: 1, maximumQuantity: 20, minimumDurationMinutes: 120, maximumDurationMinutes: 120,
+      sortOrder: 0, isDefault: true, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(PriceRuleEntity).save({
+      id: ruleId, ratePlanId, selector: "any_date", dayClass: null, serviceDateFrom: null, serviceDateToExclusive: null, selectorLabel: null,
+      minimumQuantity: 4, maximumQuantity: 4, minimumDurationMinutes: 120, maximumDurationMinutes: 120, minimumBookingLeadDays: null, maximumBookingLeadDays: null,
+      amountMinor: 2_000, extraUnitAmountMinor: null, priority: 10, reason: "duration-aware integration", enabled: true,
+      createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(PriceBookEntity).update({ id: priceBookId }, { state: "active", activatedAt: new Date(), activatedBy: adminId })
+    await dataSource.getRepository(CatalogOfferingEntity).update({ id: offeringId }, { state: "active", activePriceBookId: priceBookId, pricingVersion: 2 })
+    const preview = await adminAgent.post(`/api/internal/v1/programs/${templateId}/offering/quotes/preview`).send({
+      ratePlanKey: null, serviceDate, participants: 4, currency: "RUB", addOns: [], operationId: randomUUID(), idempotencyKey: `program-preview-${randomUUID()}`,
+    }).expect(200)
+    expect(preview.body).toMatchObject({ quoteType: "template_preview", acceptanceReady: false, offeringId, programTemplateId: templateId, total: { amountMinor: 8_000, currency: "RUB" }, provenance: { subjectVersion: 1, programTemplateVersion: 1, pricingVersion: 2, matchedRuleIds: [ruleId] }, immutableSnapshot: true })
+    expect(await dataSource.getRepository(OfferingQuoteSnapshotEntity).findOneByOrFail({ id: preview.body.quoteId })).toMatchObject({ quoteType: "template_preview", offeringId, programTemplateId: templateId, subjectVersion: 1, programTemplateVersion: 1, operationalContext: null })
+    await request(app.getHttpServer()).get(`/api/public/v1/programs/${templateId}/offering`).expect(404)
+
+    const concurrentTemplateId = randomUUID()
+    await saveTemplate(concurrentTemplateId, "P-A-CORE-RACE", 90)
+    const concurrent = await Promise.all([0, 1].map((index) => adminAgent.post(`/api/internal/v1/programs/${concurrentTemplateId}/offering`).send({ operationId: randomUUID(), idempotencyKey: `program-race-${index}-${randomUUID()}`, expectedProgramTemplateVersion: 1 })))
+    expect(concurrent.map((response) => response.status).sort()).toEqual([201, 409])
+    const liveBindings = await dataSource.getRepository(OfferingBindingEntity).findBy({ programTemplateId: concurrentTemplateId, role: "primary" })
+    expect(liveBindings).toHaveLength(1)
+    const packageOfferingId = liveBindings[0]!.offeringId
+    expect(await dataSource.getRepository(CatalogOfferingEntity).countBy({ id: packageOfferingId })).toBe(1)
+    const packageBookId = randomUUID()
+    await dataSource.getRepository(PriceBookEntity).save({
+      id: packageBookId, offeringId: packageOfferingId, revision: 1, name: "Program package", currency: "RUB", timezone: "Europe/Moscow", state: "draft",
+      validFrom: iso(0), validToExclusive: iso(60), supersedesPriceBookId: null, changeReason: "package boundary", scheduledActivationAt: null, scheduledBy: null,
+      activatedAt: null, activatedBy: null, retiredAt: null, retiredBy: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(RatePlanEntity).save({
+      id: randomUUID(), priceBookId: packageBookId, key: "package", label: "Package", pricingBasis: "flat_package", baseAmountMinor: 10_000, baseExtraUnitAmountMinor: 500,
+      quantityMetric: "participants", includedQuantity: 10, minimumQuantity: 1, maximumQuantity: 20, minimumDurationMinutes: 90, maximumDurationMinutes: 90,
+      sortOrder: 0, isDefault: true, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(PriceBookEntity).update({ id: packageBookId }, { state: "active", activatedAt: new Date(), activatedBy: adminId })
+    await dataSource.getRepository(CatalogOfferingEntity).update({ id: packageOfferingId }, { state: "active", activePriceBookId: packageBookId, pricingVersion: 2 })
+    const packagePreview = await adminAgent.post(`/api/admin/v1/programs/${concurrentTemplateId}/offering/quotes/preview`).send({
+      ratePlanKey: "package", serviceDate, participants: 12, currency: "RUB", addOns: [], operationId: randomUUID(), idempotencyKey: `program-package-${randomUUID()}`,
+    }).expect(200)
+    expect(packagePreview.body).toMatchObject({ quoteType: "template_preview", acceptanceReady: false, total: { amountMinor: 11_000 }, lines: [{ kind: "base", quantity: 1 }, { kind: "extra_unit", quantity: 2 }] })
+
+    const invalidTemplateId = randomUUID(), invalidNodeId = randomUUID()
+    await saveTemplate(invalidTemplateId, "P-A-CORE-INVALID")
+    await dataSource.getRepository(CmsNodeEntity).save({ id: invalidNodeId, kind: "resource_detail", status: "active", createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(CmsSourceLinkEntity).save({ id: randomUUID(), sourceKind: "program_template", sourceId: invalidTemplateId, sourceVersion: 1, nodeId: invalidNodeId, syncState: "draft", createdAt: new Date() })
+    await adminAgent.post(`/api/internal/v1/programs/${invalidTemplateId}/offering`).send({ operationId: randomUUID(), idempotencyKey: `program-invalid-${randomUUID()}`, expectedProgramTemplateVersion: 1 }).expect(409)
+    expect(await dataSource.getRepository(OfferingBindingEntity).countBy({ programTemplateId: invalidTemplateId, role: "primary" })).toBe(0)
+    expect(await dataSource.getRepository(CatalogOfferingEntity).countBy({ code: "PROGRAM-P-A-CORE-INVALID" })).toBe(0)
   })
 
   it("hydrates already-bound resource targets in the editor on both surfaces, including an archived identity", async () => {
@@ -1920,17 +2056,18 @@ describe.sequential("internal API + PostgreSQL", () => {
 
   it("rejects expired price activation, finite calendar gaps and malformed offering ids", async () => {
     await adminAgent.get("/api/internal/v1/offerings/not-a-uuid/editor").expect(400)
+    const dates = lifecycleGateDates()
     const calendarId = randomUUID()
     await dataSource.getRepository(BusinessCalendarEntity).save({
       id: calendarId, code: "RU-2026-P45B-GAPS", name: "Календарь lifecycle gates",
       timezone: "Europe/Moscow", countryCode: "RU", source: "official_ru", sourceVersion: "ru-2026-gaps",
       state: "active", importedAt: new Date("2026-08-01T00:00:00.000Z"),
-      coverageFrom: "2026-08-01", coverageToExclusive: "2026-09-03", contentHash: "d".repeat(64),
+      coverageFrom: dates.coverageFrom, coverageToExclusive: dates.coverageToExclusive, contentHash: "d".repeat(64),
       createdBy: adminId, updatedBy: adminId, archivedAt: null,
     })
     await dataSource.getRepository(BusinessCalendarDateEntity).save([
-      { id: randomUUID(), calendarId, localDate: "2026-08-01", officialClass: "weekday", officialLabel: null, sourceVersion: "ru-2026-gaps", createdBy: adminId, updatedBy: adminId, archivedAt: null },
-      { id: randomUUID(), calendarId, localDate: "2026-09-01", officialClass: "weekday", officialLabel: null, sourceVersion: "ru-2026-gaps", createdBy: adminId, updatedBy: adminId, archivedAt: null },
+      { id: randomUUID(), calendarId, localDate: dates.coverageFrom, officialClass: "weekday", officialLabel: null, sourceVersion: "ru-2026-gaps", createdBy: adminId, updatedBy: adminId, archivedAt: null },
+      { id: randomUUID(), calendarId, localDate: dates.coveredDate, officialClass: "weekday", officialLabel: null, sourceVersion: "ru-2026-gaps", createdBy: adminId, updatedBy: adminId, archivedAt: null },
     ])
     const makeOffering = async (code: string) => {
       const id = randomUUID()
@@ -1959,14 +2096,14 @@ describe.sequential("internal API + PostgreSQL", () => {
     }
 
     const expiredOfferingId = await makeOffering("HOUSE-EXPIRED")
-    const expiredBookId = await createDraft(expiredOfferingId, "expired", "2026-08-01", "2026-08-02")
+    const expiredBookId = await createDraft(expiredOfferingId, "expired", dates.expiredFrom, dates.expiredToExclusive)
     const expired = await adminAgent.post(`/api/admin/v1/offerings/${expiredOfferingId}/price-books/${expiredBookId}/activate`).send({
       operationId: randomUUID(), idempotencyKey: "expired-activate", expectedPricingVersion: 2, reason: "must fail",
     }).expect(409)
     expect(expired.body.code).toBe("PRICE_BOOK_ACTIVATION_EXPIRED")
 
     const gapOfferingId = await makeOffering("HOUSE-CALENDAR-GAP")
-    const gapBookId = await createDraft(gapOfferingId, "calendar-gap", "2026-09-03", "2026-09-05")
+    const gapBookId = await createDraft(gapOfferingId, "calendar-gap", dates.gapFrom, dates.gapEndExclusive)
     const gap = await adminAgent.post(`/api/admin/v1/offerings/${gapOfferingId}/price-books/${gapBookId}/activate`).send({
       operationId: randomUUID(), idempotencyKey: "calendar-gap-activate", expectedPricingVersion: 2, reason: "must fail",
     }).expect(422)
