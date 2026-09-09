@@ -51,7 +51,7 @@ import {
 } from "@crm/ui"
 
 import { useEditorLayout } from "@app/app/editor-layout-context"
-import { getSectionTitle, navGroups, quickCreateItems } from "@app/app/navigation"
+import { getQuickCreateItems, getSectionTitle, navGroups } from "@app/app/navigation"
 import { useAuthSession } from "@app/features/auth-session-context"
 import {
   globalSearchKindLabels,
@@ -61,6 +61,11 @@ import {
   type GlobalSearchRepository,
   type GlobalSearchResult,
 } from "@app/data/global-search-repository"
+import {
+  notificationsRepository,
+  type NotificationsRepository,
+} from "@app/data/notifications-repository"
+import { useNotifications } from "@app/features/use-notifications"
 
 const searchKindIcons: Record<GlobalSearchKind, React.ElementType> = {
   booking: IconBed,
@@ -73,16 +78,25 @@ const searchKindIcons: Record<GlobalSearchKind, React.ElementType> = {
   team: IconUsersGroup,
 }
 
-export function AppTopbar({ searchRepository = globalSearchRepository }: { searchRepository?: GlobalSearchRepository }) {
+export function AppTopbar({
+  notificationRepository = notificationsRepository,
+  searchRepository = globalSearchRepository,
+}: {
+  notificationRepository?: NotificationsRepository
+  searchRepository?: GlobalSearchRepository
+}) {
   const auth = useAuthSession()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([])
-  const [notificationsRead, setNotificationsRead] = useState(false)
   const [confirmLeadBooking, setConfirmLeadBooking] = useState(false)
+  const notifications = useNotifications(notificationRepository)
+  const notificationData = notifications.query.data
+  const unreadCount = notificationData?.unreadCount ?? 0
   const title = getSectionTitle(location.pathname)
+  const createItems = getQuickCreateItems(location.pathname)
   const { chrome: editorChrome } = useEditorLayout()
   const profileName = auth?.user.name ?? "Марина Кириллова"
   const profileInitials = profileName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru-RU") ?? "").join("") || "?"
@@ -173,13 +187,22 @@ export function AppTopbar({ searchRepository = globalSearchRepository }: { searc
         </Tooltip>
 
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button className="hidden sm:flex" size="sm" />}>
+          <DropdownMenuTrigger aria-label="Создать" render={<Button className="flex px-2 sm:px-3" size="sm" />}>
             <IconPlus aria-hidden="true" className="size-4" />
-            Создать
+            <span className="hidden sm:inline">Создать</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Новая запись</DropdownMenuLabel>
-            {quickCreateItems.map((item) => (
+            {createItems.contextual.length > 0 ? <>
+              {createItems.contextual.map((item) => (
+                <DropdownMenuItem key={item.href} onClick={() => createRoute(item.href)}>
+                  <item.icon aria-hidden="true" />
+                  Добавить {item.label.toLocaleLowerCase("ru-RU")}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+            </> : null}
+            {createItems.global.map((item) => (
               <DropdownMenuItem key={item.href} onClick={() => createRoute(item.href)}>
                 <item.icon aria-hidden="true" />
                 {item.label}
@@ -190,32 +213,40 @@ export function AppTopbar({ searchRepository = globalSearchRepository }: { searc
 
         <Popover>
           <PopoverTrigger
-            aria-label={notificationsRead ? "Уведомления" : "Уведомления: 2 новых"}
+            aria-label={unreadCount > 0 ? `Уведомления: ${unreadCount} новых` : "Уведомления"}
             className={editorChrome ? "relative hidden size-10 items-center justify-center rounded-md hover:bg-muted md:inline-flex" : "relative inline-flex size-10 items-center justify-center rounded-md hover:bg-muted"}
           >
             <IconBell aria-hidden="true" className="size-[18px]" />
-            {!notificationsRead ? <span className="absolute right-2 top-2 size-1.5 rounded-full bg-danger" /> : null}
+            {unreadCount > 0 ? <span className="absolute right-2 top-2 size-1.5 rounded-full bg-danger" /> : null}
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 gap-3">
             <PopoverHeader>
               <PopoverTitle>Уведомления</PopoverTitle>
-              <PopoverDescription>{notificationsRead ? "Новых нет" : "2 новых события"}</PopoverDescription>
+              <PopoverDescription>{unreadCount > 0 ? `${unreadCount} новых событий` : "Новых нет"}</PopoverDescription>
             </PopoverHeader>
-            {!notificationsRead ? (
+            {notifications.query.isPending ? <p aria-live="polite" className="rounded-md border p-3 text-xs text-muted-foreground" role="status">Загружаем события…</p> : null}
+            {notifications.query.isError ? <p className="rounded-md border border-danger/30 p-3 text-xs text-danger">Не удалось загрузить уведомления.</p> : null}
+            {notificationData && notificationData.items.length > 0 ? (
               <div className="divide-y rounded-md border text-xs">
-                <button className="block w-full p-3 text-left hover:bg-muted" onClick={() => navigate("/bookings/1048")} type="button">
-                  <span className="font-medium">Конфликт в брони #1048</span>
-                  <span className="mt-1 block text-muted-foreground">5 мин назад</span>
-                </button>
-                <button className="block w-full p-3 text-left hover:bg-muted" onClick={() => navigate("/leads/1079")} type="button">
-                  <span className="font-medium">Новая заявка #1079</span>
-                  <span className="mt-1 block text-muted-foreground">18 мин назад</span>
-                </button>
+                {notificationData.items.map((notification) => <button
+                  className={`block w-full p-3 text-left hover:bg-muted ${notification.readAt ? "text-muted-foreground" : "bg-info/5"}`}
+                  key={notification.id}
+                  onClick={() => {
+                    if (!notification.readAt) void notifications.markRead.mutateAsync(notification.id)
+                    navigate(notification.href)
+                  }}
+                  type="button"
+                >
+                  <span className="font-medium text-foreground">{notification.title}</span>
+                  {notification.description ? <span className="mt-1 block truncate text-muted-foreground">{notification.description}</span> : null}
+                  <span className="mt-1 block text-[10px] text-muted-foreground">{formatNotificationTime(notification.occurredAt)}</span>
+                </button>)}
               </div>
             ) : null}
-            <Button disabled={notificationsRead} onClick={() => setNotificationsRead(true)} size="sm" variant="outline">
+            {notificationData && notificationData.items.length === 0 ? <p className="rounded-md border p-3 text-xs text-muted-foreground">Событий пока нет.</p> : null}
+            <Button disabled={unreadCount === 0 || notifications.markAllRead.isPending} onClick={() => notifications.markAllRead.mutate()} size="sm" variant="outline">
               <IconCheck aria-hidden="true" />
-              Отметить все прочитанными
+              {notifications.markAllRead.isPending ? "Отмечаем…" : "Отметить все прочитанными"}
             </Button>
           </PopoverContent>
         </Popover>
@@ -274,4 +305,13 @@ export function AppTopbar({ searchRepository = globalSearchRepository }: { searc
       <ConfirmationDialog confirmLabel="Создать бронь" description={`Создать бронь из заявки для клиента «${editorChrome?.title ?? "Клиент"}»? Клиент и связь с заявкой будут перенесены.`} onConfirm={() => { const leadId = location.pathname.split("/").at(-1) ?? ""; navigate(`/bookings/new?leadId=${encodeURIComponent(leadId)}&clientName=${encodeURIComponent(editorChrome?.title ?? "")}`) }} onOpenChange={setConfirmLeadBooking} open={confirmLeadBooking} title="Создать бронь из заявки?" />
     </>
   )
+}
+
+function formatNotificationTime(value: string) {
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000))
+  if (elapsedMinutes < 1) return "Только что"
+  if (elapsedMinutes < 60) return `${elapsedMinutes} мин назад`
+  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  if (elapsedHours < 24) return `${elapsedHours} ч назад`
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
 }

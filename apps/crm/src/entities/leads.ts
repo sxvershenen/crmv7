@@ -12,8 +12,13 @@ export type SortDirection = "asc" | "desc"
 
 export type Lead = {
   id: string
+  version?: number
   clientName: string
   phone: string
+  channel?: string
+  comment?: string
+  desiredEndAt?: string
+  utmData?: Record<string, string>
   requestedItem: string
   guestCount: number
   direction: string

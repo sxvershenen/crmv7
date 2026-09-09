@@ -7,6 +7,7 @@ import { apiClient, type ApiClientError } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
 
 export interface LeadRepository {
+  assignSelf(id: string): Promise<Lead>
   get(id: string): Promise<Lead | null>
   list(query: LeadQuery): Promise<Lead[]>
   save(lead: Lead): Promise<Lead>
@@ -51,6 +52,14 @@ export class FixtureLeadRepository implements LeadRepository {
     return Promise.resolve(filterAndSortLeads(structuredClone(this.records), query))
   }
 
+  async assignSelf(id: string) {
+    const lead = this.records.find((item) => item.id === id)
+    if (!lead) throw new Error("Заявка не найдена")
+    if (!lead.assignees.some((assignee) => assignee.id === "demo-manager")) lead.assignees.push({ id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" })
+    lead.assignedToMe = true
+    return structuredClone(lead)
+  }
+
   async save(lead: Lead): Promise<Lead> {
     const index = this.records.findIndex((item) => item.id === lead.id)
     if (index >= 0) this.records[index] = structuredClone(lead)
@@ -87,6 +96,12 @@ export class ApiLeadRepository implements LeadRepository {
     return filterAndSortLeads(dtos.map((dto) => this.remember(dto, userId)), query)
   }
 
+  async assignSelf(id: string) {
+    const current = this.records.get(id) ?? await this.client.get(`/leads/${encodeURIComponent(id)}`, LeadDtoSchema)
+    const assigned = await this.client.post(`/leads/${encodeURIComponent(id)}/assign-self`, { version: current.version }, LeadDtoSchema)
+    return this.remember(assigned, await this.userId())
+  }
+
   async get(id: string) {
     try { return this.remember(await this.client.get(`/leads/${encodeURIComponent(id)}`, LeadDtoSchema), await this.userId()) }
     catch (error) { if (error instanceof Error && "code" in error && (error as ApiClientError).code === "NOT_FOUND") return null; throw error }
@@ -109,10 +124,10 @@ export class ApiLeadRepository implements LeadRepository {
     const current = this.records.get(lead.id)
     return {
       customerId: current?.customerId ?? null, name: lead.clientName, phone: lead.phone || null,
-      channel: current?.channel ?? null, direction: lead.direction || null, requestedItem: lead.requestedItem || null,
-      desiredStartAt: lead.plannedAt || null, desiredEndAt: current?.desiredEndAt ?? null, guestCount: lead.guestCount,
-      comment: current?.comment ?? "", source: lead.source || null,
-      utm: { ...(current?.utm ?? {}), promo: lead.promo, source: lead.utm }, assignees: lead.assignees,
+      channel: lead.channel || current?.channel || null, direction: lead.direction || null, requestedItem: lead.requestedItem || null,
+      desiredStartAt: lead.plannedAt || null, desiredEndAt: lead.desiredEndAt || current?.desiredEndAt || null, guestCount: lead.guestCount,
+      comment: lead.comment ?? current?.comment ?? "", source: lead.source || null,
+      utm: { ...(current?.utm ?? {}), ...(lead.utmData ?? {}), promo: lead.promo, source: lead.utm }, assignees: lead.assignees,
       nextContactAt: lead.nextContactAt || null,
     }
   }
@@ -121,7 +136,8 @@ export class ApiLeadRepository implements LeadRepository {
     this.records.set(dto.id, dto)
     const overdue = dto.nextContactAt !== null && new Date(dto.nextContactAt).getTime() < Date.now() && !["success", "rejected", "spam", "archived"].includes(dto.status)
     return {
-      id: dto.id, clientName: dto.name, phone: dto.phone ?? "", requestedItem: dto.requestedItem ?? "Без уточнения", guestCount: dto.guestCount,
+      id: dto.id, version: dto.version, clientName: dto.name, phone: dto.phone ?? "", channel: dto.channel ?? "", comment: dto.comment,
+      desiredEndAt: dto.desiredEndAt ?? "", utmData: dto.utm, requestedItem: dto.requestedItem ?? "Без уточнения", guestCount: dto.guestCount,
       direction: dto.direction ?? "Другое", source: dto.source ?? "Другое", promo: dto.utm.promo ?? "Без промокода", utm: dto.utm.source ?? "direct",
       plannedAt: dto.desiredStartAt ?? dto.createdAt, plannedLabel: formatLeadDate(dto.desiredStartAt ?? dto.createdAt),
       nextContactAt: dto.nextContactAt ?? "", nextContactLabel: dto.nextContactAt ? formatLeadDate(dto.nextContactAt) : "Не назначен",

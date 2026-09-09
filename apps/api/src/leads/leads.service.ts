@@ -111,6 +111,22 @@ export class LeadsService {
     return this.changeStatus(id, input, actor, requestId)
   }
 
+  async assignSelf(id: string, version: number, actor: SessionUser, requestId: string): Promise<LeadDto> {
+    assertCapability(actor.capabilities, "canAssign")
+    return this.dataSource.transaction(async (manager) => {
+      const current = await this.findWith(manager, id)
+      if (current.version !== version) throw this.versionConflict(current)
+      if (current.assignees.some((assignee) => assignee.id === actor.id)) return toLeadDto(current, actor)
+      const assignee = { id: actor.id, initials: this.initials(actor.name), name: actor.name }
+      const assignees = [...current.assignees, assignee]
+      const result = await manager.createQueryBuilder().update(LeadEntity).set({ assignees, updatedBy: actor.id, version: () => '"version" + 1', updatedAt: () => "now()" }).where("id = :id AND version = :version", { id, version }).execute()
+      if (result.affected !== 1) throw this.versionConflict(await this.findWith(manager, id))
+      const saved = await this.findWith(manager, id)
+      await this.recordMutation(manager, saved, "assigned", actor.id, requestId, { before: current.assignees, after: assignees })
+      return toLeadDto(saved, actor)
+    })
+  }
+
   private async changeStatus(id: string, input: LeadTransition, actor: SessionUser, requestId: string, mutationAction = "status_changed"): Promise<LeadDto> {
     return this.dataSource.transaction(async (manager) => {
       const current = await this.findWith(manager, id)
@@ -140,6 +156,7 @@ export class LeadsService {
     await manager.query("UPDATE customers SET lead_count = GREATEST(0, lead_count + $1), active_lead_count = GREATEST(0, active_lead_count + $2), updated_at = now() WHERE id = $3", [leadDelta, activeLeadDelta, customerId])
   }
   private async find(id: string) { return this.findWith(this.dataSource.manager, id) }
+  private initials(name: string) { return name.trim().split(/\s+/u).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru-RU") ?? "").join("") || "?" }
   private async findWith(manager: EntityManager, id: string) { const entity = await manager.getRepository(LeadEntity).findOneBy({ id }); if (!entity) throw new NotFoundException({ code: "LEAD_NOT_FOUND", message: "Заявка не найдена" }); return entity }
   private versionConflict(entity: LeadEntity) { return new ConflictException({ code: "VERSION_CONFLICT", message: "Заявка была изменена другим сотрудником", details: { entityId: entity.id, serverVersion: entity.version } }) }
   private decodeCursor(value: string, order: LeadListQuery["order"]): { value: string | null; id: string } { try { const data = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { order: string; value: string | null; id: string }; if (data.order !== order || !data.id || (data.value !== null && typeof data.value !== "string")) throw new Error(); return data } catch { throw new ConflictException({ code: "INVALID_CURSOR", message: "Некорректный cursor" }) } }

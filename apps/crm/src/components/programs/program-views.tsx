@@ -123,11 +123,12 @@ function ProgramRunCards({ items, onAssign, onStatusChange }: { items: ProgramRu
   )
 }
 
-export function ProgramRegistrationsView({ items, onAssign, onStatusChange, ...sort }: { items: ProgramRegistration[]; onAssign: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void } & SortProps<ProgramRegistrationSortKey>) {
-  return <><ProgramRegistrationCards items={items} onAssign={onAssign} onStatusChange={onStatusChange} /><ProgramRegistrationTable items={items} onAssign={onAssign} onStatusChange={onStatusChange} {...sort} /></>
+export function ProgramRegistrationsView({ items, onAssign, onStatusChange, ...sort }: { items: ProgramRegistration[]; onAssign?: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void } & SortProps<ProgramRegistrationSortKey>) {
+  const assignment = onAssign ? { onAssign } : {}
+  return <><ProgramRegistrationCards items={items} {...assignment} onStatusChange={onStatusChange} /><ProgramRegistrationTable items={items} {...assignment} onStatusChange={onStatusChange} {...sort} /></>
 }
 
-function ProgramRegistrationTable({ items, onAssign, onSort, onStatusChange, sortDirection, sortKey }: { items: ProgramRegistration[]; onAssign: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void } & SortProps<ProgramRegistrationSortKey>) {
+function ProgramRegistrationTable({ items, onAssign, onSort, onStatusChange, sortDirection, sortKey }: { items: ProgramRegistration[]; onAssign?: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void } & SortProps<ProgramRegistrationSortKey>) {
   const navigate = useNavigate()
   const header = (key: ProgramRegistrationSortKey, label: string, className?: string) => <SortableHeader active={sortKey === key} className={className} direction={sortDirection} onSort={() => onSort(key)}>{label}</SortableHeader>
   return (
@@ -138,7 +139,7 @@ function ProgramRegistrationTable({ items, onAssign, onSort, onStatusChange, sor
           <MainSecondaryCell><ProgramIdentity icon={item.categoryIcon} secondary={formatProgramDateTime(item.programStartsAt)} title={item.programName} tone={item.categoryTone} /></MainSecondaryCell>
           <MainSecondaryCell main={<span className="inline-flex max-w-full items-center gap-1.5"><IconUser aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{item.clientName}</span></span>} secondary={<a href={`tel:${item.phone.replace(/[^+\d]/g, "")}`} onClick={(event) => event.stopPropagation()}>{item.phone}</a>} />
           <MainSecondaryCell main={money.format(item.total)} secondary={item.debt > 0 ? `Долг ${money.format(item.debt)}` : "Оплачено"} />
-          <MainSecondaryCell onClick={(event) => event.stopPropagation()}><AssigneeStatusRow assignLabel={`Назначить ответственного регистрации #${item.id}`} onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect kind="registration" label={`Статус регистрации #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow></MainSecondaryCell>
+          <MainSecondaryCell onClick={(event) => event.stopPropagation()}><AssigneeStatusRow assignLabel={`Назначить ответственного регистрации #${item.id}`} {...(onAssign ? { onAssign: () => onAssign(item.id) } : {})} people={item.assignees}><ProgramStatusSelect kind="registration" label={`Статус регистрации #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow></MainSecondaryCell>
           <MainSecondaryCell><span className="block truncate" title={item.comment}>{item.comment}</span></MainSecondaryCell>
           <RowActions onClick={(event) => event.stopPropagation()}><ItemActions editLabel="Открыть регистрацию" onOpen={() => navigate(`/programs/registrations/${item.id}`)} /></RowActions>
         </tr>
@@ -147,7 +148,7 @@ function ProgramRegistrationTable({ items, onAssign, onSort, onStatusChange, sor
   )
 }
 
-function ProgramRegistrationCards({ items, onAssign, onStatusChange }: { items: ProgramRegistration[]; onAssign: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void }) {
+function ProgramRegistrationCards({ items, onAssign, onStatusChange }: { items: ProgramRegistration[]; onAssign?: (id: string) => void; onStatusChange: (id: string, status: ProgramRegistrationStatus) => void }) {
   const navigate = useNavigate()
   return (
     <section aria-label="Регистрации на программы" className="space-y-2 lg:hidden" data-testid="mobile-program-registrations">
@@ -155,7 +156,7 @@ function ProgramRegistrationCards({ items, onAssign, onStatusChange }: { items: 
         <ActionableCard key={item.id} onOpen={() => navigate(`/programs/registrations/${item.id}`)} openLabel={`Открыть регистрацию ${item.clientName}`}>
           <ProgramIdentity className="[&_p]:line-clamp-2 [&_p]:whitespace-normal" icon={item.categoryIcon} secondary={formatProgramDateTime(item.programStartsAt)} title={item.programName} tone={item.categoryTone} />
           <div className="mt-3 flex items-center justify-between gap-3 border-t pt-2"><div className="min-w-0"><p className="truncate"><IconUser aria-hidden="true" className="mr-1 inline size-3.5 text-muted-foreground" />{item.clientName}</p><a className="pointer-events-auto mt-0.5 inline-flex text-[10px] text-muted-foreground" href={`tel:${item.phone.replace(/[^+\d]/g, "")}`}><IconPhone aria-hidden="true" className="mr-1 size-3" />{item.phone}</a></div><div className="shrink-0 text-right"><p>{money.format(item.total)}</p><p className="text-[10px] text-muted-foreground">{item.debt ? `Долг ${money.format(item.debt)}` : "Оплачено"}</p></div></div>
-          <AssigneeStatusRow assignLabel={`Назначить ответственного регистрации #${item.id}`} className="mt-2 border-t pt-2" onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect kind="registration" label={`Статус регистрации #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow>
+          <AssigneeStatusRow assignLabel={`Назначить ответственного регистрации #${item.id}`} className="mt-2 border-t pt-2" {...(onAssign ? { onAssign: () => onAssign(item.id) } : {})} people={item.assignees}><ProgramStatusSelect kind="registration" label={`Статус регистрации #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow>
         </ActionableCard>
       ))}
     </section>
@@ -174,10 +175,10 @@ function Metric({ children, className, label }: { children: React.ReactNode; cla
   return <div className={className}><p className="text-[9px] text-muted-foreground">{label}</p><div className="mt-1 flex items-center gap-1 whitespace-nowrap tabular-nums">{children}</div></div>
 }
 
-function AssigneeStatusRow({ assignLabel, children, className, onAssign, people }: { assignLabel: string; children: React.ReactNode; className?: string; onAssign: () => void; people: ProgramRun["assignees"] }) {
+function AssigneeStatusRow({ assignLabel, children, className, onAssign, people }: { assignLabel: string; children: React.ReactNode; className?: string; onAssign?: () => void; people: ProgramRun["assignees"] }) {
   return (
     <div className={cn("pointer-events-auto relative z-10 flex min-w-0 items-center justify-between gap-2", className)} onClick={(event) => event.stopPropagation()}>
-      <Assignees assignLabel={assignLabel} emptyVariant="icon" onAssign={onAssign} people={people} size="compact" />
+      <Assignees assignLabel={assignLabel} emptyVariant="icon" {...(onAssign ? { onAssign } : {})} people={people} size="compact" />
       <div className="min-w-0 shrink">{children}</div>
     </div>
   )

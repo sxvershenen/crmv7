@@ -1,5 +1,8 @@
 import React from 'react';
 import { X, Home, Flame, Sparkles, Layers, CalendarDays, Compass, MapPin, Phone, Send, Calculator } from 'lucide-react';
+import type { SiteNavigationConfig, SiteNavigationItem } from '@crm/site-ui';
+import { useDialogBehavior } from '../../utils/useDialogBehavior';
+import { NavigationIcon } from './NavigationIcon';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -7,6 +10,7 @@ interface MobileDrawerProps {
   onNavigate: (sectionId: string) => void;
   onOpenBookingModal: () => void;
   onOpenCallModal: () => void;
+  navigation?: SiteNavigationConfig;
 }
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = ({
@@ -14,11 +18,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   onClose,
   onNavigate,
   onOpenBookingModal,
-  onOpenCallModal
+  onOpenCallModal,
+  navigation,
 }) => {
+  const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
 
-  const links = [
+  const defaultLinks = [
     { id: "hero", label: "Главная страница", icon: <Home className="w-4 h-4 text-[#2B9E47]" /> },
     { id: "houses", label: "Глэмпинг и домики", icon: <Sparkles className="w-4 h-4 text-[#2B9E47]" /> },
     { id: "sauna", label: "Кедровая баня и чан", icon: <Flame className="w-4 h-4 text-[#EE2F2E]" /> },
@@ -29,45 +35,64 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
     { id: "quiz", label: "Калькулятор отдыха", icon: <Calculator className="w-4 h-4 text-[#2B9E47]" /> },
     { id: "location", label: "Как добраться и FAQ", icon: <MapPin className="w-4 h-4 text-[#18191b]" /> },
   ];
+  const configuredLinks: SiteNavigationItem[] | null = navigation
+    ? (navigation.mobileItems?.length ? navigation.mobileItems : navigation.items)
+    : null;
+
+  const followLink = (href: string, external?: boolean) => {
+    onClose();
+    if (!external && href.startsWith("/#")) {
+      onNavigate(href.slice(2));
+      return;
+    }
+    if (external) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    window.location.assign(href);
+  };
 
   return (
-    <div className="lg:hidden fixed inset-0 z-[100] flex justify-end bg-black/50 backdrop-blur-xs">
+    <div className="lg:hidden fixed inset-0 z-[90]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="absolute inset-0 bg-[rgba(23,32,26,0.4)]" aria-hidden="true" />
       <div 
-        className="relative w-full max-w-xs bg-white h-full p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Навигация по сайту"
+        className="absolute inset-x-0 bottom-0 bg-surface rounded-t-2xl p-4 max-h-[85dvh] flex flex-col justify-between overflow-y-auto animate-in slide-in-from-bottom duration-200"
+        style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div>
           {/* Top header */}
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-neutral-100">
-            <div>
-              <div className="text-[15px] font-semibold text-[#18191b]">
-                СВИСТОПЛЯСОВО
-              </div>
-              <div className="text-[11px] text-[#6b7280]">
-                Глэмпинг & База отдыха
-              </div>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[16px] font-semibold tracking-[-0.5px] text-ink">Меню</div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-[#f7f7f7] flex items-center justify-center text-[#18191b]"
+              aria-label="Закрыть меню"
+              className="icon-tile !w-9 !h-9"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Links list */}
-          <div className="space-y-1">
-            {links.map((link) => (
+          <div className="flex flex-col gap-1">
+            {(configuredLinks ?? defaultLinks).map((link) => (
               <button
                 key={link.id}
                 onClick={() => {
-                  onNavigate(link.id);
-                  onClose();
+                  if ("href" in link) followLink(link.href, link.external);
+                  else {
+                    onNavigate(link.id);
+                    onClose();
+                  }
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-[#f7f7f7] text-[13px] font-medium text-[#18191b] text-left transition-colors"
+                className="nav-item w-full !bg-bg text-left"
               >
-                <div className="w-8 h-8 rounded-xl bg-[#f7f7f7] flex items-center justify-center shrink-0">
-                  {link.icon}
+                <div className="icon-tile !bg-surface !w-9 !h-9">
+                  {typeof link.icon === "string" ? <NavigationIcon icon={link.icon} color={link.color} /> : link.icon}
                 </div>
                 <span>{link.label}</span>
               </button>
@@ -76,13 +101,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         </div>
 
         {/* Bottom actions */}
-        <div className="pt-6 border-t border-neutral-100 space-y-2.5">
+        <div className="pt-4 space-y-2.5">
           <button
             onClick={() => {
               onClose();
               onOpenBookingModal();
             }}
-            className="w-full h-[48px] px-4 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center justify-center gap-2"
+            className="btn btn-primary w-full"
           >
             <Send className="w-4 h-4" />
             <span>Забронировать отдых</span>
@@ -93,7 +118,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               onClose();
               onOpenCallModal();
             }}
-            className="w-full h-[40px] px-4 rounded-full bg-[#f7f7f7] text-[#18191b] text-[13px] font-medium flex items-center justify-center gap-2"
+            className="btn btn-soft w-full"
           >
             <Phone className="w-4 h-4" />
             <span>Позвонить (2 номера)</span>
@@ -103,7 +128,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             href="https://vk.com"
             target="_blank"
             rel="noreferrer"
-            className="w-full h-[38px] px-4 rounded-full bg-[#f7f7f7] text-[#18191b] text-[12px] font-medium flex items-center justify-center gap-2"
+            className="btn btn-soft w-full"
           >
             <Send className="w-3.5 h-3.5 text-[#2B9E47] -rotate-12" />
             <span>Сообщество ВКонтакте (14.8k)</span>

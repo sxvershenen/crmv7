@@ -5,10 +5,12 @@ import { describe, expect, it } from "vitest"
 
 import { TooltipProvider } from "@crm/ui"
 import { FixtureLeadRepository } from "@app/data/leads-repository"
+import { FixtureDirectoryRepository } from "@app/data/directory-repository"
+import { DirectoryRepositoryProvider } from "@app/features/use-directory-data"
 import { LeadEditorPage } from "./lead-editor-page"
 
 function LocationProbe() { const location = useLocation(); return <output aria-label="Текущий URL">{location.pathname}{location.search}</output> }
-function renderEditor(entry = "/leads/1284") { return render(<MemoryRouter initialEntries={[entry]}><TooltipProvider><Routes><Route element={<><LeadEditorPage repository={new FixtureLeadRepository()} /><LocationProbe /></>} path="leads/:id" /></Routes></TooltipProvider></MemoryRouter>) }
+function renderEditor(entry = "/leads/1284") { return render(<DirectoryRepositoryProvider repository={new FixtureDirectoryRepository()}><MemoryRouter initialEntries={[entry]}><TooltipProvider><Routes><Route element={<><LeadEditorPage repository={new FixtureLeadRepository()} /><LocationProbe /></>} path="leads/:id" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>) }
 
 describe("LeadEditorPage", () => {
   it("uses route-driven editor chrome with editable fields and operational sidebar", async () => {

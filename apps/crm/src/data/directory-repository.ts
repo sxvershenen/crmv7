@@ -186,7 +186,8 @@ function formatDirectoryDate(value: string) {
 function resourceCategory(kind: string): Exclude<BookingCategory, "all"> | null {
   const normalized = kind.toLocaleLowerCase("ru-RU")
   if (["house", "houses"].includes(normalized)) return "houses"
-  if (["camping"].includes(normalized)) return "camping"
+  if (["camping", "campground", "campground_own_tent_area"].includes(normalized)) return "camping"
+  if (["campground_owned_tent"].includes(normalized)) return "tents"
   if (["tent", "tents"].includes(normalized)) return "tents"
   if (["bath"].includes(normalized)) return "bath"
   if (["venue", "venues"].includes(normalized)) return "venues"

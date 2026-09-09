@@ -1,8 +1,7 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common"
-import { DataSource } from "typeorm"
 
-import { OutboxEventEntity } from "@crm/db"
-
+import { OutboxDeliveryEngine } from "../delivery/outbox-delivery.engine.js"
+import { PublicOfferingProjectionConsumer } from "../delivery/public-offering-projection.consumer.js"
 import { LiveService } from "./live.service.js"
 
 @Injectable()
@@ -12,11 +11,15 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
   private running = false
 
   constructor(
-    @Inject(DataSource) private readonly dataSource: DataSource,
     @Inject(LiveService) private readonly live: LiveService,
+    @Inject(OutboxDeliveryEngine) private readonly delivery: OutboxDeliveryEngine,
+    @Inject(PublicOfferingProjectionConsumer) private readonly publicProjection: PublicOfferingProjectionConsumer,
   ) {}
 
   onModuleInit() {
+    // Integration tests drive batches explicitly. A background tick can race
+    // assertions or TRUNCATE between sequential cases and make the suite flaky.
+    if (process.env.APP_ENV === "test") return
     this.timer = setInterval(() => void this.dispatchBatch(), 1_000)
     this.timer.unref()
   }
@@ -26,41 +29,28 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async dispatchBatch() {
-    if (this.running || !this.dataSource.isInitialized) return 0
+    if (this.running) return 0
     this.running = true
     try {
-      const claimed = await this.dataSource.transaction(async (manager) => {
-        const rows = await manager.query(`
-          SELECT * FROM outbox_events
-          WHERE processed_at IS NULL AND available_at <= now()
-          ORDER BY available_at, created_at
-          FOR UPDATE SKIP LOCKED
-          LIMIT 100
-        `) as Array<Record<string, unknown>>
-        if (rows.length === 0) return rows
-        await manager.query(`
-          UPDATE outbox_events
-          SET attempts = attempts + 1, available_at = now() + interval '30 seconds'
-          WHERE id = ANY($1::uuid[])
-        `, [rows.map((row) => row.id)])
-        return rows
+      const sse = await this.delivery.dispatch("sse", async (claim) => {
+        const payload = claim.payload
+        this.live.publish({
+          entityType: claim.aggregateType,
+          entityId: String(payload.taskId ?? payload.code ?? claim.aggregateId),
+          event: claim.topic,
+          version: typeof payload.version === "number" ? payload.version
+            : typeof payload.pricingVersion === "number" ? payload.pricingVersion
+              : 1,
+        })
       })
-
-      for (const row of claimed) {
-        try {
-          const payload = row.payload as Record<string, unknown>
-          this.live.publish({
-            entityType: String(row.aggregate_type),
-            entityId: String(payload.taskId ?? payload.code ?? row.aggregate_id),
-            event: String(row.topic),
-            version: typeof payload.version === "number" ? payload.version : 1,
-          })
-          await this.dataSource.getRepository(OutboxEventEntity).update({ id: String(row.id) }, { processedAt: new Date() })
-        } catch (error) {
-          this.logger.warn(`Outbox event ${String(row.id)} will be retried: ${error instanceof Error ? error.message : "unknown error"}`)
-        }
-      }
-      return claimed.length
+      const projection = await this.delivery.dispatch(
+        "public_projection",
+        (claim) => this.publicProjection.consume(claim),
+      )
+      return sse + projection
+    } catch (error) {
+      this.logger.error(error, "Outbox dispatch batch failed")
+      return 0
     } finally {
       this.running = false
     }

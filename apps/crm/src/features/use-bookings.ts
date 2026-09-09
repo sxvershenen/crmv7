@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { bookingRepository, type BookingRepository } from "@app/data/bookings-repository"
-import type { Booking, BookingDataset, BookingQuery } from "@app/entities/bookings"
+import type { BookingDataset, BookingQuery } from "@app/entities/bookings"
 
 export type BookingsState =
   | { status: "loading" }
@@ -27,11 +27,17 @@ export function useBookings(query: BookingQuery, repository: BookingRepository =
     if (!repository.updateInterval) throw new Error("Изменение интервала бронирования недоступно")
     return repository.updateInterval(input.id, input.startHour, input.endHour, input.resourceId)
   } })
+  const assignment = useMutation({ mutationFn: (id: string) => repository.assignSelf(id) })
   const state: BookingsState = result.isPending ? { status: "loading" } : result.isError ? { status: "error", message: result.error instanceof Error ? result.error.message : "Не удалось загрузить бронирования" } : { status: "ready", data: result.data }
   const updateInterval = async (id: string, startHour: number, endHour: number, resourceId?: string | null) => {
     const updated = await mutation.mutateAsync({ id, startHour, endHour, ...(resourceId === undefined ? {} : { resourceId }) })
     await queryClient.invalidateQueries({ queryKey: ["bookings", key] })
     return updated
   }
-  return { state, retry: () => { void result.refetch() }, updateInterval }
+  const assignSelf = async (id: string) => {
+    const updated = await assignment.mutateAsync(id)
+    await queryClient.invalidateQueries({ queryKey: ["bookings", key] })
+    return updated
+  }
+  return { assignSelf, state, retry: () => { void result.refetch() }, updateInterval }
 }

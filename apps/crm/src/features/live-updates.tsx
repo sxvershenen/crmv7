@@ -32,6 +32,7 @@ export function LiveUpdates() {
     source.onmessage = (message) => {
       try {
         const event = JSON.parse(message.data) as LiveEvent
+        void queryClient.invalidateQueries({ queryKey: ["notifications"] })
         const queryRoot = queryRootByEntity[event.entityType]
         if (queryRoot) void queryClient.invalidateQueries({ queryKey: [queryRoot] })
         if (event.event.startsWith("payment.")) {

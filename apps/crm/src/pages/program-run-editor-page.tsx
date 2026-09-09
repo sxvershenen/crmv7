@@ -16,7 +16,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AssigneePicker,
   Button,
-  DateTimePicker,
+  DateTimeRangePicker,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -46,6 +46,7 @@ import {
 } from "@crm/ui";
 
 import { useEditorLayoutChrome } from "@app/app/editor-layout-context";
+import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime";
 import {
   EditorPreviewHistory,
   EditorPreviewTasks,
@@ -113,10 +114,10 @@ function inputNumber(value: string) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 function editorDateTime(value: string) {
-  return value.slice(0, 16);
+  return toBusinessDateTimeInput(value);
 }
 function storedDateTime(value: string, fallback: string) {
-  return value ? `${value}:00+03:00` : fallback;
+  return value ? businessDateTimeToIso(value) : fallback;
 }
 
 export function ProgramRunEditorPage({
@@ -649,33 +650,11 @@ function ProgramRunMain({
               value={draft.name}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="run-start"
-            label="Начало"
-          >
-            <DateTimePicker
-              id="run-start"
-              label="Начало проведения"
-              onValueChange={(value) =>
-                update("startsAt", storedDateTime(value, draft.startsAt))
-              }
-              value={editorDateTime(draft.startsAt)}
-            />
-          </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="run-end"
-            label="Окончание"
-          >
-            <DateTimePicker
-              id="run-end"
-              label="Окончание проведения"
-              onValueChange={(value) =>
-                update("endsAt", storedDateTime(value, draft.endsAt))
-              }
-              value={editorDateTime(draft.endsAt)}
-            />
+          <FormField className="sm:col-span-4" htmlFor="run-period" label="Период проведения">
+            <DateTimeRangePicker id="run-period" label="Период проведения" onValueChange={(value) => {
+              update("startsAt", storedDateTime(value.from, draft.startsAt));
+              update("endsAt", storedDateTime(value.to, draft.endsAt));
+            }} value={{ from: editorDateTime(draft.startsAt), to: editorDateTime(draft.endsAt) }} />
           </FormField>
           <FormField
             className="sm:col-span-3"
@@ -1221,7 +1200,7 @@ function ProgramRunResources({
   return (
     <div className="space-y-3">
       <EditorSection
-        subtitle="Бронь создаётся как связь-заготовка; доступность и конфликты проверит backend."
+        subtitle="Бронь сохраняется на сервере; доступность и конфликты проверяются при сохранении."
         title="Быстрое бронирование ресурса"
       >
         <div className="grid items-end gap-4 sm:grid-cols-6">
@@ -1241,29 +1220,8 @@ function ProgramRunResources({
               value={resourceId}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="run-resource-start"
-            label="Начало"
-          >
-            <DateTimePicker
-              id="run-resource-start"
-              label="Начало брони"
-              onValueChange={setStartAt}
-              value={startAt}
-            />
-          </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="run-resource-end"
-            label="Окончание"
-          >
-            <DateTimePicker
-              id="run-resource-end"
-              label="Окончание брони"
-              onValueChange={setEndAt}
-              value={endAt}
-            />
+          <FormField className="sm:col-span-4" htmlFor="run-resource-period" label="Период брони">
+            <DateTimeRangePicker id="run-resource-period" label="Период брони ресурса" onValueChange={(value) => { setStartAt(value.from); setEndAt(value.to) }} value={{ from: startAt, to: endAt }} />
           </FormField>
           <FormField
             className="sm:col-span-2"

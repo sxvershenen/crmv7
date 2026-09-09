@@ -3,6 +3,7 @@ import { z } from "zod"
 import { CapabilitiesSchema } from "./capabilities.js"
 import { DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "./primitives.js"
 import { IdempotencyKeySchema, OperationIdSchema } from "./operations.js"
+import { QuoteAcceptanceReferenceSchema } from "./operational-quote-acceptance.js"
 
 export const ProgramTemplatePublicationSchema = z.enum(["draft", "published", "archived"])
 export type ProgramTemplatePublication = z.infer<typeof ProgramTemplatePublicationSchema>
@@ -89,11 +90,13 @@ export const ProgramRegistrationSchema = z.object({
 export type ProgramRegistration = z.infer<typeof ProgramRegistrationSchema>
 export const ProgramRegistrationDtoSchema = ProgramRegistrationSchema
 export type ProgramRegistrationDto = ProgramRegistration
-export const ProgramRegistrationCreateSchema = z.object({ code: z.string().trim().min(1).max(120).optional(), occurrenceId: IdSchema, customerId: IdSchema.nullable().default(null), phone: z.string().max(64).default(""), participantCount: z.number().int().positive(), participantNames: z.string().max(20_000).default(""), total: NonNegativeMoneySchema, discount: NonNegativeMoneySchema.default({ amountMinor: 0, currency: "RUB" }), paid: NonNegativeMoneySchema.default({ amountMinor: 0, currency: "RUB" }), status: ProgramRegistrationStatusSchema.default("new"), promo: z.string().max(120).default(""), source: z.string().max(120).default(""), comment: z.string().max(20_000).default(""), operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict()
+export const ProgramRegistrationCreateSchema = z.object({ code: z.string().trim().min(1).max(120).optional(), occurrenceId: IdSchema, customerId: IdSchema.nullable().default(null), phone: z.string().max(64).default(""), participantCount: z.number().int().positive(), participantNames: z.string().max(20_000).default(""), total: NonNegativeMoneySchema, discount: NonNegativeMoneySchema.default({ amountMinor: 0, currency: "RUB" }), status: ProgramRegistrationStatusSchema.default("new"), promo: z.string().max(120).default(""), source: z.string().max(120).default(""), comment: z.string().max(20_000).default(""), operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict()
 export type ProgramRegistrationCreate = z.infer<typeof ProgramRegistrationCreateSchema>
 export const ProgramRegistrationUpdateSchema = z.object({ version: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema, occurrenceId: IdSchema.optional(), customerId: IdSchema.nullable().optional(), phone: z.string().max(64).optional(), participantCount: z.number().int().positive().optional(), participantNames: z.string().max(20_000).optional(), total: NonNegativeMoneySchema.optional(), discount: NonNegativeMoneySchema.optional(), promo: z.string().max(120).optional(), source: z.string().max(120).optional(), comment: z.string().max(20_000).optional() }).strict()
 export type ProgramRegistrationUpdate = z.infer<typeof ProgramRegistrationUpdateSchema>
-export const ProgramRegistrationTransitionSchema = z.object({ version: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema, status: ProgramRegistrationStatusSchema }).strict()
+export const ProgramRegistrationTransitionSchema = z.object({ version: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema, status: ProgramRegistrationStatusSchema, quoteAcceptance: QuoteAcceptanceReferenceSchema.optional() }).strict().superRefine((value, context) => {
+  if (value.quoteAcceptance !== undefined && value.status !== "confirmed") context.addIssue({ code: "custom", path: ["quoteAcceptance"], message: "Quote acceptance is only allowed when confirming a registration" })
+})
 export type ProgramRegistrationTransition = z.infer<typeof ProgramRegistrationTransitionSchema>
 export const ProgramRegistrationArchiveSchema = z.object({ version: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict()
 export type ProgramRegistrationArchive = z.infer<typeof ProgramRegistrationArchiveSchema>

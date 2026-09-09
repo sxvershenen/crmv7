@@ -74,4 +74,32 @@ describe("events API adapter", () => {
     await repository.updateStatus("event-1", "booked")
     expect(post).toHaveBeenCalledWith(expect.stringContaining("/events/event-1/transition"), expect.objectContaining({ version: 2, status: "booked", operationId: expect.any(String), idempotencyKey: expect.any(String) }), expect.anything())
   })
+
+  it("maps event editor fields to a versioned canonical patch", async () => {
+    const patch = vi.fn(async () => event)
+    const client = {
+      get: vi.fn(async () => event),
+      getWithMeta: vi.fn(async () => ({ data: { items: [event], nextCursor: null }, headers: new Headers(), status: 200 })),
+      patch,
+      post: vi.fn(),
+    }
+    const repository = new ApiEventsRepository(client as never)
+    const editor = await repository.get("event-1")
+    if (!editor) throw new Error("API event is missing")
+    editor.name = "Новый тайминг"
+    editor.total = 1250
+    editor.clientComment = "Нужна детская зона"
+    editor.scenarioStages = [{ id: "stage-1", name: "Встреча", durationMinutes: 30, comment: "" }]
+    await repository.save(editor)
+
+    expect(patch).toHaveBeenCalledWith("/events/event-1", expect.objectContaining({
+      version: 2,
+      name: "Новый тайминг",
+      total: { amountMinor: 125000, currency: "RUB" },
+      comment: "Нужна детская зона",
+      scenario: [{ name: "Встреча", durationMinutes: 30, comment: "" }],
+      operationId: expect.any(String),
+      idempotencyKey: expect.any(String),
+    }), expect.anything())
+  })
 })

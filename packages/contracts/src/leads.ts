@@ -81,6 +81,8 @@ export const LeadTransitionSchema = z.object({ version: VersionSchema, status: L
 export type LeadTransition = z.infer<typeof LeadTransitionSchema>;
 export const LeadArchiveSchema = z.object({ version: VersionSchema }).strict();
 export type LeadArchive = z.infer<typeof LeadArchiveSchema>;
+export const LeadAssignSelfSchema = z.object({ version: VersionSchema }).strict();
+export type LeadAssignSelf = z.infer<typeof LeadAssignSelfSchema>;
 export const LeadListQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
   customerId: IdSchema.optional(),

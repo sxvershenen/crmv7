@@ -1,5 +1,7 @@
 export {
   ResourceAllocationCreateSchema,
+  ResourceAllocationListQuerySchema,
+  ResourceAllocationCancelSchema,
   ResourceAllocationsQuerySchema,
   ResourceArchiveSchema,
   ResourceAvailabilityByCodeQuerySchema,
@@ -13,6 +15,8 @@ export {
 
 export type {
   ResourceAllocationCreate,
+  ResourceAllocationListQuery,
+  ResourceAllocationCancel,
   ResourceAllocationsQuery,
   ResourceArchive,
   ResourceAvailabilityByCodeQuery,

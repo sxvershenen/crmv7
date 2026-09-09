@@ -32,7 +32,12 @@ import {
   type Assignee,
 } from "@crm/ui";
 
+import { useFixtureData } from "@app/lib/data-mode";
+
 import type { MarketingAttributionDraft } from "./editor-preview-data";
+
+const showPreviewFixtures =
+  useFixtureData || import.meta.env.MODE === "test";
 
 const marina: Assignee = {
   id: "preview-marina",
@@ -58,6 +63,25 @@ function PreviewNote() {
       Демонстрационные fixture-данные для оценки плотности, переполнения и
       состояний интерфейса.
     </p>
+  );
+}
+
+function PreviewUnavailable({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <EditorSection title={title}>
+      <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+        <p className="text-xs font-medium">Данных пока нет</p>
+        <p className="mx-auto mt-1 max-w-lg text-[11px] leading-4 text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </EditorSection>
   );
 }
 
@@ -122,6 +146,14 @@ function TimelineRow({
 }
 
 export function EditorPreviewHistory({ entityLabel }: { entityLabel: string }) {
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description={`История «${entityLabel}» появится здесь после подключения журнала изменений к редактору.`}
+        title="История изменений"
+      />
+    );
+  }
   return (
     <EditorSection
       subtitle="Хронология показана от новых событий к старым."
@@ -206,6 +238,14 @@ export function EditorPreviewTasks({
     status: "todo",
     assignees: [] as Assignee[],
   });
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description={`Связанные с «${relationLabel}» задачи доступны в разделе «Задачи». Встроенное редактирование появится после подключения relation API.`}
+        title="Связанные задачи"
+      />
+    );
+  }
   const addTask = () => {
     if (!newTask.title.trim()) return;
     const sequence = tasks.length + 422;
@@ -425,6 +465,14 @@ export function EditorPreviewCommunications({
     message: "Сообщение",
     comment: "Внутренний комментарий",
   };
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description="Лента звонков и сообщений появится после подключения каналов коммуникации. Локальные сообщения не выдаются за сохранённые."
+        title="Коммуникации"
+      />
+    );
+  }
   return (
     <div className="space-y-3">
       <EditorSection
@@ -489,6 +537,14 @@ export function EditorPreviewCommunications({
 }
 
 export function EditorPreviewVisits({ clientName }: { clientName: string }) {
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description={`История посещений клиента «${clientName}» появится после подключения агрегированной выборки по бронированиям и программам.`}
+        title="История посещений"
+      />
+    );
+  }
   return (
     <div className="space-y-3">
       <EditorSection
@@ -556,6 +612,14 @@ export function EditorPreviewPayments({
   total?: number;
 }) {
   const safeTotal = Math.max(total, paid, 1);
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description="Платёжные операции для этой сущности пока не подключены. Сводка не подменяется демонстрационными начислениями."
+        title="Платежи"
+      />
+    );
+  }
   return (
     <div className="space-y-3">
       <EditorSection title="Финансовая сводка">
@@ -612,6 +676,14 @@ export function EditorPreviewPayments({
 }
 
 export function EditorPreviewOrders({ clientName }: { clientName: string }) {
+  if (!showPreviewFixtures) {
+    return (
+      <PreviewUnavailable
+        description={`Связанные заявки и бронирования клиента «${clientName}» появятся после подключения агрегированной выборки.`}
+        title="Заявки и бронирования"
+      />
+    );
+  }
   return (
     <EditorSection
       subtitle={`Активные и завершённые процессы клиента «${clientName}».`}
@@ -654,17 +726,29 @@ export function EditorPreviewOrders({ clientName }: { clientName: string }) {
 }
 
 export function EditorMarketingAttribution({
+  available = showPreviewFixtures,
   idPrefix,
   onChange,
+  showIntegrationStatus = showPreviewFixtures,
   value,
 }: {
+  available?: boolean;
   idPrefix: string;
   onChange: <K extends keyof MarketingAttributionDraft>(
     key: K,
     value: MarketingAttributionDraft[K],
   ) => void;
+  showIntegrationStatus?: boolean;
   value: MarketingAttributionDraft;
 }) {
+  if (!available) {
+    return (
+      <PreviewUnavailable
+        description="Атрибуция для этой сущности пока не подключена к API. Поля не показываются как сохраняемые до появления серверного контракта."
+        title="Маркетинг"
+      />
+    );
+  }
   const field = <K extends keyof MarketingAttributionDraft>(
     key: K,
     label: string,
@@ -743,11 +827,13 @@ export function EditorMarketingAttribution({
           {field("vkLeadId", "VK lead ID", "sm:col-span-3")}
           {field("maxDialogId", "MAX dialog ID", "sm:col-span-3")}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
-          <StatusBadge tone="success">Метрика подключена</StatusBadge>
-          <StatusBadge tone="info">VK связан</StatusBadge>
-          <StatusBadge tone="neutral">MAX не связан</StatusBadge>
-        </div>
+        {showIntegrationStatus ? (
+          <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
+            <StatusBadge tone="success">Метрика подключена</StatusBadge>
+            <StatusBadge tone="info">VK связан</StatusBadge>
+            <StatusBadge tone="neutral">MAX не связан</StatusBadge>
+          </div>
+        ) : null}
       </EditorSection>
     </div>
   );

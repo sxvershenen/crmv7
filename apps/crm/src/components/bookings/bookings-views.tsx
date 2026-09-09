@@ -88,7 +88,7 @@ function AgendaOperationRow({ operation }: { operation: BookingOperation }) {
   )
 }
 
-export function BookingTable({ assignedIds, bookings, onAssign, onSort, sortDirection, sortKey }: { assignedIds: string[]; bookings: Booking[]; onAssign: (id: string) => void; onSort: (key: BookingSortKey) => void; sortDirection: SortDirection; sortKey: BookingSortKey }) {
+export function BookingTable({ bookings, onAssign, onSort, sortDirection, sortKey }: { bookings: Booking[]; onAssign: (id: string) => void; onSort: (key: BookingSortKey) => void; sortDirection: SortDirection; sortKey: BookingSortKey }) {
   const header = (key: BookingSortKey, label: string, className?: string) => (
     <SortableHeader active={sortKey === key} className={className} direction={sortDirection} onSort={() => onSort(key)}>{label}</SortableHeader>
   )
@@ -104,13 +104,13 @@ export function BookingTable({ assignedIds, bookings, onAssign, onSort, sortDire
         {header("assignee", "Ответственный", "w-28")}
         <th className="w-12 px-2 py-2"><span className="sr-only">Действия</span></th>
       </tr></thead>
-      <tbody className="divide-y">{bookings.map((booking) => <BookingTableRow assigned={assignedIds.includes(booking.id)} booking={booking} key={booking.id} onAssign={() => onAssign(booking.id)} />)}</tbody>
+      <tbody className="divide-y">{bookings.map((booking) => <BookingTableRow booking={booking} key={booking.id} onAssign={() => onAssign(booking.id)} />)}</tbody>
     </DataTableShell>
   )
 }
 
-function BookingTableRow({ assigned, booking, onAssign }: { assigned: boolean; booking: Booking; onAssign: () => void }) {
-  const people = assigned && booking.assignees.length === 0 ? [{ id: "current", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }] : booking.assignees
+function BookingTableRow({ booking, onAssign }: { booking: Booking; onAssign: () => void }) {
+  const people = booking.assignees
   return (
     <tr className={cn("hover:bg-muted/45", booking.status === "cancelled" && "opacity-50")}>
       <MainSecondaryCell main={<Link className="underline-offset-2 hover:underline" to={`/bookings/${booking.id}`}>#{booking.id}</Link>} />

@@ -1,33 +1,48 @@
-import { useEffect, useState } from "react"
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react"
 
-import { directoryRepository, loadDirectoryData, type AssigneeScope, type DirectoryData } from "@app/data/directory-repository"
+import { directoryRepository, loadDirectoryData, type AssigneeScope, type DirectoryData, type DirectoryRepository } from "@app/data/directory-repository"
 
-let cachedData: DirectoryData | null = null
-let pendingLoad: Promise<DirectoryData> | null = null
+const DirectoryRepositoryContext = createContext<DirectoryRepository | null>(null)
+const cachedData = new WeakMap<DirectoryRepository, DirectoryData>()
+const pendingLoads = new WeakMap<DirectoryRepository, Promise<DirectoryData>>()
 
-function loadOnce() {
-  pendingLoad ??= loadDirectoryData(directoryRepository).then((data) => {
-    cachedData = data
+function loadOnce(repository: DirectoryRepository) {
+  const existing = pendingLoads.get(repository)
+  if (existing) return existing
+  const pending = loadDirectoryData(repository).then((data) => {
+    cachedData.set(repository, data)
     return data
   }).catch((error: unknown) => {
-    pendingLoad = null
+    pendingLoads.delete(repository)
     throw error
   })
-  return pendingLoad
+  pendingLoads.set(repository, pending)
+  return pending
+}
+
+export function DirectoryRepositoryProvider({ children, repository }: { children: ReactNode; repository: DirectoryRepository }) {
+  return createElement(DirectoryRepositoryContext.Provider, { value: repository }, children)
 }
 
 export function useDirectoryData() {
-  const [data, setData] = useState<DirectoryData | null>(cachedData)
-  const [error, setError] = useState<string | null>(null)
+  const repository = useContext(DirectoryRepositoryContext) ?? directoryRepository
+  const [state, setState] = useState<{ data: DirectoryData | null; error: string | null; repository: DirectoryRepository }>(() => ({ data: cachedData.get(repository) ?? null, error: null, repository }))
+  const data = state.repository === repository ? state.data : cachedData.get(repository) ?? null
+  const error = state.repository === repository ? state.error : null
 
   useEffect(() => {
-    if (data) return
+    const cached = cachedData.get(repository)
+    if (cached) {
+      setState({ data: cached, error: null, repository })
+      return
+    }
     let active = true
-    void loadOnce()
-      .then((nextData) => { if (active) setData(nextData) })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Не удалось загрузить справочники") })
+    setState({ data: null, error: null, repository })
+    void loadOnce(repository)
+      .then((nextData) => { if (active) setState({ data: nextData, error: null, repository }) })
+      .catch((reason: unknown) => { if (active) setState({ data: null, error: reason instanceof Error ? reason.message : "Не удалось загрузить справочники", repository }) })
     return () => { active = false }
-  }, [data])
+  }, [repository])
 
   return { data, error, loading: !data && !error }
 }

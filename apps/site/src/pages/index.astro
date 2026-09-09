@@ -1,5 +1,7 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro"
+import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
+import SitePageShell from "@crm/site-ui/astro/SitePageShell"
 import { publicRoute, siteIdentity } from "../lib/content"
 import NavigationIsland from "../components/islands/NavigationIsland"
 import HeroIsland from "../components/islands/HeroIsland"
@@ -13,36 +15,55 @@ import TerritoryMapIsland from "../components/islands/TerritoryMapIsland"
 import FaqLocationIsland from "../components/islands/FaqLocationIsland"
 import BookingQuizIsland from "../components/islands/BookingQuizIsland"
 import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
-import ModalHub from "../components/islands/ModalHub"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
+import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
+import { getPublishedPage, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
 
-const canonical = new URL(publicRoute("/").pathname, Astro.site).toString()
+const [publishedSiteSettings, publishedPage] = await Promise.all([getPublishedSiteSettings(), getPublishedPage("/")])
+const canonical = publishedPage?.seo.canonical.mode === "custom"
+  ? publishedPage.seo.canonical.url
+  : new URL(publicRoute("/").pathname, Astro.site).toString()
+const robots = publishedPage?.seo.indexPolicy
+const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
+const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
+const effectiveHero = publishedPage?.hero ?? publishedSiteSettings?.value.heroDefault
+const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
+// Blog was introduced after the original homepage section registry. Until CMS
+// publishes an explicit blog section, keep this additive static section visible.
+const sectionEnabled = (key: string) => key === "blog" || !publishedPage || publishedPage.sections.some((section) => section.key === key)
 ---
 
-<BaseLayout title={siteIdentity.title} description={siteIdentity.description} canonical={canonical}>
-  <NavigationIsland client:load />
+<BaseLayout
+  title={publishedPage?.seo.title ?? siteIdentity.title}
+  description={publishedPage?.seo.description ?? siteIdentity.description}
+  canonical={canonical}
+  robots={robots}
+  social={publishedPage?.seo.social}
+  structuredData={publishedPage ? toSiteStructuredData(publishedPage.seo.structuredData) : []}
+>
+  <NavigationIsland {...(navigation ? { navigation } : {})} client:load />
 
-  <div id="site-content" class="flex-1 transition-all duration-300 ease-in-out lg:pl-[280px]">
-    <main class="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-12">
-      <HeroIsland client:load />
-      <EventsIsland client:visible />
-      <HousesIsland client:visible />
-      <SaunaChanIsland client:visible />
-      <ProgramsIsland client:visible />
-      <VenuesIsland client:visible />
-      <WhyUsSection />
-      <ReviewsIsland client:visible />
-      <TerritoryMapIsland client:visible />
-      <FaqLocationIsland client:visible />
-      <BookingQuizIsland client:visible />
-      <PartnersMarquee />
-    </main>
+  <SitePageShell>
+    <SitePageFrame>
+      {(!publishedPage || hero) && <HeroIsland {...(hero ? { hero } : {})} client:load />}
+      {sectionEnabled("events") && <EventsIsland client:visible />}
+      {sectionEnabled("houses") && <HousesIsland client:visible />}
+      {sectionEnabled("sauna-chan") && <SaunaChanIsland client:visible />}
+      {sectionEnabled("programs") && <ProgramsIsland client:visible />}
+      {sectionEnabled("venues") && <VenuesIsland client:visible />}
+      {sectionEnabled("blog") && <BlogSection />}
+      {sectionEnabled("why-us") && <WhyUsSection />}
+      {sectionEnabled("reviews") && <ReviewsIsland client:visible />}
+      {sectionEnabled("map") && <TerritoryMapIsland client:visible />}
+      {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}
+      {sectionEnabled("calculator") && <BookingQuizIsland client:visible />}
+      {sectionEnabled("partners") && <PartnersMarquee />}
+    </SitePageFrame>
 
-    <Footer />
-  </div>
+    {sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+  </SitePageShell>
 
   <FloatingHelperIsland client:idle />
-  <ModalHub client:load />
 </BaseLayout>

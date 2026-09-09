@@ -58,9 +58,8 @@ const sectionIcons = {
 export function DashboardPage({ repository = dashboardRepository }: { repository?: DashboardRepository }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const scope: DashboardScope = searchParams.get("scope") === "mine" ? "mine" : "all"
-  const { retry, state } = useDashboard(scope, repository)
+  const { assign, assignmentError, assignmentPending, retry, state } = useDashboard(scope, repository)
   const [hiddenSections, setHiddenSections] = useState<string[]>([])
-  const [assignedItems, setAssignedItems] = useState<string[]>([])
   const [announcement, setAnnouncement] = useState("")
 
   const setScope = (nextScope: DashboardScope) => {
@@ -80,9 +79,17 @@ export function DashboardPage({ repository = dashboardRepository }: { repository
     setHiddenSections((current) => (visible ? current.filter((sectionId) => sectionId !== id) : [...current, id]))
   }
 
-  const assignItem = (item: DashboardItem) => {
-    setAssignedItems((current) => [...new Set([...current, item.id])])
-    setAnnouncement(`Вы назначены ответственным за ${item.title}`)
+  const assignItem = async (item: DashboardItem) => {
+    if (item.assignment?.kind === "unsupported") {
+      setAnnouncement(item.assignment.reason)
+      return
+    }
+    try {
+      await assign(item)
+      setAnnouncement(`Вы назначены ответственным за ${item.title}`)
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : "Не удалось назначить ответственного")
+    }
   }
 
   return (
@@ -162,18 +169,18 @@ export function DashboardPage({ repository = dashboardRepository }: { repository
         ) : (
           <div className="grid items-start gap-4 lg:grid-cols-3">
             <DashboardColumn
-              assignedItems={assignedItems}
               className="order-1 lg:order-2"
               emptyLabel="На сегодня записей нет"
               onAssign={assignItem}
+              assignmentPending={assignmentPending}
               sections={visibleData.today}
               title="Сегодня"
             />
             <DashboardColumn
-              assignedItems={assignedItems}
               className="order-2 lg:order-1 lg:col-span-2"
               emptyLabel="Внимания не требуется"
               onAssign={assignItem}
+              assignmentPending={assignmentPending}
               sections={visibleData.attention}
               title="Внимание"
             />
@@ -182,24 +189,24 @@ export function DashboardPage({ repository = dashboardRepository }: { repository
       ) : null}
 
       <p aria-live="polite" className="sr-only">
-        {announcement}
+        {announcement || assignmentError || ""}
       </p>
     </div>
   )
 }
 
 function DashboardColumn({
-  assignedItems,
   className,
   emptyLabel,
   onAssign,
+  assignmentPending,
   sections,
   title,
 }: {
-  assignedItems: string[]
   className?: string
   emptyLabel: string
   onAssign: (item: DashboardItem) => void
+  assignmentPending: boolean
   sections: DashboardSection[]
   title: string
 }) {
@@ -216,10 +223,10 @@ function DashboardColumn({
               <ListSection count={section.items.length} icon={sectionIcons[section.iconKey]} title={section.title} tone={section.tone}>
                 {section.items.map((item) => (
                   <DashboardRow
-                    assigned={assignedItems.includes(item.id)}
                     item={item}
                     key={item.id}
                     onAssign={() => onAssign(item)}
+                    assignmentPending={assignmentPending}
                   />
                 ))}
               </ListSection>
@@ -235,10 +242,8 @@ function DashboardColumn({
   )
 }
 
-function DashboardRow({ assigned, item, onAssign }: { assigned: boolean; item: DashboardItem; onAssign: () => void }) {
-  const people = assigned
-    ? [{ id: "current", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }]
-    : item.assignees
+function DashboardRow({ item, onAssign, assignmentPending }: { item: DashboardItem; onAssign: () => void; assignmentPending: boolean }) {
+  const people = item.assignees
 
   return (
     <ListRow className="group relative min-h-20 transition-colors hover:bg-muted/55 focus-within:bg-muted/55">
@@ -276,7 +281,11 @@ function DashboardRow({ assigned, item, onAssign }: { assigned: boolean; item: D
             </div>
           ) : <span />}
           <div className="pointer-events-auto relative z-10">
-            <Assignees onAssign={onAssign} people={people} />
+            {item.assignment?.kind === "unsupported" ? (
+              people.length > 0 ? <span title={item.assignment.reason}><Assignees people={people} /></span> : <span className="whitespace-nowrap text-[11px] text-muted-foreground" title={item.assignment.reason}>Назначение недоступно</span>
+            ) : (
+              <span className={assignmentPending ? "pointer-events-none opacity-60" : undefined}><Assignees {...(assignmentPending ? {} : { onAssign })} people={people} /></span>
+            )}
           </div>
         </div>
       </div>

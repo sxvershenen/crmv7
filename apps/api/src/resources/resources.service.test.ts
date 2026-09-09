@@ -49,6 +49,21 @@ function serviceFor(current: ResourceEntity, allocations: ResourceAllocationEnti
 }
 
 describe("ResourcesService availability", () => {
+  it("treats concrete campground inventory kinds as one CRM camping direction", async () => {
+    let kinds: string[] = []
+    const builder = {
+      where() { return builder },
+      andWhere(_query: string, parameters: { kinds?: string[] }) { if (parameters.kinds) kinds = parameters.kinds; return builder },
+      orderBy() { return builder },
+      take() { return builder },
+      getMany: async () => [],
+    }
+    const service = new ResourcesService({ getRepository: () => ({ createQueryBuilder: () => builder }) } as never)
+
+    await service.list({ kind: "camping", archived: false, limit: 50 }, actor)
+    expect(kinds).toEqual(["camping", "campground", "campground_owned_tent", "campground_own_tent_area"])
+  })
+
   it("treats touching half-open intervals as available", async () => {
     const service = serviceFor(resource("fixed", 1), [allocation("33333333-3333-4333-8333-333333333333", "2026-09-01T10:00:00Z", "2026-09-01T11:00:00Z", 1)])
     const result = await service.availability({ resourceId: "22222222-2222-4222-8222-222222222222", startAt: "2026-09-01T11:00:00Z", endAt: "2026-09-01T12:00:00Z", quantity: 1 }, actor)

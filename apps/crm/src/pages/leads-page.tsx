@@ -7,7 +7,7 @@ import {
   Assignees, Badge, Button, ClickableCard, DataTableShell, DropdownMenu, DropdownMenuContent, DropdownMenuItem, EntityCardAssignees, EntityCardDetails, EntityCardInfoRow, EntityCardLayout, EntityCardRail,
   DropdownMenuTrigger, FilterSelect, KanbanBoard, KanbanColumn, KanbanDropPlaceholder, MainSecondaryCell, PageFrame, PageNav, PageState,
   RowActions, SettingsBar, Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger,
-  Skeleton, SortableHeader, Tooltip, TooltipContent, TooltipTrigger, ViewTabs, cn, type Assignee,
+  Skeleton, SortableHeader, Tooltip, TooltipContent, TooltipTrigger, ViewTabs, cn,
 } from "@crm/ui"
 import type { Lead, LeadQuery, LeadSortKey, LeadStage, SortDirection } from "@app/entities/leads"
 import { leadBoardStages, leadScopeLabels, leadStageMeta, leadStages } from "@app/entities/leads"
@@ -30,8 +30,6 @@ const stageDotClass: Record<LeadStage, string> = {
   waiting: "bg-amber-400",
   work: "bg-slate-400",
 }
-const currentAssignee: Assignee = { id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }
-
 function oneOf<T extends string>(value: string | null, options: readonly T[], fallback: T): T {
   return value && options.includes(value as T) ? value as T : fallback
 }
@@ -49,14 +47,10 @@ export function LeadsPage({ repository = leadRepository }: { repository?: LeadRe
   const sortKey = oneOf(searchParams.get("sort"), ["id", "client", "direction", "planned", "nextContact", "assignee"] as const, "id")
   const sortDirection = oneOf(searchParams.get("order"), ["asc", "desc"] as const, "desc")
   const query = useMemo<LeadQuery>(() => ({ scope, stage, direction, source, promo, utm, sort: { key: sortKey, direction: sortDirection } }), [direction, promo, scope, sortDirection, sortKey, source, stage, utm])
-  const { moveLead, retry, state } = useLeads(query, repository)
+  const { assignSelf, moveLead, retry, state } = useLeads(query, repository)
   const [announcement, setAnnouncement] = useState("")
   const [moveError, setMoveError] = useState("")
-  const [assignedLeads, setAssignedLeads] = useState<Record<string, Assignee[]>>({})
-  const visibleLeads = useMemo(() => state.status === "ready" ? state.data.map((lead) => ({
-    ...lead,
-    assignees: assignedLeads[lead.id] ?? lead.assignees,
-  })) : [], [assignedLeads, state])
+  const visibleLeads = state.status === "ready" ? state.data : []
 
   const updateParam = (name: string, value: string, defaultValue = "all") => setSearchParams((current) => {
     const next = new URLSearchParams(current)
@@ -96,9 +90,13 @@ export function LeadsPage({ repository = leadRepository }: { repository?: LeadRe
   const secondaryFilterCount = [direction, source, promo, utm].filter((value) => value !== "all").length
   const activeFilterCount = secondaryFilterCount + (scope === "all" ? 0 : 1) + (stage === "all" ? 0 : 1)
   const openLead = (leadId: string) => navigate(`/leads/${leadId}`)
-  const assignLead = (leadId: string) => {
-    setAssignedLeads((current) => ({ ...current, [leadId]: [currentAssignee] }))
-    setAnnouncement(`${currentAssignee.name} назначена заявке #${leadId}.`)
+  const assignLead = async (leadId: string) => {
+    try {
+      const assigned = await assignSelf(leadId)
+      setAnnouncement(`${assigned.assignees.at(-1)?.name ?? "Вы"} назначена заявке #${leadId}.`)
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : "Не удалось назначить ответственного")
+    }
   }
 
   return (
@@ -121,8 +119,8 @@ export function LeadsPage({ repository = leadRepository }: { repository?: LeadRe
       {state.status === "error" ? <div className="rounded-xl border bg-surface-raised"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={retry} title="Заявки не загрузились" tone="danger">{state.message}</PageState></div> : null}
       {state.status === "ready" && state.data.length === 0 ? <div className="rounded-xl border bg-surface-raised"><PageState actionLabel="Сбросить фильтры" icon={IconFilter} onAction={resetFilters} title="Заявок нет">Попробуйте изменить область или фильтры.</PageState></div> : null}
       {state.status === "ready" && state.data.length > 0 ? <>
-        <div className="md:hidden" data-testid="mobile-leads-list"><MobileLeadList leads={visibleLeads} onAssign={assignLead} onMove={handleMove} onOpen={openLead} /></div>
-        <div className="hidden md:block" data-testid="desktop-leads-view">{view === "cards" ? <LeadBoard announcement={announcement} leads={visibleLeads} onAnnouncement={setAnnouncement} onAssign={assignLead} onMove={handleMove} onOpen={openLead} selectedStage={stage} /> : <LeadTable leads={visibleLeads} onMove={handleMove} onOpen={openLead} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} />}</div>
+        <div className="md:hidden" data-testid="mobile-leads-list"><MobileLeadList leads={visibleLeads} onAssign={(id) => { void assignLead(id) }} onMove={handleMove} onOpen={openLead} /></div>
+        <div className="hidden md:block" data-testid="desktop-leads-view">{view === "cards" ? <LeadBoard announcement={announcement} leads={visibleLeads} onAnnouncement={setAnnouncement} onAssign={(id) => { void assignLead(id) }} onMove={handleMove} onOpen={openLead} selectedStage={stage} /> : <LeadTable leads={visibleLeads} onMove={handleMove} onOpen={openLead} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} />}</div>
       </> : null}
       <p aria-live="assertive" className="sr-only">{announcement}</p>
     </PageFrame>

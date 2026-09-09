@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint src",
+    "test": "vitest run src/test-database-safety.test.ts",
     "migration:run": "typeorm-ts-node-esm migration:run -d src/data-source.ts",
     "migration:revert": "typeorm-ts-node-esm migration:revert -d src/data-source.ts"
   },
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }

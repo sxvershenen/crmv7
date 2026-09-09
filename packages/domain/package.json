@@ -12,7 +12,9 @@
     "./capabilities": "./src/capabilities.ts",
     "./money": "./src/money.ts",
     "./idempotency": "./src/idempotency.ts",
-    "./phones": "./src/phones.ts"
+    "./phones": "./src/phones.ts",
+    "./offering-pricing": "./src/offering-pricing.ts",
+    "./outbox-delivery": "./src/outbox-delivery.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

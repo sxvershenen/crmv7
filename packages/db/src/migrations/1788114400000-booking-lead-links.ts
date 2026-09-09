@@ -4,6 +4,14 @@ export class BookingLeadLinks1788114400000 implements MigrationInterface {
   name = "BookingLeadLinks1788114400000"
 
   async up(queryRunner: QueryRunner): Promise<void> {
+    // Older fixtures allowed arbitrary customer ids. Preserve them as NULL before
+    // closing the referential-integrity gap for all existing customer relations.
+    await queryRunner.query(`UPDATE bookings SET customer_id = NULL WHERE customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customers WHERE customers.id = bookings.customer_id)`)
+    await queryRunner.query(`UPDATE program_registrations SET customer_id = NULL WHERE customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customers WHERE customers.id = program_registrations.customer_id)`)
+    await queryRunner.query(`UPDATE events SET customer_id = NULL WHERE customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customers WHERE customers.id = events.customer_id)`)
+    await queryRunner.query(`ALTER TABLE bookings ADD CONSTRAINT bookings_customer_fk FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL`)
+    await queryRunner.query(`ALTER TABLE program_registrations ADD CONSTRAINT program_registrations_customer_fk FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL`)
+    await queryRunner.query(`ALTER TABLE events ADD CONSTRAINT events_customer_fk FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL`)
     await queryRunner.query(`CREATE TABLE booking_lead_links (
       id uuid PRIMARY KEY,
       booking_id uuid NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -24,5 +32,8 @@ export class BookingLeadLinks1788114400000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS booking_lead_links_lead_history_idx`)
     await queryRunner.query(`DROP INDEX IF EXISTS booking_lead_links_active_booking_unique`)
     await queryRunner.query(`DROP TABLE IF EXISTS booking_lead_links`)
+    await queryRunner.query(`ALTER TABLE events DROP CONSTRAINT IF EXISTS events_customer_fk`)
+    await queryRunner.query(`ALTER TABLE program_registrations DROP CONSTRAINT IF EXISTS program_registrations_customer_fk`)
+    await queryRunner.query(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_customer_fk`)
   }
 }

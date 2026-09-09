@@ -1,19 +1,23 @@
 import { DomainError } from "./errors.js";
 
 export type Role = "admin" | "manager" | "lead_manager" | "manager_supervisor" | "supervisor" | "technical_admin" | "readonly";
-export type Capability = "canView" | "canCreate" | "canEdit" | "canDelete" | "canArchive" | "canAssign" | "canChangeStatus" | "canAddPayment" | "canRefund" | "canOverrideConflict" | "canViewFinance" | "canViewAudit" | "canManageUsers" | "canManageSettings";
-export type Capabilities = Readonly<Record<Capability, boolean>>;
+export type CoreCapability = "canView" | "canCreate" | "canEdit" | "canDelete" | "canArchive" | "canAssign" | "canChangeStatus" | "canAddPayment" | "canRefund" | "canOverrideConflict" | "canViewFinance" | "canViewAudit" | "canManageUsers" | "canManageSettings";
+export type AdminCapability = "canViewContent" | "canEditContent" | "canReviewContent" | "canPublishContent" | "canManageSeo" | "canManageMedia" | "canViewAnalytics" | "canViewRawAnalytics" | "canManageSiteCode" | "canManageIntegrations" | "canManageRedirects" | "canManageSiteSettings";
+export type Capability = CoreCapability | AdminCapability;
+export type Capabilities = Readonly<Record<CoreCapability, boolean> & Partial<Record<AdminCapability, boolean | undefined>>>;
 
-const all: Capabilities = { canView: true, canCreate: true, canEdit: true, canDelete: true, canArchive: true, canAssign: true, canChangeStatus: true, canAddPayment: true, canRefund: true, canOverrideConflict: true, canViewFinance: true, canViewAudit: true, canManageUsers: true, canManageSettings: true };
-const noneExceptView: Capabilities = { canView: true, canCreate: false, canEdit: false, canDelete: false, canArchive: false, canAssign: false, canChangeStatus: false, canAddPayment: false, canRefund: false, canOverrideConflict: false, canViewFinance: false, canViewAudit: false, canManageUsers: false, canManageSettings: false };
+const adminCapabilities = { canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true, canManageSeo: true, canManageMedia: true, canViewAnalytics: true, canViewRawAnalytics: true, canManageSiteCode: true, canManageIntegrations: true, canManageRedirects: true, canManageSiteSettings: true } as const;
+const noAdminCapabilities = Object.fromEntries(Object.keys(adminCapabilities).map((key) => [key, false])) as Record<AdminCapability, boolean>;
+const all: Capabilities = { canView: true, canCreate: true, canEdit: true, canDelete: true, canArchive: true, canAssign: true, canChangeStatus: true, canAddPayment: true, canRefund: true, canOverrideConflict: true, canViewFinance: true, canViewAudit: true, canManageUsers: true, canManageSettings: true, ...adminCapabilities };
+const noneExceptView: Capabilities = { canView: true, canCreate: false, canEdit: false, canDelete: false, canArchive: false, canAssign: false, canChangeStatus: false, canAddPayment: false, canRefund: false, canOverrideConflict: false, canViewFinance: false, canViewAudit: false, canManageUsers: false, canManageSettings: false, ...noAdminCapabilities };
 export const roleCapabilitiesByRole: Readonly<Record<Role, Capabilities>> = {
   admin: all,
-  manager: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false },
-  lead_manager: { ...all, canDelete: false, canAddPayment: false, canRefund: false, canOverrideConflict: false, canManageUsers: false, canManageSettings: false },
-  manager_supervisor: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false },
-  supervisor: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false },
-  technical_admin: { ...noneExceptView, canManageUsers: true, canManageSettings: true, canViewAudit: true },
-  readonly: noneExceptView,
+  manager: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false, canPublishContent: false, canViewRawAnalytics: false, canManageSiteCode: false, canManageIntegrations: false, canManageRedirects: false, canManageSiteSettings: false },
+  lead_manager: { ...all, canDelete: false, canAddPayment: false, canRefund: false, canOverrideConflict: false, canManageUsers: false, canManageSettings: false, ...noAdminCapabilities, canViewContent: true },
+  manager_supervisor: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false, ...noAdminCapabilities, canViewContent: true },
+  supervisor: { ...all, canDelete: false, canManageUsers: false, canManageSettings: false, ...noAdminCapabilities, canViewContent: true },
+  technical_admin: { ...noneExceptView, canManageUsers: true, canManageSettings: true, canViewAudit: true, canViewContent: true, canManageSiteCode: true, canManageIntegrations: true, canManageSiteSettings: true },
+  readonly: { ...noneExceptView, canViewContent: true },
 };
 
 /** Resolve one role; use capabilitiesForRoles when a user has multiple roles. */

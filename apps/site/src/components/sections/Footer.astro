@@ -1,23 +1,12 @@
 ---
-import { Mail, MapPin, Phone } from "lucide-react";
-const currentYear = new Date().getFullYear();
+import Footer from "./Footer";
+import type { SiteNavigationItem } from "@crm/site-ui";
+
+interface Props {
+  navigation?: SiteNavigationItem[];
+}
+
+const { navigation } = Astro.props;
 ---
 
-<footer class="w-full bg-[#121514] text-white pt-12 pb-24 lg:pb-10 border-t border-white/10">
-  <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-8 pb-10 border-b border-white/10">
-      <div class="max-w-xl space-y-4">
-        <div class="flex items-center gap-3"><div class="w-12 h-12 rounded-2xl bg-[#2B9E47] text-white flex items-center justify-center font-bold text-lg">С</div><div><div class="text-[22px] font-semibold tracking-tight">СВИСТОПЛЯСОВО</div><div class="text-[13px] text-[#2B9E47]">Глэмпинг &amp; База отдыха под Кировом</div></div></div>
-        <p class="text-[15px] text-neutral-400 leading-relaxed">Уютные дома с горячим чаном и баней в 30 минутах от Кирова.<br />Организация душевных праздников от команды «Зажигай».</p>
-      </div>
-      <div class="flex flex-wrap gap-3 shrink-0"><a href="https://vk.com/svistoplyasovo" target="_blank" rel="noreferrer" class="h-[48px] px-5 rounded-full bg-[#1677f2] hover:bg-[#0866d5] inline-flex items-center gap-2 text-[13px] font-medium"><span class="w-5 h-5 rounded-md bg-white/20 text-white text-[9px] font-bold flex items-center justify-center">VK</span>Мы ВКонтакте</a><button data-site-action="call" class="h-[48px] px-5 rounded-full bg-white/10 hover:bg-white/15 inline-flex items-center gap-2 text-[13px] font-medium"><Phone className="w-4 h-4 text-[#2B9E47]" />Связаться с нами</button></div>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 py-10 border-b border-white/10 text-[13px] leading-relaxed">
-      <div><h3 class="font-semibold mb-4">ГЛЭМПИНГ И ДОМА</h3><ul class="space-y-3 text-neutral-400"><li><a href="#houses">Домик «Гнездо» с чаном</a></li><li><a href="#houses">Двухэтажный дом на дереве</a></li><li><a href="#sauna">Лесное шале с сауной</a></li><li><a href="#sauna">Сибирский чан на дровах</a></li><li><a href="#sauna">Русская баня на березе</a></li></ul></div>
-      <div><h3 class="font-semibold mb-4">МЕРОПРИЯТИЯ</h3><ul class="space-y-3 text-neutral-400"><li><a href="#programs">Корпоративы и тимбилдинги</a></li><li><a href="#programs">Свадьбы и выездные регистрации</a></li><li><a href="#programs">Школьные выпускные</a></li><li><a href="#venues">Банкетный зал «Свистопляс»</a></li><li><a href="#venues">Панорамная веранда у леса</a></li></ul></div>
-      <div><h3 class="font-semibold mb-4">ИНФОРМАЦИЯ</h3><ul class="space-y-3 text-neutral-400"><li><a href="#map">Интерактивная карта базы</a></li><li><a href="#location">Правила заезда и проживания</a></li><li><a href="#quiz">Онлайн-калькулятор бронирования</a></li><li><button data-site-action="privacy">Политика конфиденциальности</button></li><li><button data-site-action="privacy">Согласие на обработку данных</button></li></ul></div>
-      <div><h3 class="font-semibold mb-4">ПРЯМЫЕ КОНТАКТЫ</h3><ul class="space-y-3 text-neutral-300"><li class="flex gap-2"><MapPin className="w-5 h-5 text-[#2B9E47] shrink-0" />Кировская область, Кирово-Чепецкий район, д. Свистоплясово, ул. Лесная, 12</li><li><a href="tel:+78332745510" class="flex gap-2 hover:text-white"><Phone className="w-5 h-5 text-[#2B9E47] shrink-0" /><span>+7 (8332) 74-55-10<br /><small class="text-neutral-500">Бронирование домиков</small></span></a></li><li><a href="tel:+79229953322" class="flex gap-2 hover:text-white"><Phone className="w-5 h-5 text-[#FAAB2B] shrink-0" /><span>+7 (922) 995-33-22<br /><small class="text-neutral-500">Мероприятия</small></span></a></li><li class="flex gap-2"><Mail className="w-5 h-5 text-[#2B9E47] shrink-0" /><a href="mailto:info@svistoplyasovo.ru" class="hover:text-white">info@svistoplyasovo.ru</a></li></ul></div>
-    </div>
-    <div class="pt-8 flex flex-col lg:flex-row gap-4 justify-between text-[12px] text-neutral-500"><div>© {currentYear} База отдыха и глэмпинг «Свистоплясово». Все права защищены.<br />ИП Норсеева Ирина Михайловна · ИНН: 431900639521</div><div class="flex flex-wrap gap-4"><button data-site-action="privacy">Политика обработки персональных данных</button><span>•</span><button data-site-action="privacy">Согласие на обработку данных</button></div></div>
-  </div>
-</footer>
+<Footer {...(navigation ? { navigation } : {})} />

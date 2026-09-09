@@ -66,7 +66,7 @@ describe("CustomersPage", () => {
     const assignButtons = within(table).getAllByRole("button", { name: "+ Назначить" })
     await user.click(assignButtons[0]!)
 
-    expect(within(table).getAllByRole("button", { name: "+ Назначить" })).toHaveLength(assignButtons.length - 1)
-    expect(screen.getByText("Марина Кириллова назначена клиенту #1024")).toBeInTheDocument()
+    await waitFor(() => expect(within(table).getAllByRole("button", { name: "+ Назначить" })).toHaveLength(assignButtons.length - 1))
+    await waitFor(() => expect(document.querySelector('p[aria-live="polite"]')).toHaveTextContent("Марина Кириллова назначена клиенту #1024"))
   })
 })

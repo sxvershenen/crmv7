@@ -2,21 +2,48 @@ import { z } from "zod";
 import { DateSchema, DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "./primitives.js";
 import { IdempotencyKeySchema, MutationMetaSchema, OperationIdSchema } from "./operations.js";
 import { CapabilitiesSchema } from "./capabilities.js";
+import { BookingItemQuoteAcceptanceSchema } from "./operational-quote-acceptance.js";
+import { BookingPromotionSchema, PromoCodeSchema } from "./marketing.js";
 
 export const BookingStatusSchema = z.enum(["draft", "unconfirmed", "confirmed", "in_progress", "completed", "cancelled", "archived"]);
 export type BookingStatus = z.infer<typeof BookingStatusSchema>;
 export const BookingItemTypeSchema = z.enum(["accommodation", "bath", "venue", "camping", "program", "service", "other"]);
 export type BookingItemType = z.infer<typeof BookingItemTypeSchema>;
+export const BookingProjectionAssigneeSchema = z.object({ id: IdSchema, initials: z.string().max(10), name: z.string().min(1).max(200) }).strict();
+export const BookingItemAddOnInputSchema = z.object({
+  assignmentId: IdSchema,
+  quantity: z.number().int().positive().max(1_000_000),
+}).strict();
+export type BookingItemAddOnInput = z.infer<typeof BookingItemAddOnInputSchema>;
+export const BookingItemAddOnSchema = BookingItemAddOnInputSchema.extend({
+  addOnOfferingId: IdSchema,
+  label: z.string().min(1).max(500),
+  serviceType: z.enum(["quantity_service", "person_service"]),
+  price: NonNegativeMoneySchema,
+}).strict();
+export type BookingItemAddOn = z.infer<typeof BookingItemAddOnSchema>;
 export const BookingItemSchema = z.object({
   id: IdSchema, type: BookingItemTypeSchema, resourceId: IdSchema.nullable(),
   startAt: DateTimeSchema, endAt: DateTimeSchema, quantity: z.number().int().positive(),
   price: NonNegativeMoneySchema, discount: NonNegativeMoneySchema, preparationMinutes: z.number().int().nonnegative().max(1440),
+  quoteSnapshotId: IdSchema.nullable().optional(),
+  addOns: z.array(BookingItemAddOnSchema).max(100).optional(),
 }).strict();
 export type BookingItem = z.infer<typeof BookingItemSchema>;
+export const BookingItemInputSchema = BookingItemSchema.omit({ id: true, quoteSnapshotId: true, addOns: true }).extend({
+  quoteSnapshotId: IdSchema.nullable().default(null),
+  addOns: z.array(BookingItemAddOnInputSchema).max(100).default([]),
+}).strict();
+export type BookingItemInput = z.infer<typeof BookingItemInputSchema>;
+export const BookingPromotionPreviewSchema = z.object({ promoCode: PromoCodeSchema, items: z.array(BookingItemInputSchema).min(1).max(100) }).strict();
+export type BookingPromotionPreview = z.infer<typeof BookingPromotionPreviewSchema>;
+export const BookingPromotionPreviewResultSchema = z.object({ promotion: BookingPromotionSchema, total: NonNegativeMoneySchema }).strict();
+export type BookingPromotionPreviewResult = z.infer<typeof BookingPromotionPreviewResultSchema>;
 export const BookingSchema = z.object({
   id: IdSchema, version: VersionSchema, customerId: IdSchema, status: BookingStatusSchema,
   items: z.array(BookingItemSchema), subtotal: NonNegativeMoneySchema, total: NonNegativeMoneySchema,
   paymentState: z.enum(["unpaid", "partial", "paid", "overpaid", "refund", "debt"]),
+  promotion: BookingPromotionSchema.nullable().optional(),
   createdAt: DateTimeSchema, updatedAt: DateTimeSchema,
 }).strict();
 export type Booking = z.infer<typeof BookingSchema>;
@@ -24,15 +51,17 @@ export const BookingCapabilitiesSchema = CapabilitiesSchema.pick({ canView: true
 export type BookingCapabilities = z.infer<typeof BookingCapabilitiesSchema>;
 export const BookingDtoSchema = BookingSchema.extend({ capabilities: BookingCapabilitiesSchema }).strict();
 export type BookingDto = z.infer<typeof BookingDtoSchema>;
-export const CreateBookingInputSchema = z.object({ customerId: IdSchema, items: z.array(BookingItemSchema.omit({ id: true })).min(1), note: z.string().max(20_000).nullable().default(null) }).strict();
+export const CreateBookingInputSchema = z.object({ customerId: IdSchema, items: z.array(BookingItemInputSchema).min(1), promoCode: PromoCodeSchema.nullable().default(null), note: z.string().max(20_000).nullable().default(null), assignees: z.array(BookingProjectionAssigneeSchema).max(20).default([]) }).strict();
 export type CreateBookingInput = z.infer<typeof CreateBookingInputSchema>;
 // PATCH must stay sparse: deriving it with `.partial()` from a schema containing
 // defaults would turn omitted fields into writes.
 export const UpdateBookingInputSchema = z.object({
   expectedVersion: VersionSchema,
+  promoCode: PromoCodeSchema.nullable().optional(),
   customerId: IdSchema.optional(),
-  items: z.array(BookingItemSchema.omit({ id: true })).min(1).optional(),
+  items: z.array(BookingItemInputSchema).min(1).optional(),
   note: z.string().max(20_000).nullable().optional(),
+  assignees: z.array(BookingProjectionAssigneeSchema).max(20).optional(),
   itemId: IdSchema.optional(),
   startAt: DateTimeSchema.optional(),
   endAt: DateTimeSchema.optional(),
@@ -47,10 +76,28 @@ export const BookingCreateSchema = CreateBookingInputSchema.extend({ operationId
 export type BookingCreate = z.infer<typeof BookingCreateSchema>;
 export const BookingUpdateSchema = UpdateBookingInputSchema.extend({ operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema, overrideConflict: z.boolean().default(false) }).strict();
 export type BookingUpdate = z.infer<typeof BookingUpdateSchema>;
-export const BookingTransitionSchema = TransitionBookingInputSchema.extend({ idempotencyKey: IdempotencyKeySchema }).strict();
+export const BookingTransitionSchema = TransitionBookingInputSchema.extend({
+  idempotencyKey: IdempotencyKeySchema,
+  quoteAcceptances: z.array(BookingItemQuoteAcceptanceSchema).min(1).max(100).optional(),
+}).strict().superRefine((value, context) => {
+  if (value.quoteAcceptances === undefined) return;
+  if (value.status !== "confirmed") {
+    context.addIssue({ code: "custom", path: ["quoteAcceptances"], message: "Quote acceptance is only allowed when confirming a booking" });
+  }
+  const itemIds = new Set<string>();
+  const quoteIds = new Set<string>();
+  value.quoteAcceptances.forEach((acceptance, index) => {
+    if (itemIds.has(acceptance.bookingItemId)) context.addIssue({ code: "custom", path: ["quoteAcceptances", index, "bookingItemId"], message: "A booking item may accept one quote" });
+    if (quoteIds.has(acceptance.quoteSnapshotId)) context.addIssue({ code: "custom", path: ["quoteAcceptances", index, "quoteSnapshotId"], message: "A quote snapshot may be accepted once" });
+    itemIds.add(acceptance.bookingItemId);
+    quoteIds.add(acceptance.quoteSnapshotId);
+  });
+});
 export type BookingTransition = z.infer<typeof BookingTransitionSchema>;
 export const BookingArchiveSchema = z.object({ expectedVersion: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict();
 export type BookingArchive = z.infer<typeof BookingArchiveSchema>;
+export const BookingAssignSelfSchema = z.object({ expectedVersion: VersionSchema, operationId: OperationIdSchema, idempotencyKey: IdempotencyKeySchema }).strict();
+export type BookingAssignSelf = z.infer<typeof BookingAssignSelfSchema>;
 export const BookingListQuerySchema = z.object({ status: BookingStatusSchema.optional(), customerId: IdSchema.optional(), archived: z.preprocess((value) => value === "true" ? true : value === "false" ? false : value, z.boolean()).optional(), limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().min(1).max(2048).optional() }).strict();
 export type BookingListQuery = z.infer<typeof BookingListQuerySchema>;
 export const BookingResponseSchema = z.object({ data: BookingDtoSchema }).strict();
@@ -69,7 +116,6 @@ export const BookingProjectionStatusSchema = z.enum(["draft", "confirmed", "unpa
 export type BookingProjectionStatus = z.infer<typeof BookingProjectionStatusSchema>;
 export const BookingProjectionSortSchema = z.enum(["id", "client", "arrival", "resource", "status", "total", "assignee"]);
 export type BookingProjectionSort = z.infer<typeof BookingProjectionSortSchema>;
-export const BookingProjectionAssigneeSchema = z.object({ id: IdSchema, initials: z.string().max(10), name: z.string().min(1).max(200) }).strict();
 export const BookingProjectionBookingSchema = z.object({
   id: IdSchema,
   code: z.string().min(1).max(120),
@@ -165,6 +211,7 @@ export const BookingCustomerSummarySchema = z.object({ id: IdSchema, name: z.str
 export const BookingResourceSummarySchema = z.object({ id: IdSchema, code: z.string(), name: z.string(), category: BookingProjectionCategorySchema, capacity: z.number().int().nonnegative() }).strict();
 export const BookingPaymentSummarySchema = z.object({ id: IdSchema, operationId: IdSchema, kind: z.enum(["charge", "refund", "adjustment", "payment"]), amount: z.number().int().positive(), currency: z.string().length(3), method: z.string(), sourcePaymentId: IdSchema.nullable(), reason: z.string(), createdAt: DateTimeSchema, createdBy: IdSchema.nullable() }).strict();
 export const BookingDetailResponseSchema = BookingProjectionBookingSchema.extend({
+  promotion: BookingPromotionSchema.nullable().optional(),
   customer: BookingCustomerSummarySchema.nullable(),
   resource: BookingResourceSummarySchema.nullable(),
   items: z.array(BookingItemSchema),

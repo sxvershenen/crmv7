@@ -94,5 +94,7 @@ export const CustomerListQuerySchema = z.object({
 export type CustomerListQuery = z.infer<typeof CustomerListQuerySchema>;
 export const CustomerArchiveSchema = z.object({ version: VersionSchema }).strict();
 export type CustomerArchive = z.infer<typeof CustomerArchiveSchema>;
+export const CustomerAssignSelfSchema = z.object({ version: VersionSchema }).strict();
+export type CustomerAssignSelf = z.infer<typeof CustomerAssignSelfSchema>;
 export const CustomerListResponseSchema = z.object({ items: z.array(CustomerDtoSchema), nextCursor: z.string().nullable() }).strict();
 export type CustomerListResponse = z.infer<typeof CustomerListResponseSchema>;

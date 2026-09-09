@@ -2,6 +2,7 @@ import type { Resource, ResourceDataset, ResourceEditorRecord, ResourceKind, Res
 import { resourcesFixture } from "@app/fixtures/resources"
 import { apiClient, type ApiClientError } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
+import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime"
 import { ResourceAllocationDtoSchema, ResourceBlockDtoSchema, ResourceDtoSchema, ResourceCreateSchema, ResourceUpdateSchema } from "@crm/contracts"
 
 const defaultResourceColors = { bath: "orange", camping: "green", houses: "blue", venues: "violet" } as const
@@ -93,7 +94,7 @@ function toListResource(record: ResourceEditorRecord): Resource {
 }
 
 export function createEmptyResource(kind: ResourceKind): ResourceEditorRecord {
-  return toEditorRecord({
+  const resource = toEditorRecord({
     capacity: { mode: "fixed", total: 1 },
     futureBookingCount: 0,
     hasActiveBlock: false,
@@ -107,13 +108,35 @@ export function createEmptyResource(kind: ResourceKind): ResourceEditorRecord {
     secondaryType: "",
     warning: null,
   })
+  if (useFixtureData || import.meta.env.MODE === "test") return resource
+  return {
+    ...resource,
+    blocks: [],
+    cmsId: "",
+    description: "",
+    monthlyLoadPercent: null,
+    rules: {
+      availableDays: [],
+      bookingStepMinutes: "",
+      defaultCheckIn: "",
+      defaultCheckOut: "",
+      maxDurationMinutes: "",
+      minDurationMinutes: "",
+      preparationAfterMinutes: "",
+      preparationBeforeMinutes: "",
+    },
+    showOnSite: false,
+  }
 }
 
 type VersionedEditor = ResourceEditorRecord & { version: number; apiCode: string }
 
 const kindToApi = (kind: ResourceKind) => kind
-const kindFromApi = (kind: string): ResourceKind => ({ house: "houses", venue: "venues", bath: "bath", camping: "camping", houses: "houses", venues: "venues" }[kind] as ResourceKind) ?? "houses"
-const localDateTime = (value: string) => value.length > 16 ? value.slice(0, 16) : value
+const kindFromApi = (kind: string): ResourceKind => ({
+  house: "houses", houses: "houses", venue: "venues", venues: "venues", bath: "bath",
+  camping: "camping", campground: "camping", campground_owned_tent: "camping", campground_own_tent_area: "camping",
+}[kind] as ResourceKind) ?? "houses"
+const localDateTime = (value: string) => toBusinessDateTimeInput(value)
 
 function mapBlock(block: ReturnType<typeof ResourceBlockDtoSchema.parse>): ResourceEditorRecord["blocks"][number] {
   return { id: block.id, from: localDateTime(block.startAt), to: localDateTime(block.endAt), reason: block.reason, status: block.status === "active" ? "active" : "cancelled" }
@@ -190,7 +213,7 @@ export class ApiResourceRepository implements ResourceRepository, ResourceEditor
     for (const block of resource.blocks) {
       if (block.status === "active" && !previousBlocks.has(block.id)) {
         const created = await this.client.post(`/resources/${encodeURIComponent(current.apiCode)}/blocks`, {
-          startAt: new Date(block.from).toISOString(), endAt: new Date(block.to).toISOString(), reason: block.reason,
+          startAt: businessDateTimeToIso(block.from), endAt: businessDateTimeToIso(block.to), reason: block.reason,
           operationId: crypto.randomUUID(), expectedVersion: current.version,
         }, ResourceAllocationDtoSchema)
         void created

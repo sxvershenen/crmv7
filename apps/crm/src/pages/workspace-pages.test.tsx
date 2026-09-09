@@ -43,7 +43,7 @@ describe("workspace pages", () => {
     renderPage(<TeamPage repository={new FixtureWorkspaceRepository()} />, "/team?section=workload");
     expect(await screen.findByText("Как считается нагрузка")).toBeInTheDocument();
     expect(screen.getByText(/100%/)).toBeInTheDocument();
-    expect(screen.getAllByText("График не настроен").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Расписание не настроено").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Сотрудники" }));
   });
 

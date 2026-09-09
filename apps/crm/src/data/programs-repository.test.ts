@@ -139,4 +139,32 @@ describe("ProgramsRepository API adapter", () => {
     await repository.updateRunStatus("occurrence-1", "completed")
     expect(post).toHaveBeenCalledWith(expect.stringContaining("/programs/occurrences/occurrence-1/transition"), expect.objectContaining({ version: 3, status: "completed", operationId: expect.any(String), idempotencyKey: expect.any(String) }), expect.anything())
   })
+
+  it("maps template editor settings to canonical money/stages and versioned patch", async () => {
+    const patch = vi.fn(async () => template)
+    const client = {
+      get: vi.fn(async (path: string) => path === "/programs/templates/template-1" ? template : occurrence),
+      getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [], nextCursor: null }, headers: new Headers(), status: 200 })),
+      patch,
+      post: vi.fn(),
+    }
+    const repository = new ApiProgramsRepository(client as never)
+    const editor = await repository.getTemplate("template-1")
+    if (!editor) throw new Error("API template is missing")
+    editor.name = "Обновлённая программа"
+    editor.basePrice = 4500
+    editor.description = "Описание"
+    editor.stages = [{ id: "stage-1", name: "Старт", durationMinutes: 30, comment: "" }]
+    await repository.saveTemplate(editor)
+
+    expect(patch).toHaveBeenCalledWith("/programs/templates/template-1", expect.objectContaining({
+      version: 2,
+      name: "Обновлённая программа",
+      basePrice: { amountMinor: 450000, currency: "RUB" },
+      description: "Описание",
+      stages: [{ name: "Старт", durationMinutes: 30, comment: "" }],
+      operationId: expect.any(String),
+      idempotencyKey: expect.any(String),
+    }), expect.anything())
+  })
 })

@@ -1,29 +1,36 @@
 @import "tailwindcss";
+@import "@crm/site-ui/theme.css";
+@source "../../../../packages/site-ui/src";
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   :root {
-    --bg-site: #f7f7f7;
-    --accent-green: #2B9E47;
-    --accent-red: #EE2F2E;
-    --accent-amber: #FAAB2B;
-    --text-primary: #18191b;
-    --text-muted: #6b7280;
-    --card-bg: #ffffff;
+    /* Legacy aliases remain temporarily for restored components. Their values
+       are governed by the public UI-kit theme, so global edits have one source. */
+    --bg-site: var(--site-color-bg);
+    --accent-green: var(--site-color-brand-500);
+    --accent-red: var(--site-color-accent-red);
+    --accent-amber: var(--site-color-accent-amber);
+    --text-primary: var(--site-color-text);
+    --text-muted: var(--site-color-text-muted);
+    --card-bg: var(--site-color-surface);
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #f7f7f7;
-    color: #18191b;
-    letter-spacing: -0.022em;
+    font-family: var(--site-font-sans);
+    background-color: var(--site-color-bg);
+    color: var(--site-color-text);
+    letter-spacing: var(--site-tracking-body);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
+    font-weight: var(--site-weight-semibold);
     letter-spacing: -0.03em;
   }
 
@@ -37,19 +44,9 @@
   }
 }
 
-/* Shared section eyebrow: pale accent surface with accent copy and icon. */
-main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"][class*="mb-2.5"] {
-  background-color: #2b9e471a !important;
-  color: #2b9e47 !important;
-}
-
-main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"][class*="mb-2.5"] svg {
-  color: #2b9e47 !important;
-}
-
 /* Swiss typography utilities */
 .font-inter {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--site-font-sans);
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -75,23 +72,6 @@ main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"]
   scroll-snap-stop: always;
 }
 
-/* Mobile swiper nudge animation */
-@keyframes swipeHint {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  30% {
-    transform: translateX(-24px);
-  }
-  60% {
-    transform: translateX(0);
-  }
-}
-
-.animate-swipe-hint {
-  animation: swipeHint 1.8s ease-in-out 1;
-}
-
 /* Marquee continuous scroll */
 @keyframes marquee {
   0% { transform: translateX(0%); }
@@ -100,8 +80,10 @@ main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"]
 
 .animate-marquee {
   display: flex;
-  width: 200%;
-  animation: marquee 25s linear infinite;
+  width: max-content;
+  padding-inline: 6px;
+  animation: marquee 32s linear infinite;
+  will-change: transform;
 }
 
 .animate-marquee:hover {
@@ -118,13 +100,17 @@ main section [class*="inline-flex"][class*="uppercase"][class*="tracking-wider"]
   animation: pulseDot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@media (min-width: 1024px) {
-  html[data-sidebar-collapsed="true"] #site-content {
-    padding-left: 98px;
-  }
+/* Attached homepage vertical rhythm; islands retain their CMS boundaries. */
+.site-page-frame [data-section-key]:not([data-section-key="hero"]) {
+  padding-top: var(--section-gap) !important;
+  padding-bottom: 0 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *, *::before, *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react"
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { Skeleton } from "@crm/ui"
 
@@ -35,6 +35,15 @@ const ResourcesPage = lazy(() =>
 const ResourceEditorPage = lazy(() =>
   import("@app/pages/resource-editor-page").then((module) => ({ default: module.ResourceEditorPage })),
 )
+const StayOfferingResourceRedirectPage = lazy(() =>
+  import("@app/pages/stay-offering-resource-redirect-page").then((module) => ({ default: module.StayOfferingResourceRedirectPage })),
+)
+const AddOnOfferingsPage = lazy(() =>
+  import("@app/pages/addon-offerings-page").then((module) => ({ default: module.AddOnOfferingsPage })),
+)
+const AddOnOfferingEditorPage = lazy(() =>
+  import("@app/pages/addon-offering-editor-page").then((module) => ({ default: module.AddOnOfferingEditorPage })),
+)
 const ProgramsPage = lazy(() =>
   import("@app/pages/programs-page").then((module) => ({ default: module.ProgramsPage })),
 )
@@ -65,6 +74,8 @@ const TaskEditorPage = lazy(() =>
 const FinancePage = lazy(() =>
   import("@app/pages/finance-page").then((module) => ({ default: module.FinancePage })),
 )
+const MarketingPage = lazy(() => import("@app/pages/marketing-page").then(module => ({ default: module.MarketingPage })))
+const PromotionEditorPage = lazy(() => import("@app/pages/promotion-editor-page").then(module => ({ default: module.PromotionEditorPage })))
 const EventCategoriesPage = lazy(() =>
   import("@app/pages/event-categories-page").then((module) => ({ default: module.EventCategoriesPage })),
 )
@@ -114,11 +125,19 @@ export function AppRouter() {
           <Route element={<LazyRoute><BookingsPage defaultView="scheduler" /></LazyRoute>} path="schedule" />
           <Route element={<LazyRoute><CustomersPage /></LazyRoute>} path="customers" />
           <Route element={<LazyRoute><ResourcesPage /></LazyRoute>} path="resources/:kind" />
+          <Route element={<Navigate replace to="/resources/houses" />} path="offers/houses" />
+          <Route element={<LazyRoute><StayOfferingResourceRedirectPage /></LazyRoute>} path="offers/houses/:offeringId" />
+          <Route element={<Navigate replace to="/resources/camping" />} path="offers/campgrounds" />
+          <Route element={<LazyRoute><StayOfferingResourceRedirectPage /></LazyRoute>} path="offers/campgrounds/:offeringId" />
+          <Route element={<LazyRoute><AddOnOfferingsPage /></LazyRoute>} path="offers/addons" />
+          <Route element={<LazyRoute><AddOnOfferingEditorPage /></LazyRoute>} path="offers/addons/:offeringId" />
           <Route element={<LazyRoute><ProgramsPage /></LazyRoute>} path="programs" />
           <Route element={<LazyRoute><ProgramCategoriesPage /></LazyRoute>} path="programs/categories" />
           <Route element={<LazyRoute><EventsPage /></LazyRoute>} path="events" />
           <Route element={<LazyRoute><TasksPage /></LazyRoute>} path="tasks" />
           <Route element={<LazyRoute><FinancePage /></LazyRoute>} path="finance" />
+          <Route element={<LazyRoute><MarketingPage /></LazyRoute>} path="marketing" />
+          <Route element={<LazyRoute><PromotionEditorPage /></LazyRoute>} path="marketing/promotions/:id" />
           <Route element={<LazyRoute><ProfilePage /></LazyRoute>} path="profile" />
           <Route element={<LazyRoute><TeamPage /></LazyRoute>} path="team" />
           <Route element={<LazyRoute><SettingsPage /></LazyRoute>} path="settings" />

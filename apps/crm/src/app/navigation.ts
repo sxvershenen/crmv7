@@ -7,9 +7,11 @@ import {
   IconCampfire,
   IconCash,
   IconDashboard,
+  IconDiscount2,
   IconHome,
   IconMap,
   IconMessageQuestion,
+  IconPuzzle,
   IconSettings,
   IconSparkles,
   IconTargetArrow,
@@ -33,9 +35,10 @@ export const navGroups = [
     label: "Ресурсы и расписание",
     items: [
       { label: "Домики", href: "/resources/houses", icon: IconBuildingCottage },
+      { label: "Палаточный кемпинг", href: "/resources/camping", icon: IconTent },
       { label: "Баня и чан", href: "/resources/bath", icon: IconBath },
       { label: "Площадки", href: "/resources/venues", icon: IconMap },
-      { label: "Палаточный кемпинг", href: "/resources/camping", icon: IconTent },
+      { label: "Допы и услуги", href: "/offers/addons", icon: IconPuzzle },
       { label: "Программы", href: "/programs", icon: IconSparkles },
       { label: "Мероприятия", href: "/events", icon: IconCampfire },
     ],
@@ -45,6 +48,7 @@ export const navGroups = [
     items: [
       { label: "Задачи", href: "/tasks", icon: IconTargetArrow },
       { label: "Финансы", href: "/finance", icon: IconCash },
+      { label: "Маркетинг", href: "/marketing", icon: IconTargetArrow },
       { label: "Команда", href: "/team", icon: IconUsersGroup },
       { label: "Настройки CRM", href: "/settings", icon: IconSettings },
     ],
@@ -59,6 +63,27 @@ export const quickCreateItems = [
   { label: "Программу", href: "/programs/new", icon: IconSparkles },
   { label: "Мероприятие", href: "/events/new", icon: IconCampfire },
 ] as const
+
+/**
+ * Actions which are meaningful in the currently open operational section.
+ * Keep these separate from the global list: the topbar and mobile sheet can
+ * expose the same registry without duplicating route matching logic.
+ */
+export const contextualCreateItems = [
+  { label: "Домик", href: "/resources/houses/new", icon: IconBuildingCottage, section: "/resources/houses" },
+  { label: "Кемпинг", href: "/resources/camping/new", icon: IconTent, section: "/resources/camping" },
+  { label: "SPA-ресурс", href: "/resources/bath/new", icon: IconBath, section: "/resources/bath" },
+  { label: "Площадку", href: "/resources/venues/new", icon: IconMap, section: "/resources/venues" },
+  { label: "Доп/услугу", href: "/offers/addons?create=1", icon: IconPuzzle, section: "/offers/addons" },
+  { label: "Проведение", href: "/programs/runs/new", icon: IconCalendarEvent, section: "/programs" },
+  { label: "Регистрацию", href: "/programs/registrations/new", icon: IconUsers, section: "/programs" },
+  { label: "Промокод", href: "/marketing/promotions/new", icon: IconDiscount2, section: "/marketing" },
+] as const
+
+export function getQuickCreateItems(pathname: string) {
+  const contextual = contextualCreateItems.filter((item) => pathname === item.section || pathname.startsWith(`${item.section}/`))
+  return { contextual, global: quickCreateItems }
+}
 
 export const mobileNav = [
   { label: "Обзор", href: "/", icon: IconHome },

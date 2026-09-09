@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertAvailable, calculatePaymentSummary, canTransitionTask, capabilitiesForRoles, checkAvailability, createInterval, normalizePhone, overlaps, phonesEqual, validateIdempotencyInput } from "../src";
+import { assertAvailable, calculatePaymentSummary, canTransitionTask, capabilitiesForRoles, checkAvailability, createInterval, normalizePhone, overlaps, phonesEqual, roleCapabilities, validateIdempotencyInput } from "../src";
 import { DomainError } from "../src/errors";
 
 const date = (value: string) => new Date(`2026-01-01T${value}:00.000Z`);
@@ -33,6 +33,12 @@ describe("task, RBAC and payment rules", () => {
     expect(capabilities.canView).toBe(true);
     expect(capabilities.canEdit).toBe(true);
     expect(capabilities.canManageUsers).toBe(false);
+  });
+  it("keeps CMS authority conservative by role", () => {
+    expect(roleCapabilities("admin").canPublishContent).toBe(true);
+    expect(roleCapabilities("technical_admin")).toMatchObject({ canViewContent: true, canManageSiteCode: true, canManageIntegrations: true, canManageSiteSettings: true, canEditContent: false });
+    expect(roleCapabilities("manager")).toMatchObject({ canViewContent: true, canEditContent: true, canReviewContent: true, canManageSeo: true, canManageMedia: true, canViewAnalytics: true, canPublishContent: false, canViewRawAnalytics: false, canManageSiteCode: false });
+    expect(roleCapabilities("readonly")).toMatchObject({ canViewContent: true, canEditContent: false, canViewAnalytics: false });
   });
   it("calculates immutable payment totals in minor units", () => {
     const summary = calculatePaymentSummary({ amountMinor: 10_000, currency: "RUB" }, [

@@ -2,6 +2,7 @@ import type { Assignee } from "@crm/ui"
 import { z } from "zod"
 
 import { taskPriorities, taskRelationTypes, taskStatuses, type TaskEditorRecord } from "@app/entities/tasks"
+import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime"
 
 export type TaskFormValues = {
   archived: boolean
@@ -31,15 +32,8 @@ export const taskFormSchema = z.object({
   title: z.string().refine((value) => value.trim().length > 0, "Укажите название задачи"),
 })
 
-function pad(value: number) {
-  return String(value).padStart(2, "0")
-}
-
 export function toLocalDateTimeInput(value: string | null) {
-  if (!value) return ""
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return ""
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  return toBusinessDateTimeInput(value)
 }
 
 export function formatTaskDue(value: string) {
@@ -70,7 +64,7 @@ export function toTaskFormValues(record: TaskEditorRecord): TaskFormValues {
 }
 
 export function applyTaskFormValues(record: TaskEditorRecord, values: TaskFormValues): TaskEditorRecord {
-  const dueAt = values.dueAt ? new Date(values.dueAt).toISOString() : null
+  const dueAt = values.dueAt ? businessDateTimeToIso(values.dueAt) : null
   return {
     ...record,
     archived: values.archived,

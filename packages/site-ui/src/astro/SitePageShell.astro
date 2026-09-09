@@ -1,0 +1,12 @@
+---
+interface Props {
+  id?: string
+  class?: string
+}
+
+const { class: className, id = "site-content" } = Astro.props
+---
+
+<div {id} class:list={["site-page-shell", className]}>
+  <slot />
+</div>

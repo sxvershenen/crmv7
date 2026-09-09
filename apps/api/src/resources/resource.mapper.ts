@@ -4,8 +4,8 @@ import type { ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 
 import type { ResourceDto, ResourceReadModel } from "./resources.contracts.js"
 
-const defaultIcons: Record<string, string> = { bath: "bath", camping: "tent", houses: "cottage", house: "cottage", venues: "map" }
-const defaultColors: Record<string, ResourceReadModel["colorKey"]> = { bath: "orange", camping: "green", houses: "blue", house: "blue", venues: "violet" }
+const defaultIcons: Record<string, string> = { bath: "bath", camping: "tent", campground: "tent", campground_owned_tent: "tent", campground_own_tent_area: "tent", houses: "cottage", house: "cottage", venues: "map" }
+const defaultColors: Record<string, ResourceReadModel["colorKey"]> = { bath: "orange", camping: "green", campground: "green", campground_owned_tent: "green", campground_own_tent_area: "green", houses: "blue", house: "blue", venues: "violet" }
 const defaultRules: ResourceReadModel["rules"] = {
   availableDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], bookingStepMinutes: "", defaultCheckIn: "",
   defaultCheckOut: "", maxDurationMinutes: "", minDurationMinutes: "", preparationAfterMinutes: "", preparationBeforeMinutes: "",

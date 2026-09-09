@@ -3,7 +3,8 @@ import { Progress } from "../ui/progress"
 
 const money = new Intl.NumberFormat("ru-RU", {
   currency: "RUB",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
   style: "currency",
 })
 

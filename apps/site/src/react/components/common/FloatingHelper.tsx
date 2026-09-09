@@ -1,22 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Send } from 'lucide-react';
+import { useForgivingHover } from '../../utils/useForgivingHover';
 
 interface FloatingHelperProps {
   onOpenBookingModal?: () => void;
 }
 
 export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    const expandTimer = window.setTimeout(() => setIsExpanded(true), 60_000);
-    const collapseTimer = window.setTimeout(() => setIsExpanded(false), 120_000);
-    return () => {
-      window.clearTimeout(expandTimer);
-      window.clearTimeout(collapseTimer);
-    };
-  }, []);
+  const { expanded: isExpanded, open, closeSoon } = useForgivingHover();
 
   const handleManagerChat = () => {
     setIsConfirmOpen(true);
@@ -30,7 +22,14 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
   return (
     <>
       {/* Desktop Floating Card (Bottom Right) */}
-      <div className="hidden lg:flex fixed bottom-6 right-6 z-40 items-center">
+      <div
+        data-site-component="floating-helper"
+        className="hidden lg:flex fixed bottom-6 right-6 z-40 items-center"
+        onPointerEnter={open}
+        onPointerLeave={closeSoon}
+        onFocusCapture={open}
+        onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) closeSoon(); }}
+      >
         {isConfirmOpen && (
           <div className="absolute bottom-full right-0 mb-3 w-[280px] rounded-3xl bg-white border border-neutral-200 shadow-xl p-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="text-[14px] font-semibold text-[#18191b]">Перейти в ВКонтакте?</div>
@@ -43,7 +42,9 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
         )}
         <button
           onClick={handleManagerChat}
-          className={`flex items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 hover:scale-[1.02] transition-all duration-500 group cursor-pointer ${isExpanded ? 'gap-3 p-2.5 pr-4' : 'w-12 h-12 p-0.5'}`}
+          aria-label="Написать менеджеру в ВК"
+          aria-expanded={isExpanded}
+          className={`site-floating-helper flex h-12 items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 hover:scale-[1.02] transition-[width,padding,gap,transform,border-color] duration-500 ease-[var(--ease-spring)] group cursor-pointer ${isExpanded ? 'w-[294px] gap-3 p-1 pr-3' : 'w-12 gap-0 p-0.5'}`}
         >
           {/* Avatar with pulsing online dot */}
           <div className="relative">
@@ -55,7 +56,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#2B9E47] border-2 border-white"></span>
           </div>
 
-          <div className={`text-left whitespace-nowrap transition-all duration-300 ${isExpanded ? 'max-w-[190px] opacity-100' : 'max-w-0 opacity-0 overflow-hidden'}`}>
+          <div className={`text-left whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'max-w-[190px] opacity-100' : 'max-w-0 opacity-0'}`}>
             <div className="text-[12px] font-semibold text-[#18191b] flex items-center gap-1.5 leading-none mb-1">
               Нужна помощь?
               <span className="text-[10px] font-normal text-[#2B9E47] bg-[#2B9E47]/10 px-1.5 py-0.5 rounded-full">онлайн</span>
@@ -65,7 +66,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             </div>
           </div>
 
-          <div className={`w-7 h-7 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-colors ${isExpanded ? 'ml-1' : 'hidden'}`}>
+          <div className={`w-7 h-7 shrink-0 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-[opacity,transform,background-color,color] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-75'}`}>
             <Send className="w-3.5 h-3.5 -rotate-12" />
           </div>
         </button>

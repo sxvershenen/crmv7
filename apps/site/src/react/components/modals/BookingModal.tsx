@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Phone, ArrowUpRight, Sparkles, Send } from 'lucide-react';
+import { useDialogBehavior } from '../../utils/useDialogBehavior';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   onOpenCallModal,
   initialItemName
 }) => {
+  const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleVkClick = () => {
@@ -32,8 +34,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div 
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-dialog-title"
         className="relative w-full max-w-md bg-white rounded-3xl p-6 md:p-8 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -52,7 +58,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           Индивидуальный сервис
         </div>
 
-        <h3 className="text-[24px] font-semibold text-[#18191b] leading-tight mb-2">
+        <h3 id="booking-dialog-title" className="text-[24px] font-semibold text-[#18191b] leading-tight mb-2">
           Забронировать отдых
         </h3>
         

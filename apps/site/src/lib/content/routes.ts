@@ -1,6 +1,7 @@
 export type PublicRoute = {
   readonly pathname: `/${string}`
   readonly changeFrequency: "daily" | "weekly" | "monthly" | "yearly"
+  readonly indexable: boolean
 }
 
 /**
@@ -8,8 +9,9 @@ export type PublicRoute = {
  * generation until the content/admin API is introduced.
  */
 export const publicRoutes = [
-  { pathname: "/", changeFrequency: "weekly" },
-  { pathname: "/privacy", changeFrequency: "yearly" },
+  { pathname: "/", changeFrequency: "weekly", indexable: true },
+  { pathname: "/blog", changeFrequency: "weekly", indexable: true },
+  { pathname: "/privacy", changeFrequency: "yearly", indexable: false },
 ] as const satisfies readonly PublicRoute[]
 
 export function publicRoute(pathname: PublicRoute["pathname"]): PublicRoute {

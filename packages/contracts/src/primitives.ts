@@ -40,3 +40,14 @@ export const PageInfoSchema = z.object({
 export const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema)]),
 );
+
+export const JsonScalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+export const BoundedJsonObjectSchema = z.record(z.string().min(1).max(120), JsonScalarSchema);
+export const BoundedJsonValueSchema = z.union([
+  JsonScalarSchema,
+  z.array(JsonScalarSchema).max(500),
+  BoundedJsonObjectSchema,
+  z.array(BoundedJsonObjectSchema).max(500),
+  z.record(z.string().min(1).max(120), z.union([JsonScalarSchema, z.array(JsonScalarSchema).max(500)])),
+]);
+export type BoundedJsonValue = z.infer<typeof BoundedJsonValueSchema>;

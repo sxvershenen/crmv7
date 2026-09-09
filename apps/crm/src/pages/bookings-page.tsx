@@ -67,10 +67,9 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
     source,
     utm,
   }), [amountFrom, category, conflictOnly, date, debtFrom, overpayOnly, promo, rangeEnd, resource, sortDirection, sortKey, source, utm, view])
-  const { retry, state, updateInterval } = useBookings(query)
+  const { assignSelf, retry, state, updateInterval } = useBookings(query)
   const [conflictMessage, setConflictMessage] = useState("")
   const [announcement, setAnnouncement] = useState("")
-  const [assignedIds, setAssignedIds] = useState<string[]>([])
   const [laneCount, setLaneCount] = useState(3)
   const [lanePage, setLanePage] = useState(0)
   const [selectedSchedulerResource, setSelectedSchedulerResource] = useState("")
@@ -120,6 +119,14 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
       setConflictMessage(message)
       setAnnouncement(message)
       throw error
+    }
+  }
+  const assignBooking = async (id: string) => {
+    try {
+      const updated = await assignSelf(id)
+      setAnnouncement(`Вы назначены ответственным за бронирование #${updated.id}.`)
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : "Не удалось назначить ответственного")
     }
   }
   const resetFilters = () => {
@@ -187,7 +194,7 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
       {(state.status === "ready" && state.data.bookings.length > 0) || (view === "scheduler" && schedulerData && schedulerData.resources.length > 0) ? (
         <div data-bookings-view={view}>
           {view === "agenda" && state.status === "ready" ? <AgendaView data={state.data} date={date} /> : null}
-          {view === "table" && state.status === "ready" ? <BookingTable assignedIds={assignedIds} bookings={state.data.bookings} onAssign={(id) => setAssignedIds((current) => [...new Set([...current, id])])} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} /> : null}
+          {view === "table" && state.status === "ready" ? <BookingTable bookings={state.data.bookings} onAssign={(id) => { void assignBooking(id) }} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} /> : null}
           {view === "scheduler" && schedulerData ? <VerticalScheduler data={schedulerData} date={date} lanePage={lanePage} onAnnouncement={setAnnouncement} onChange={handleScheduleChange} onConflict={setConflictMessage} onLaneCountChange={handleLaneCountChange} onNavigateDate={navigateSchedulerDate} selectedResource={selectedSchedulerResource || schedulerData.resources[0]?.id || ""} /> : null}
         </div>
       ) : null}

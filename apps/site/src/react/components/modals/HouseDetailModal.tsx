@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Users, CheckCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { HouseItem } from '../../data/resortData';
+import { useDialogBehavior } from '../../utils/useDialogBehavior';
 
 interface HouseDetailModalProps {
   house: HouseItem | null;
@@ -16,12 +17,19 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
   onBook
 }) => {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const dialogRef = useDialogBehavior(isOpen, onClose);
+
+  useEffect(() => setActivePhotoIndex(0), [house?.id]);
 
   if (!isOpen || !house) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div 
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="house-dialog-title"
         className="relative w-full max-w-3xl bg-white rounded-3xl p-5 md:p-8 my-auto animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -51,6 +59,8 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
                 <button
                   key={idx}
                   onClick={() => setActivePhotoIndex(idx)}
+                  aria-label={`Показать фото ${idx + 1} из ${house.photos.length}`}
+                  aria-current={activePhotoIndex === idx ? "true" : undefined}
                   className={`w-12 h-8 rounded-lg overflow-hidden border-2 transition-all ${
                     activePhotoIndex === idx ? 'border-white scale-105' : 'border-transparent opacity-70 hover:opacity-100'
                   }`}
@@ -71,7 +81,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
         {/* Header & Title */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-[26px] md:text-[30px] font-semibold text-[#18191b] leading-tight">
+            <h2 id="house-dialog-title" className="text-[26px] md:text-[30px] font-semibold text-[#18191b] leading-tight">
               {house.title}
             </h2>
             <p className="text-[14px] text-[#6b7280] mt-1">

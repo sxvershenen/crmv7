@@ -44,6 +44,11 @@ function formatDate(value: Date | undefined) {
   return value ? dateFormatter.format(value).replace(" г.", "") : ""
 }
 
+function calendarBounds() {
+  const year = new Date().getFullYear()
+  return { startMonth: new Date(year - 30, 0), endMonth: new Date(year + 10, 11) }
+}
+
 export function DatePicker(props: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const label = props.label ?? (props.mode === "range" ? "Диапазон дат" : "Дата")
@@ -73,6 +78,8 @@ export function DatePicker(props: DatePickerProps) {
       <PopoverContent align="start" className="w-auto p-0">
         {props.mode === "range" ? (
           <Calendar
+            {...calendarBounds()}
+            captionLayout="dropdown"
             className="[--cell-size:--spacing(11)] sm:[--cell-size:--spacing(8)]"
             locale={ru}
             mode="range"
@@ -82,6 +89,8 @@ export function DatePicker(props: DatePickerProps) {
           />
         ) : (
           <Calendar
+            {...calendarBounds()}
+            captionLayout="dropdown"
             className="[--cell-size:--spacing(11)] sm:[--cell-size:--spacing(8)]"
             locale={ru}
             mode="single"

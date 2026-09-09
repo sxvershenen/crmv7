@@ -43,6 +43,7 @@ const relationGroups = [
 
 export function ManualRelationPicker({
   addLabel,
+  disabled = false,
   emptyLabel,
   label,
   multiple = false,
@@ -53,6 +54,7 @@ export function ManualRelationPicker({
   values,
 }: {
   addLabel: string;
+  disabled?: boolean;
   emptyLabel: string;
   label: string;
   multiple?: boolean;
@@ -124,6 +126,7 @@ export function ManualRelationPicker({
                   render={
                     <Button
                       aria-label={`Убрать связь: ${option.label}`}
+                      disabled={disabled}
                       onClick={() =>
                         onValuesChange(
                           values.filter((value) => value !== option.id),
@@ -151,6 +154,7 @@ export function ManualRelationPicker({
             <Button
               aria-label={label}
               className="w-fit"
+              disabled={disabled}
               size="xs"
               variant="outline"
             />

@@ -22,6 +22,7 @@ export const GET: APIRoute = ({ site }) => {
   }
 
   const urls = publicRoutes
+    .filter(({ indexable }) => indexable)
     .map(({ pathname }) => `  <url><loc>${escapeXml(new URL(pathname, site).toString())}</loc></url>`)
     .join("\n")
 

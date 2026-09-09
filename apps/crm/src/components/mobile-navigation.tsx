@@ -12,13 +12,14 @@ import {
   cn,
 } from "@crm/ui";
 
-import { mobileNav, navGroups, quickCreateItems } from "@app/app/navigation";
+import { getQuickCreateItems, mobileNav, navGroups } from "@app/app/navigation";
 import { useEditorLayout } from "@app/app/editor-layout-context";
 
 export function MobileNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
   const { chrome: editorChrome } = useEditorLayout();
+  const createItems = getQuickCreateItems(location.pathname);
   const [createOpen, setCreateOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLeadBooking, setConfirmLeadBooking] = useState(false);
@@ -84,7 +85,7 @@ export function MobileNavigation() {
             <SheetDescription>Выберите тип новой записи.</SheetDescription>
           </SheetHeader>
           <div className="grid grid-cols-2 gap-2 px-4 pb-5">
-            {quickCreateItems.map((item) => (
+            {[...createItems.contextual, ...createItems.global].map((item) => (
               <button
                 className="flex min-h-12 items-center gap-3 rounded-lg border px-3 text-left text-[13px] font-normal hover:bg-muted"
                 key={item.href}
@@ -129,7 +130,7 @@ export function MobileNavigation() {
               Создать
             </p>
             <div className="mb-5 grid gap-1">
-              {quickCreateItems.map((item) => (
+              {[...createItems.contextual, ...createItems.global].map((item) => (
                 <button
                   className="flex min-h-11 items-center gap-3 rounded-md px-2 text-left text-xs hover:bg-muted"
                   key={item.href}

@@ -107,7 +107,24 @@ export class CustomersService {
     })
   }
 
+  async assignSelf(id: string, version: number, actor: SessionUser, requestId: string): Promise<CustomerDto> {
+    assertCapability(actor.capabilities, "canAssign")
+    return this.dataSource.transaction(async (manager) => {
+      const current = await this.findWith(manager, id)
+      if (current.version !== version) throw this.versionConflict(current)
+      if (current.assignees.some((assignee) => assignee.id === actor.id)) return toCustomerDto(current, actor)
+      const assignee = { id: actor.id, initials: this.initials(actor.name), name: actor.name }
+      const assignees = [...current.assignees, assignee]
+      const result = await manager.createQueryBuilder().update(CustomerEntity).set({ assignees, updatedBy: actor.id, version: () => '"version" + 1', updatedAt: () => "now()" }).where("id = :id AND version = :version", { id, version }).execute()
+      if (result.affected !== 1) throw this.versionConflict(await this.findWith(manager, id))
+      const saved = await this.findWith(manager, id)
+      await this.recordMutation(manager, saved, "assigned", actor.id, requestId, { before: current.assignees, after: assignees })
+      return toCustomerDto(saved, actor)
+    })
+  }
+
   private async find(id: string) { return this.findWith(this.dataSource.manager, id) }
+  private initials(name: string) { return name.trim().split(/\s+/u).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru-RU") ?? "").join("") || "?" }
   private async hasPhoneDuplicate(manager: EntityManager, phones: string[], excludeId?: string) {
     const keys = [...new Set(phones.flatMap((phone) => {
       const normalized = normalizePhone(phone)

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Public site UI renderer manifest",
+  "type": "object",
+  "required": ["package", "version", "rendererVersion", "schemaVersion", "sectionKeys", "actions"],
+  "properties": {
+    "package": { "const": "@crm/site-ui" },
+    "version": { "type": "string" },
+    "rendererVersion": { "type": "string" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "sectionKeys": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "actions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  },
+  "additionalProperties": true
+}

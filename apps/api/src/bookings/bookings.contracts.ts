@@ -1,8 +1,11 @@
 export {
   BookingArchiveSchema,
+  BookingAssignSelfSchema,
   BookingCreateSchema,
   BookingDetailResponseSchema,
   BookingIntervalUpdateSchema,
+  BookingLeadLinkInputSchema,
+  BookingLeadUnlinkInputSchema,
   BookingListQuerySchema,
   BookingProjectionQuerySchema,
   BookingTransitionSchema,
@@ -11,9 +14,12 @@ export {
 
 export type {
   BookingArchive,
+  BookingAssignSelf,
   BookingCreate,
   BookingDetailResponse,
   BookingIntervalUpdate,
+  BookingLeadLinkInput,
+  BookingLeadUnlinkInput,
   BookingDto,
   BookingListQuery,
   BookingProjectionQuery,

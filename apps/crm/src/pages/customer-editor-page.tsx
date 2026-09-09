@@ -55,6 +55,7 @@ import type {
   CustomerChannel,
   CustomerType,
 } from "@app/entities/customers";
+import { useFixtureData } from "@app/lib/data-mode";
 import {
   customerChannels,
   customerTypeLabels,
@@ -74,7 +75,6 @@ const tabs = [
 type CustomerEditorTab = (typeof tabs)[number];
 type CustomerDraft = Customer & {
   additionalPhone: string;
-  birthday: string;
   email: string;
   marketing: MarketingAttributionDraft;
   preferredChannel: CustomerChannel;
@@ -134,15 +134,13 @@ function oneOf<T extends string>(
 function toDraft(customer: Customer): CustomerDraft {
   return {
     ...customer,
-    additionalPhone: "",
-    birthday: "",
-    email: "",
-    marketing: createPreviewMarketing(
-      customer.channels[0] ?? "Сайт",
-      "organic",
-    ),
+    additionalPhone: customer.phones?.[1] ?? "",
+    email: customer.email ?? "",
+    marketing: useFixtureData
+      ? createPreviewMarketing(customer.channels[0] ?? "Сайт", "organic")
+      : createPreviewMarketing("", ""),
     preferredChannel: customer.channels[0] ?? "Телефон",
-    preferences: "",
+    preferences: customer.notes ?? "",
   };
 }
 
@@ -406,18 +404,6 @@ function CustomerMain({
             />
           </FormField>
           <FormField
-            className="sm:col-span-2"
-            htmlFor="customer-birthday"
-            label="Дата рождения"
-          >
-            <Input
-              id="customer-birthday"
-              onChange={(event) => update("birthday", event.target.value)}
-              type="date"
-              value={draft.birthday}
-            />
-          </FormField>
-          <FormField
             className="sm:col-span-6"
             htmlFor="customer-preferences"
             label="Предпочтения и заметки"
@@ -594,6 +580,7 @@ function CustomerRelatedTab({
   if (tab === "marketing")
     return (
       <EditorMarketingAttribution
+        available={false}
         idPrefix="customer-marketing"
         onChange={updateMarketing}
         value={draft.marketing}

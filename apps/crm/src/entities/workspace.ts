@@ -4,6 +4,7 @@ export type TeamMember = {
   colorClass: string;
   email: string;
   id: string;
+  version: number;
   initials: string;
   lastActiveLabel: string;
   name: string;
@@ -18,6 +19,7 @@ export type WorkspaceProfile = {
   email: string;
   emailNotifications: boolean;
   id: string;
+  version: number;
   initials: string;
   language: "ru";
   name: string;
@@ -41,6 +43,9 @@ export type WorkspaceIntegration = {
 };
 
 export type CrmSettings = {
+  id: string;
+  version: number;
+  canManageSettings: boolean;
   organization: {
     currency: "RUB";
     email: string;

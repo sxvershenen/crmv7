@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "status": "canonical",
+  "visualReference": "attached glamping-website-development/src design port",
+  "galleryRoute": "/dev/site-ui-v2",
+  "foundations": [],
+  "canonical": [
+    { "export": "SiteHero", "family": "homepage-hero", "consumer": "apps/site/src/react/components/sections/HeroSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteSectionHeader", "family": "homepage-section-heading", "consumer": "apps/site/src/react/components/sections/EventsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteActionSectionHeader", "family": "homepage-action-heading", "consumer": "apps/site/src/react/components/sections/ProgramsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteFilterMenu", "family": "homepage-filter-menu", "consumer": "apps/site/src/react/components/sections/ProgramsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteSecondaryAction", "family": "homepage-secondary-action", "consumer": "apps/site/src/components/islands/BlogSectionIsland.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx", "galleryNeedle": "<ProgramsSection" },
+    { "export": "SiteResponsiveRail", "family": "homepage-responsive-rail", "consumer": "apps/site/src/react/components/sections/HousesSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteEventFeatureCard", "family": "homepage-event-card", "consumer": "apps/site/src/react/components/sections/EventsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteVkCommunityCard", "family": "homepage-social-card", "consumer": "apps/site/src/react/components/sections/EventsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteResourceFeatureCard", "family": "homepage-house-card", "consumer": "apps/site/src/react/components/sections/HousesSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteHouseMedia", "family": "homepage-house-media", "consumer": "apps/site/src/react/components/sections/HousesSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteSpaFeatureCard", "family": "homepage-spa-card", "consumer": "apps/site/src/react/components/sections/SaunaChanSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteSpaMedia", "family": "homepage-spa-media", "consumer": "apps/site/src/react/components/sections/SaunaChanSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx" },
+    { "export": "SiteProgramFeatureCard", "family": "homepage-program-card", "consumer": "apps/site/src/react/components/sections/ProgramsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx", "galleryNeedle": "<ProgramsSection" },
+    { "export": "SiteImageCategoryCard", "family": "homepage-category-card", "consumer": "apps/site/src/react/components/sections/ProgramsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx", "galleryNeedle": "<ProgramsSection" },
+    { "export": "Pagination", "family": "homepage-pagination", "consumer": "apps/site/src/react/components/sections/ProgramsSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx", "galleryNeedle": "<ProgramsSection" },
+    { "export": "SiteVenueCard", "family": "homepage-venue-card", "consumer": "apps/site/src/react/components/sections/VenuesSection.tsx", "gallerySource": "apps/site/src/components/islands/SiteUiV2GalleryIsland.tsx", "galleryNeedle": "<VenuesSection" },
+    { "export": "ArticleCard", "family": "homepage-blog-card", "consumer": "apps/site/src/components/islands/BlogSectionIsland.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<BlogSection />" },
+    { "export": "SiteListingRail", "family": "homepage-blog-rail", "consumer": "apps/site/src/components/islands/BlogSectionIsland.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<BlogSection />" },
+    { "export": "SiteFooterShell", "family": "homepage-footer", "consumer": "apps/site/src/components/sections/Footer.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<Footer />" },
+    { "export": "SiteFooterBrand", "family": "homepage-footer-brand", "consumer": "apps/site/src/components/sections/Footer.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<Footer />" },
+    { "export": "SiteFooterColumn", "family": "homepage-footer-column", "consumer": "apps/site/src/components/sections/Footer.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<Footer />" },
+    { "export": "SiteFooterLegal", "family": "homepage-footer-legal", "consumer": "apps/site/src/components/sections/Footer.tsx", "gallerySource": "apps/site/src/pages/dev/site-ui-v2.astro", "galleryNeedle": "<Footer />" }
+  ]
+}

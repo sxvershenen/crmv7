@@ -8,6 +8,10 @@ export type PaymentSummary = {
   total: number
 }
 
+export type DashboardAssignment =
+  | { kind: "self"; entityType: "booking" | "lead" | "task"; version: number }
+  | { kind: "unsupported"; reason: string }
+
 export type DashboardContentSummary = {
   label?: "Хотят"
   value: string
@@ -26,6 +30,7 @@ export type DashboardItem = {
   contentSummary?: DashboardContentSummary
   assignees: Assignee[]
   assignedToMe: boolean
+  assignment?: DashboardAssignment
   payment?: PaymentSummary
   badge?: {
     label: string

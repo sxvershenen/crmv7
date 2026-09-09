@@ -79,9 +79,9 @@ describe("LeadsPage", () => {
 
     await user.click(assign)
 
-    expect(within(leadCard!).queryByRole("button", { name: "Назначить ответственного заявке 1283" })).not.toBeInTheDocument()
-    expect(within(leadCard!).getByLabelText("Ответственные: Марина Кириллова")).toBeInTheDocument()
-    expect(screen.getByText("Марина Кириллова назначена заявке #1283.", { selector: ".sr-only" })).toBeInTheDocument()
+    await waitFor(() => expect(within(leadCard!).queryByRole("button", { name: "Назначить ответственного заявке 1283" })).not.toBeInTheDocument())
+    expect(await within(leadCard!).findByLabelText("Ответственные: Марина Кириллова")).toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('p[aria-live="assertive"]')).toHaveTextContent("Марина Кириллова назначена заявке #1283."))
   })
 
   it("uses shared neutral table pieces with sortable URL state", async () => {

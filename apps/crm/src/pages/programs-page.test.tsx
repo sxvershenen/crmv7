@@ -61,7 +61,7 @@ describe("ProgramsPage", () => {
     expect(within(screen.getByTestId("program-scheduler")).getAllByText(/Семейный день в лесу/).length).toBeGreaterThan(0)
   })
 
-  it("changes run status through the generated select without backend authority", async () => {
+  it("changes run status through the generated select and confirms persistence", async () => {
     const user = userEvent.setup()
     renderPrograms("/programs?section=runs")
     const table = await screen.findByTestId("desktop-program-runs")
@@ -69,7 +69,7 @@ describe("ProgramsPage", () => {
     await user.click(status)
     await user.click(await screen.findByRole("option", { name: "Завершено" }))
     expect(within(table).getByRole("combobox", { name: "Статус проведения #24081" })).toHaveTextContent("Завершено")
-    expect(screen.getByText("Статус проведения #24081 изменён локально")).toBeInTheDocument()
+    expect(screen.getByText("Статус проведения #24081 сохранён")).toBeInTheDocument()
   })
 
   it("renders revenue as paid progress in the runs table", async () => {

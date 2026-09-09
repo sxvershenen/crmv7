@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { IconAlertTriangle, IconFilter } from "@tabler/icons-react"
 import { useSearchParams } from "react-router-dom"
 
-import { PageFrame, PageState, type Assignee } from "@crm/ui"
+import { PageFrame, PageState } from "@crm/ui"
 
 import { CustomerFilters } from "@app/components/customers/customer-filters"
 import { CustomerCards, CustomerTable, CustomersLoading } from "@app/components/customers/customer-views"
@@ -21,7 +21,6 @@ function readFlags(value: string | null): CustomerFlag[] {
 }
 
 export function CustomersPage({ repository = customerRepository }: { repository?: CustomerRepository }) {
-  const [assignedCustomers, setAssignedCustomers] = useState<Record<string, Assignee[]>>({})
   const [assignmentMessage, setAssignmentMessage] = useState("")
   const [searchParams, setSearchParams] = useSearchParams()
   const type = oneOf(searchParams.get("type"), ["all", ...customerTypes] as const, "all")
@@ -39,16 +38,18 @@ export function CustomersPage({ repository = customerRepository }: { repository?
     lastVisitDays: lastVisitDays === "all" ? null : Number(lastVisitDays) as 30 | 60 | 90,
     sort: { key: sortKey, direction: sortDirection },
   }), [channel, flags, lastVisitDays, sortDirection, sortKey, type])
-  const { retry, state } = useCustomers(query, repository)
-  const visibleCustomers = useMemo(() => state.status === "ready" ? state.data.map((customer) => ({
-    ...customer,
-    assignees: assignedCustomers[customer.id] ?? customer.assignees,
-  })) : [], [assignedCustomers, state])
+  const { assignSelf, retry, state } = useCustomers(query, repository)
+  const visibleCustomers = state.status === "ready" ? state.data : []
 
-  const assignCustomer = (customerId: string) => {
-    const assignee: Assignee = { id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }
-    setAssignedCustomers((current) => ({ ...current, [customerId]: [assignee] }))
-    setAssignmentMessage(`Марина Кириллова назначена клиенту #${customerId}`)
+  const assignCustomer = async (customerId: string) => {
+    setAssignmentMessage("")
+    try {
+      const assigned = await assignSelf(customerId)
+      const person = assigned.assignees.at(-1)
+      setAssignmentMessage(`${person?.name ?? "Вы"} назначена клиенту #${customerId}`)
+    } catch (error) {
+      setAssignmentMessage(error instanceof Error ? error.message : "Не удалось назначить ответственного")
+    }
   }
 
   const setFilter = (name: "type" | "channel" | "visit", value: string, defaultValue = "all") => {
@@ -119,8 +120,8 @@ export function CustomersPage({ repository = customerRepository }: { repository?
       ) : null}
       {state.status === "ready" && state.data.length > 0 ? (
         <>
-          <CustomerCards customers={visibleCustomers} onAssign={assignCustomer} />
-          <CustomerTable customers={visibleCustomers} onAssign={assignCustomer} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} />
+          <CustomerCards customers={visibleCustomers} onAssign={(id) => { void assignCustomer(id) }} />
+          <CustomerTable customers={visibleCustomers} onAssign={(id) => { void assignCustomer(id) }} onSort={handleSort} sortDirection={sortDirection} sortKey={sortKey} />
           <p className="text-[11px] font-normal text-muted-foreground">Показано: {state.data.length}</p>
         </>
       ) : null}

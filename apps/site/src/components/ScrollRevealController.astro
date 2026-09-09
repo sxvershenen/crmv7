@@ -1,0 +1,58 @@
+<script is:inline>
+  (() => {
+    const initialise = () => {
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const sections = document.querySelectorAll(".site-page-frame [data-section-key]:not([data-section-key='hero'])");
+      const revealSelector = [
+        ".site-home-heading",
+        ".card",
+        ".site-article-card-link",
+        ".site-accordion-list",
+        "[data-gallery-component]",
+      ].join(",");
+
+      const registered = new Set();
+      sections.forEach((section) => {
+        const targets = Array.from(section.querySelectorAll(revealSelector));
+        if (!targets.length) targets.push(section);
+        targets.forEach((target, index) => {
+          // An Astro island owns all descendants during hydration. Mark its host
+          // until hydration completes so React sees unchanged server markup.
+          const revealTarget = target.closest("astro-island[ssr]") || target;
+          if (registered.has(revealTarget)) return;
+          registered.add(revealTarget);
+          revealTarget.setAttribute("data-site-reveal", "");
+          revealTarget.style.setProperty("--site-reveal-delay", `${Math.min(index, 8) * 65}ms`);
+        });
+      });
+
+      const targets = document.querySelectorAll("[data-site-reveal]");
+      if (!targets.length) return;
+      document.documentElement.classList.add("site-reveal-ready");
+
+      const complete = (target) => {
+        target.setAttribute("data-site-reveal-state", "complete");
+        target.removeAttribute("data-site-reveal");
+        target.style.removeProperty("--site-reveal-delay");
+      };
+
+      if (reduced || !("IntersectionObserver" in window)) {
+        targets.forEach(complete);
+        return;
+      }
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.setAttribute("data-site-reveal-state", "revealed");
+          observer.unobserve(entry.target);
+          window.setTimeout(() => complete(entry.target), 1400);
+        });
+      }, { rootMargin: "0px 0px -8%", threshold: 0.08 });
+
+      targets.forEach((target) => observer.observe(target));
+    };
+
+    initialise();
+  })();
+</script>

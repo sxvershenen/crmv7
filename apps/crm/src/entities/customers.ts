@@ -14,8 +14,13 @@ export type CustomerChannel = (typeof customerChannels)[number]
 
 export type Customer = {
   id: string
+  version?: number
   name: string
   phone: string
+  /** Canonical contact fields exposed by the API editor adapter. */
+  phones?: string[]
+  email?: string
+  notes?: string
   type: CustomerType
   channels: CustomerChannel[]
   leadCount: number

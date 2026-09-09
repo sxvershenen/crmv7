@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, ShieldCheck } from 'lucide-react';
+import { useDialogBehavior } from '../../utils/useDialogBehavior';
 
 interface PrivacyPolicyModalProps {
   isOpen: boolean;
@@ -7,11 +8,16 @@ interface PrivacyPolicyModalProps {
 }
 
 export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose }) => {
+  const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div 
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="privacy-dialog-title"
         className="relative w-full max-w-2xl bg-white rounded-3xl p-6 md:p-8 my-auto animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -31,7 +37,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
           </span>
         </div>
 
-        <h3 className="text-[22px] font-semibold text-[#18191b] leading-tight mb-4">
+        <h3 id="privacy-dialog-title" className="text-[22px] font-semibold text-[#18191b] leading-tight mb-4">
           Политика обработки персональных данных и согласие
         </h3>
 

@@ -1,5 +1,13 @@
 import { defineConfig, devices } from "@playwright/test"
 
+import { assertSafeTestDatabaseEnvironment } from "../../packages/db/src/test-database-safety.js"
+
+assertSafeTestDatabaseEnvironment({
+  ...process.env,
+  APP_ENV: "test",
+  DATABASE_URL: process.env.TEST_DATABASE_URL,
+})
+
 export default defineConfig({
   testDir: "./e2e-api",
   fullyParallel: false,
@@ -12,7 +20,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "DATABASE_URL=postgresql:///crm_v7_dev pnpm db:seed && DATABASE_URL=postgresql:///crm_v7_dev API_PORT=3010 CORS_ORIGIN=http://127.0.0.1:4188 LOG_LEVEL=warn pnpm dev:api",
+      command: "APP_ENV=test DATABASE_URL=\"$TEST_DATABASE_URL\" pnpm --filter @crm/api test:db:prepare-e2e && APP_ENV=test DATABASE_URL=\"$TEST_DATABASE_URL\" API_PORT=3010 CORS_ORIGIN=http://127.0.0.1:4188 LOG_LEVEL=warn pnpm dev:api",
       cwd: "../..",
       reuseExistingServer: false,
       url: "http://127.0.0.1:3010/api/internal/v1/health",

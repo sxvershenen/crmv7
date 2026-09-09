@@ -1,16 +1,23 @@
 import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, Res } from "@nestjs/common"
 import type { Response } from "express"
 
-import { ProgramOccurrenceArchiveSchema, ProgramOccurrenceCreateSchema, ProgramOccurrenceListQuerySchema, ProgramOccurrenceTransitionSchema, ProgramOccurrenceUpdateSchema, ProgramRegistrationArchiveSchema, ProgramRegistrationCreateSchema, ProgramRegistrationListQuerySchema, ProgramRegistrationTransitionSchema, ProgramRegistrationUpdateSchema, ProgramTemplateArchiveSchema, ProgramTemplateCreateSchema, ProgramTemplateListQuerySchema, ProgramTemplateUpdateSchema, type ProgramOccurrenceArchive, type ProgramOccurrenceCreate, type ProgramOccurrenceListQuery, type ProgramOccurrenceTransition, type ProgramOccurrenceUpdate, type ProgramRegistrationArchive, type ProgramRegistrationCreate, type ProgramRegistrationListQuery, type ProgramRegistrationTransition, type ProgramRegistrationUpdate, type ProgramTemplateArchive, type ProgramTemplateCreate, type ProgramTemplateListQuery, type ProgramTemplateUpdate } from "@crm/contracts"
+import { ProgramCategoryArchiveSchema, ProgramCategoryCreateSchema, ProgramCategoryListQuerySchema, ProgramCategoryUpdateSchema, ProgramOccurrenceArchiveSchema, ProgramOccurrenceCreateSchema, ProgramOccurrenceListQuerySchema, ProgramOccurrenceTransitionSchema, ProgramOccurrenceUpdateSchema, ProgramRegistrationArchiveSchema, ProgramRegistrationCreateSchema, ProgramRegistrationListQuerySchema, ProgramRegistrationTransitionSchema, ProgramRegistrationUpdateSchema, ProgramTemplateArchiveSchema, ProgramTemplateCreateSchema, ProgramTemplateListQuerySchema, ProgramTemplateUpdateSchema, type ProgramCategoryArchive, type ProgramCategoryCreate, type ProgramCategoryListQuery, type ProgramCategoryUpdate, type ProgramOccurrenceArchive, type ProgramOccurrenceCreate, type ProgramOccurrenceListQuery, type ProgramOccurrenceTransition, type ProgramOccurrenceUpdate, type ProgramRegistrationArchive, type ProgramRegistrationCreate, type ProgramRegistrationListQuery, type ProgramRegistrationTransition, type ProgramRegistrationUpdate, type ProgramTemplateArchive, type ProgramTemplateCreate, type ProgramTemplateListQuery, type ProgramTemplateUpdate } from "@crm/contracts"
 
 import type { AuthenticatedRequest } from "../common/request-context.js"
 import { RequireCapabilities } from "../common/require-capability.decorator.js"
 import { ZodValidationPipe } from "../common/zod-validation.pipe.js"
 import { ProgramsService } from "./programs.service.js"
+import { ProgramCategoriesService } from "./program-categories.service.js"
 
 @Controller("programs")
 export class ProgramsController {
-  constructor(@Inject(ProgramsService) private readonly programs: ProgramsService) {}
+  constructor(@Inject(ProgramsService) private readonly programs: ProgramsService, @Inject(ProgramCategoriesService) private readonly categories: ProgramCategoriesService) {}
+
+  @Get("categories") @RequireCapabilities("canView") listCategories(@Query(new ZodValidationPipe(ProgramCategoryListQuerySchema)) query: ProgramCategoryListQuery, @Req() req: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return this.page(this.categories.list(query, req.sessionUser!), response) }
+  @Get("categories/:id") @RequireCapabilities("canView") getCategory(@Param("id") id: string, @Req() req: AuthenticatedRequest) { return this.categories.get(id, req.sessionUser!) }
+  @Post("categories") @RequireCapabilities("canCreate") createCategory(@Body(new ZodValidationPipe(ProgramCategoryCreateSchema)) input: ProgramCategoryCreate, @Req() req: AuthenticatedRequest) { return this.categories.create(input, req.sessionUser!, req.requestId) }
+  @Patch("categories/:id") @RequireCapabilities("canEdit") updateCategory(@Param("id") id: string, @Body(new ZodValidationPipe(ProgramCategoryUpdateSchema)) input: ProgramCategoryUpdate, @Req() req: AuthenticatedRequest) { return this.categories.update(id, input, req.sessionUser!, req.requestId) }
+  @Post("categories/:id/archive") @RequireCapabilities("canArchive") archiveCategory(@Param("id") id: string, @Body(new ZodValidationPipe(ProgramCategoryArchiveSchema)) input: ProgramCategoryArchive, @Req() req: AuthenticatedRequest) { return this.categories.archive(id, input, req.sessionUser!, req.requestId) }
 
   @Get("templates") @RequireCapabilities("canView") listTemplates(@Query(new ZodValidationPipe(ProgramTemplateListQuerySchema)) query: ProgramTemplateListQuery, @Req() req: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return this.page(this.programs.listTemplates(query, req.sessionUser!), response) }
   @Get("templates/:id") @RequireCapabilities("canView") getTemplate(@Param("id") id: string, @Req() req: AuthenticatedRequest) { return this.programs.getTemplate(id, req.sessionUser!) }

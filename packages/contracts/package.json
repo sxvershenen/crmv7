@@ -22,7 +22,21 @@
     "./programs": "./src/programs.ts",
     "./events": "./src/events.ts",
     "./finance": "./src/finance.ts",
-    "./search": "./src/search.ts"
+    "./search": "./src/search.ts",
+    "./notifications": "./src/notifications.ts",
+    "./workspace": "./src/workspace.ts",
+    "./seo": "./src/seo.ts",
+    "./content": "./src/content.ts",
+    "./media": "./src/media.ts",
+    "./publication": "./src/publication.ts",
+    "./public-site": "./src/public-site.ts",
+    "./public-intake": "./src/public-intake.ts",
+    "./analytics": "./src/analytics.ts",
+    "./admin-capabilities": "./src/admin-capabilities.ts",
+    "./phase4-openapi": "./src/phase4-openapi.ts",
+    "./offerings": "./src/offerings.ts",
+    "./outbox": "./src/outbox.ts",
+    "./cms-dashboard": "./src/cms-dashboard.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -24,6 +24,7 @@ export type ProgramCategoryTone = "amber" | "emerald" | "violet" | "sky" | "rose
 
 export type ProgramCategory = {
   id: string
+  version?: number
   name: string
   description: string
   icon: ProgramCategoryIcon
@@ -98,6 +99,7 @@ export type ProgramRunResourceOption = {
   category: string
   id: string
   name: string
+  version: number
 }
 
 export type ProgramRunResourceBooking = {
@@ -141,6 +143,7 @@ export type ProgramRegistrationPayment = {
   id: string
   kind: ProgramRegistrationPaymentKind
   method: ProgramRegistrationPaymentMethod
+  sourcePaymentId?: string
 }
 
 export type ProgramRegistrationEditorRecord = ProgramRunEditorRegistration & {

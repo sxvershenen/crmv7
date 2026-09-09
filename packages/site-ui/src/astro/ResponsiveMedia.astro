@@ -1,0 +1,24 @@
+---
+interface Source { srcset: string; media?: string; type?: "image/webp" | "image/avif" }
+interface Props {
+  src: string
+  alt: string
+  width: number
+  height: number
+  sources?: Source[]
+  focalX?: number
+  focalY?: number
+  loading?: "eager" | "lazy"
+  fetchpriority?: "high" | "low" | "auto"
+  class?: string
+}
+
+const { alt, class: className, fetchpriority = "auto", focalX = 50, focalY = 50, height, loading = "lazy", sources = [], src, width } = Astro.props
+const style = `--site-media-aspect:${width}/${height};--site-media-position:${Math.max(0, Math.min(100, focalX))}% ${Math.max(0, Math.min(100, focalY))}%`
+---
+
+<picture class:list={["site-media", className]} style={style}>
+  {sources.map((source) => <source srcset={source.srcset} media={source.media} type={source.type} />)}
+  <img src={src} alt={alt} width={width} height={height} loading={loading} fetchpriority={fetchpriority} />
+  <slot />
+</picture>

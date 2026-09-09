@@ -26,6 +26,16 @@ export const SessionUserSchema = z.object({
 }).strict();
 export type SessionUser = z.infer<typeof SessionUserSchema>;
 
+export const AuthUserResponseSchema = z.object({
+  user: SessionUserSchema,
+}).strict();
+export type AuthUserResponse = z.infer<typeof AuthUserResponseSchema>;
+
+export const OkResponseSchema = z.object({
+  ok: z.literal(true),
+}).strict();
+export type OkResponse = z.infer<typeof OkResponseSchema>;
+
 export const SessionSchema = z.object({
   user: SessionUserSchema,
   expiresAt: DateTimeSchema,

@@ -1,5 +1,7 @@
 ---
 import { siteIdentity } from "../lib/content"
+import ModalHub from "../components/islands/ModalHub"
+import ScrollRevealController from "../components/ScrollRevealController.astro"
 import "../styles/global.css"
 
 interface Props {
@@ -7,6 +9,14 @@ interface Props {
   description?: string
   canonical?: string
   noindex?: boolean
+  robots?: "index_follow" | "noindex_follow" | "noindex_nofollow" | undefined
+  social?: {
+    title?: string | undefined
+    description?: string | undefined
+    imageUrl?: string | undefined
+    imageAlt?: string | undefined
+  } | undefined
+  structuredData?: Array<Record<string, unknown>>
 }
 
 const {
@@ -14,7 +24,12 @@ const {
   description = siteIdentity.description,
   canonical = new URL(Astro.url.pathname, Astro.site).toString(),
   noindex = false,
+  robots,
+  social,
+  structuredData = [],
 } = Astro.props
+
+const robotsContent = robots === "noindex_follow" ? "noindex, follow" : robots === "noindex_nofollow" || noindex ? "noindex, nofollow" : null
 
 const websiteSchema = {
   "@context": "https://schema.org",
@@ -22,6 +37,16 @@ const websiteSchema = {
   name: siteIdentity.name,
   url: new URL("/", Astro.site).toString(),
 }
+
+const jsonLd = [
+  ...(Astro.url.pathname === "/" ? [websiteSchema] : []),
+  ...structuredData,
+]
+
+const serializeJsonLd = (value: Record<string, unknown>) => JSON.stringify(value)
+  .replace(/</g, "\\u003c")
+  .replace(/>/g, "\\u003e")
+  .replace(/&/g, "\\u0026")
 ---
 
 <!doctype html>
@@ -35,20 +60,27 @@ const websiteSchema = {
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {robotsContent && <meta name="robots" content={robotsContent} />}
     <meta property="og:type" content="website" />
     <meta property="og:locale" content={siteIdentity.locale} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content={siteIdentity.name} />
+    <meta property="og:title" content={social?.title ?? title} />
+    <meta property="og:description" content={social?.description ?? description} />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <script is:inline type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+    {social?.imageUrl && <meta property="og:image" content={social.imageUrl} />}
+    {social?.imageAlt && <meta property="og:image:alt" content={social.imageAlt} />}
+    <meta name="twitter:card" content={social?.imageUrl ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={social?.title ?? title} />
+    <meta name="twitter:description" content={social?.description ?? description} />
+    {social?.imageUrl && <meta name="twitter:image" content={social.imageUrl} />}
+    {social?.imageAlt && <meta name="twitter:image:alt" content={social.imageAlt} />}
+    {jsonLd.map((schema) => <script is:inline type="application/ld+json" set:html={serializeJsonLd(schema)} />)}
   </head>
   <body>
-    <div class="min-h-screen bg-[#f7f7f7] text-[#18191b] font-inter antialiased flex flex-col selection:bg-[#2B9E47]/20 selection:text-[#2B9E47]">
+    <div class="site-theme min-h-screen bg-[var(--site-color-bg)] text-[var(--site-color-text)] font-[family-name:var(--site-font-sans)] antialiased flex flex-col selection:bg-[color-mix(in_srgb,var(--site-color-brand-500)_20%,transparent)] selection:text-[var(--site-color-brand-500)]">
       <slot />
     </div>
+    <ScrollRevealController />
+    <ModalHub client:load />
   </body>
 </html>

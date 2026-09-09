@@ -1,0 +1,30 @@
+---
+interface Props {
+  eyebrow: string
+  title: string
+  description?: string
+  eyebrowTone?: "surface" | "brand"
+  titleId?: string
+  class?: string
+}
+
+const {
+  class: className,
+  description,
+  eyebrow,
+  eyebrowTone = "brand",
+  title,
+  titleId,
+} = Astro.props
+---
+
+<div class:list={["site-home-heading", className]}>
+  <div class:list={["site-section-eyebrow", "site-home-heading__eyebrow", `site-home-heading__eyebrow--${eyebrowTone}`]}>
+    <slot name="icon" />
+    {eyebrow}
+  </div>
+  <div class="site-home-heading__row">
+    <h2 id={titleId} class="site-home-heading__title">{title}</h2>
+    {description && <p class="site-home-heading__description">{description}</p>}
+  </div>
+</div>

@@ -1,0 +1,7 @@
+---
+import BlogSectionIsland from "../islands/BlogSectionIsland"
+---
+
+<!-- Keep the complete React composition on one renderer boundary. Astro JSX children
+     are not React nodes and otherwise abort SSR before all sections below the blog. -->
+<BlogSectionIsland client:visible />

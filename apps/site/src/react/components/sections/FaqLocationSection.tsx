@@ -1,203 +1,39 @@
 import React, { useState } from 'react';
-import {
-  HelpCircle,
-  MapPin,
-  Phone,
-  Send,
-  Mail,
-  ChevronDown,
-  Navigation,
-  Clock,
-  Car
-} from 'lucide-react';
-import { FAQ_ITEMS, FaqItem } from '../../data/resortData';
+import { Car, Clock, HelpCircle, Mail, MapPin, Navigation, Phone, Send } from 'lucide-react';
+import { Accordion, SiteSectionHeader } from '@crm/site-ui';
+import { FAQ_ITEMS } from '../../data/resortData';
 
-interface FaqLocationSectionProps {
-  onOpenCallModal: () => void;
-}
+interface FaqLocationSectionProps { onOpenCallModal: () => void; }
+const coords = { lat: 58.5532, lng: 49.6234 };
+const route = `https://yandex.ru/maps/?rtext=~${coords.lat}%2C${coords.lng}&rtt=auto`;
+const widget = `https://yandex.ru/map-widget/v1/?ll=${coords.lng}%2C${coords.lat}&z=12&pt=${coords.lng}%2C${coords.lat}%2Cpm2gnm`;
+
+const ContactRow = ({ icon, label, value, href, onClick }: { icon: React.ReactNode; label: string; value: string; href?: string; onClick?: () => void }) => {
+  const content = <><span className="icon-tile !w-9 !h-9 group-hover:bg-green-soft group-hover:text-green-deep transition-colors">{icon}</span><span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-3"><span className="text-[11px] text-ink-3">{label}</span><span className="text-[13px] font-medium truncate">{value}</span></span></>;
+  const cls = 'group flex items-center gap-3 px-2 py-2 rounded-[var(--site-radius-md)] hover:bg-bg transition-colors text-left';
+  if (onClick) return <button type="button" onClick={onClick} className={cls}>{content}</button>;
+  if (href) return <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className={cls}>{content}</a>;
+  return <div className={cls}>{content}</div>;
+};
 
 export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCallModal }) => {
-  const [openFaqId, setOpenFaqId] = useState<string | null>(FAQ_ITEMS[0]!.id);
-  const [isInteractiveMapLoaded] = useState(false);
-
-  const toggleFaq = (id: string) => {
-    setOpenFaqId(openFaqId === id ? null : id);
-  };
-
-  const handleOpenYandexNavigator = () => {
-    window.open('https://yandex.ru/maps/?rtext=~58.553200,49.623400&rtt=auto', '_blank');
-  };
-
-  return (
-    <section id="location" className="w-full py-8">
-      {/* Block Header */}
-      <div className="mb-6">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[10px] font-semibold tracking-wider uppercase text-[#18191b] mb-2.5">
-          <HelpCircle className="w-3 h-3 text-[#2B9E47]" />
-          Забота и ответы
+  const [mapOn, setMapOn] = useState(false);
+  return <section id="location" data-section-key="faq" className="w-full py-8">
+    <SiteSectionHeader eyebrow="Полезное" eyebrowIcon={<HelpCircle className="w-3 h-3" />} eyebrowTone="brand" title={<>Как доехать и&nbsp;что спросить</>} description={<>Дорога занимает полчаса, а&nbsp;ответы на&nbsp;частые вопросы — минуту.</>} />
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+      <div className="lg:col-span-5 flex flex-col gap-3">
+        <div className="relative rounded-[var(--site-radius-xl)] overflow-hidden aspect-[4/3] bg-green-soft group">
+          {mapOn ? <iframe title="Карта проезда" src={widget} className="absolute inset-0 w-full h-full border-0" loading="lazy" allowFullScreen /> : <><img src="https://images.pexels.com/photos/34923437/pexels-photo-34923437.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=500&w=800" alt="Карта: как доехать" loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-80" /><span className="absolute inset-0 bg-black/20" /><button type="button" onClick={() => setMapOn(true)} className="absolute inset-0 flex items-center justify-center" aria-label="Загрузить интерактивную карту"><span className="btn btn-light group-hover:bg-green group-hover:text-white"><span>Открыть карту</span><span className="btn-arrow"><MapPin size={14} /></span></span></button><span className="absolute left-3 bottom-3 chip on-img text-[11px]">58.5532, 49.6234</span></>}
         </div>
-
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 md:gap-4">
-          <h2 className="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">
-            Как добраться и&nbsp;частые вопросы
-          </h2>
-          <p className="hidden md:block text-[13px] text-[#6b7280] max-w-md font-normal leading-relaxed text-left md:text-right">
-            Всё, что важно знать перед поездкой к&nbsp;нам в&nbsp;гости — от&nbsp;маршрута до&nbsp;правил заезда с&nbsp;питомцами
-          </p>
+        <div className="grid grid-cols-2 gap-3">
+          <a href={route} target="_blank" rel="noreferrer" className="group bg-surface rounded-[var(--site-radius-xl)] p-3 flex items-center gap-3"><span className="icon-tile group-hover:bg-green-soft group-hover:text-green-deep transition-colors"><Navigation size={17} /></span><span className="min-w-0"><span className="block text-[13px] font-semibold tracking-[-.3px]">Маршрут</span><span className="block text-[11px] text-ink-3 truncate">Яндекс Навигатор</span></span></a>
+          <div className="bg-surface rounded-[var(--site-radius-xl)] p-3 flex items-center gap-3"><span className="icon-tile"><Car size={17} /></span><span className="min-w-0"><span className="block text-[13px] font-semibold tracking-[-.3px]">30 минут</span><span className="block text-[11px] text-ink-3 truncate">38 км из Кирова</span></span></div>
+        </div>
+        <div className="bg-surface rounded-[var(--site-radius-xl)] p-2 flex flex-col">
+          <ContactRow icon={<MapPin size={16} />} label="Адрес" value="дер. Свистоплясово" /><ContactRow icon={<Phone size={16} />} label="Бронирование" value="+7 (8332) 74-55-10" onClick={onOpenCallModal} /><ContactRow icon={<Send size={16} />} label="ВКонтакте" value="vk.com/svistoplyasovo" href="https://vk.com" /><ContactRow icon={<Mail size={16} />} label="Почта" value="info@svistoplyasovo.ru" href="mailto:info@svistoplyasovo.ru" /><ContactRow icon={<Clock size={16} />} label="Заезд / выезд" value="15:00 / 12:00" />
         </div>
       </div>
-
-      {/* Main Grid: Info & Map on Left (First on Mobile) / FAQ Accordion on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Route & Contacts Card */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Static Map Preview / Interactive Map Container */}
-          <div className="relative h-[240px] rounded-3xl overflow-hidden bg-neutral-100 shadow-sm">
-            {!isInteractiveMapLoaded ? (
-              <>
-                <img
-                  src="https://images.pexels.com/photos/34923437/pexels-photo-34923437.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=500&w=800"
-                  alt="Карта проезда"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center text-white">
-                  <MapPin className="w-8 h-8 text-[#2B9E47] mb-2" />
-                  <div className="text-[15px] font-semibold leading-tight mb-1">
-                    Кировская область, дер. Свистоплясово
-                  </div>
-                  <div className="text-[12px] text-neutral-200 mb-3">
-                    Координаты: 58.5532° N, 49.6234° E
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleOpenYandexNavigator}
-                      className="h-[36px] px-4 rounded-full bg-[#2B9E47] hover:bg-[#23823a] text-white text-[12px] font-medium flex items-center gap-1.5 transition-colors"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                      <span>Маршрут в Яндекс.Картах</span>
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <iframe
-                title="Яндекс Карта"
-                src="https://yandex.ru/map-widget/v1/?um=constructor%3Aexample&source=constructor"
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-              />
-            )}
-          </div>
-
-          {/* Travel Details & Drive Proof */}
-          <div className="p-3 rounded-3xl bg-white space-y-1">
-            <div className="flex items-start gap-3 p-2.5 rounded-2xl">
-              <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0">
-                <Car className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-[13px] font-semibold text-[#18191b]">
-                  30 минут на авто от Театральной площади
-                </div>
-                <div className="text-[12px] text-[#6b7280] mt-0.5 leading-snug">
-                  Ровная асфальтированная трасса, регулярная чистка снега зимой.
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-2.5 rounded-2xl border-t border-neutral-100">
-              <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-[13px] font-semibold text-[#18191b]">
-                  Заезд с 15:00 • Выезд до 12:00
-                </div>
-                <div className="text-[12px] text-[#6b7280] mt-0.5 leading-snug">
-                  Возможен ранний заезд и поздний выезд по согласованию.
-                </div>
-              </div>
-            </div>
-
-            {/* Direct Contacts List */}
-            <div className="pt-1 border-t border-neutral-100 space-y-1">
-              <button
-                onClick={onOpenCallModal}
-                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#eaf5ec] text-[#2B9E47] flex items-center justify-center shrink-0"><Phone className="w-4 h-4" /></div>
-                <div>
-                  <div className="text-[13px] font-semibold text-[#18191b]">+7 (8332) 74-55-10</div>
-                  <div className="text-[11px] text-[#6b7280]">Бронирование домиков</div>
-                </div>
-              </button>
-
-              <a
-                href="https://vk.com"
-                target="_blank"
-                rel="noreferrer"
-                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left"
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#eaf3ff] text-[#2876c9] flex items-center justify-center shrink-0"><Send className="w-4 h-4 -rotate-12" /></div>
-                <div>
-                  <div className="text-[13px] font-semibold text-[#18191b]">Связаться ВКонтакте</div>
-                  <div className="text-[11px] text-[#6b7280]">vk.com/svistoplyasovo</div>
-                </div>
-              </a>
-
-              <a
-                href="mailto:info@svistoplyasovo.ru"
-                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f7f7f7] transition-colors text-left"
-              >
-                <div className="w-9 h-9 rounded-xl bg-neutral-100 text-[#6b7280] flex items-center justify-center shrink-0"><Mail className="w-4 h-4" /></div>
-                <div>
-                  <div className="text-[13px] font-semibold text-[#18191b]">Написать на почту</div>
-                  <div className="text-[11px] text-[#6b7280]">info@svistoplyasovo.ru</div>
-                </div>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: FAQ Accordion (8-10 questions with large tap target) */}
-        <div className="lg:col-span-7 space-y-2.5">
-          {FAQ_ITEMS.map((faq: FaqItem) => {
-            const isOpen = openFaqId === faq.id;
-
-            return (
-              <div
-                key={faq.id}
-                className={`rounded-3xl transition-all overflow-hidden ${isOpen ? 'bg-[#18191b]' : 'bg-white'}`}
-              >
-                {/* Large Tap Zone Header */}
-                <button
-                  onClick={() => toggleFaq(faq.id)}
-                  className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3 group"
-                >
-                  <span className={`text-[14px] sm:text-[15px] font-semibold transition-colors leading-snug ${isOpen ? 'text-white' : 'text-[#18191b] group-hover:text-[#2B9E47]'}`}>
-                    {faq.question}
-                  </span>
-                  <div
-                    className={`w-7 h-7 rounded-full group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center transition-all shrink-0 ${
-                      isOpen ? 'rotate-180 bg-[#2B9E47] text-white' : 'bg-[#f7f7f7] text-[#18191b]'
-                    }`}
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                </button>
-
-                {/* Answer Content */}
-                {isOpen && (
-                  <div className="px-4 pb-5 sm:px-5 text-[13px] text-neutral-300 leading-relaxed animate-in fade-in duration-150">
-                    <p>{faq.answer}</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
+      <Accordion className="lg:col-span-7" defaultOpenIds={FAQ_ITEMS[0] ? [FAQ_ITEMS[0].id] : []} items={FAQ_ITEMS.map((faq) => ({ id: faq.id, title: faq.question, content: <p>{faq.answer}</p> }))} />
+    </div>
+  </section>;
 };

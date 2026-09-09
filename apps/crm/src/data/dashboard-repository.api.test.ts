@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
+import type { DashboardItem } from "@app/entities/dashboard"
+
 import { ApiDashboardRepository } from "./dashboard-repository"
 
 describe("ApiDashboardRepository", () => {
@@ -43,5 +45,23 @@ describe("ApiDashboardRepository", () => {
     await repository.getOverview("mine")
 
     expect(get).toHaveBeenCalledWith("/auth/session", expect.anything())
+  })
+
+  it("posts the authoritative version for supported self-assignment only", async () => {
+    const post = vi.fn(async () => ({}))
+    const repository = new ApiDashboardRepository({ client: { get: vi.fn(), post }, now: () => new Date("2026-08-30T12:00:00+03:00") } as never)
+    const base: Omit<DashboardItem, "entityId" | "assignment"> = {
+      id: "overdue-L-1", href: "/leads/L-1", title: "Lead", subtitle: "Нужна обработка", assignees: [], assignedToMe: false,
+    }
+
+    await repository.assign({ ...base, entityId: "L-1", assignment: { kind: "self", entityType: "lead", version: 3 } })
+    await repository.assign({ ...base, id: "task-T-1", entityId: "T-1", href: "/tasks/T-1", assignment: { kind: "self", entityType: "task", version: 8 } })
+    await repository.assign({ ...base, id: "booking-B-1", entityId: "B-1", href: "/bookings/B-1", assignment: { kind: "self", entityType: "booking", version: 13 } })
+
+    expect(post).toHaveBeenNthCalledWith(1, "/leads/L-1/assign-self", { version: 3 }, expect.anything())
+    expect(post).toHaveBeenNthCalledWith(2, "/tasks/T-1/assign-self", { version: 8 }, expect.anything())
+    expect(post).toHaveBeenNthCalledWith(3, "/bookings/B-1/assign-self", { expectedVersion: 13, operationId: expect.any(String), idempotencyKey: expect.stringContaining("dashboard-booking-assign-") }, expect.anything())
+    await expect(repository.assign({ ...base, entityId: "event-1", assignment: { kind: "unsupported", reason: "Назначение недоступно" } })).rejects.toThrow("Назначение недоступно")
+    expect(post).toHaveBeenCalledTimes(3)
   })
 })

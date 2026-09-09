@@ -6,11 +6,13 @@ import { describe, expect, it } from "vitest"
 import { TooltipProvider } from "@crm/ui"
 
 import { FixtureProgramsRepository } from "@app/data/programs-repository"
+import { FixtureDirectoryRepository } from "@app/data/directory-repository"
+import { DirectoryRepositoryProvider } from "@app/features/use-directory-data"
 
 import { ProgramRunEditorPage } from "./program-run-editor-page"
 
 function LocationProbe() { const location = useLocation(); return <output aria-label="Текущий URL">{location.pathname}{location.search}</output> }
-function renderEditor(entry = "/programs/runs/24081") { return render(<MemoryRouter initialEntries={[entry]}><TooltipProvider><Routes><Route element={<><ProgramRunEditorPage repository={new FixtureProgramsRepository()} /><LocationProbe /></>} path="programs/runs/:id" /><Route element={<LocationProbe />} path="bookings/:id" /><Route element={<LocationProbe />} path="customers/:id" /></Routes></TooltipProvider></MemoryRouter>) }
+function renderEditor(entry = "/programs/runs/24081") { return render(<DirectoryRepositoryProvider repository={new FixtureDirectoryRepository()}><MemoryRouter initialEntries={[entry]}><TooltipProvider><Routes><Route element={<><ProgramRunEditorPage repository={new FixtureProgramsRepository()} /><LocationProbe /></>} path="programs/runs/:id" /><Route element={<LocationProbe />} path="bookings/:id" /><Route element={<LocationProbe />} path="customers/:id" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>) }
 
 describe("ProgramRunEditorPage", () => {
   it("uses shared editor chrome and keeps status out of the operational sidebar", async () => {

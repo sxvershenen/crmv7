@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AllocationSourceTypeSchema, AllocationStatusSchema, AvailabilityResultSchema, ResourceAllocationSchema } from "./availability.js";
 import { CapabilitiesSchema } from "./capabilities.js";
 import { DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
-import { OperationIdSchema } from "./operations.js";
+import { IdempotentOperationSchema, OperationIdSchema } from "./operations.js";
 
 export const ResourceCapacityModeSchema = z.enum(["fixed", "shared"]);
 export type ResourceCapacityMode = z.infer<typeof ResourceCapacityModeSchema>;
@@ -108,6 +108,12 @@ export type ResourceListResponse = z.infer<typeof ResourceListResponseSchema>;
 
 export const ResourceAllocationsQuerySchema = z.object({ includeCancelled: z.preprocess((value) => value === "true" ? true : value === "false" ? false : value, z.boolean()).default(false) }).strict();
 export type ResourceAllocationsQuery = z.infer<typeof ResourceAllocationsQuerySchema>;
+export const ResourceAllocationListQuerySchema = ResourceAllocationsQuerySchema.extend({
+  sourceType: AllocationSourceTypeSchema.optional(), sourceId: IdSchema.optional(), resourceId: IdSchema.optional(),
+}).strict();
+export type ResourceAllocationListQuery = z.infer<typeof ResourceAllocationListQuerySchema>;
+export const ResourceAllocationCancelSchema = IdempotentOperationSchema;
+export type ResourceAllocationCancel = z.infer<typeof ResourceAllocationCancelSchema>;
 export const ResourceBlockCreateSchema = z.object({
   startAt: DateTimeSchema, endAt: DateTimeSchema, reason: z.string().trim().min(1).max(1000),
   operationId: OperationIdSchema, expectedVersion: VersionSchema,

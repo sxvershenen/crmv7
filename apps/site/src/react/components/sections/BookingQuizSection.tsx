@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Input, SiteSectionHeader, Tabs } from "@crm/site-ui";
 import {
-  Calculator,
-  Home,
-  Layers,
-  Sparkles,
-  Check,
-  Phone,
-  Send,
-  MessageCircle,
   ArrowRight,
+  Calculator,
+  Check,
   CheckCircle2,
-  Gift
-} from 'lucide-react';
-import { HOUSES, VENUES, POPULAR_PROGRAMS, PROMO_CODES } from '../../data/resortData';
-import { fireConfetti } from '../../utils/confetti';
+  ChevronLeft,
+  ChevronRight,
+  Gift,
+  MessageCircle,
+  Minus,
+  Phone,
+  Plus,
+  Send,
+  Ticket,
+  User,
+} from "lucide-react";
+import { HOUSES, POPULAR_PROGRAMS, PROMO_CODES, VENUES } from "../../data/resortData";
+import { fireConfetti } from "../../utils/confetti";
+import { listenForSiteEvent, SITE_EVENTS } from "../../../lib/site-events";
 
 interface BookingQuizSectionProps {
   onOpenPrivacyPolicy: () => void;
@@ -21,634 +26,218 @@ interface BookingQuizSectionProps {
   preselectedItem?: string;
 }
 
-export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({
-  onOpenPrivacyPolicy,
-  onToast
-}) => {
-  // Tabs: 'glamping' | 'venue' | 'event'
-  const [activeTab, setActiveTab] = useState<'glamping' | 'venue' | 'event'>('glamping');
+type Kind = "glamping" | "venue" | "event";
+const kindTabs = [
+  { id: "glamping", label: "Отдых" },
+  { id: "venue", label: "Площадка" },
+  { id: "event", label: "Мероприятие" },
+] as const;
+const stepLabels = ["Что", "Дата", "Допы"];
+const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const monthLabels = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const monthGenitiveLabels = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const addonOptions = [
+  { id: "chan", title: "Сибирский чан", price: 4500, icon: "🔥", desc: "3 часа на живом огне" },
+  { id: "sauna", title: "Кедровая русская баня", price: 5000, icon: "🪵", desc: "2 часа, веники и чай" },
+  { id: "catering", title: "Фермерский сет", price: 3200, icon: "🥩", desc: "Мясо и овощи гриль" },
+  { id: "animator", title: "Игра от «Зажигай»", price: 6000, icon: "🎈", desc: "1,5 часа с ведущим" },
+];
 
-  // Step state (1: Resource selection, 2: Date & Guests, 3: Add-ons, 4: Contacts for mobile)
-  const [currentStep, setCurrentStep] = useState<number>(1);
+const isoDate = (year: number, month: number, day: number) => `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+const fromIso = (value: string) => new Date(`${value}T12:00:00`);
+const isBusyDate = (value: string) => fromIso(value).getDate() % 6 === 5;
 
-  // Selections
-  const [selectedHouseId, setSelectedHouseId] = useState<string>(HOUSES[0]!.id);
-  const [selectedVenueId, setSelectedVenueId] = useState<string>(VENUES[0]!.id);
-  const [selectedProgramId, setSelectedProgramId] = useState<string>(POPULAR_PROGRAMS[0]!.id);
+function containsBusyDate(start: string, end: string) {
+  const cursor = fromIso(start);
+  const last = fromIso(end);
+  while (cursor <= last) {
+    if (isBusyDate(isoDate(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()))) return true;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return false;
+}
 
-  // Date selection (simulated interactive days)
-  const [selectedDate, setSelectedDate] = useState<string>("2025-03-22");
-  const [guestCount, setGuestCount] = useState<number>(2);
+function formatRange(start: string | null, end: string | null) {
+  if (!start) return "даты не выбраны";
+  const startDate = fromIso(start);
+  const first = `${startDate.getDate()} ${monthGenitiveLabels[startDate.getMonth()]}`;
+  if (!end) return `${first} — выберите дату выезда`;
+  const endDate = fromIso(end);
+  if (start === end) return first;
+  if (startDate.getMonth() === endDate.getMonth() && startDate.getFullYear() === endDate.getFullYear()) {
+    return `${startDate.getDate()}–${endDate.getDate()} ${monthGenitiveLabels[startDate.getMonth()]}`;
+  }
+  return `${first} — ${endDate.getDate()} ${monthGenitiveLabels[endDate.getMonth()]}`;
+}
 
-  // Add-ons
-  const [selectedAddons, setSelectedAddons] = useState<{ [key: string]: boolean }>({
-    chan: true,
-    sauna: false,
-    catering: false,
-    animator: false
-  });
-
-  // Promo Code
-  const [promoInput, setPromoInput] = useState<string>('');
+export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ onOpenPrivacyPolicy, onToast, preselectedItem }) => {
+  const [activeTab, setActiveTab] = useState<Kind>("glamping");
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedHouseId, setSelectedHouseId] = useState(HOUSES[0]!.id);
+  const [selectedVenueId, setSelectedVenueId] = useState(VENUES[0]!.id);
+  const [selectedProgramId, setSelectedProgramId] = useState(POPULAR_PROGRAMS[0]!.id);
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<string | null>(null);
+  const [month, setMonth] = useState({ year: 2026, index: 8 });
+  const [guestCount, setGuestCount] = useState(2);
+  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>({ chan: true });
+  const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
-
-  // Contact form
-  const [contactMethod, setContactMethod] = useState<'phone' | 'telegram' | 'max'>('phone');
-  const [userName, setUserName] = useState('');
-  const [userPhone, setUserPhone] = useState('');
+  const [contactMethod, setContactMethod] = useState<"phone" | "telegram" | "max">("phone");
+  const [userName, setUserName] = useState("");
+  const [userPhone, setUserPhone] = useState("");
   const [isConsentGiven, setIsConsentGiven] = useState(true);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Available add-on options
-  const addonOptions = [
-    { id: 'chan', title: 'Сибирский чан с пихтой и цитрусами', price: 4500, icon: '🔥', desc: '3 часа парения на живом огне' },
-    { id: 'sauna', title: 'Кедровая русская баня на березе', price: 5000, icon: '🪵', desc: '2 часа + веники и чай' },
-    { id: 'catering', title: 'Фермерский сет для барбекю на углях', price: 3200, icon: '🥩', desc: 'Мясо, соусы, овощи гриль' },
-    { id: 'animator', title: 'Интерактивная игра от «Зажигай»', price: 6000, icon: '🎈', desc: '1.5 часа квеста для детей/взрослых' }
-  ];
+  useEffect(() => {
+    if (!preselectedItem) return;
+    const house = HOUSES.find((item) => item.title === preselectedItem || item.id === preselectedItem);
+    const venue = VENUES.find((item) => item.title === preselectedItem || item.id === preselectedItem);
+    const program = POPULAR_PROGRAMS.find((item) => item.title === preselectedItem || item.id === preselectedItem);
+    if (house) { setActiveTab("glamping"); setSelectedHouseId(house.id); }
+    else if (venue) { setActiveTab("venue"); setSelectedVenueId(venue.id); }
+    else if (program) { setActiveTab("event"); setSelectedProgramId(program.id); }
+  }, [preselectedItem]);
 
-  // Price Calculation
-  const calculateBasePrice = () => {
-    if (activeTab === 'glamping') {
-      const house = HOUSES.find((h) => h.id === selectedHouseId);
-      return house ? house.priceFrom : 6500;
-    } else if (activeTab === 'venue') {
-      return 12000;
-    } else {
-      return 18000;
+  const selected = useMemo(() => {
+    if (activeTab === "glamping") {
+      const item = HOUSES.find((house) => house.id === selectedHouseId) ?? HOUSES[0]!;
+      return { title: item.title, price: item.priceFrom };
     }
-  };
-
-  const calculateAddonsPrice = () => {
-    return addonOptions.reduce((sum, item) => {
-      return selectedAddons[item.id] ? sum + item.price : sum;
-    }, 0);
-  };
-
-  const rawTotal = calculateBasePrice() + calculateAddonsPrice();
-  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
-  const finalTotal = Math.max(0, rawTotal - discountAmount);
-
-  // Promo handling
-  const handleApplyPromo = () => {
-    const trimmed = promoInput.trim().toUpperCase();
-    const found = PROMO_CODES.find((p) => p.code === trimmed);
-
-    if (found) {
-      const discountVal = found.id === 'glamp' ? 3000 : found.id === 'kids' ? 1000 : Math.round(rawTotal * 0.2);
-      setAppliedPromo({ code: found.code, discount: discountVal });
-      fireConfetti();
-      onToast(`Промокод ${found.code} применен! Скидка: ${discountVal.toLocaleString('ru-RU')} ₽`);
-    } else {
-      onToast('Промокод не найден или устарел');
+    if (activeTab === "venue") {
+      const item = VENUES.find((venue) => venue.id === selectedVenueId) ?? VENUES[0]!;
+      return { title: item.title, price: 12_000 };
     }
-  };
+    const item = POPULAR_PROGRAMS.find((program) => program.id === selectedProgramId) ?? POPULAR_PROGRAMS[0]!;
+    return { title: item.title, price: 18_000 };
+  }, [activeTab, selectedHouseId, selectedProgramId, selectedVenueId]);
 
-  // Form submission
-  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!userPhone.trim()) {
-      onToast('Пожалуйста, укажите номер телефона');
+  const addonTotal = addonOptions.reduce((sum, item) => sum + (selectedAddons[item.id] ? item.price : 0), 0);
+  const rawTotal = selected.price + addonTotal;
+  const finalTotal = Math.max(0, rawTotal - (appliedPromo?.discount ?? 0));
+  const rangeSummary = formatRange(rangeStart, rangeEnd);
+  const checkoutDate = rangeEnd ?? rangeStart ?? "";
+
+  const applyPromoCode = useCallback((code: string, announce = true) => {
+    const normalized = code.trim().toUpperCase();
+    const found = PROMO_CODES.find((promo) => promo.code === normalized);
+    if (!found) {
+      setPromoInput(normalized);
+      setAppliedPromo(null);
+      if (announce) onToast("Промокод не найден или устарел");
       return;
     }
-    if (!isConsentGiven) {
-      onToast('Необходимо согласие на обработку данных');
-      return;
-    }
+    const discount = found.id === "glamp" ? 3000 : found.id === "kids" ? 1000 : Math.round(rawTotal * .2);
+    setPromoInput(found.code);
+    setAppliedPromo({ code: found.code, discount });
+    if (announce) { fireConfetti(); onToast(`Промокод ${found.code} применен! Скидка: ${discount.toLocaleString("ru-RU")} ₽`); }
+  }, [onToast, rawTotal]);
 
+  useEffect(() => listenForSiteEvent(SITE_EVENTS.promo, ({ code }) => applyPromoCode(code, false)), [applyPromoCode]);
+
+  const submit = (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!rangeStart) { onToast("Пожалуйста, выберите даты поездки"); return; }
+    if (!userPhone.trim()) { onToast("Пожалуйста, укажите номер телефона"); return; }
+    if (!isConsentGiven) { onToast("Необходимо согласие на обработку данных"); return; }
     setIsSubmitted(true);
     fireConfetti();
-    onToast('Заявка успешно отправлена! Менеджер свяжется с вами в течение 10 минут.');
+    onToast("Заявка успешно отправлена! Менеджер свяжется с вами в течение 10 минут.");
   };
 
-  // Dates for simulated calendar
-  const calendarDays = [
-    { date: "2025-03-20", day: "20", weekday: "ЧТ", available: true },
-    { date: "2025-03-21", day: "21", weekday: "ПТ", available: false },
-    { date: "2025-03-22", day: "22", weekday: "СБ", available: true },
-    { date: "2025-03-23", day: "23", weekday: "ВС", available: true },
-    { date: "2025-03-24", day: "24", weekday: "ПН", available: true },
-    { date: "2025-03-25", day: "25", weekday: "ВТ", available: true },
-    { date: "2025-03-26", day: "26", weekday: "СР", available: false },
-  ];
+  const firstDayOffset = (new Date(month.year, month.index, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(month.year, month.index + 1, 0).getDate();
+  const moveMonth = (delta: number) => setMonth((value) => {
+    const next = new Date(value.year, value.index + delta, 1);
+    return { year: next.getFullYear(), index: next.getMonth() };
+  });
+  const chooseDay = (date: string) => {
+    if (!rangeStart || rangeEnd || date < rangeStart) {
+      setRangeStart(date);
+      setRangeEnd(null);
+      return;
+    }
+    if (containsBusyDate(rangeStart, date)) {
+      onToast("В диапазоне есть занятая дата — выберите более короткий период");
+      return;
+    }
+    setRangeEnd(date);
+  };
+  const changeKind = (value: string) => {
+    setActiveTab(value as Kind);
+    setRangeStart(null);
+    setRangeEnd(null);
+  };
 
-  return (
-    <section id="quiz" className="w-full py-8">
-      {/* Block Header */}
-      <div className="mb-6">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[10px] font-semibold tracking-wider uppercase text-[#18191b] mb-2.5">
-          <Calculator className="w-3 h-3 text-[#2B9E47]" />
-          Интерактивный расчет
+  return <section
+    id="quiz"
+    data-section-key="calculator"
+    data-site-component="booking-calculator"
+    data-applied-promo={appliedPromo?.code}
+    data-date-start={rangeStart ?? ""}
+    data-date-end={rangeEnd ?? ""}
+    className="w-full py-8"
+  >
+    <SiteSectionHeader eyebrow="Расчёт" eyebrowIcon={<Calculator className="w-3 h-3" />} eyebrowTone="brand" title="Соберите свой выезд" description={<>Три шага — и&nbsp;у&nbsp;вас предварительная цена. Итог считается сразу, а&nbsp;мы перезвоним, чтобы всё уточнить.</>} />
+
+    <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+      <div className="lg:hidden sticky top-3 z-30 bg-surface rounded-[var(--site-radius-xl)] px-5 py-3 flex items-center justify-between gap-3">
+        <div><div className="text-[11px] text-ink-3">Предварительная цена</div><div className="text-[22px] font-semibold tracking-[-.8px] leading-none"><span>от </span><span data-calculated-price>{finalTotal.toLocaleString("ru-RU")} ₽</span></div></div>
+        <div className="flex items-center gap-1" aria-label={`Шаг ${currentStep} из 3`}>{stepLabels.map((label, index) => <span key={label} className={`h-1.5 rounded-[var(--site-radius-round)] transition-all ${index + 1 === currentStep ? "w-6 bg-green" : index + 1 < currentStep ? "w-2 bg-green" : "w-2 bg-bg"}`} />)}</div>
+      </div>
+
+      <div className="lg:col-span-7 bg-surface rounded-[var(--site-radius-xl)] p-3 lg:p-5 flex flex-col gap-5">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" aria-label="Шаги расчёта">
+          {stepLabels.map((label, index) => { const step = index + 1; return <button key={label} type="button" onClick={() => step <= currentStep && setCurrentStep(step)} className={`h-9 rounded-[var(--site-radius-round)] pl-1.5 pr-3.5 inline-flex items-center gap-2 text-[12px] font-medium shrink-0 transition-colors ${step === currentStep ? "bg-green text-white" : step < currentStep ? "bg-green-soft text-green-deep" : "bg-bg text-ink-3"}`}><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center text-[11px] ${step === currentStep ? "bg-white/20" : step < currentStep ? "bg-green text-white" : "bg-surface"}`}>{step < currentStep ? <Check size={11} strokeWidth={3} /> : step}</span>{label}</button>; })}
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 md:gap-4">
-          <h2 className="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">
-            Калькулятор отдыха и праздника
-          </h2>
-          <p className="hidden md:block text-[13px] text-[#6b7280] max-w-md font-normal leading-relaxed text-left md:text-right">
-            Соберите ваш индивидуальный пакет за&nbsp;3&nbsp;шага и&nbsp;зафиксируйте скидку по&nbsp;промокоду
-          </p>
+        <div className="min-h-[290px]">
+          {currentStep === 1 ? <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <Tabs className="site-calculator-tabs" value={activeTab} renderPanel={false} onValueChange={changeKind} items={kindTabs.map((tab) => ({ ...tab, content: null }))} />
+            {activeTab === "glamping" ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{HOUSES.map((house) => { const on = selectedHouseId === house.id; return <button key={house.id} type="button" aria-pressed={on} onClick={() => setSelectedHouseId(house.id)} className={`text-left rounded-[var(--site-radius-lg)] p-2 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="card-img w-14 h-14 !rounded-[var(--site-radius-sm)] shrink-0"><img src={house.photos[0]} alt="" /></span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold truncate">{house.title}</span><span className="block text-[11px] text-ink-3">до {house.capacityNumber} чел · за ночь</span><span className="block text-[13px] font-semibold mt-0.5">от {house.priceFrom.toLocaleString("ru-RU")} ₽</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
+            {activeTab === "venue" ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{VENUES.map((venue) => { const on = selectedVenueId === venue.id; return <button key={venue.id} type="button" aria-pressed={on} onClick={() => setSelectedVenueId(venue.id)} className={`text-left rounded-[var(--site-radius-lg)] p-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="flex items-center justify-between gap-2"><span className="text-[13px] font-semibold">{venue.title}</span>{on ? <Check size={13} className="text-green" /> : null}</span><span className="block text-[11px] text-ink-3 mt-1">{venue.capacity} · {venue.area}</span></button>; })}</div> : null}
+            {activeTab === "event" ? <div className="flex flex-col gap-2">{POPULAR_PROGRAMS.map((program) => { const on = selectedProgramId === program.id; return <button key={program.id} type="button" aria-pressed={on} onClick={() => setSelectedProgramId(program.id)} className={`text-left rounded-[var(--site-radius-lg)] p-3 flex items-center justify-between gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span><span className="block text-[13px] font-semibold">{program.title}</span><span className="block text-[11px] text-ink-3 mt-1">{program.duration} · {program.age}</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
+          </div> : null}
+
+          {currentStep === 2 ? <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="flex items-center justify-between"><button type="button" onClick={() => moveMonth(-1)} className="arrow-bubble !bg-bg" aria-label="Предыдущий месяц"><ChevronLeft size={16} /></button><span className="text-[15px] font-semibold capitalize">{monthLabels[month.index]} {month.year}</span><button type="button" onClick={() => moveMonth(1)} className="arrow-bubble !bg-bg" aria-label="Следующий месяц"><ChevronRight size={16} /></button></div>
+            <div className="grid grid-cols-7 gap-1 text-center" role="grid" aria-label={`Выбор диапазона: ${monthLabels[month.index]} ${month.year}`}>{weekDays.map((day) => <span key={day} role="columnheader" className="text-[11px] text-ink-3 py-1">{day}</span>)}{Array.from({ length: firstDayOffset }, (_, index) => <span key={`offset-${index}`} />)}{Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
+              const date = isoDate(month.year, month.index, day);
+              const busy = isBusyDate(date);
+              const endpoint = date === rangeStart || date === rangeEnd;
+              const inRange = Boolean(rangeStart && rangeEnd && date > rangeStart && date < rangeEnd);
+              const selectedDay = endpoint || inRange;
+              return <button key={day} type="button" role="gridcell" data-calendar-day={day} data-range-position={endpoint ? "endpoint" : inRange ? "within" : undefined} disabled={busy} aria-pressed={selectedDay} aria-label={`${day} ${monthLabels[month.index]} ${month.year}${busy ? ", недоступно" : endpoint ? ", граница выбранного диапазона" : inRange ? ", входит в выбранный диапазон" : ", доступно"}`} onClick={() => chooseDay(date)} className={`h-10 lg:h-11 rounded-[var(--site-radius-md)] text-[13px] font-medium transition-[background-color,color,transform] duration-300 ease-[var(--site-ease)] ${busy ? "bg-bg text-ink-3 opacity-60 line-through" : endpoint ? "bg-green text-white scale-[1.04]" : inRange ? "bg-green-soft text-green-deep" : "bg-green-soft text-green-deep hover:bg-green hover:text-white"}`}>{day}</button>;
+            })}</div>
+            <div className="flex items-center justify-between gap-3 text-[11px] text-ink-3"><span className="flex items-center gap-4"><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-green-soft" />свободно</span><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-bg" />занято</span></span><span aria-live="polite" data-date-summary className="text-right">{rangeSummary}</span></div>
+          </div> : null}
+
+          {currentStep === 3 ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in slide-in-from-right-4 duration-300">{addonOptions.map((item) => { const on = Boolean(selectedAddons[item.id]); return <button key={item.id} type="button" aria-pressed={on} onClick={() => setSelectedAddons((value) => ({ ...value, [item.id]: !value[item.id] }))} className={`text-left rounded-[var(--site-radius-lg)] p-2.5 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="icon-tile !bg-surface text-[18px]">{item.icon}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold">{item.title}</span><span className="block text-[11px] text-ink-3">{item.desc} · +{item.price.toLocaleString("ru-RU")} ₽</span></span><span className={`w-7 h-7 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-ink"}`}>{on ? <Check size={13} /> : <Plus size={13} />}</span></button>; })}</div> : null}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <Button variant="muted" disabled={currentStep === 1} onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}>Назад</Button>
+          {currentStep < 3 ? <Button disabled={currentStep === 2 && !rangeStart} onClick={() => setCurrentStep(Math.min(3, currentStep + 1))}>{currentStep === 2 && !rangeStart ? "Выберите даты" : "Далее"} <ArrowRight size={14} /></Button> : <span className="text-[12px] text-ink-3">Контакты в форме <span className="max-lg:hidden">справа →</span><span className="lg:hidden">ниже ↓</span></span>}
         </div>
       </div>
 
-      {/* Main Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Step-by-Step Selection Engine */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Format Selection Tabs */}
-          <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-white shadow-xs">
-            <button
-              onClick={() => {
-                setActiveTab('glamping');
-                setCurrentStep(1);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-[12px] sm:text-[13px] font-medium flex items-center justify-center gap-2 transition-all ${
-                activeTab === 'glamping'
-                  ? 'bg-[#2B9E47] text-white shadow-xs'
-                  : 'text-[#18191b] hover:bg-[#f7f7f7]'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span>Отдых в домике</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('venue');
-                setCurrentStep(1);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-[12px] sm:text-[13px] font-medium flex items-center justify-center gap-2 transition-all ${
-                activeTab === 'venue'
-                  ? 'bg-[#2B9E47] text-white shadow-xs'
-                  : 'text-[#18191b] hover:bg-[#f7f7f7]'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Площадка</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('event');
-                setCurrentStep(1);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-[12px] sm:text-[13px] font-medium flex items-center justify-center gap-2 transition-all ${
-                activeTab === 'event'
-                  ? 'bg-[#2B9E47] text-white shadow-xs'
-                  : 'text-[#18191b] hover:bg-[#f7f7f7]'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Праздник</span>
-            </button>
-          </div>
-
-          {/* Steps Progress Indicator */}
-          <div className="p-4 rounded-3xl bg-white">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-100">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#2B9E47] text-white text-[11px] font-bold flex items-center justify-center">
-                  {currentStep}
-                </span>
-                <span className="text-[14px] font-semibold text-[#18191b]">
-                  {currentStep === 1 && 'Шаг 1: Выберите объект'}
-                  {currentStep === 2 && 'Шаг 2: Дата и гости'}
-                  {currentStep === 3 && 'Шаг 3: Дополнительные опции'}
-                  {currentStep === 4 && 'Шаг 4: Контакты для брони'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4].map((step) => (
-                  <button
-                    key={step}
-                    onClick={() => setCurrentStep(step)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      currentStep === step ? 'w-5 bg-[#2B9E47]' : 'bg-neutral-200'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* STEP 1: Resource Picker */}
-            {currentStep === 1 && (
-              <div className="space-y-3 animate-in fade-in duration-200">
-                {activeTab === 'glamping' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {HOUSES.map((house) => {
-                      const isSelected = selectedHouseId === house.id;
-
-                      return (
-                        <div
-                          key={house.id}
-                          onClick={() => setSelectedHouseId(house.id)}
-                          className={`relative aspect-video overflow-hidden rounded-2xl border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-[#2B9E47] ring-2 ring-[#2B9E47]/20'
-                              : 'border-transparent hover:border-neutral-300'
-                          }`}
-                        >
-                          <img src={house.photos[0]} alt={house.title} className="absolute inset-0 w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                          <span className="absolute bottom-3 left-3 right-3 truncate text-[14px] font-semibold text-white">{house.title}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {activeTab === 'venue' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {VENUES.map((venue) => {
-                      const isSelected = selectedVenueId === venue.id;
-
-                      return (
-                        <div
-                          key={venue.id}
-                          onClick={() => setSelectedVenueId(venue.id)}
-                          className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-[#2B9E47] bg-[#eaf5ec]'
-                              : 'border-transparent bg-[#f7f7f7] hover:bg-neutral-200'
-                          }`}
-                        >
-                          <div className="text-[13px] font-semibold text-[#18191b]">{venue.title}</div>
-                          <div className="text-[11px] text-[#6b7280]">{venue.capacity} • {venue.area}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {activeTab === 'event' && (
-                  <div className="space-y-2">
-                    {POPULAR_PROGRAMS.slice(0, 3).map((prog) => {
-                      const isSelected = selectedProgramId === prog.id;
-
-                      return (
-                        <div
-                          key={prog.id}
-                          onClick={() => setSelectedProgramId(prog.id)}
-                          className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                            isSelected
-                              ? 'border-[#2B9E47] bg-[#eaf5ec]'
-                              : 'border-transparent bg-[#f7f7f7] hover:bg-neutral-200'
-                          }`}
-                        >
-                          <div>
-                            <div className="text-[13px] font-semibold text-[#18191b]">{prog.title}</div>
-                            <div className="text-[11px] text-[#6b7280]">{prog.duration} • {prog.age}</div>
-                          </div>
-                          <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
-                            {isSelected ? <Check className="w-3.5 h-3.5 text-[#2B9E47]" /> : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="pt-3 flex justify-end">
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
-                  >
-                    <span>Далее</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Interactive Date & Guests */}
-            {currentStep === 2 && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div>
-                  <label className="text-[12px] font-semibold text-[#18191b] mb-2 block">
-                    Выберите свободную дату заезда:
-                  </label>
-                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                    {calendarDays.map((item) => {
-                      const isSelected = selectedDate === item.date;
-
-                      return (
-                        <button
-                          key={item.date}
-                          disabled={!item.available}
-                          onClick={() => setSelectedDate(item.date)}
-                          className={`p-2 rounded-2xl text-center flex flex-col items-center justify-center transition-all ${
-                            !item.available
-                              ? 'bg-neutral-100 text-neutral-400 opacity-50 cursor-not-allowed line-through'
-                              : isSelected
-                              ? 'bg-[#2B9E47] text-white shadow-sm'
-                              : 'bg-[#f7f7f7] text-[#18191b] hover:bg-neutral-200'
-                          }`}
-                        >
-                          <span className="text-[10px] font-medium">{item.weekday}</span>
-                          <span className="text-[16px] font-bold">{item.day}</span>
-                          <span className="text-[9px] mt-0.5">
-                            {item.available ? (isSelected ? 'Выбрано' : 'Свободно') : 'Занято'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Guest counter */}
-                <div>
-                  <label className="text-[12px] font-semibold text-[#18191b] mb-2 block">
-                    Количество гостей:
-                  </label>
-                  <div className="flex items-center gap-3">
-                    {[1, 2, 3, 4, 6, 8, 12].map((num) => (
-                      <button
-                        key={num}
-                        onClick={() => setGuestCount(num)}
-                        className={`w-10 h-10 rounded-2xl text-[13px] font-semibold transition-all ${
-                          guestCount === num
-                            ? 'bg-[#18191b] text-white'
-                            : 'bg-[#f7f7f7] text-[#18191b] hover:bg-neutral-200'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-3 flex items-center justify-between">
-                  <button
-                    onClick={() => setCurrentStep(1)}
-                    className="h-[40px] px-5 rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[13px] text-[#6b7280] hover:text-[#18191b] transition-colors"
-                  >
-                    Назад
-                  </button>
-                  <button
-                    onClick={() => setCurrentStep(3)}
-                    className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
-                  >
-                    <span>Далее</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 3: Add-ons */}
-            {currentStep === 3 && (
-              <div className="space-y-3 animate-in fade-in duration-200">
-                <div className="text-[12px] font-semibold text-[#18191b] mb-1">
-                  Доступно на выбранную дату ({selectedDate}):
-                </div>
-
-                <div className="space-y-2">
-                  {addonOptions.map((item) => {
-                    const isChecked = !!selectedAddons[item.id];
-
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() =>
-                          setSelectedAddons((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
-                        }
-                        className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                          isChecked
-                            ? 'border-[#2B9E47] bg-[#eaf5ec]'
-                            : 'border-transparent bg-[#f7f7f7] hover:bg-neutral-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">{item.icon}</span>
-                          <div>
-                            <div className="text-[13px] font-semibold text-[#18191b]">
-                              {item.title}
-                            </div>
-                            <div className="text-[11px] text-[#6b7280]">{item.desc}</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span className="text-[13px] font-semibold text-[#18191b]">
-                            +{item.price.toLocaleString('ru-RU')} ₽
-                          </span>
-                          <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                              isChecked ? 'bg-[#2B9E47] text-white' : 'bg-white'
-                            }`}
-                          >
-                            {isChecked ? <Check className="w-3.5 h-3.5" /> : null}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-3 flex items-center justify-between">
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="h-[40px] px-5 rounded-full bg-[#f7f7f7] hover:bg-neutral-200 text-[13px] text-[#6b7280] hover:text-[#18191b] transition-colors"
-                  >
-                    Назад
-                  </button>
-                  <button
-                    onClick={() => setCurrentStep(4)}
-                    className="h-[40px] px-5 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium flex items-center gap-2 hover:bg-[#23823a]"
-                  >
-                    <span>Далее</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 4 (Mobile view) */}
-            {currentStep === 4 && (
-              <div className="lg:hidden space-y-4 animate-in fade-in duration-200">
-                <div className="p-4 rounded-2xl bg-[#f7f7f7]">
-                  <div className="text-[12px] text-[#6b7280]">Предварительный итог:</div>
-                  <div className="text-[26px] font-semibold text-[#2B9E47]">
-                    {finalTotal.toLocaleString('ru-RU')} ₽
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+      <aside className="lg:col-span-5 lg:sticky lg:top-6">
+        <div className="px-5 py-5 sm:p-6 rounded-[var(--site-radius-xl)] bg-surface flex flex-col gap-4">
+          <div aria-live="polite"><div className="text-[11px] text-ink-3">Предварительная цена</div><div className="flex items-baseline gap-2 mt-1"><span className="text-[32px] font-semibold tracking-[-1px] leading-none"><span>от </span><span data-calculated-price>{finalTotal.toLocaleString("ru-RU")} ₽</span></span>{appliedPromo ? <span className="text-[13px] text-ink-3 line-through">{rawTotal.toLocaleString("ru-RU")} ₽</span> : null}</div><div className="text-[12px] text-ink-2 mt-2 line-clamp-2">{selected.title} · <span data-date-summary>{rangeSummary}</span></div></div>
+          <div className="flex items-center justify-between rounded-[var(--site-radius-round)] bg-bg pl-4 pr-1 py-1"><span className="text-[13px] font-medium inline-flex items-center gap-2"><User size={14} />Количество гостей</span><span className="inline-flex items-center gap-1"><button type="button" onClick={() => setGuestCount(Math.max(1, guestCount - 1))} className="w-9 h-9 rounded-[var(--site-radius-round)] bg-surface inline-flex items-center justify-center hover:bg-green hover:text-white transition-colors" aria-label="Меньше гостей"><Minus size={13} /></button><span className="w-9 text-center text-[14px] font-semibold">{guestCount}</span><button type="button" onClick={() => setGuestCount(Math.min(300, guestCount + 1))} className="w-9 h-9 rounded-[var(--site-radius-round)] bg-surface inline-flex items-center justify-center hover:bg-green hover:text-white transition-colors" aria-label="Больше гостей"><Plus size={13} /></button></span></div>
+          <div className="relative h-11 rounded-[var(--site-radius-round)] bg-bg"><Ticket size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-3" /><Input aria-label="Промокод" placeholder="Введите промокод" value={promoInput} onChange={(event) => setPromoInput(event.target.value)} className="site-promo-input !h-11 !min-h-11 !rounded-[var(--site-radius-round)] !pl-10 !pr-14 !text-[14px] uppercase font-mono placeholder:normal-case placeholder:font-sans" /><button type="button" onClick={() => applyPromoCode(promoInput)} className="absolute right-0 top-0 w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center hover:bg-green-deep transition-colors" title="Применить промокод" aria-label="Применить промокод"><Gift size={15} /></button></div>
+          {!isSubmitted ? <form onSubmit={submit} className="flex flex-col gap-3" data-intake-range={`${rangeStart ?? ""}/${checkoutDate}`}>
+            <input type="hidden" name="dateStart" value={rangeStart ?? ""} />
+            <input type="hidden" name="dateEnd" value={checkoutDate} />
+            <input type="hidden" name="guestCount" value={guestCount} />
+            <div><div className="text-[11px] text-ink-3 mb-1.5">Куда ответить</div><div className="grid grid-cols-3 gap-1.5">{([{ id: "phone", label: "Звонок", Icon: Phone }, { id: "max", label: "MAX", Icon: MessageCircle }, { id: "telegram", label: "Telegram", Icon: Send }] as const).map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => setContactMethod(id)} className={`h-11 rounded-[var(--site-radius-round)] text-[12px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${contactMethod === id ? "bg-green text-white" : "bg-bg text-ink hover:bg-green-soft"}`}><Icon size={13} />{label}</button>)}</div></div>
+            <Input aria-label="Ваше имя" required placeholder="Ваше имя" value={userName} onChange={(event) => setUserName(event.target.value)} autoComplete="name" className="!h-11 !min-h-11 !rounded-[var(--site-radius-round)] !px-[18px] !text-[14px]" />
+            <Input aria-label="Телефон" required type="tel" placeholder="+7 (___) ___-__-__" value={userPhone} onChange={(event) => setUserPhone(event.target.value)} autoComplete="tel" className="!h-11 !min-h-11 !rounded-[var(--site-radius-round)] !px-[18px] !text-[14px]" />
+            <label className="flex items-start gap-2.5 cursor-pointer text-[12px] text-ink-2 leading-snug"><span aria-hidden="true" className={`mt-0.5 w-5 h-5 rounded-[var(--site-radius-xs)] inline-flex items-center justify-center shrink-0 transition-colors ${isConsentGiven ? "bg-green text-white" : "bg-bg"}`}>{isConsentGiven ? <Check size={12} strokeWidth={3} /> : null}</span><input type="checkbox" aria-label="Согласие на обработку персональных данных" checked={isConsentGiven} onChange={(event) => setIsConsentGiven(event.target.checked)} className="sr-only" /><span>Даю согласие на обработку персональных данных в соответствии с <button type="button" onClick={onOpenPrivacyPolicy} className="text-green-deep underline underline-offset-2">политикой</button>.</span></label>
+            <button type="submit" className="btn btn-primary w-full justify-between"><span>Отправить заявку</span><span className="btn-arrow"><ArrowRight size={15} /></span></button>
+          </form> : <div className="rounded-[var(--site-radius-lg)] bg-green-soft p-5 text-center animate-in zoom-in-95"><span className="w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center"><CheckCircle2 size={21} /></span><h4 className="text-[16px] font-semibold mt-3">Заявка принята!</h4><p className="text-[12px] text-ink-2 mt-2">Спасибо, {userName || "гость"}! Менеджер подтвердит условия и свяжется с вами.</p><button type="button" onClick={() => setIsSubmitted(false)} className="text-[12px] text-green-deep font-medium underline mt-3">Рассчитать заново</button></div>}
         </div>
-
-        {/* Right Sticky Sidebar: Live Price, Promo Code & Contact Form */}
-        <div className="lg:col-span-5 sticky top-6">
-          <div className="p-5 sm:p-6 rounded-3xl bg-white space-y-4">
-            {/* Price Preview Header */}
-            <div>
-              <div className="text-[11px] uppercase font-semibold text-[#6b7280] tracking-wider">
-                Предварительная стоимость
-              </div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-[32px] font-semibold text-[#2B9E47] tracking-tight">
-                  от {finalTotal.toLocaleString('ru-RU')} ₽
-                </span>
-                {appliedPromo && (
-                  <span className="text-[14px] text-neutral-400 line-through">
-                    {rawTotal.toLocaleString('ru-RU')} ₽
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-[#6b7280] mt-0.5">
-                Дата: {selectedDate} • {guestCount} человек
-              </div>
-            </div>
-
-            {/* Promo Code Input Box */}
-            <div className="flex items-center gap-2 rounded-2xl bg-[#f7f7f7] px-3 py-2">
-                <input
-                  type="text"
-                  placeholder="Введите промокод"
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
-                  className="flex-1 h-[40px] bg-transparent text-[12px] uppercase font-mono text-[#18191b] placeholder:normal-case placeholder:font-sans placeholder:text-[#6b7280] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyPromo}
-                  className="w-10 h-10 rounded-full bg-[#2B9E47] text-white flex items-center justify-center hover:bg-[#23823a] transition-colors"
-                  title="Применить промокод"
-                >
-                  <Gift className="w-4 h-4" />
-                </button>
-            </div>
-
-            {/* Form */}
-            {!isSubmitted ? (
-              <form onSubmit={handleSubmit} className="space-y-3 pt-1">
-                {/* Where to respond: Phone / Telegram / MAX */}
-                <div>
-                  <label className="text-[11px] font-semibold text-[#18191b] mb-1.5 block">
-                    Куда вам ответить?
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setContactMethod('phone')}
-                      className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        contactMethod === 'phone'
-                          ? 'bg-[#2B9E47] text-white'
-                          : 'bg-[#2B9E47]/10 text-[#237c39] hover:bg-[#2B9E47]/15'
-                      }`}
-                    >
-                      <Phone className="w-3 h-3" />
-                      <span>Звонок</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setContactMethod('max')}
-                      className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        contactMethod === 'max'
-                          ? 'bg-[#6557e8] text-white'
-                          : 'bg-[#6557e8]/10 text-[#5548c8] hover:bg-[#6557e8]/15'
-                      }`}
-                    >
-                      <MessageCircle className="w-3 h-3" />
-                      <span>MAX</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setContactMethod('telegram')}
-                      className={`h-[36px] rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        contactMethod === 'telegram'
-                          ? 'bg-[#229ED9] text-white'
-                          : 'bg-[#229ED9]/10 text-[#167fb0] hover:bg-[#229ED9]/15'
-                      }`}
-                    >
-                      <Send className="w-3 h-3 -rotate-12" />
-                      <span>Telegram</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Name */}
-                <div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ваше имя"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    className="w-full h-[40px] px-3.5 rounded-2xl bg-[#f7f7f7] text-[13px] text-[#18191b] placeholder:text-[#6b7280] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#2B9E47]"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+7 (___) ___-__-__"
-                    value={userPhone}
-                    onChange={(e) => setUserPhone(e.target.value)}
-                    className="w-full h-[40px] px-3.5 rounded-2xl bg-[#f7f7f7] text-[13px] text-[#18191b] placeholder:text-[#6b7280] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#2B9E47]"
-                  />
-                </div>
-
-                {/* Personal data consent checkbox */}
-                <div className="flex items-start gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="consentQuiz"
-                    checked={isConsentGiven}
-                    onChange={(e) => setIsConsentGiven(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded text-[#2B9E47] focus:ring-[#2B9E47] cursor-pointer"
-                  />
-                  <label htmlFor="consentQuiz" className="text-[11px] text-[#6b7280] leading-snug cursor-pointer select-none">
-                    Даю согласие на обработку персональных данных в соответствии с{' '}
-                    <button
-                      type="button"
-                      onClick={onOpenPrivacyPolicy}
-                      className="text-[#2B9E47] underline hover:text-[#23823a]"
-                    >
-                      политикой обработки персональных данных
-                    </button>
-                    .
-                  </label>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  className="w-full h-[48px] rounded-full bg-[#2B9E47] hover:bg-[#23823a] text-white text-[14px] font-medium flex items-center justify-center gap-2 transition-all shadow-sm"
-                >
-                  <span>Забронировать расчет</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-            ) : (
-              /* Success confirmation view */
-              <div className="p-6 rounded-2xl bg-[#eaf5ec] text-center space-y-3 animate-in zoom-in-95">
-                <div className="w-12 h-12 rounded-full bg-[#2B9E47] text-white flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <h4 className="text-[16px] font-semibold text-[#18191b]">
-                  Заявка принята!
-                </h4>
-                <p className="text-[12px] text-[#2d3134] leading-relaxed">
-                  Спасибо, {userName || 'гость'}! Мы уже зарезервировали условия для даты {selectedDate} и перезвоним вам в ближайшие минуты.
-                </p>
-                <button
-                  onClick={() => setIsSubmitted(false)}
-                  className="text-[12px] text-[#2B9E47] font-medium underline"
-                >
-                  Рассчитать заново
-                </button>
-              </div>
-            )}
-
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+      </aside>
+    </div>
+  </section>;
 };

@@ -5,15 +5,16 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=22.16.0 <23"
+    "node": ">=24.0.0 <25"
   },
   "scripts": {
     "dev": "pnpm --filter @crm/app dev",
+    "dev:admin": "pnpm --filter @crm/admin dev",
     "dev:site": "pnpm --filter @crm/site dev",
     "dev:api": "pnpm --filter @crm/api dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @crm/app test",
+    "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter @crm/app test:e2e",
     "test:e2e:api": "pnpm --filter @crm/app test:e2e:api",
     "test:integration": "pnpm --filter @crm/api test:integration",

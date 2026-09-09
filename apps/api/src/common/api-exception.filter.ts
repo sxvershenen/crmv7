@@ -66,8 +66,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
       }
     }
     if (error instanceof QueryFailedError) {
-      const code = (error.driverError as { code?: string }).code
+      const driverError = error.driverError as { code?: string; constraint?: string }
+      const code = driverError.code
       if (code === "23P01") {
+        if (driverError.constraint?.startsWith("price_books_")) {
+          return {
+            status: HttpStatus.CONFLICT,
+            body: { code: "PRICE_BOOK_PERIOD_CONFLICT", message: "Периоды действия прайс-листов пересекаются", details: { constraint: driverError.constraint } },
+          }
+        }
         return {
           status: HttpStatus.CONFLICT,
           body: { code: "RESOURCE_CONFLICT", message: "Ресурс уже занят", details: {} },

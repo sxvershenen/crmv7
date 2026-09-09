@@ -257,6 +257,7 @@ export function ProgramRegistrationEditorPage({
             date: new Date().toISOString().slice(0, 10),
             id: `registration-refund-${Date.now()}`,
             kind: "refund",
+            sourcePaymentId: payment.id,
           },
           ...current.payments,
         ],

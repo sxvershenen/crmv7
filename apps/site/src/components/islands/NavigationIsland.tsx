@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import type { SiteNavigationConfig } from "@crm/site-ui";
 import { MobileDrawer } from "../../react/components/navigation/MobileDrawer";
-import { MobileHeader } from "../../react/components/navigation/MobileHeader";
 import { MobileNavbar } from "../../react/components/navigation/MobileNavbar";
 import { Sidebar } from "../../react/components/navigation/Sidebar";
 import {
@@ -9,6 +9,7 @@ import {
   openBooking,
   openCall
 } from "../../lib/site-events";
+import { DEFAULT_PUBLIC_NAVIGATION } from "../../data/publicContentDefaults";
 
 const TRACKED_SECTIONS = [
   "hero",
@@ -23,7 +24,7 @@ const TRACKED_SECTIONS = [
   "quiz"
 ];
 
-export function NavigationIsland() {
+export function NavigationIsland({ navigation }: { navigation?: SiteNavigationConfig }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
@@ -37,7 +38,13 @@ export function NavigationIsland() {
     setIsMobileDrawerOpen(false);
 
     const section = document.getElementById(sectionId);
-    section?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (section) {
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      return;
+    }
+
+    window.location.assign(`/#${encodeURIComponent(sectionId)}`);
   }, []);
 
   useEffect(() => {
@@ -116,11 +123,9 @@ export function NavigationIsland() {
         onOpenCallModal={openCall}
         activeSection={activeSection}
         onNavigate={handleNavigate}
-      />
-      <MobileHeader
-        onOpenCallModal={openCall}
-        onOpenBookingModal={openBooking}
-        onNavigate={handleNavigate}
+        brand={(navigation ?? DEFAULT_PUBLIC_NAVIGATION).brand}
+        items={(navigation ?? DEFAULT_PUBLIC_NAVIGATION).items}
+        configuredColors={Boolean(navigation)}
       />
       <MobileNavbar
         activeSection={activeSection}
@@ -135,6 +140,7 @@ export function NavigationIsland() {
         onNavigate={handleNavigate}
         onOpenBookingModal={() => openBooking()}
         onOpenCallModal={openCall}
+        {...(navigation ? { navigation } : {})}
       />
     </>
   );

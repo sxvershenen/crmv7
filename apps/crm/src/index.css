@@ -3,6 +3,7 @@
 
 @source ".";
 @source "../../../packages/ui/src";
+@source "../../../packages/offering-editor/src";
 
 @layer base {
   html {

@@ -1,5 +1,6 @@
 ---
 import { Award, MapPin, ShieldCheck, Sparkles, Trees } from "lucide-react";
+import SiteSectionHeader from "@crm/site-ui/astro/SiteSectionHeader";
 import { RESORT_IMAGES, WHY_US_FACTS } from "../../data/resortData";
 
 const getFactIcon = (id: string) => {
@@ -17,82 +18,60 @@ const getFactIcon = (id: string) => {
   }
 };
 
-const getFactIconClass = (id: string) =>
-  id === "team" ? "w-5 h-5 text-[#FAAB2B]" : id === "allinclusive" ? "w-5 h-5 text-[#EE2F2E]" : "w-5 h-5 text-[#2B9E47]";
 ---
 
-<section class="w-full py-8">
-  <div class="mb-6">
-    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[10px] font-semibold tracking-wider uppercase text-[#18191b] mb-2.5">
-      <ShieldCheck className="w-3 h-3 text-[#2B9E47]" />
-      Факты и цифры
-    </div>
+<section data-section-key="why-us" class="w-full py-8">
+  <SiteSectionHeader
+    eyebrow="Почему мы"
+    eyebrowTone="brand"
+    title="Почему выбирают нас"
+    description="Конкретные доказательства вместо общих эпитетов. Всё, что можно посчитать, — посчитали."
+  >
+    <ShieldCheck slot="icon" className="w-3 h-3" />
+  </SiteSectionHeader>
 
-    <div class="flex flex-col md:flex-row md:items-end justify-between gap-2 md:gap-4">
-      <h2 class="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">
-        Почему выбирают «Свистоплясово»
-      </h2>
-      <p class="hidden md:block text-[13px] text-[#6b7280] max-w-md font-normal leading-relaxed text-left md:text-right">
-        Честные преимущества без преувеличений — всё проверено сотнями счастливых гостей
-      </p>
-    </div>
-  </div>
-
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-    <div class="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4">
+    <div class="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
       {WHY_US_FACTS.map((fact) => {
         const FactIcon = getFactIcon(fact.id);
-        const factIconClass = getFactIconClass(fact.id);
-
         return (
-          <div class="p-5 rounded-3xl bg-white flex flex-col justify-between transition-transform">
-            <div>
-              <div class="flex items-center justify-between mb-3">
-                <div class="w-10 h-10 rounded-2xl bg-[#f7f7f7] flex items-center justify-center">
-                  <FactIcon className={factIconClass} />
+          <div class="group bg-[var(--site-color-surface)] rounded-[var(--site-radius-xl)] p-3 lg:p-5 flex lg:flex-col items-center lg:items-start gap-3 lg:gap-6 lg:min-h-[220px] hover:-translate-y-[3px] transition-transform">
+                <div class="icon-tile !w-11 !h-11 lg:!w-12 lg:!h-12 group-hover:bg-[var(--site-color-brand-50)] group-hover:text-[var(--site-color-brand-700)] transition-colors">
+                  <FactIcon className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span class="text-[24px] font-semibold text-[#2B9E47] tracking-tight">
-                  {fact.number}
-                </span>
-              </div>
-
-              <h3 class="text-[16px] font-semibold text-[#18191b] mb-1.5 leading-snug">
-                {fact.title}
+            <div class="flex-1 lg:mt-auto min-w-0">
+              <h3 class="text-[length:var(--site-text-card-title)] lg:text-[length:var(--site-text-title-sm)] font-[var(--site-weight-semibold)] text-[var(--site-color-text)] leading-tight">
+                {fact.number} {fact.title}
               </h3>
-            </div>
-
-            <p class="text-[12px] text-[#6b7280] leading-relaxed">
+            <p class="text-[length:var(--site-text-caption)] lg:text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)] mt-1 lg:mt-2 leading-[1.5]">
               {fact.desc}
             </p>
+            </div>
           </div>
         );
       })}
     </div>
 
-    <div class="lg:col-span-5 rounded-3xl bg-white p-3.5 flex flex-col justify-between">
-      <div class="relative h-[220px] sm:h-[260px] rounded-2xl overflow-hidden bg-neutral-100 mb-4">
+    <div class="lg:col-span-5 card group/card flex flex-col hover:-translate-y-[3px] transition-transform">
+      <div class="card-img aspect-[4/3] lg:aspect-auto lg:flex-1 lg:min-h-[320px] img-dim">
         <img
           src={RESORT_IMAGES.teamPhoto}
           alt="Команда Зажигай"
           class="w-full h-full object-cover"
         />
-        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-
-        <div class="absolute bottom-3 left-3 right-3 text-white">
-          <div class="text-[16px] font-semibold leading-tight">
-            Event-команда «Зажигай»
-          </div>
+        <div class="absolute inset-0 z-10 p-4 flex flex-col justify-end text-[var(--site-color-text-inverse)]">
+          <span class="chip on-img w-fit mb-2">Команда «Зажигай»</span>
+          <div class="text-[length:var(--site-text-h3)] lg:text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] leading-tight">Профессиональная команда рядом на каждом этапе</div>
         </div>
       </div>
-
-      <div class="px-1.5">
-        <div class="text-[13px] text-[#2d3134] leading-relaxed mb-3">
-          Мы не просто сдаём дома — мы создаем душевные воспоминания. Все сценарии, музыкальное сопровождение и безопасность контролируются нашими штатными сотрудниками.
-        </div>
-
-        <div class="flex items-center justify-between pt-2 border-t border-neutral-100 text-[11px] text-[#6b7280]">
-          <span>Опыт работы: с 2017 года</span>
-          <span class="text-[#2B9E47] font-medium">Более 1 200 событий</span>
+      <div class="px-2 pt-3 pb-2">
+        <div class="flex items-center justify-between gap-3">
+          <div class="text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)] leading-[1.5]">
+            Проживание и событие в одном месте: гости не разъезжаются по домам, а идут спать в домики.
+          </div>
+          <div class="flex -space-x-2 shrink-0" aria-hidden="true">
+            {[0, 1, 2].map((item) => <img src={RESORT_IMAGES.teamPhoto} alt="" class="w-9 h-9 rounded-[var(--site-radius-round)] object-cover border-2 border-[var(--site-color-surface)]" style={`object-position: ${30 + item * 25}% center`} />)}
+          </div>
         </div>
       </div>
     </div>

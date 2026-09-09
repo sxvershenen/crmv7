@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { fixtureDashboardRepository } from "./dashboard-repository"
+import { FixtureDashboardRepository, fixtureDashboardRepository } from "./dashboard-repository"
 
 describe("dashboard repository boundary", () => {
   it("returns cloned fixture data", async () => {
@@ -38,5 +38,19 @@ describe("dashboard repository boundary", () => {
     for (const id of summaryIds) {
       expect(itemsById.get(id)?.contentSummary?.peopleCount).toEqual(expect.any(Number))
     }
+  })
+
+  it("keeps fixture assignment local while exposing the updated projection", async () => {
+    const repository = new FixtureDashboardRepository()
+    const before = await repository.getOverview("all")
+    const item = before.attention.flatMap((section) => section.items).find((candidate) => candidate.assignees.length === 0)
+    expect(item).toBeDefined()
+
+    await repository.assign(item!)
+
+    const after = await repository.getOverview("all")
+    const updated = after.attention.flatMap((section) => section.items).find((candidate) => candidate.id === item!.id)
+    expect(updated).toMatchObject({ assignedToMe: true })
+    expect(updated?.assignees.some((person) => person.id === "demo-manager")).toBe(true)
   })
 })

@@ -18,7 +18,7 @@ const query: CustomerQuery = {
 
 describe("useCustomers", () => {
   it("exposes loading and repository error states", async () => {
-    const repository: CustomerRepository = { list: vi.fn().mockRejectedValue(new Error("fixture unavailable")) }
+    const repository: CustomerRepository = { assignSelf: vi.fn(), list: vi.fn().mockRejectedValue(new Error("fixture unavailable")) }
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
     const { result } = renderHook(() => useCustomers(query, repository), { wrapper })

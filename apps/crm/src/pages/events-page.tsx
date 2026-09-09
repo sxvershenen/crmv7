@@ -8,7 +8,7 @@ import { EventsControls, EventsNav, type EventFilterValues } from "@app/componen
 import { shiftIso } from "@app/components/events/event-format"
 import { EventScheduler } from "@app/components/events/event-scheduler"
 import { EventsLoading, EventsTableView } from "@app/components/events/event-views"
-import { apiEventsRepository, type EventsRepository } from "@app/data/events-repository"
+import { eventsRepository, type EventsRepository } from "@app/data/events-repository"
 import type { EventQuery, EventSortKey, EventStatus, EventStatusFilter } from "@app/entities/events"
 import { eventPeriods, eventSortKeys, eventStatusFilters, eventViews } from "@app/entities/events"
 import { useEvents } from "@app/features/use-events"
@@ -19,7 +19,7 @@ const DEFAULT_RANGE_END = "2026-08-30"
 function oneOf<T extends string>(value: string | null, values: readonly T[], fallback: T): T { return value && values.includes(value as T) ? value as T : fallback }
 function validDate(value: string | null, fallback: string) { return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value! : fallback }
 
-export function EventsPage({ repository = apiEventsRepository }: { repository?: EventsRepository }) {
+export function EventsPage({ repository = eventsRepository }: { repository?: EventsRepository }) {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const status = oneOf(params.get("status"), eventStatusFilters, "all")

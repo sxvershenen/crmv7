@@ -19,8 +19,9 @@ import type {
 } from "@app/entities/programs"
 import { bookingResourcesFixture } from "@app/fixtures/bookings"
 import { programCategoriesFixture, programRegistrationsFixture, programRunsFixture, programTemplatesFixture } from "@app/fixtures/programs"
-import { apiClient } from "@app/lib/api-client"
-import { ProgramOccurrenceDtoSchema, ProgramRegistrationDtoSchema, ProgramTemplateDtoSchema, SessionUserSchema } from "@crm/contracts"
+import { ApiClientError, apiClient } from "@app/lib/api-client"
+import { useFixtureData } from "@app/lib/data-mode"
+import { PaymentListResponseSchema, ProgramCategoryDetailSchema, ProgramCategorySchema, ProgramOccurrenceDtoSchema, ProgramRegistrationDtoSchema, ProgramTemplateDtoSchema, ResourceAllocationDtoSchema, ResourceDtoSchema, SessionUserSchema } from "@crm/contracts"
 import { z } from "zod"
 
 export interface ProgramsRepository {
@@ -238,7 +239,7 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
   }
 
   async listRunResources(): Promise<ProgramRunResourceOption[]> {
-    return Promise.resolve(bookingResourcesFixture.map(({ capacity, category, id, name }) => ({ capacity, category, id, name })))
+    return Promise.resolve(bookingResourcesFixture.map(({ capacity, category, id, name }) => ({ capacity, category, id, name, version: 1 })))
   }
 
   async listRunTemplates(): Promise<ProgramTemplate[]> {
@@ -308,6 +309,7 @@ const templatePageSchema = z.object({ items: z.array(ProgramTemplateDtoSchema), 
 const occurrencePageSchema = z.object({ items: z.array(ProgramOccurrenceDtoSchema), nextCursor: z.string().nullable() }).strict()
 const registrationPageSchema = z.object({ items: z.array(ProgramRegistrationDtoSchema), nextCursor: z.string().nullable() }).strict()
 const sessionResponseSchema = z.object({ user: SessionUserSchema }).strict()
+const programCategoryPageSchema = z.object({ items: z.array(ProgramCategorySchema), nextCursor: z.string().nullable() }).strict()
 
 const runStatusToApi: Record<ProgramRunStatus, "draft" | "open" | "closed" | "completed" | "cancelled"> = {
   draft: "draft", planned: "draft", registration: "open", full: "closed", completed: "completed", cancelled: "cancelled",
@@ -318,6 +320,7 @@ const runStatusFromApi: Record<"draft" | "open" | "closed" | "completed" | "canc
 
 function operationId() { return crypto.randomUUID() }
 function idempotencyKey(scope: string) { return `${scope}-${crypto.randomUUID()}` }
+function canonicalId(value: string | null | undefined) { return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null }
 function dateTimeStart(date: string) { return `${date}T00:00:00.000Z` }
 function dateTimeEnd(date: string) { return `${date}T23:59:59.999Z` }
 
@@ -325,18 +328,21 @@ function assigneeFromId(id: string) {
   return { id, initials: id.slice(0, 2).toUpperCase(), name: id, colorClass: "bg-slate-100 text-slate-700" }
 }
 
-function categoryFromId(id: string | null, icon: ProgramCategory["icon"] = "sparkles", tone: ProgramCategory["tone"] = "violet"): ProgramCategory {
-  const value = id ?? "uncategorized"
-  return { id: value, name: id ?? "Без категории", description: "", icon, tone, templateCount: 0 }
-}
-
-function mapTemplate(dto: ReturnType<typeof ProgramTemplateDtoSchema.parse>): ProgramTemplate {
+function mapTemplate(dto: ReturnType<typeof ProgramTemplateDtoSchema.parse>, category?: ProgramCategory): ProgramTemplate {
   return {
     id: dto.id, name: dto.name, version: dto.version, updatedAt: dto.updatedAt, categoryId: dto.categoryId ?? "uncategorized",
-    categoryName: dto.categoryId ?? "Без категории", categoryIcon: "sparkles", categoryTone: "violet", durationMinutes: dto.durationMinutes,
+    categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "sparkles", categoryTone: category?.tone ?? "violet", durationMinutes: dto.durationMinutes,
     participantLimit: dto.participantLimit, basePrice: dto.basePrice.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId), published: dto.published,
     nextRun: dto.nextOccurrence ? { id: dto.nextOccurrence.id, startsAt: dto.nextOccurrence.startsAt } : null,
   }
+}
+
+function mapCategory(dto: ReturnType<typeof ProgramCategorySchema.parse>): ProgramCategory {
+  return { id: dto.id, version: dto.version, name: dto.name, description: dto.description, icon: dto.icon, tone: dto.tone, templateCount: dto.templateCount }
+}
+
+function mapCategoryDetail(dto: ReturnType<typeof ProgramCategoryDetailSchema.parse>): ProgramCategoryEditorRecord {
+  return { ...mapCategory(dto), relatedTemplates: dto.relatedTemplates.map((template) => ({ id: template.id, version: template.version, name: template.name, updatedAt: template.updatedAt, categoryId: dto.id, categoryName: dto.name, categoryIcon: dto.icon, categoryTone: dto.tone, durationMinutes: 0, participantLimit: 1, basePrice: 0, assignees: [], published: false, nextRun: template.nextRun })) }
 }
 
 function mapRun(dto: ReturnType<typeof ProgramOccurrenceDtoSchema.parse>, template?: ProgramTemplate): ProgramRun {
@@ -356,28 +362,54 @@ function mapRegistration(dto: ReturnType<typeof ProgramRegistrationDtoSchema.par
   }
 }
 
-export class ApiProgramsRepository implements ProgramsRepository {
+function toApiRunEditorRegistration(dto: ReturnType<typeof ProgramRegistrationDtoSchema.parse>, run: ProgramRun): ProgramRunEditorRegistration {
+  return {
+    ...mapRegistration(dto, run ?? undefined),
+    discount: dto.discount.amountMinor / 100,
+    paid: dto.paid.amountMinor / 100,
+    participantCount: dto.participantCount,
+    participantNames: dto.participantNames,
+    promo: dto.promo,
+    source: dto.source,
+  }
+}
+
+function toApiRegistrationEditorRecord(dto: ReturnType<typeof ProgramRegistrationDtoSchema.parse>, run: ProgramRun | null, payments: ProgramRegistrationEditorRecord["payments"] = []): ProgramRegistrationEditorRecord {
+  const compact: ProgramRunEditorRegistration = {
+    ...mapRegistration(dto, run ?? undefined),
+    discount: dto.discount.amountMinor / 100,
+    paid: dto.paid.amountMinor / 100,
+    participantCount: dto.participantCount,
+    participantNames: dto.participantNames,
+    promo: dto.promo,
+    source: dto.source,
+  }
+  return { ...compact, customerId: dto.customerId, internalComments: [], payments, run }
+}
+
+export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplateEditorRepository, ProgramRunEditorRepository, ProgramRegistrationEditorRepository, ProgramCategoryEditorRepository {
   private readonly templates = new Map<string, ReturnType<typeof ProgramTemplateDtoSchema.parse>>()
   private readonly occurrences = new Map<string, ReturnType<typeof ProgramOccurrenceDtoSchema.parse>>()
   private readonly registrations = new Map<string, ReturnType<typeof ProgramRegistrationDtoSchema.parse>>()
-
   constructor(private readonly client: ApiProgramsClient = apiClient) {}
 
   async list(query: ProgramQuery): Promise<ProgramsDataset> {
-    const [templates, occurrences, registrations] = await Promise.all([
+    const [templates, occurrences, registrations, categories] = await Promise.all([
       this.listAll("/programs/templates?archived=false&limit=100", templatePageSchema),
       this.listAll(`/programs/occurrences?archived=false&from=${encodeURIComponent(dateTimeStart(query.date))}&to=${encodeURIComponent(dateTimeEnd(query.rangeEnd))}&limit=100`, occurrencePageSchema),
       this.listAll(`/programs/registrations?archived=false&limit=100`, registrationPageSchema),
+      this.listCategories(),
     ])
     for (const dto of templates) this.templates.set(dto.id, dto)
     for (const dto of occurrences) this.occurrences.set(dto.id, dto)
     for (const dto of registrations) this.registrations.set(dto.id, dto)
-    const templateModels = templates.map(mapTemplate)
+    const categoryById = new Map(categories.map((category) => [category.id, category]))
+    const templateModels = templates.map((dto) => mapTemplate(dto, categoryById.get(dto.categoryId ?? "")))
     const templateById = new Map(templateModels.map((template) => [template.id, template]))
     const runModels = occurrences.map((dto) => mapRun(dto, templateById.get(dto.templateId)))
     const runById = new Map(runModels.map((run) => [run.id, run]))
     const registrationModels = registrations.map((dto) => mapRegistration(dto, runById.get(dto.occurrenceId)))
-    return selectPrograms({ categories: this.categories(templateModels), templates: templateModels, runs: runModels, registrations: registrationModels }, query)
+    return selectPrograms({ categories, templates: templateModels, runs: runModels, registrations: registrationModels }, query)
   }
 
   async assignTemplate(id: string) {
@@ -422,20 +454,257 @@ export class ApiProgramsRepository implements ProgramsRepository {
     return mapRegistration(updated, run)
   }
 
-  private async currentUser() { return (await this.client.get("/auth/session", sessionResponseSchema)).user }
-  private async templateDto(id: string) { return this.templates.get(id) ?? await this.client.get(`/programs/templates/${encodeURIComponent(id)}`, ProgramTemplateDtoSchema) }
-  private async occurrenceDto(id: string) { return this.occurrences.get(id) ?? await this.client.get(`/programs/occurrences/${encodeURIComponent(id)}`, ProgramOccurrenceDtoSchema) }
-  private async registrationDto(id: string) { return this.registrations.get(id) ?? await this.client.get(`/programs/registrations/${encodeURIComponent(id)}`, ProgramRegistrationDtoSchema) }
-
-  private categories(templates: ProgramTemplate[]) {
-    const categories = new Map<string, ProgramCategory>()
-    for (const template of templates) {
-      const category = categories.get(template.categoryId) ?? categoryFromId(template.categoryId, template.categoryIcon, template.categoryTone)
-      category.templateCount += 1
-      categories.set(template.categoryId, category)
+  async getTemplate(id: string): Promise<ProgramTemplateEditorRecord | null> {
+    try {
+      const dto = await this.templateDto(id)
+      const template = mapTemplate(dto)
+      const occurrences = await this.listAll(`/programs/occurrences?templateId=${encodeURIComponent(id)}&archived=false&limit=100`, occurrencePageSchema)
+      for (const occurrence of occurrences) this.occurrences.set(occurrence.id, occurrence)
+      return {
+        ...template,
+        description: dto.description,
+        minimumParticipants: dto.minimumParticipants,
+        registrationCloseHours: dto.registrationCloseHours,
+        stages: dto.stages.map((stage) => ({ ...stage })),
+        relatedRuns: occurrences.map((occurrence) => mapRun(occurrence, template)),
+      }
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 404) return null
+      throw error
     }
-    return [...categories.values()]
   }
+
+  async listCategories(): Promise<ProgramCategory[]> {
+    return (await this.listAll("/programs/categories?archived=false&limit=100", programCategoryPageSchema)).map(mapCategory)
+  }
+
+  async saveTemplate(record: ProgramTemplateEditorRecord): Promise<ProgramTemplateEditorRecord> {
+    const money = { amountMinor: Math.round(record.basePrice * 100), currency: "RUB" }
+    const common = {
+      name: record.name,
+      categoryId: canonicalId(record.categoryId === "uncategorized" ? null : record.categoryId),
+      durationMinutes: record.durationMinutes,
+      minimumParticipants: record.minimumParticipants,
+      participantLimit: record.participantLimit,
+      registrationCloseHours: record.registrationCloseHours,
+      basePrice: money,
+      description: record.description,
+      publication: record.published ? "published" : "draft",
+      assigneeIds: record.assignees.map((assignee) => assignee.id),
+      stages: record.stages.map(({ id, name, durationMinutes, comment }) => ({ ...(canonicalId(id) ? { id } : {}), name, durationMinutes, comment })),
+    }
+    const updated = record.id === "new"
+      ? await this.client.post("/programs/templates", { ...common, operationId: operationId(), idempotencyKey: idempotencyKey("program-template-create") }, ProgramTemplateDtoSchema)
+      : await this.client.patch(`/programs/templates/${encodeURIComponent(record.id)}`, { ...common, version: (await this.templateDto(record.id)).version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-template-${record.id}`) }, ProgramTemplateDtoSchema)
+    this.templates.set(updated.id, updated)
+    const template = mapTemplate(updated)
+    return { ...template, description: updated.description, minimumParticipants: updated.minimumParticipants, registrationCloseHours: updated.registrationCloseHours, stages: updated.stages.map((stage) => ({ ...stage })), relatedRuns: record.relatedRuns }
+  }
+
+  async getRun(id: string): Promise<ProgramRunEditorRecord | null> {
+    const dto = await this.occurrenceDto(id).catch((error) => {
+      if (error instanceof ApiClientError && error.status === 404) return null
+      throw error
+    })
+    if (!dto) return null
+    const templateDto = await this.templateDto(dto.templateId).catch(() => null)
+    const template = templateDto ? mapTemplate(templateDto) : undefined
+    const registrations = await this.listAll(`/programs/registrations?occurrenceId=${encodeURIComponent(id)}&archived=false&limit=100`, registrationPageSchema)
+    for (const registration of registrations) this.registrations.set(registration.id, registration)
+    const run = mapRun(dto, template)
+    const resourceBookings = await this.listResourceBookings(id)
+    return {
+      ...run,
+      comment: dto.comment,
+      registrations: registrations.map((registration) => toApiRunEditorRegistration(registration, run)),
+      resourceBookings,
+    }
+  }
+
+  async listRunResources(): Promise<ProgramRunResourceOption[]> {
+    const resources = await this.client.get("/resources?archived=false&limit=100", ResourceDtoSchema.array())
+    return resources.map((resource) => ({ id: resource.id, name: resource.name, category: resource.kind, capacity: resource.capacityTotal, version: resource.version }))
+  }
+
+  async listRunTemplates(): Promise<ProgramTemplate[]> {
+    const templates = await this.listAll("/programs/templates?archived=false&limit=100", templatePageSchema)
+    for (const template of templates) this.templates.set(template.id, template)
+    return templates.map((template) => mapTemplate(template))
+  }
+
+  async saveRun(record: ProgramRunEditorRecord): Promise<ProgramRunEditorRecord> {
+    const common = {
+      templateId: record.templateId,
+      name: record.name,
+      startsAt: record.startsAt,
+      endsAt: record.endsAt,
+      participantLimit: record.participantLimit,
+      registrationLimit: record.registrationLimit,
+      comment: record.comment,
+      assigneeIds: record.assignees.map((assignee) => assignee.id),
+    }
+    let updated = record.id === "new"
+      ? await this.client.post("/programs/occurrences", { ...common, currency: "RUB", operationId: operationId(), idempotencyKey: idempotencyKey("program-occurrence-create") }, ProgramOccurrenceDtoSchema)
+      : await this.client.patch(`/programs/occurrences/${encodeURIComponent(record.id)}`, { ...common, version: (await this.occurrenceDto(record.id)).version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-occurrence-${record.id}`) }, ProgramOccurrenceDtoSchema)
+    this.occurrences.set(updated.id, updated)
+    const targetStatus = runStatusToApi[record.status]
+    if (updated.status !== targetStatus) {
+      updated = await this.client.post(`/programs/occurrences/${encodeURIComponent(updated.id)}/transition`, { version: updated.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-occurrence-transition-${updated.id}`), status: targetStatus }, ProgramOccurrenceDtoSchema)
+      this.occurrences.set(updated.id, updated)
+    }
+    const templateDto = await this.templateDto(updated.templateId).catch(() => null)
+    const template = templateDto ? mapTemplate(templateDto) : undefined
+    const registrations = await this.listAll(`/programs/registrations?occurrenceId=${encodeURIComponent(updated.id)}&archived=false&limit=100`, registrationPageSchema)
+    for (const registration of registrations) this.registrations.set(registration.id, registration)
+    await this.reconcileResourceBookings(updated.id, record.resourceBookings, "program_occurrence")
+    const run = mapRun(updated, template)
+    return { ...run, comment: updated.comment, registrations: registrations.map((registration) => toApiRunEditorRegistration(registration, run)), resourceBookings: await this.listResourceBookings(updated.id) }
+  }
+
+  private async listResourceBookings(sourceId: string) {
+    const [allocations, resources] = await Promise.all([
+      this.client.get(`/resources/allocations?sourceType=program_occurrence&sourceId=${encodeURIComponent(sourceId)}&includeCancelled=false`, ResourceAllocationDtoSchema.array()),
+      this.listRunResources(),
+    ])
+    const names = new Map(resources.map((resource) => [resource.id, resource.name]))
+    return (Array.isArray(allocations) ? allocations : []).map((allocation) => ({ id: allocation.id, resourceId: allocation.resourceId, resourceName: names.get(allocation.resourceId) ?? allocation.resourceId, startAt: allocation.startAt, endAt: allocation.endAt, guestCount: allocation.quantity }))
+  }
+
+  private async reconcileResourceBookings(sourceId: string, desired: ProgramRunEditorRecord["resourceBookings"], sourceType: "program_occurrence") {
+    const current = await this.client.get(`/resources/allocations?sourceType=${sourceType}&sourceId=${encodeURIComponent(sourceId)}&includeCancelled=false`, ResourceAllocationDtoSchema.array())
+    const activeAllocations = Array.isArray(current) ? current : []
+    const desiredIds = new Set(desired.filter((booking) => {
+      const existing = activeAllocations.find((item) => item.id === booking.id)
+      return Boolean(existing && existing.resourceId === booking.resourceId && existing.startAt === booking.startAt && existing.endAt === booking.endAt && existing.quantity === booking.guestCount)
+    }).map((booking) => booking.id))
+    for (const allocation of activeAllocations.filter((item) => !desiredIds.has(item.id))) {
+      const options = await this.listRunResources()
+      const resource = options.find((item) => item.id === allocation.resourceId)
+      if (!resource) continue
+      await this.client.post(`/resources/allocations/${encodeURIComponent(allocation.id)}/cancel`, { expectedVersion: resource.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-allocation-cancel-${allocation.id}`) }, ResourceAllocationDtoSchema)
+    }
+    for (const booking of desired) {
+      if (desiredIds.has(booking.id)) continue
+      const options = await this.listRunResources()
+      const resource = options.find((item) => item.id === booking.resourceId)
+      if (!resource) throw new Error("Выбранный ресурс недоступен")
+      await this.client.post("/resources/allocations", { resourceId: resource.id, sourceType, sourceId, startAt: booking.startAt, endAt: booking.endAt, quantity: booking.guestCount, capacityImpact: booking.guestCount, status: "tentative", operationId: operationId(), expectedVersion: resource.version, overrideConflict: false }, ResourceAllocationDtoSchema)
+    }
+  }
+
+  async getRegistration(id: string): Promise<ProgramRegistrationEditorRecord | null> {
+    const dto = await this.registrationDto(id).catch((error) => {
+      if (error instanceof ApiClientError && error.status === 404) return null
+      throw error
+    })
+    if (!dto) return null
+    const occurrence = await this.occurrenceDto(dto.occurrenceId).catch(() => null)
+    const template = occurrence ? await this.templateDto(occurrence.templateId).catch(() => null) : null
+    const run = occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null
+    return toApiRegistrationEditorRecord(dto, run, await this.listRegistrationPayments(dto.id))
+  }
+
+  async listRegistrationRuns(): Promise<ProgramRun[]> {
+    const occurrences = await this.listAll("/programs/occurrences?archived=false&limit=100", occurrencePageSchema)
+    for (const occurrence of occurrences) this.occurrences.set(occurrence.id, occurrence)
+    const templates = await this.listRunTemplates()
+    const templateById = new Map(templates.map((template) => [template.id, template]))
+    return occurrences.map((occurrence) => mapRun(occurrence, templateById.get(occurrence.templateId)))
+  }
+
+  async saveRegistration(record: ProgramRegistrationEditorRecord): Promise<ProgramRegistrationEditorRecord> {
+    const money = (value: number) => ({ amountMinor: Math.round(value * 100), currency: "RUB" })
+    const common = {
+      occurrenceId: record.runId,
+      customerId: record.customerId,
+      phone: record.phone,
+      participantCount: Math.max(1, record.participantCount ?? 1),
+      participantNames: record.participantNames,
+      total: money(record.total),
+      discount: money(record.discount),
+      promo: record.promo,
+      source: record.source,
+      comment: record.comment,
+    }
+    let updated = record.id === "new"
+      ? await this.client.post("/programs/registrations", { ...common, status: record.status, operationId: operationId(), idempotencyKey: idempotencyKey("program-registration-create") }, ProgramRegistrationDtoSchema)
+      : await this.client.patch(`/programs/registrations/${encodeURIComponent(record.id)}`, { ...common, version: (await this.registrationDto(record.id)).version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-${record.id}`) }, ProgramRegistrationDtoSchema)
+    this.registrations.set(updated.id, updated)
+    if (record.id !== "new" && updated.status !== record.status) {
+      updated = await this.client.post(`/programs/registrations/${encodeURIComponent(updated.id)}/transition`, { version: updated.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-transition-${updated.id}`), status: record.status }, ProgramRegistrationDtoSchema)
+      this.registrations.set(updated.id, updated)
+    }
+    const occurrence = await this.occurrenceDto(updated.occurrenceId).catch(() => null)
+    const template = occurrence ? await this.templateDto(occurrence.templateId).catch(() => null) : null
+    await this.reconcileRegistrationPayments(updated.id, record.payments)
+    const authoritative = await this.registrationDto(updated.id)
+    return toApiRegistrationEditorRecord(authoritative, occurrence ? mapRun(occurrence, template ? mapTemplate(template) : undefined) : null, await this.listRegistrationPayments(updated.id))
+  }
+
+  private async listRegistrationPayments(registrationId: string): Promise<ProgramRegistrationEditorRecord["payments"]> {
+    const query = new URLSearchParams({ "target[type]": "program_registration", "target[id]": registrationId, limit: "100" })
+    const page = await this.client.get(`/payments?${query.toString()}`, PaymentListResponseSchema)
+    return (page?.items ?? []).map((payment) => ({ id: payment.id, amount: payment.amount.amountMinor / 100, comment: payment.reason ?? "", date: payment.createdAt.slice(0, 10), kind: payment.type === "refund" ? "refund" : "payment", method: payment.method === "cash" || payment.method === "bank_transfer" ? payment.method === "bank_transfer" ? "transfer" : "cash" : "card", ...(payment.sourcePaymentId ? { sourcePaymentId: payment.sourcePaymentId } : {}) }))
+  }
+
+  private async reconcileRegistrationPayments(registrationId: string, desired: ProgramRegistrationEditorRecord["payments"]) {
+    const existing = new Set((await this.listRegistrationPayments(registrationId)).map((payment) => payment.id))
+    const pending = desired.filter((payment) => !existing.has(payment.id))
+    const ids = new Map<string, string>()
+    for (const payment of pending.filter((payment) => payment.kind === "payment")) {
+      const current = await this.refreshRegistrationDto(registrationId)
+      const saved = await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "charge", amount: { amountMinor: Math.round(payment.amount * 100), currency: "RUB" }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId: null, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-payment-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
+      ids.set(payment.id, saved.id)
+    }
+    for (const payment of pending.filter((payment) => payment.kind === "refund")) {
+      const sourcePaymentId = payment.sourcePaymentId ? ids.get(payment.sourcePaymentId) ?? payment.sourcePaymentId : undefined
+      if (!sourcePaymentId) throw new Error("Для возврата нужна сохранённая исходная оплата")
+      const current = await this.refreshRegistrationDto(registrationId)
+      await this.client.post("/payments", { target: { type: "program_registration", id: registrationId }, type: "refund", amount: { amountMinor: Math.round(payment.amount * 100), currency: "RUB" }, method: payment.method === "transfer" ? "bank_transfer" : payment.method, reason: payment.comment || null, sourcePaymentId, expectedVersion: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-registration-refund-${registrationId}`) }, PaymentListResponseSchema.shape.items.element)
+    }
+  }
+
+  async getCategory(id: string): Promise<ProgramCategoryEditorRecord | null> {
+    if (id === "new") return null
+    const response = await this.client.get(`/programs/categories/${encodeURIComponent(id)}`, ProgramCategoryDetailSchema)
+    return mapCategoryDetail(response)
+  }
+  async saveCategory(category: ProgramCategoryEditorRecord): Promise<ProgramCategoryEditorRecord> {
+    const common = { name: category.name, description: category.description, icon: category.icon, tone: category.tone, operationId: operationId(), idempotencyKey: idempotencyKey("program-category") }
+    const response = category.id === "new"
+      ? await this.client.post("/programs/categories", common, ProgramCategoryDetailSchema)
+      : await this.client.patch(`/programs/categories/${encodeURIComponent(category.id)}`, { ...common, version: category.version ?? 1 }, ProgramCategoryDetailSchema)
+    return mapCategoryDetail(response)
+  }
+
+  private async currentUser() { return (await this.client.get("/auth/session", sessionResponseSchema)).user }
+  private async templateDto(id: string) {
+    const cached = this.templates.get(id)
+    if (cached) return cached
+    const value = await this.client.get(`/programs/templates/${encodeURIComponent(id)}`, ProgramTemplateDtoSchema)
+    this.templates.set(value.id, value)
+    return value
+  }
+  private async occurrenceDto(id: string) {
+    const cached = this.occurrences.get(id)
+    if (cached) return cached
+    const value = await this.client.get(`/programs/occurrences/${encodeURIComponent(id)}`, ProgramOccurrenceDtoSchema)
+    this.occurrences.set(value.id, value)
+    return value
+  }
+  private async registrationDto(id: string) {
+    const cached = this.registrations.get(id)
+    if (cached) return cached
+    const value = await this.client.get(`/programs/registrations/${encodeURIComponent(id)}`, ProgramRegistrationDtoSchema)
+    this.registrations.set(value.id, value)
+    return value
+  }
+  private async refreshRegistrationDto(id: string) {
+    const value = await this.client.get(`/programs/registrations/${encodeURIComponent(id)}`, ProgramRegistrationDtoSchema)
+    this.registrations.set(value.id, value)
+    return value
+  }
+
 
   private async listAll<T>(path: string, schema: z.ZodType<Page<T>>) {
     const items: T[] = []
@@ -597,7 +866,9 @@ function localDateTimeIso(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00${sign}${pad(Math.floor(absoluteOffset / 60))}:${pad(absoluteOffset % 60)}`
 }
 
-export const programsRepository: ProgramsRepository & ProgramTemplateEditorRepository & ProgramRunEditorRepository & ProgramRegistrationEditorRepository & ProgramCategoryEditorRepository = new FixtureProgramsRepository()
-export const apiProgramsRepository: ProgramsRepository = new ApiProgramsRepository()
+export type FullProgramsRepository = ProgramsRepository & ProgramTemplateEditorRepository & ProgramRunEditorRepository & ProgramRegistrationEditorRepository & ProgramCategoryEditorRepository
+export const fixtureProgramsRepository: FullProgramsRepository = new FixtureProgramsRepository()
+export const apiProgramsRepository: FullProgramsRepository = new ApiProgramsRepository()
+export const programsRepository: FullProgramsRepository = useFixtureData ? fixtureProgramsRepository : apiProgramsRepository
 
 const demoAssignee = { id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }

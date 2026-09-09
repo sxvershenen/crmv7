@@ -1,12 +1,14 @@
-import type { DashboardData, DashboardScope } from "@app/entities/dashboard"
+import type { DashboardData, DashboardItem, DashboardScope } from "@app/entities/dashboard"
 import { dashboardFixture } from "@app/fixtures/dashboard"
-import { BookingProjectionResponseSchema, EventDtoSchema, LeadDtoSchema, ProgramOccurrenceDtoSchema, SessionUserSchema, TaskDtoSchema } from "@crm/contracts"
+import { BookingDtoSchema, BookingProjectionResponseSchema, EventDtoSchema, LeadDtoSchema, ProgramOccurrenceDtoSchema, SessionUserSchema, TaskDtoSchema } from "@crm/contracts"
 import type { Assignee } from "@crm/ui"
 import { z } from "zod"
 
 import { apiClient } from "@app/lib/api-client"
+import { useFixtureData } from "@app/lib/data-mode"
 
 export interface DashboardRepository {
+  assign(item: DashboardItem): Promise<void>
   getOverview(scope: DashboardScope): Promise<DashboardData>
 }
 
@@ -28,17 +30,30 @@ function filterData(data: DashboardData, scope: DashboardScope): DashboardData {
 }
 
 export class FixtureDashboardRepository implements DashboardRepository {
+  private readonly data = structuredClone(dashboardFixture)
+
   async getOverview(scope: DashboardScope): Promise<DashboardData> {
-    return Promise.resolve(filterData(dashboardFixture, scope))
+    return Promise.resolve(filterData(this.data, scope))
+  }
+
+  async assign(item: DashboardItem) {
+    const candidate = [...this.data.attention, ...this.data.today]
+      .flatMap((section) => section.items)
+      .find((entry) => entry.id === item.id)
+    if (!candidate) throw new Error("Запись не найдена")
+    candidate.assignedToMe = true
+    if (!candidate.assignees.some((person) => person.id === "demo-manager")) {
+      candidate.assignees = [...candidate.assignees, { id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" }]
+    }
   }
 }
 
 export type ApiDashboardRepositoryOptions = {
-  client?: Pick<typeof apiClient, "get">
+  client?: Pick<typeof apiClient, "get" | "post">
   now?: () => Date
 }
 
-type ApiDashboardClient = Pick<typeof apiClient, "get">
+type ApiDashboardClient = Pick<typeof apiClient, "get" | "post">
 
 const eventListSchema = z.object({ items: z.array(EventDtoSchema), nextCursor: z.string().nullable() }).strict()
 const sessionSchema = z.object({ user: SessionUserSchema }).strict()
@@ -89,6 +104,19 @@ export class ApiDashboardRepository implements DashboardRepository {
     this.now = options.now ?? (() => new Date())
   }
 
+  async assign(item: DashboardItem) {
+    if (item.assignment?.kind === "unsupported") throw new Error(item.assignment.reason)
+    if (!item.assignment || item.assignment.kind !== "self") throw new Error("Назначение недоступно")
+
+    if (item.assignment.entityType === "lead") {
+      await this.client.post(`/leads/${encodeURIComponent(item.entityId)}/assign-self`, { version: item.assignment.version }, LeadDtoSchema)
+    } else if (item.assignment.entityType === "task") {
+      await this.client.post(`/tasks/${encodeURIComponent(item.entityId)}/assign-self`, { version: item.assignment.version }, TaskDtoSchema)
+    } else {
+      await this.client.post(`/bookings/${encodeURIComponent(item.entityId)}/assign-self`, { expectedVersion: item.assignment.version, operationId: crypto.randomUUID(), idempotencyKey: `dashboard-booking-assign-${crypto.randomUUID()}` }, BookingDtoSchema)
+    }
+  }
+
   async getOverview(scope: DashboardScope): Promise<DashboardData> {
     const today = dateKey(this.now())
     const rangeEnd = addDays(today, 365)
@@ -136,6 +164,7 @@ export class ApiDashboardRepository implements DashboardRepository {
       contentSummary: { value: booking.resourceName || "Без ресурса", peopleCount: booking.guestCount },
       assignees: assignees(booking.assignees),
       assignedToMe: assignedToMe(booking.assignees, currentUserId),
+      assignment: { kind: "self" as const, entityType: "booking" as const, version: booking.version },
       ...(paidSummary ? { payment: paidSummary } : {}),
       ...(variant === "conflict" ? { badge: { label: "Конфликт", tone: "conflict" as const } } : variant === "cancelled" ? { badge: { label: "Отмена", tone: "neutral" as const } } : {}),
     }
@@ -149,21 +178,21 @@ export class ApiDashboardRepository implements DashboardRepository {
       ...(lead.requestedItem ? { contentSummary: { value: lead.requestedItem, ...(lead.guestCount > 0 ? { peopleCount: lead.guestCount } : {}) } } : {}),
       ...(lead.nextContactAt ? { primaryMeta: dateTimeLabel(lead.nextContactAt) } : {}),
       ...(lead.nextContactAt && variant === "overdue" ? { secondaryMeta: "контакт" } : {}),
-      assignees: assignees(lead.assignees), assignedToMe: assignedToMe(lead.assignees, currentUserId),
+      assignees: assignees(lead.assignees), assignedToMe: assignedToMe(lead.assignees, currentUserId), assignment: { kind: "self" as const, entityType: "lead" as const, version: lead.version },
       ...(variant === "overdue" ? { badge: { label: "Просрочено", tone: "danger" as const } } : {}),
     }
   }
 
   private taskItem(task: ReturnType<typeof TaskDtoSchema.parse>, currentUserId: string | null) {
-    return { id: `task-${task.id}`, entityId: task.entityId, href: `/tasks/${task.id}`, title: task.title, subtitle: `#${task.id}`, primaryMeta: dateTimeLabel(task.dueAt), secondaryMeta: "срок", assignees: assignees(task.assignees), assignedToMe: assignedToMe(task.assignees, currentUserId), badge: { label: "Просрочено", tone: "danger" as const } }
+    return { id: `task-${task.id}`, entityId: task.id, href: `/tasks/${task.id}`, title: task.title, subtitle: `#${task.id}`, primaryMeta: dateTimeLabel(task.dueAt), secondaryMeta: "срок", assignees: assignees(task.assignees), assignedToMe: assignedToMe(task.assignees, currentUserId), assignment: { kind: "self" as const, entityType: "task" as const, version: task.version }, badge: { label: "Просрочено", tone: "danger" as const } }
   }
 
   private programItem(run: ReturnType<typeof ProgramOccurrenceDtoSchema.parse>, currentUserId: string | null) {
-    return { id: `program-${run.id}`, entityId: run.id, href: `/programs/runs/${run.id}`, title: run.name, subtitle: timeLabel(run.startsAt), contentSummary: { value: `${run.registrationCount} регистрации`, peopleCount: run.participantCount }, assignees: [], assignedToMe: assignedToMe(run.assigneeIds, currentUserId) }
+    return { id: `program-${run.id}`, entityId: run.id, href: `/programs/runs/${run.id}`, title: run.name, subtitle: timeLabel(run.startsAt), contentSummary: { value: `${run.registrationCount} регистрации`, peopleCount: run.participantCount }, assignees: [], assignedToMe: assignedToMe(run.assigneeIds, currentUserId), assignment: { kind: "unsupported" as const, reason: "Назначение проведения пока недоступно из обзора" } }
   }
 
   private eventItem(event: ReturnType<typeof EventDtoSchema.parse>, currentUserId: string | null) {
-    return { id: `event-${event.id}`, entityId: event.id, href: `/events/${event.id}`, title: event.name, subtitle: timeLabel(event.startsAt), contentSummary: { value: "Мероприятие", peopleCount: event.guestCount }, assignees: [], assignedToMe: assignedToMe(event.assigneeIds, currentUserId), ...(event.requiresAction ? { badge: { label: "Нужно действие", tone: "warning" as const } } : {}) }
+    return { id: `event-${event.id}`, entityId: event.id, href: `/events/${event.id}`, title: event.name, subtitle: timeLabel(event.startsAt), contentSummary: { value: "Мероприятие", peopleCount: event.guestCount }, assignees: [], assignedToMe: assignedToMe(event.assigneeIds, currentUserId), assignment: { kind: "unsupported" as const, reason: "Назначение мероприятия пока недоступно из обзора" }, ...(event.requiresAction ? { badge: { label: "Нужно действие", tone: "warning" as const } } : {}) }
   }
 }
 
@@ -176,4 +205,4 @@ function section(id: string, title: string, iconKey: DashboardData["attention"][
 }
 
 export const fixtureDashboardRepository: DashboardRepository = new FixtureDashboardRepository()
-export const dashboardRepository: DashboardRepository = new ApiDashboardRepository()
+export const dashboardRepository: DashboardRepository = useFixtureData ? fixtureDashboardRepository : new ApiDashboardRepository()

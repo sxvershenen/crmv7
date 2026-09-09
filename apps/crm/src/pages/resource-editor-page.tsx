@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconCalendarEvent, IconClock, IconDotsVertical, IconExternalLink, IconLock, IconLockOpen, IconPlus, IconSettings, IconTrash, IconUser, IconWorld } from "@tabler/icons-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { IconAlertTriangle, IconCalendarEvent, IconClock, IconDotsVertical, IconExternalLink, IconHome, IconLinkOff, IconLock, IconLockOpen, IconPlus, IconSettings, IconTent, IconTrash, IconUser, IconWorld } from "@tabler/icons-react"
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import {
   Button,
   Checkbox,
+  DateTimeRangePicker,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -27,6 +28,8 @@ import {
   type EditorSaveState,
   type IconBoxVariant,
 } from "@crm/ui"
+import { CampgroundOfferingWorkspace, HouseOfferingWorkspace, type OfferingEditorGateway } from "@crm/offering-editor"
+import type { InternalOfferingEditor, ResourcePrimaryStayOfferingLookupResponse, ResourceStayOfferingCreateBody, ResourceStayOfferingCreateResult } from "@crm/contracts"
 
 import { useEditorLayoutChrome } from "@app/app/editor-layout-context"
 import { EditorPreviewHistory } from "@app/components/shared/editor-preview-tabs"
@@ -34,17 +37,19 @@ import { formatResourceDate } from "@app/components/resources/resource-date"
 import { ResourceIdentityIcon } from "@app/components/resources/resource-presentation"
 import { resourceColorOptions, resourceIconOptions } from "@app/components/resources/resource-presentation-data"
 import { createEmptyResource, resourceRepository, type ResourceEditorRepository } from "@app/data/resources-repository"
+import { houseOfferingGateway } from "@app/data/house-offerings-repository"
 import type { ResourceActivityStatus, ResourceEditorBlock, ResourceEditorRecord, ResourceEditorRules, ResourceKind, ResourceSpaceType, ResourceWeekDay } from "@app/entities/resources"
 import { isResourceKind, resourceActivityStatusLabels, resourceKindLabels, resourceKinds, resourceSpaceTypeLabels, resourceSpaceTypes, resourceWeekDayLabels, resourceWeekDays } from "@app/entities/resources"
 
-const tabs = ["main", "schedule", "blocks", "rules", "history"] as const
-const tabItems = [
+const tabs = ["main", "schedule", "blocks", "rules", "history", "offering"] as const
+const baseTabItems = [
   { value: "main", label: "Основное" },
   { value: "schedule", label: "Расписание" },
   { value: "blocks", label: "Блокировки" },
   { value: "rules", label: "Правила" },
   { value: "history", label: "История" },
 ]
+const offeringTabItem = { value: "offering", label: "Цена и сайт" }
 const statusOptions = (["active", "inactive"] as const).map((value) => ({ value, label: resourceActivityStatusLabels[value] }))
 const kindOptions = resourceKinds.map((value) => ({ value, label: resourceKindLabels[value] }))
 const capacityModeOptions = [{ value: "fixed", label: "Фиксированная" }, { value: "shared", label: "Общая" }]
@@ -54,18 +59,28 @@ const resourceTones: Record<ResourceKind, IconBoxVariant> = { bath: "resourceBat
 function oneOf<T extends string>(value: string | null, options: readonly T[], fallback: T): T { return value && options.includes(value as T) ? value as T : fallback }
 function inputNumber(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, parsed) : 0 }
 
-export function ResourceEditorPage({ repository = resourceRepository }: { repository?: ResourceEditorRepository }) {
+export type ResourceOfferingLookupGateway = {
+  resolvePrimaryStayOffering(resourceId: string): Promise<ResourcePrimaryStayOfferingLookupResponse>
+  createStayOffering(resourceId: string, input: ResourceStayOfferingCreateBody): Promise<ResourceStayOfferingCreateResult>
+}
+
+export function ResourceEditorPage({ repository = resourceRepository, offeringGateway = houseOfferingGateway }: { repository?: ResourceEditorRepository; offeringGateway?: OfferingEditorGateway & ResourceOfferingLookupGateway }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { kind, resourceId = "new" } = useParams()
   const [params, setParams] = useSearchParams()
-  const tab = oneOf(params.get("tab"), tabs, "main")
+  const requestedTab = oneOf(params.get("tab"), tabs, "main")
   const [draft, setDraft] = useState<ResourceEditorRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<EditorSaveState>("saved")
 
   const validKind = isResourceKind(kind) ? kind : null
+  const supportsOffering = validKind === "houses" || validKind === "camping"
+  const tab = requestedTab === "offering" && !supportsOffering ? "main" : requestedTab
+  const tabItems = supportsOffering ? [...baseTabItems, offeringTabItem] : baseTabItems
+  const offeringNavigationGuard = useRef<(() => boolean) | null>(null)
   useEffect(() => {
     if (!validKind) return
     let active = true
@@ -90,7 +105,33 @@ export function ResourceEditorPage({ repository = resourceRepository }: { reposi
   const setOccupied = useCallback((occupied: number) => { setDraft((current) => current?.capacity.mode === "shared" ? { ...current, capacity: { ...current.capacity, occupied } } : current); setSaveState("dirty") }, [])
   const addBlock = useCallback((from: string, to: string, reason: string) => { const text = reason.trim(); if (!draft?.permissions.canManageBlocks || !from || !to || !text) return; const block: ResourceEditorBlock = { from, id: `block-${Date.now()}`, reason: text, status: "active", to }; setDraft((current) => current ? { ...current, blocks: [block, ...current.blocks], hasActiveBlock: true } : current); setSaveState("dirty") }, [draft?.permissions.canManageBlocks])
   const cancelBlock = useCallback((id: string) => { if (!draft?.permissions.canManageBlocks) return; setDraft((current) => { if (!current) return current; const blocks = current.blocks.map((block) => block.id === id ? { ...block, status: "cancelled" as const } : block); return { ...current, blocks, hasActiveBlock: blocks.some((block) => block.status === "active") } }); setSaveState("dirty") }, [draft?.permissions.canManageBlocks])
-  const save = async () => { if (!draft?.permissions.canEdit) return; setSaveState("saving"); try { await repository.save(draft); setSaveState("saved") } catch { setSaveState("conflict") } }
+  const save = async () => {
+    if (!draft?.permissions.canEdit) return
+    const wasNew = draft.id === "new"
+    setSaveState("saving")
+    setSetupError(null)
+    try {
+      const saved = await repository.save(draft)
+      setDraft(saved)
+      setSaveState("saved")
+      if (!wasNew || saved.id === "new") return
+
+      const createsStaySaleDossier = saved.kind === "houses" || saved.kind === "camping"
+      if (createsStaySaleDossier) {
+        try {
+          await offeringGateway.createStayOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
+        } catch (reason) {
+          setSetupError(reason instanceof Error ? reason.message : "Ресурс сохранён, но цену и страницу не удалось подготовить.")
+        }
+      }
+
+      const next = new URLSearchParams(location.search)
+      if (createsStaySaleDossier) next.set("tab", "offering")
+      navigate(`/resources/${saved.kind}/${saved.id}${next.size ? `?${next}` : ""}`, { replace: true })
+    } catch {
+      setSaveState("conflict")
+    }
+  }
 
   const draftActive = draft?.active
   const statusControl = useMemo(() => draftActive === undefined ? undefined : <FilterSelect className="w-28 max-w-28 sm:w-36 sm:max-w-36" label="Статус активности ресурса" onValueChange={(value) => setStatus(value as ResourceActivityStatus)} options={statusOptions} value={draftActive ? "active" : "inactive"} />, [draftActive, setStatus])
@@ -99,13 +140,14 @@ export function ResourceEditorPage({ repository = resourceRepository }: { reposi
   useEditorLayoutChrome(editorChrome)
 
   if (!validKind) return <Navigate replace to={`/resources/houses${location.search}`} />
-  const navigation = <PageNav ariaLabel="Разделы редактора ресурса" items={tabItems} onValueChange={(value) => setParams((current) => { const next = new URLSearchParams(current); if (value === "main") next.delete("tab"); else next.set("tab", value); return next })} value={tab} />
+  const navigation = <PageNav ariaLabel="Разделы редактора ресурса" items={tabItems} onValueChange={(value) => { if (tab === "offering" && value !== "offering" && !(offeringNavigationGuard.current?.() ?? true)) return; setParams((current) => { const next = new URLSearchParams(current); if (value === "main") next.delete("tab"); else next.set("tab", value); next.delete("offerSection"); return next }) }} value={tab} />
   const openSchedule = () => navigate(`/bookings?view=scheduler&resource=${draft?.id ?? resourceId}`)
   const overflow = draft ? <ResourceOverflow onOpenSchedule={openSchedule} /> : null
 
   return <EditorFrame actions={draft ? <>{statusControl}{overflow}</> : null} footerActions={<><Button onClick={() => navigate(-1)} size="sm" variant="outline">Закрыть</Button><Button aria-describedby={draft?.permissions.canEdit ? undefined : "resource-save-permission"} disabled={!draft || !draft.permissions.canEdit || saveState === "saving"} onClick={() => void save()} size="sm" title={draft && !draft.permissions.canEdit ? "Нет прав на изменение ресурса" : undefined}>Сохранить</Button></>} mobileActions={overflow} navigation={navigation} saveState={saveState} sidebar={draft ? <ResourceSidebar draft={draft} /> : <Skeleton className="h-80 rounded-xl" />}>
     {loading ? <ResourceEditorLoading /> : null}
     {error ? <div className="rounded-xl border bg-background"><PageState icon={IconAlertTriangle} title="Ресурс не открылся" tone="danger">{error}</PageState></div> : null}
+    {setupError ? <div className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning-subtle p-3 text-xs text-warning-foreground" role="alert"><IconAlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" /><span>{setupError} Откройте «Цена и сайт», чтобы повторить.</span></div> : null}
     {draft && !draft.permissions.canEdit ? <div className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning-subtle p-3 text-xs text-warning-foreground" id="resource-save-permission" role="status"><IconLock aria-hidden="true" className="mt-0.5 size-4 shrink-0" /><span>У вас нет прав на изменение этого ресурса. Сохранение недоступно.</span></div> : null}
     {draft && tab === "blocks" && !draft.permissions.canManageBlocks ? <div className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning-subtle p-3 text-xs text-warning-foreground" role="status"><IconLock aria-hidden="true" className="mt-0.5 size-4 shrink-0" /><span>У вас нет прав на управление блокировками. Добавление и отмена недоступны.</span></div> : null}
     {draft && tab === "main" ? <ResourceMain draft={draft} onCapacityModeChange={setCapacityMode} onCapacityTotalChange={setCapacityTotal} onKindChange={setKind} onOccupiedChange={setOccupied} update={update} /> : null}
@@ -113,14 +155,61 @@ export function ResourceEditorPage({ repository = resourceRepository }: { reposi
     {draft && tab === "blocks" ? <ResourceBlocks canManageBlocks={draft.permissions.canManageBlocks} draft={draft} onAdd={addBlock} onCancel={cancelBlock} /> : null}
     {draft && tab === "rules" ? <ResourceRules rules={draft.rules} update={updateRules} /> : null}
     {draft && tab === "history" ? <EditorPreviewHistory entityLabel="Ресурс" /> : null}
+    {draft && tab === "offering" ? <ResourceOfferingTab gateway={offeringGateway} onNavigationGuardChange={(guard) => { offeringNavigationGuard.current = guard }} resource={draft} /> : null}
   </EditorFrame>
+}
+
+function ResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
+  const [lookup, setLookup] = useState<ResourcePrimaryStayOfferingLookupResponse | null>(null)
+  const [editor, setEditor] = useState<InternalOfferingEditor | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const expectedKind = resource.kind === "camping" ? "campground" : "house"
+  const load = useCallback(async () => {
+    if (resource.id === "new") return
+    setLookup(null)
+    setError(null)
+    try { setLookup(await gateway.resolvePrimaryStayOffering(resource.id)) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось найти предложение ресурса") }
+  }, [gateway, resource.id])
+  useEffect(() => { void load() }, [load])
+
+  const createCommandMeta = useCallback(() => ({ operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), expectedPricingVersion: editor?.ownerVersions.pricing ?? 1 }), [editor?.ownerVersions.pricing])
+  const createSubjectCommandMeta = useCallback(() => ({ operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), expectedSubjectVersion: editor?.ownerVersions.subject.aggregateVersion ?? 1 }), [editor?.ownerVersions.subject.aggregateVersion])
+  const createAddOnsCommandMeta = useCallback(() => ({ operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), expectedAddOnsVersion: editor?.ownerVersions.addOnAssignments ?? 1 }), [editor?.ownerVersions.addOnAssignments])
+  const linkedOfferingId = lookup?.resolution === "linked" ? lookup.offering.offeringId : null
+  const editorialHref = useCallback(() => linkedOfferingId ? `${(import.meta.env.VITE_ADMIN_APP_URL ?? (import.meta.env.DEV ? "http://localhost:5174" : "/cms")).replace(/\/$/, "")}/offers/${expectedKind === "campground" ? "campgrounds" : "houses"}/${encodeURIComponent(linkedOfferingId)}?tab=content` : null, [expectedKind, linkedOfferingId])
+  const createOffering = useCallback(async () => {
+    if (creating) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const offering = await gateway.createStayOffering(resource.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
+      setLookup({ resolution: "linked", offering })
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : "Не удалось создать условия продажи")
+    } finally {
+      setCreating(false)
+    }
+  }, [creating, gateway, resource.id])
+
+  if (resource.id === "new") return <div className="rounded-xl border bg-background"><PageState icon={expectedKind === "campground" ? IconTent : IconHome} title="Сначала сохраните ресурс">При первом сохранении система сама подготовит для него цену и черновик страницы.</PageState></div>
+  if (error) return <div className="rounded-xl border bg-background"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={() => void load()} title="Цена и страница не загрузились" tone="danger">{error}</PageState></div>
+  if (!lookup) return <ResourceEditorLoading />
+  if (lookup.resolution === "none") return <div className="rounded-xl border bg-background"><PageState actionLabel={creating ? "Подготавливаем…" : "Подготовить цену и страницу"} icon={IconLinkOff} onAction={() => void createOffering()} title="Цена и страница ещё не настроены">Система создаст рабочие настройки цены и черновик страницы. Технические связи будут добавлены автоматически.{createError ? <span className="mt-2 block text-danger" role="alert">{createError}</span> : null}</PageState></div>
+  if (lookup.resolution === "ambiguous") return <EditorSection subtitle="Цены временно недоступны: система нашла несколько старых связей и не будет выбирать за вас." title="Нужна проверка данных"><div className="divide-y rounded-lg border">{lookup.candidates.map((candidate) => <div className="flex items-center gap-3 p-3" key={candidate.offeringId}><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{candidate.operationalName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{candidate.code}</p></div><StatusBadge tone="warning">Дубль</StatusBadge></div>)}</div></EditorSection>
+  if (lookup.offering.kind !== expectedKind) return <div className="rounded-xl border bg-background"><PageState icon={IconAlertTriangle} title="Тип связи не совпадает" tone="danger">Ресурс связан с предложением другого направления. Исправьте primary binding перед редактированием.</PageState></div>
+
+  const workspaceProps = { createAddOnsCommandMeta, createCommandMeta, createSubjectCommandMeta, editorialHref, gateway, layout: "embedded" as const, offeringId: lookup.offering.offeringId, onEditorChange: setEditor, onNavigationGuardChange }
+  return expectedKind === "campground" ? <CampgroundOfferingWorkspace {...workspaceProps} /> : <HouseOfferingWorkspace {...workspaceProps} />
 }
 
 function ResourceOverflow({ onOpenSchedule }: { onOpenSchedule: () => void }) { return <DropdownMenu><DropdownMenuTrigger render={<Button aria-label="Дополнительные действия ресурса" size="icon-sm" variant="ghost" />}><IconDotsVertical aria-hidden="true" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={onOpenSchedule}><IconExternalLink aria-hidden="true" />Открыть расписание</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }
 
 function ResourceMain({ draft, onCapacityModeChange, onCapacityTotalChange, onKindChange, onOccupiedChange, update }: { draft: ResourceEditorRecord; onCapacityModeChange: (value: string) => void; onCapacityTotalChange: (value: number) => void; onKindChange: (value: ResourceKind) => void; onOccupiedChange: (value: number) => void; update: <K extends keyof ResourceEditorRecord>(key: K, value: ResourceEditorRecord[K]) => void }) {
   const uploadIcon = (file: File | undefined) => { if (!file) return; const reader = new FileReader(); reader.onload = () => { if (typeof reader.result === "string") { update("customIconDataUrl", reader.result); update("customIconName", file.name) } }; reader.readAsDataURL(file) }
-  return <div className="space-y-3"><EditorSection title="Основные данные"><div className="mb-4 flex items-center gap-3 rounded-lg border bg-muted/25 p-3"><ResourceIdentityIcon color={draft.colorKey} customIconDataUrl={draft.customIconDataUrl} iconKey={draft.iconKey} kind={draft.kind} /><div className="min-w-0"><p className="truncate text-[13px] font-medium">{draft.name}</p><p className="truncate text-[11px] text-muted-foreground">{draft.customIconName || draft.secondaryType || resourceKindLabels[draft.kind]}</p></div>{draft.customIconDataUrl ? <Button className="ml-auto" onClick={() => { update("customIconDataUrl", ""); update("customIconName", "") }} size="sm" variant="ghost">Удалить свою иконку</Button> : null}</div><div className="grid items-start gap-4 sm:grid-cols-6"><FormField className="sm:col-span-2" htmlFor="resource-icon" label="Иконка из набора"><FormSelect id="resource-icon" label="Иконка ресурса" onValueChange={(value) => update("iconKey", value)} options={resourceIconOptions} value={draft.iconKey} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-color" label="Цвет"><FormSelect id="resource-color" label="Цвет ресурса" onValueChange={(value) => update("colorKey", value as ResourceEditorRecord["colorKey"])} options={resourceColorOptions} value={draft.colorKey} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-icon-upload" label="Своя иконка"><Input accept="image/svg+xml,image/png,image/webp" id="resource-icon-upload" onChange={(event) => uploadIcon(event.target.files?.[0])} type="file" /></FormField><FormField className="sm:col-span-2" htmlFor="resource-kind" label="Направление"><FormSelect id="resource-kind" label="Направление ресурса" onValueChange={(value) => onKindChange(value as ResourceKind)} options={kindOptions} value={draft.kind} /></FormField><FormField className="sm:col-span-4" htmlFor="resource-name" label="Название"><Input id="resource-name" onChange={(event) => update("name", event.target.value)} value={draft.name} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-type" label="Тип ресурса"><Input id="resource-type" onChange={(event) => update("secondaryType", event.target.value)} value={draft.secondaryType} /></FormField>{draft.kind === "venues" ? <FormField className="sm:col-span-3" htmlFor="resource-space-type" label="Тип пространства"><FormSelect id="resource-space-type" label="Тип пространства" onValueChange={(value) => update("spaceType", value as ResourceSpaceType)} options={spaceTypeOptions} value={draft.spaceType ?? "outdoor"} /></FormField> : null}<FormField className="sm:col-span-6" htmlFor="resource-description" label="Описание"><Textarea id="resource-description" onChange={(event) => update("description", event.target.value)} placeholder="Описание ресурса для команды и сайта" value={draft.description} /></FormField></div></EditorSection><EditorSection title="Вместимость"><div className="grid items-start gap-4 sm:grid-cols-6"><FormField className="sm:col-span-2" htmlFor="capacity-mode" label="Режим"><FormSelect id="capacity-mode" label="Режим вместимости" onValueChange={onCapacityModeChange} options={capacityModeOptions} value={draft.capacity.mode} /></FormField><FormField className="sm:col-span-2" htmlFor="capacity-total" label="Всего мест"><Input id="capacity-total" min="0" onChange={(event) => onCapacityTotalChange(inputNumber(event.target.value))} type="number" value={draft.capacity.total} /></FormField>{draft.capacity.mode === "shared" ? <FormField className="sm:col-span-2" htmlFor="capacity-occupied" label="Занято сейчас"><Input id="capacity-occupied" min="0" onChange={(event) => onOccupiedChange(inputNumber(event.target.value))} type="number" value={draft.capacity.occupied} /></FormField> : null}</div></EditorSection><EditorSection title="Публикация и интеграция"><div className="divide-y rounded-lg border"><ToggleField checked={draft.active} label="Активен для бронирования" onChange={(checked) => update("active", checked)} /><ToggleField checked={draft.showOnSite} label="Показывать на сайте" onChange={(checked) => update("showOnSite", checked)} /></div><div className="mt-4 grid sm:grid-cols-2"><FormField htmlFor="resource-cms-id" label="CMS ID"><Input id="resource-cms-id" onChange={(event) => update("cmsId", event.target.value)} placeholder="Не связан" value={draft.cmsId} /></FormField></div></EditorSection></div>
+  return <div className="space-y-3"><EditorSection title="Основные данные"><div className="mb-4 flex items-center gap-3 rounded-lg border bg-muted/25 p-3"><ResourceIdentityIcon color={draft.colorKey} customIconDataUrl={draft.customIconDataUrl} iconKey={draft.iconKey} kind={draft.kind} /><div className="min-w-0"><p className="truncate text-[13px] font-medium">{draft.name}</p><p className="truncate text-[11px] text-muted-foreground">{draft.customIconName || draft.secondaryType || resourceKindLabels[draft.kind]}</p></div>{draft.customIconDataUrl ? <Button className="ml-auto" onClick={() => { update("customIconDataUrl", ""); update("customIconName", "") }} size="sm" variant="ghost">Удалить свою иконку</Button> : null}</div><div className="grid items-start gap-4 sm:grid-cols-6"><FormField className="sm:col-span-2" htmlFor="resource-icon" label="Иконка из набора"><FormSelect id="resource-icon" label="Иконка ресурса" onValueChange={(value) => update("iconKey", value)} options={resourceIconOptions} value={draft.iconKey} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-color" label="Цвет"><FormSelect id="resource-color" label="Цвет ресурса" onValueChange={(value) => update("colorKey", value as ResourceEditorRecord["colorKey"])} options={resourceColorOptions} value={draft.colorKey} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-icon-upload" label="Своя иконка"><Input accept="image/svg+xml,image/png,image/webp" id="resource-icon-upload" onChange={(event) => uploadIcon(event.target.files?.[0])} type="file" /></FormField><FormField className="sm:col-span-2" htmlFor="resource-kind" label="Направление"><FormSelect id="resource-kind" label="Направление ресурса" onValueChange={(value) => onKindChange(value as ResourceKind)} options={kindOptions} value={draft.kind} /></FormField><FormField className="sm:col-span-4" htmlFor="resource-name" label="Название"><Input id="resource-name" onChange={(event) => update("name", event.target.value)} value={draft.name} /></FormField><FormField className="sm:col-span-2" htmlFor="resource-type" label="Тип ресурса"><Input id="resource-type" onChange={(event) => update("secondaryType", event.target.value)} value={draft.secondaryType} /></FormField>{draft.kind === "venues" ? <FormField className="sm:col-span-3" htmlFor="resource-space-type" label="Тип пространства"><FormSelect id="resource-space-type" label="Тип пространства" onValueChange={(value) => update("spaceType", value as ResourceSpaceType)} options={spaceTypeOptions} value={draft.spaceType ?? "outdoor"} /></FormField> : null}<FormField className="sm:col-span-6" htmlFor="resource-description" label="Внутренняя заметка"><Textarea id="resource-description" onChange={(event) => update("description", event.target.value)} placeholder="Что важно знать команде; на сайт этот текст не публикуется" value={draft.description} /></FormField></div></EditorSection><EditorSection title="Вместимость"><div className="grid items-start gap-4 sm:grid-cols-6"><FormField className="sm:col-span-2" htmlFor="capacity-mode" label="Режим"><FormSelect id="capacity-mode" label="Режим вместимости" onValueChange={onCapacityModeChange} options={capacityModeOptions} value={draft.capacity.mode} /></FormField><FormField className="sm:col-span-2" htmlFor="capacity-total" label="Всего мест"><Input id="capacity-total" min="0" onChange={(event) => onCapacityTotalChange(inputNumber(event.target.value))} type="number" value={draft.capacity.total} /></FormField>{draft.capacity.mode === "shared" ? <FormField className="sm:col-span-2" htmlFor="capacity-occupied" label="Занято сейчас"><Input id="capacity-occupied" min="0" onChange={(event) => onOccupiedChange(inputNumber(event.target.value))} type="number" value={draft.capacity.occupied} /></FormField> : null}</div></EditorSection><EditorSection subtitle="Страница и её публикация управляются в разделе «Цена и сайт»." title="Работа ресурса"><div className="divide-y rounded-lg border"><ToggleField checked={draft.active} label="Активен для бронирования" onChange={(checked) => update("active", checked)} /></div></EditorSection></div>
 }
 
 function ToggleField({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) { return <label className="flex min-h-12 items-center justify-between gap-3 px-3 text-xs font-medium"><span>{label}</span><Switch checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} /></label> }
@@ -135,7 +224,7 @@ function ResourceBlocks({ canManageBlocks, draft, onAdd, onCancel }: { canManage
   const [to, setTo] = useState("")
   const [reason, setReason] = useState("")
   const submit = () => { if (!from || !to || !reason.trim()) return; onAdd(from, to, reason); setFrom(""); setTo(""); setReason("") }
-  return <div className="space-y-3"><EditorSection title="Новая блокировка"><div className="grid items-end gap-4 sm:grid-cols-6"><FormField className="sm:col-span-2" htmlFor="block-from" label="С даты"><Input disabled={!canManageBlocks} id="block-from" onChange={(event) => setFrom(event.target.value)} type="datetime-local" value={from} /></FormField><FormField className="sm:col-span-2" htmlFor="block-to" label="По дату"><Input disabled={!canManageBlocks} id="block-to" onChange={(event) => setTo(event.target.value)} type="datetime-local" value={to} /></FormField><FormField className="sm:col-span-2" htmlFor="block-reason" label="Причина"><Input disabled={!canManageBlocks} id="block-reason" onChange={(event) => setReason(event.target.value)} value={reason} /></FormField><Button className="sm:col-span-2" disabled={!canManageBlocks || !from || !to || !reason.trim()} onClick={submit} size="sm"><IconPlus aria-hidden="true" />Добавить блокировку</Button></div></EditorSection><EditorSection title="Блокировки">{draft.blocks.length ? <div className="divide-y rounded-lg border">{draft.blocks.map((block) => <div className="flex items-start gap-3 p-3" key={block.id}><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-medium">{block.reason}</p><StatusBadge tone={block.status === "active" ? "warning" : "neutral"}>{block.status === "active" ? "Активна" : "Отменена"}</StatusBadge></div><p className="mt-1 text-[10px] text-muted-foreground">{block.from.replace("T", " ")} — {block.to.replace("T", " ")}</p></div><Button aria-label={`Отменить блокировку: ${block.reason}`} disabled={!canManageBlocks || block.status === "cancelled"} onClick={() => onCancel(block.id)} size="icon-sm" variant="ghost"><IconTrash aria-hidden="true" /></Button></div>)}</div> : draft.hasActiveBlock ? <PageState icon={IconLock} title="Активная блокировка отмечена">Интервалы существующей блокировки отсутствуют в текущем наборе данных. Новые блокировки можно создавать здесь.</PageState> : <PageState icon={IconLockOpen} title="Блокировок нет">Добавьте интервал и причину новой блокировки.</PageState>}</EditorSection></div>
+  return <div className="space-y-3"><EditorSection title="Новая блокировка"><div className="grid items-end gap-4 sm:grid-cols-6"><FormField className="sm:col-span-3" htmlFor="block-period" label="Период блокировки"><DateTimeRangePicker disabled={!canManageBlocks} id="block-period" label="Период блокировки" onValueChange={(value) => { setFrom(value.from); setTo(value.to) }} value={{ from, to }} /></FormField><FormField className="sm:col-span-3" htmlFor="block-reason" label="Причина"><Input disabled={!canManageBlocks} id="block-reason" onChange={(event) => setReason(event.target.value)} value={reason} /></FormField><Button className="sm:col-span-2" disabled={!canManageBlocks || !from || !to || !reason.trim()} onClick={submit} size="sm"><IconPlus aria-hidden="true" />Добавить блокировку</Button></div></EditorSection><EditorSection title="Блокировки">{draft.blocks.length ? <div className="divide-y rounded-lg border">{draft.blocks.map((block) => <div className="flex items-start gap-3 p-3" key={block.id}><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-medium">{block.reason}</p><StatusBadge tone={block.status === "active" ? "warning" : "neutral"}>{block.status === "active" ? "Активна" : "Отменена"}</StatusBadge></div><p className="mt-1 text-[10px] text-muted-foreground">{block.from.replace("T", " ")} — {block.to.replace("T", " ")}</p></div><Button aria-label={`Отменить блокировку: ${block.reason}`} disabled={!canManageBlocks || block.status === "cancelled"} onClick={() => onCancel(block.id)} size="icon-sm" variant="ghost"><IconTrash aria-hidden="true" /></Button></div>)}</div> : draft.hasActiveBlock ? <PageState icon={IconLock} title="Активная блокировка отмечена">Интервалы существующей блокировки отсутствуют в текущем наборе данных. Новые блокировки можно создавать здесь.</PageState> : <PageState icon={IconLockOpen} title="Блокировок нет">Добавьте интервал и причину новой блокировки.</PageState>}</EditorSection></div>
 }
 
 function ResourceRules({ rules, update }: { rules: ResourceEditorRules; update: <K extends keyof ResourceEditorRules>(key: K, value: ResourceEditorRules[K]) => void }) {

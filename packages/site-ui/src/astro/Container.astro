@@ -1,0 +1,13 @@
+---
+interface Props {
+  as?: "div" | "main" | "section"
+  size?: "sm" | "md" | "lg" | "xl"
+  class?: string
+}
+
+const { as: Element = "div", class: className, size = "xl" } = Astro.props
+---
+
+<Element class:list={["site-container", size !== "xl" && `site-container--${size}`, className]}>
+  <slot />
+</Element>

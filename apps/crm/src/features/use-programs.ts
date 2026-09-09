@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { apiProgramsRepository, type ProgramsRepository } from "@app/data/programs-repository"
+import { programsRepository, type ProgramsRepository } from "@app/data/programs-repository"
 import type { ProgramQuery, ProgramRegistrationStatus, ProgramRunStatus, ProgramsDataset } from "@app/entities/programs"
 
 export type ProgramsState =
@@ -9,7 +9,7 @@ export type ProgramsState =
   | { status: "ready"; data: ProgramsDataset }
   | { status: "error"; message: string }
 
-export function usePrograms(query: ProgramQuery, repository: ProgramsRepository = apiProgramsRepository) {
+export function usePrograms(query: ProgramQuery, repository: ProgramsRepository = programsRepository) {
   const result = useQuery({ queryKey: ["programs", repository, query] as const, queryFn: () => repository.list(query) })
   const queryClient = useQueryClient()
   const queryKey = ["programs", repository, query] as const

@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { apiEventsRepository, type EventsRepository } from "@app/data/events-repository"
+import { eventsRepository, type EventsRepository } from "@app/data/events-repository"
 import type { EventQuery, EventsDataset, EventStatus } from "@app/entities/events"
 
 export type EventsState = { status: "loading" } | { status: "ready"; data: EventsDataset } | { status: "error"; message: string }
 
-export function useEvents(query: EventQuery, repository: EventsRepository = apiEventsRepository) {
+export function useEvents(query: EventQuery, repository: EventsRepository = eventsRepository) {
   const result = useQuery({ queryKey: ["events", repository, query] as const, queryFn: () => repository.list(query) })
   const queryClient = useQueryClient()
   const queryKey = ["events", repository, query] as const

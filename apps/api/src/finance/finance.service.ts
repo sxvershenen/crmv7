@@ -51,7 +51,6 @@ export class FinanceService {
       SELECT id, booking_id, kind, amount, currency, method, source_payment_id, created_at
       FROM payments WHERE booking_id = ANY($1::uuid[]) ORDER BY created_at, id
     `, [bookings.map((booking) => booking.id)]) as PaymentRow[]
-    const bookingById = new Map(bookings.map((booking) => [booking.id, booking]))
     const paymentsByBooking = new Map<string, PaymentRow[]>()
     for (const payment of payments) paymentsByBooking.set(payment.booking_id, [...(paymentsByBooking.get(payment.booking_id) ?? []), payment])
 

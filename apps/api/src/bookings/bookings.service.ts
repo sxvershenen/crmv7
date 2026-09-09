@@ -3,13 +3,18 @@ import { randomUUID } from "node:crypto"
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
 import { Brackets, DataSource, IsNull, QueryFailedError, type EntityManager } from "typeorm"
 
-import type { BookingDetailResponse, BookingItem, BookingIntervalUpdate, BookingLeadLink, BookingLeadLinkHistoryResponse, BookingLeadLinkInput, BookingLeadLinkResponse, BookingLeadUnlinkInput, BookingProjectionBooking, BookingProjectionCategory, BookingProjectionOperation, BookingProjectionQuery, BookingProjectionResource, BookingProjectionResponse, SessionUser } from "@crm/contracts"
-import { BookingEntity, BookingItemEntity, BookingLeadLinkEntity, ChangeLogEntity, IdempotencyKeyEntity, LeadEntity, OutboxEventEntity, PaymentEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
+import { InternalOfferingQuoteResultSchema, type BookingDetailResponse, type BookingItemInput, type BookingIntervalUpdate, type BookingLeadLink, type BookingLeadLinkHistoryResponse, type BookingLeadLinkInput, type BookingLeadLinkResponse, type BookingLeadUnlinkInput, type BookingProjectionBooking, type BookingProjectionCategory, type BookingProjectionOperation, type BookingProjectionQuery, type BookingProjectionResource, type BookingProjectionResponse, type SessionUser } from "@crm/contracts"
+import { AcceptedOfferingQuoteLinkEntity, BookingEntity, BookingItemEntity, BookingLeadLinkEntity, ChangeLogEntity, CustomerEntity, IdempotencyKeyEntity, LeadEntity, OfferingQuoteSnapshotEntity, OutboxEventEntity, PaymentEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 import { assertAvailable, checkAvailability, createInterval, type AvailabilityAllocation } from "@crm/domain"
 
-import type { BookingArchive, BookingCreate, BookingDto, BookingListQuery, BookingTransition, BookingUpdate } from "./bookings.contracts.js"
+import { canonicalSha256 } from "../offerings/offering-mutation-support.js"
+import { BookingPromotionSchema, type BookingPromotion, type BookingPromotionPreview, type BookingPromotionPreviewResult } from "@crm/contracts"
+import { calculateBookingPromotion, type PromotionLine } from "@crm/domain"
+import { MarketingService } from "../marketing/marketing.service.js"
+import { OperationalQuoteAcceptanceService } from "../offerings/operational-quote-acceptance.service.js"
+import type { BookingArchive, BookingAssignSelf, BookingCreate, BookingDto, BookingListQuery, BookingTransition, BookingUpdate } from "./bookings.contracts.js"
 
-type ItemInput = Omit<BookingItem, "id">
+type ItemInput = BookingItemInput
 
 type ProjectionRow = {
   id: string; code: string; version: number; customer_id: string | null; status: string; currency: string; total_amount: number; snapshot: Record<string, unknown> | null;
@@ -20,7 +25,36 @@ type ProjectionRow = {
 
 @Injectable()
 export class BookingsService {
-  constructor(@Inject(DataSource) private readonly dataSource: DataSource) {}
+  constructor(@Inject(DataSource) private readonly dataSource: DataSource, @Inject(OperationalQuoteAcceptanceService) private readonly quoteAcceptance: OperationalQuoteAcceptanceService, @Inject(MarketingService) private readonly marketing: MarketingService) {}
+
+  async previewPromotion(input: BookingPromotionPreview, actor: SessionUser): Promise<BookingPromotionPreviewResult> {
+    this.assert(actor, "canView")
+    return this.dataSource.transaction(async manager => {
+      const items = this.normalizeItems(input.items)
+      this.assertCurrency(items, "RUB")
+      const promotion = await this.applyPromotion(manager, input.promoCode, items)
+      return { promotion, total: { amountMinor: this.total(items) - promotion.discountAmountMinor, currency: "RUB" } }
+    })
+  }
+
+  private storedPromotion(booking: BookingEntity): BookingPromotion | null {
+    const parsed = BookingPromotionSchema.safeParse(booking.snapshot.promotion)
+    return parsed.success ? parsed.data : null
+  }
+
+  private async applyPromotion(manager: EntityManager, code: string, items: readonly ItemInput[]): Promise<BookingPromotion> {
+    this.assertCurrency(items, "RUB")
+    const promotion = await this.marketing.findByCode(manager, code)
+    const lines: PromotionLine[] = []
+    for (const item of items) {
+      const addons = await this.authoritativeAddOnSelections(manager, item)
+      const bindings = item.resourceId ? await manager.query(`SELECT offering_id FROM offering_bindings WHERE resource_id = $1 AND role = 'primary' AND archived_at IS NULL ORDER BY offering_id`, [item.resourceId]) as Array<{ offering_id: string }> : []
+      // Ambiguous legacy bindings never grant an offering-scoped promotion.
+      lines.push({ resourceId: item.resourceId, offeringId: bindings.length === 1 ? bindings[0]!.offering_id : null, amountMinor: item.price.amountMinor - addons.reduce((sum, addon) => sum + addon.price.amountMinor, 0) })
+      lines.push(...addons.map(addon => ({ resourceId: null, offeringId: addon.addOnOfferingId, amountMinor: addon.price.amountMinor })))
+    }
+    return calculateBookingPromotion(promotion, lines, items.reduce((sum, item) => sum + item.discount.amountMinor, 0), new Date())
+  }
 
   async list(query: BookingListQuery, actor: SessionUser): Promise<BookingDto[]> {
     this.assert(actor, "canView")
@@ -112,7 +146,76 @@ export class BookingsService {
     const projection = this.projectionBooking(projectionRow[0]!, payments.map((payment) => ({ kind: payment.kind, amount: payment.amount }))) ?? this.emptyProjection(booking, base, item)
     const marketing = typeof booking.snapshot.marketing === "object" && booking.snapshot.marketing !== null ? booking.snapshot.marketing as Record<string, unknown> : {}
     const leadLink = await this.activeLeadLink(this.dataSource.manager, booking.id)
-    return { ...projection, leadLink: leadLink ? this.toLeadLink(leadLink) : null, customer: customer[0] ? { id: customer[0].id, name: customer[0].name, phone: customer[0].phone || null, email: customer[0].email } : null, resource: resource[0] ? { id: resource[0].id, code: resource[0].code, name: resource[0].name, category: this.category(resource[0].kind), capacity: resource[0].capacity_total } : null, items: base.items, payments: payments.map((payment) => ({ id: payment.id, operationId: payment.operationId, kind: payment.kind as "charge" | "refund" | "adjustment" | "payment", amount: payment.amount, currency: payment.currency, method: payment.method, sourcePaymentId: payment.sourcePaymentId, reason: payment.reason, createdAt: payment.createdAt.toISOString(), createdBy: payment.createdBy })), note: typeof booking.snapshot.note === "string" ? booking.snapshot.note : null, comments: Array.isArray(booking.snapshot.comments) ? booking.snapshot.comments : [], marketing }
+return { ...projection, promotion: this.storedPromotion(booking), sourceLeadId: leadLink?.leadId ?? projection.sourceLeadId, leadLink: leadLink ? this.toLeadLink(leadLink) : null, customer: customer[0] ? { id: customer[0].id, name: customer[0].name, phone: customer[0].phone || null, email: customer[0].email } : null, resource: resource[0] ? { id: resource[0].id, code: resource[0].code, name: resource[0].name, category: this.category(resource[0].kind), capacity: resource[0].capacity_total } : null, items: base.items, payments: payments.map((payment) => ({ id: payment.id, operationId: payment.operationId, kind: payment.kind as "charge" | "refund" | "adjustment" | "payment", amount: payment.amount, currency: payment.currency, method: payment.method, sourcePaymentId: payment.sourcePaymentId, reason: payment.reason, createdAt: payment.createdAt.toISOString(), createdBy: payment.createdBy })), note: typeof booking.snapshot.note === "string" ? booking.snapshot.note : null, comments: Array.isArray(booking.snapshot.comments) ? booking.snapshot.comments : [], marketing }
+  }
+
+  async linkLead(idOrCode: string, input: BookingLeadLinkInput, actor: SessionUser, requestId: string): Promise<BookingLeadLinkResponse> {
+    this.assert(actor, "canEdit")
+    const resolved = await this.find(this.dataSource.manager, idOrCode)
+    const scope = `booking:${resolved.id}:lead-link`
+    const method = input.method ?? "manual"
+    const requestHash = canonicalSha256({ command: "booking.lead-link", bookingId: resolved.id, expectedVersion: input.expectedVersion, leadId: input.leadId, method })
+    try {
+      return await this.retrySerializable(() => this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+        const replay = await this.idempotentReplay<BookingLeadLinkResponse>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+        if (replay) return replay
+        const booking = await this.find(manager, resolved.id, true)
+        if (booking.version !== input.expectedVersion) throw this.versionConflict(booking)
+        const lead = await manager.getRepository(LeadEntity).findOne({ where: { id: input.leadId }, lock: { mode: "pessimistic_read" } })
+        if (!lead || lead.archivedAt) throw new NotFoundException({ code: "LEAD_NOT_FOUND", message: "Лид не найден" })
+        const links = manager.getRepository(BookingLeadLinkEntity)
+        const active = await this.activeLeadLink(manager, booking.id, true)
+        if (active?.leadId === lead.id) {
+          const response: BookingLeadLinkResponse = { link: this.toLeadLink(active), bookingVersion: booking.version }
+          await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+          return response
+        }
+        const now = new Date()
+        if (active) await links.update({ id: active.id }, { unlinkedAt: now, unlinkedBy: actor.id })
+        const created = await links.save(links.create({ id: randomUUID(), bookingId: booking.id, leadId: lead.id, method, linkedAt: now, linkedBy: actor.id, unlinkedAt: null, unlinkedBy: null }))
+        const updated = await this.bumpBookingVersion(manager, booking, actor.id)
+        await this.recordMutation(manager, updated, active ? "lead_relinked" : "lead_linked", actor.id, requestId, { before: active ? this.toLeadLink(active) : null, after: this.toLeadLink(created) })
+        const response: BookingLeadLinkResponse = { link: this.toLeadLink(created), bookingVersion: updated.version }
+        await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+        return response
+      }))
+    } catch (error) {
+      if (!this.isActiveLeadLinkUniqueConflict(error)) throw error
+      throw this.versionConflict(await this.find(this.dataSource.manager, resolved.id))
+    }
+  }
+
+  async unlinkLead(idOrCode: string, input: BookingLeadUnlinkInput, actor: SessionUser, requestId: string): Promise<BookingLeadLinkResponse> {
+    this.assert(actor, "canEdit")
+    const resolved = await this.find(this.dataSource.manager, idOrCode)
+    return this.retrySerializable(() => this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+      const scope = `booking:${resolved.id}:lead-link`
+      const requestHash = canonicalSha256({ command: "booking.lead-unlink", bookingId: resolved.id, expectedVersion: input.expectedVersion })
+      const replay = await this.idempotentReplay<BookingLeadLinkResponse>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      if (replay) return replay
+      const booking = await this.find(manager, resolved.id, true)
+      if (booking.version !== input.expectedVersion) throw this.versionConflict(booking)
+      const active = await this.activeLeadLink(manager, booking.id, true)
+      if (!active) {
+        const response: BookingLeadLinkResponse = { link: null, bookingVersion: booking.version }
+        await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+        return response
+      }
+      const now = new Date()
+      await manager.getRepository(BookingLeadLinkEntity).update({ id: active.id }, { unlinkedAt: now, unlinkedBy: actor.id })
+      const updated = await this.bumpBookingVersion(manager, booking, actor.id)
+      await this.recordMutation(manager, updated, "lead_unlinked", actor.id, requestId, { before: this.toLeadLink(active), after: null })
+      const response: BookingLeadLinkResponse = { link: null, bookingVersion: updated.version }
+      await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+      return response
+    }))
+  }
+
+  async leadLinkHistory(idOrCode: string, actor: SessionUser): Promise<BookingLeadLinkHistoryResponse> {
+    this.assert(actor, "canView")
+    const booking = await this.find(this.dataSource.manager, idOrCode)
+    const items = await this.dataSource.getRepository(BookingLeadLinkEntity).find({ where: { bookingId: booking.id }, order: { linkedAt: "ASC", id: "ASC" } })
+    return { items: items.map((item) => this.toLeadLink(item)) }
   }
 
   async updateInterval(idOrCode: string, input: BookingIntervalUpdate, actor: SessionUser, requestId: string): Promise<BookingDto> {
@@ -124,15 +227,17 @@ export class BookingsService {
     return this.retrySerializable(() => this.dataSource.transaction("SERIALIZABLE", async (manager) => {
       const scope = "booking:create"
       const requestHash = JSON.stringify(input)
-      const replay = await this.idempotentReplay(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      const replay = await this.idempotentReplay<BookingDto>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
       if (replay) return replay
       const normalized = this.normalizeItems(input.items)
       const currency = normalized[0]!.price.currency
       this.assertCurrency(normalized, currency)
+      const promotion = input.promoCode ? await this.applyPromotion(manager, input.promoCode, normalized) : null
+      await this.assertCustomer(manager, input.customerId)
       const [{ nextval }] = await manager.query(`SELECT nextval('booking_code_seq')::text AS nextval`) as [{ nextval: string }]
       const booking = manager.create(BookingEntity, {
         id: randomUUID(), code: `B-${nextval}`, customerId: input.customerId, status: "draft", currency,
-        totalAmount: this.total(normalized), snapshot: { note: input.note }, createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
+        totalAmount: this.total(normalized) - (promotion?.discountAmountMinor ?? 0), snapshot: { note: input.note, assignees: input.assignees, promotion, promo: promotion?.code ?? "" }, createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
       })
       const saved = await manager.save(booking)
       const items = await this.replaceItems(manager, saved, normalized, actor)
@@ -149,16 +254,18 @@ export class BookingsService {
     return this.retrySerializable(() => this.dataSource.transaction("SERIALIZABLE", async (manager) => {
       const scope = `booking:${idOrCode}:update`
       const requestHash = JSON.stringify(input)
-      const replay = await this.idempotentReplay(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      const replay = await this.idempotentReplay<BookingDto>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
       if (replay) return replay
       const current = await this.find(manager, idOrCode, true)
       if (current.version !== input.expectedVersion) throw this.versionConflict(current)
+      if (input.customerId !== undefined) await this.assertCustomer(manager, input.customerId)
       const beforeItems = await manager.getRepository(BookingItemEntity).find({ where: { bookingId: current.id, archivedAt: IsNull() }, order: { createdAt: "ASC" } })
       let items = beforeItems
       if (input.itemId) {
         if (!input.startAt || !input.endAt) throw new ConflictException({ code: "INVALID_INTERVAL", message: "Для переноса нужны начало и окончание интервала", fieldErrors: { startAt: ["Обязательное поле"], endAt: ["Обязательное поле"] } })
         const target = beforeItems.find((item) => item.id === input.itemId)
         if (!target) throw new NotFoundException({ code: "BOOKING_ITEM_NOT_FOUND", message: "Позиция бронирования не найдена" })
+        await this.assertCompositionMutable(manager, beforeItems)
         const normalized = beforeItems.map((item) => item.id === target.id ? { ...this.fromEntity(item), startAt: input.startAt!, endAt: input.endAt!, resourceId: input.resourceId === undefined ? item.resourceId : input.resourceId } : this.fromEntity(item))
         await this.cancelAllocations(manager, beforeItems, actor)
         await manager.getRepository(BookingItemEntity).update({ bookingId: current.id, archivedAt: IsNull() }, { archivedAt: new Date(), updatedBy: actor.id })
@@ -168,15 +275,25 @@ export class BookingsService {
         const normalized = this.normalizeItems(input.items)
         this.assertCurrency(normalized, normalized[0]!.price.currency)
         if (normalized[0]!.price.currency !== current.currency) throw new ConflictException({ code: "CURRENCY_MISMATCH", message: "Валюта брони неизменяема" })
-        await this.cancelAllocations(manager, beforeItems, actor)
-        await manager.getRepository(BookingItemEntity).update({ bookingId: current.id, archivedAt: IsNull() }, { archivedAt: new Date(), updatedBy: actor.id })
-        items = await this.replaceItems(manager, current, normalized, actor)
-        await this.allocateItems(manager, current, items, actor, input.overrideConflict)
+        if (!this.sameItems(beforeItems, normalized)) {
+          await this.assertCompositionMutable(manager, beforeItems)
+          await this.cancelAllocations(manager, beforeItems, actor)
+          await manager.getRepository(BookingItemEntity).update({ bookingId: current.id, archivedAt: IsNull() }, { archivedAt: new Date(), updatedBy: actor.id })
+          items = await this.replaceItems(manager, current, normalized, actor)
+          await this.allocateItems(manager, current, items, actor, input.overrideConflict)
+        }
       }
+      const previousPromotion = this.storedPromotion(current)
+      const promoCode = input.promoCode === undefined ? previousPromotion?.code ?? null : input.promoCode
+      const compositionChanged = items !== beforeItems
+      const promotionChanged = promoCode !== (previousPromotion?.code ?? null)
+      if (compositionChanged && previousPromotion && !["draft", "unconfirmed"].includes(current.status)) throw new ConflictException({ code: "BOOKING_PROMOTION_IMMUTABLE", message: "Состав подтверждённой брони с промокодом зафиксирован. Изменение требует новой брони." })
+      if (promotionChanged && !["draft", "unconfirmed"].includes(current.status)) throw new ConflictException({ code: "BOOKING_PROMOTION_IMMUTABLE", message: "Промокод подтверждённой брони зафиксирован. Изменение требует новой брони." })
+      const promotion = !compositionChanged && !promotionChanged ? previousPromotion : promoCode ? await this.applyPromotion(manager, promoCode, items.map(this.fromEntity)) : null
       const result = await manager.createQueryBuilder().update(BookingEntity).set({
         ...(input.customerId === undefined ? {} : { customerId: input.customerId }),
-        ...(input.note === undefined ? {} : { snapshot: { ...current.snapshot, note: input.note } }),
-        ...(input.items || input.itemId ? { totalAmount: this.total(items.map(this.fromEntity)) } : {}),
+        snapshot: { ...current.snapshot, promotion, promo: promotion?.code ?? "", ...(input.note === undefined ? {} : { note: input.note }), ...(input.assignees === undefined ? {} : { assignees: input.assignees }) },
+        totalAmount: this.total(items.map(this.fromEntity)) - (promotion?.discountAmountMinor ?? 0),
         updatedBy: actor.id, version: () => '"version" + 1', updatedAt: () => "now()",
       }).where("id = :id AND version = :version", { id: current.id, version: input.expectedVersion }).execute()
       if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(BookingEntity, { id: current.id }))
@@ -190,28 +307,59 @@ export class BookingsService {
 
   async transition(idOrCode: string, input: BookingTransition, actor: SessionUser, requestId: string): Promise<BookingDto> {
     this.assert(actor, "canChangeStatus")
-    return this.dataSource.transaction(async (manager) => {
-      const scope = `booking:${idOrCode}:transition`
-      const requestHash = JSON.stringify(input)
-      const replay = await this.idempotentReplay(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+    // Resolve aliases before establishing the idempotency scope.  A code and its
+    // UUID must serialize through the same command key.
+    const resolved = await this.find(this.dataSource.manager, idOrCode)
+    return this.retrySerializable(() => this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+      const scope = `booking:${resolved.id}:transition`
+      const requestHash = canonicalSha256({ command: "booking.transition", bookingId: resolved.id, input })
+      const replay = await this.idempotentReplay<BookingDto>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
       if (replay) return replay
-      const current = await this.find(manager, idOrCode, true)
+      const current = await this.find(manager, resolved.id, true)
       if (current.version !== input.expectedVersion) throw this.versionConflict(current)
       this.assertTransition(current.status, input.status)
       const result = await manager.createQueryBuilder().update(BookingEntity).set({ status: input.status, updatedBy: actor.id, version: () => '"version" + 1', updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: current.id, version: input.expectedVersion }).execute()
       if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(BookingEntity, { id: current.id }))
       const saved = await manager.findOneByOrFail(BookingEntity, { id: current.id })
+      if (input.quoteAcceptances?.length) await this.quoteAcceptance.acceptBookingItems(manager, saved, input.quoteAcceptances, actor, requestId, input.operationId)
       await this.syncAllocationsForStatus(manager, saved.id, input.status, actor)
       await this.recordMutation(manager, saved, "status_changed", actor.id, requestId, { before: current.status, after: saved.status })
       const response = await this.toDto(manager, saved, actor)
       await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
       return response
-    })
+    }))
   }
 
   async archive(idOrCode: string, input: BookingArchive, actor: SessionUser, requestId: string): Promise<BookingDto> {
     this.assert(actor, "canArchive")
     return this.transition(idOrCode, { operationId: input.operationId, idempotencyKey: input.idempotencyKey, expectedVersion: input.expectedVersion, status: "archived" }, actor, requestId)
+  }
+
+  async assignSelf(idOrCode: string, input: BookingAssignSelf, actor: SessionUser, requestId: string): Promise<BookingDto> {
+    this.assert(actor, "canAssign")
+    return this.dataSource.transaction(async (manager) => {
+      const scope = `booking:${idOrCode}:assign-self`
+      const requestHash = JSON.stringify(input)
+      const replay = await this.idempotentReplay<BookingDto>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      if (replay) return replay
+      const current = await this.find(manager, idOrCode, true)
+      if (current.version !== input.expectedVersion) throw this.versionConflict(current)
+      const currentAssignees = this.snapshotAssignees(current.snapshot)
+      if (currentAssignees.some((person) => person.id === actor.id)) {
+        const response = await this.toDto(manager, current, actor)
+        await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+        return response
+      }
+      const initials = actor.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru-RU") ?? "").join("") || "?"
+      const assignees = [...currentAssignees, { id: actor.id, initials, name: actor.name }]
+      const result = await manager.createQueryBuilder().update(BookingEntity).set({ snapshot: { ...current.snapshot, assignees }, updatedBy: actor.id, version: () => '"version" + 1', updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: current.id, version: input.expectedVersion }).execute()
+      if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(BookingEntity, { id: current.id }))
+      const saved = await manager.findOneByOrFail(BookingEntity, { id: current.id })
+      await this.recordMutation(manager, saved, "assigned", actor.id, requestId, { before: currentAssignees, after: assignees })
+      const response = await this.toDto(manager, saved, actor)
+      await this.storeIdempotentResponse(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+      return response
+    })
   }
 
   private normalizeItems(items: readonly ItemInput[]): ItemInput[] {
@@ -228,13 +376,69 @@ export class BookingsService {
 
   private total(items: readonly ItemInput[]) { return items.reduce((sum, item) => sum + item.price.amountMinor - item.discount.amountMinor, 0) }
 
+  private sameItems(current: readonly BookingItemEntity[], requested: readonly ItemInput[]) {
+    if (current.length !== requested.length) return false
+    return current.every((item, index) => JSON.stringify(this.fromEntity(item)) === JSON.stringify(requested[index]))
+  }
+
+  private async assertCompositionMutable(manager: EntityManager, items: readonly BookingItemEntity[]) {
+    if (items.length === 0) return
+    const accepted = await manager.createQueryBuilder(AcceptedOfferingQuoteLinkEntity, "link")
+      .where("link.booking_item_id IN (:...itemIds)", { itemIds: items.map((item) => item.id) })
+      .getOne()
+    if (accepted) throw new ConflictException({
+      code: "BOOKING_ACCEPTED_QUOTE_IMMUTABLE",
+      message: "Состав подтверждённой брони зафиксирован расчётом; для изменения отмените бронь и создайте новую",
+      details: { bookingItemId: accepted.bookingItemId, quoteSnapshotId: accepted.quoteSnapshotId },
+    })
+  }
+
   private async replaceItems(manager: EntityManager, booking: BookingEntity, items: readonly ItemInput[], actor: SessionUser) {
-    const entities = items.map((item) => manager.create(BookingItemEntity, {
-      id: randomUUID(), bookingId: booking.id, type: item.type, resourceId: item.resourceId, startAt: new Date(item.startAt), endAt: new Date(item.endAt), quantity: item.quantity,
-      priceAmount: item.price.amountMinor, discountAmount: item.discount.amountMinor, currency: item.price.currency, preparationMinutes: item.preparationMinutes,
-      createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
-    }))
+    const entities: BookingItemEntity[] = []
+    for (const item of items) {
+      const addOnSelections = await this.authoritativeAddOnSelections(manager, item)
+      entities.push(manager.create(BookingItemEntity, {
+        id: randomUUID(), bookingId: booking.id, type: item.type, resourceId: item.resourceId, startAt: new Date(item.startAt), endAt: new Date(item.endAt), quantity: item.quantity,
+        priceAmount: item.price.amountMinor, discountAmount: item.discount.amountMinor, currency: item.price.currency, preparationMinutes: item.preparationMinutes,
+        quoteSnapshotId: item.quoteSnapshotId, addOnSelections,
+        createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
+      }))
+    }
     return manager.getRepository(BookingItemEntity).save(entities)
+  }
+
+  private async authoritativeAddOnSelections(manager: EntityManager, item: ItemInput): Promise<BookingItemEntity["addOnSelections"]> {
+    if (item.addOns.length === 0) {
+      if (item.quoteSnapshotId !== null) throw new ConflictException({ code: "BOOKING_QUOTE_UNUSED", message: "Расчёт указан без выбранных дополнительных услуг" })
+      return []
+    }
+    if (!item.quoteSnapshotId || !item.resourceId) throw new ConflictException({ code: "BOOKING_ADDON_QUOTE_REQUIRED", message: "Для дополнительных услуг нужен расчёт выбранного ресурса" })
+    const quote = await manager.createQueryBuilder(OfferingQuoteSnapshotEntity, "quote").setLock("pessimistic_read").where("quote.id = :id", { id: item.quoteSnapshotId }).getOne()
+    if (!quote || quote.validUntil <= new Date()) throw new ConflictException({ code: "BOOKING_QUOTE_EXPIRED", message: "Расчёт цены устарел; обновите состав брони" })
+    const operational = quote.operationalContext as { primaryResourceId?: unknown } | null
+    const quotedResource = typeof operational?.primaryResourceId === "string"
+      ? operational.primaryResourceId
+      : (await manager.query(`SELECT resource_id FROM offering_bindings WHERE offering_id = $1 AND role = 'primary' AND archived_at IS NULL ORDER BY id`, [quote.offeringId]) as Array<{ resource_id: string | null }>).map((row) => row.resource_id).filter((id): id is string => id !== null).at(0)
+    if (quotedResource !== item.resourceId) throw new ConflictException({ code: "BOOKING_QUOTE_RESOURCE_MISMATCH", message: "Расчёт цены относится к другому ресурсу" })
+    const request = quote.requestPayload as { period?: { arrivalDate?: unknown; departureDate?: unknown }; quantities?: { guests?: unknown; units?: unknown }; addOns?: unknown }
+    if (request.period?.arrivalDate !== item.startAt.slice(0, 10) || request.period?.departureDate !== item.endAt.slice(0, 10)) throw new ConflictException({ code: "BOOKING_QUOTE_PERIOD_MISMATCH", message: "Даты брони изменились; обновите расчёт цены" })
+    const quotedQuantity = typeof request.quantities?.guests === "number" ? request.quantities.guests : request.quantities?.units
+    if (quotedQuantity !== item.quantity) throw new ConflictException({ code: "BOOKING_QUOTE_QUANTITY_MISMATCH", message: "Количество гостей или мест изменилось; обновите расчёт цены" })
+    const requested = Array.isArray(request.addOns) ? request.addOns as Array<{ assignmentId?: unknown; quantity?: unknown }> : []
+    const normalizedRequest = [...item.addOns].sort((left, right) => left.assignmentId.localeCompare(right.assignmentId))
+    const quotedRequest = requested.map((selection) => ({ assignmentId: selection.assignmentId, quantity: selection.quantity })).sort((left, right) => String(left.assignmentId).localeCompare(String(right.assignmentId)))
+    if (JSON.stringify(normalizedRequest) !== JSON.stringify(quotedRequest)) throw new ConflictException({ code: "BOOKING_QUOTE_ADDONS_MISMATCH", message: "Состав дополнительных услуг изменился; обновите расчёт цены" })
+    const result = InternalOfferingQuoteResultSchema.parse(quote.resultPayload)
+    if (result.total.amountMinor !== item.price.amountMinor || result.currency !== item.price.currency) throw new ConflictException({ code: "BOOKING_QUOTE_AMOUNT_MISMATCH", message: "Стоимость брони не совпадает с серверным расчётом" })
+    const provenance = new Map((result.provenance.addOns ?? []).map((entry) => [entry.assignmentId, entry]))
+    const lines = result.lines.filter((line) => line.kind === "addon")
+    if (lines.length !== item.addOns.length) throw new ConflictException({ code: "BOOKING_QUOTE_ADDONS_MISMATCH", message: "Расчёт не содержит все дополнительные услуги" })
+    return lines.map((line) => {
+      const assignmentId = line.addOnAssignmentId
+      const source = assignmentId ? provenance.get(assignmentId) : undefined
+      if (!assignmentId || !source || !line.addOnOfferingId) throw new ConflictException({ code: "BOOKING_QUOTE_ADDONS_MISMATCH", message: "Расчёт дополнительной услуги повреждён" })
+      return { assignmentId, addOnOfferingId: line.addOnOfferingId, label: line.label, serviceType: source.serviceType, quantity: line.quantity, price: line.amount }
+    })
   }
 
   private async allocateItems(manager: EntityManager, booking: BookingEntity, items: BookingItemEntity[], actor: SessionUser, overrideConflict: boolean) {
@@ -282,26 +486,62 @@ export class BookingsService {
 
   private async find(manager: EntityManager, idOrCode: string, lock = false) {
     const repository = manager.getRepository(BookingEntity)
-    const booking = lock && /^[0-9a-f-]{36}$/i.test(idOrCode) ? await repository.findOne({ where: { id: idOrCode }, lock: { mode: "pessimistic_write" } }) : await repository.findOneBy(/^[0-9a-f-]{36}$/i.test(idOrCode) ? { id: idOrCode } : { code: idOrCode })
+    const query = repository.createQueryBuilder("booking")
+      .where(/^[0-9a-f-]{36}$/i.test(idOrCode) ? "booking.id = :idOrCode" : "booking.code = :idOrCode", { idOrCode })
+    if (lock) query.setLock("pessimistic_write")
+    const booking = await query.getOne()
     if (!booking) throw new NotFoundException({ code: "BOOKING_NOT_FOUND", message: "Бронь не найдена" })
     return booking
   }
 
-  private async idempotentReplay(manager: EntityManager, scope: string, operationId: string, idempotencyKey: string, requestHash: string) {
+  private async idempotentReplay<T>(manager: EntityManager, scope: string, operationId: string, idempotencyKey: string, requestHash: string): Promise<T | null> {
+    for (const lock of [`key:${scope}:${idempotencyKey}`, `operation:${scope}:${operationId}`].sort()) await manager.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [lock])
     const existing = await manager.getRepository(IdempotencyKeyEntity).createQueryBuilder("idempotency")
       .where("idempotency.scope = :scope", { scope })
       .andWhere(new Brackets((query) => query.where("idempotency.operation_id = :operationId", { operationId }).orWhere("idempotency.idempotency_key = :idempotencyKey", { idempotencyKey })))
       .getOne()
     if (!existing) return null
+    if (existing.operationId !== operationId || existing.idempotencyKey !== idempotencyKey) {
+      throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "Operation ID и ключ идемпотентности должны повторяться вместе" })
+    }
     if (existing.requestHash !== requestHash) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "Ключ идемпотентности уже использован с другими данными" })
-    return existing.responseBody as BookingDto | null
+    if (!existing.responseBody) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "Операция с этим ключом ещё выполняется" })
+    return existing.responseBody as T
   }
 
-  private async storeIdempotentResponse(manager: EntityManager, scope: string, operationId: string, idempotencyKey: string, requestHash: string, response: BookingDto) {
+  private async storeIdempotentResponse<T>(manager: EntityManager, scope: string, operationId: string, idempotencyKey: string, requestHash: string, response: T) {
     await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, {
       id: randomUUID(), scope, operationId, idempotencyKey, requestHash, responseStatus: 201,
       responseBody: response as unknown as Record<string, unknown>, createdAt: new Date(),
     }))
+  }
+
+  private async activeLeadLink(manager: EntityManager, bookingId: string, lock = false): Promise<BookingLeadLinkEntity | null> {
+    const query = manager.getRepository(BookingLeadLinkEntity).createQueryBuilder("link")
+      .where("link.booking_id = :bookingId AND link.unlinked_at IS NULL", { bookingId })
+    if (lock) query.setLock("pessimistic_write")
+    return query.orderBy("link.linked_at", "DESC").addOrderBy("link.id", "DESC").getOne()
+  }
+
+  private isActiveLeadLinkUniqueConflict(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false
+    const driverError = error.driverError as { code?: string; constraint?: string }
+    return driverError.code === "23505" && driverError.constraint === "booking_lead_links_active_booking_unique"
+  }
+
+  private async assertCustomer(manager: EntityManager, customerId: string): Promise<void> {
+    const customer = await manager.getRepository(CustomerEntity).findOneBy({ id: customerId })
+    if (!customer || customer.archivedAt) throw new NotFoundException({ code: "CUSTOMER_NOT_FOUND", message: "Клиент не найден" })
+  }
+
+  private toLeadLink(link: BookingLeadLinkEntity): BookingLeadLink {
+    return { id: link.id, bookingId: link.bookingId, leadId: link.leadId, method: link.method as BookingLeadLink["method"], linkedAt: link.linkedAt.toISOString(), linkedBy: link.linkedBy, unlinkedAt: link.unlinkedAt?.toISOString() ?? null, unlinkedBy: link.unlinkedBy }
+  }
+
+  private async bumpBookingVersion(manager: EntityManager, booking: BookingEntity, actorId: string): Promise<BookingEntity> {
+    const result = await manager.createQueryBuilder().update(BookingEntity).set({ updatedBy: actorId, version: () => '"version" + 1', updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: booking.id, version: booking.version }).execute()
+    if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(BookingEntity, { id: booking.id }))
+    return manager.findOneByOrFail(BookingEntity, { id: booking.id })
   }
 
   private async toDto(manager: EntityManager, booking: BookingEntity, actor: SessionUser, knownItems?: BookingItemEntity[]): Promise<BookingDto> {
@@ -309,7 +549,7 @@ export class BookingsService {
     const items = entities.map(this.toDtoItem)
     const charged = await manager.getRepository(PaymentEntity).createQueryBuilder("payment").select("COALESCE(SUM(CASE WHEN payment.kind IN ('charge','adjustment') THEN payment.amount ELSE 0 END), 0)", "charged").addSelect("COALESCE(SUM(CASE WHEN payment.kind = 'refund' THEN payment.amount ELSE 0 END), 0)", "refunded").where("payment.booking_id = :bookingId", { bookingId: booking.id }).getRawOne<{ charged: string; refunded: string }>()
     const net = Number(charged?.charged ?? 0) - Number(charged?.refunded ?? 0)
-    return { id: booking.id, version: booking.version, customerId: booking.customerId!, status: booking.status as BookingDto["status"], items, subtotal: { amountMinor: items.reduce((sum, item) => sum + item.price.amountMinor, 0), currency: booking.currency }, total: { amountMinor: booking.totalAmount, currency: booking.currency }, paymentState: this.paymentState(booking.totalAmount, net), createdAt: booking.createdAt.toISOString(), updatedAt: booking.updatedAt.toISOString(), capabilities: { canView: actor.capabilities.canView, canCreate: actor.capabilities.canCreate, canEdit: actor.capabilities.canEdit, canArchive: actor.capabilities.canArchive, canChangeStatus: actor.capabilities.canChangeStatus, canOverrideConflict: actor.capabilities.canOverrideConflict, canAddPayment: actor.capabilities.canAddPayment, canRefund: actor.capabilities.canRefund } }
+    return { id: booking.id, version: booking.version, customerId: booking.customerId!, status: booking.status as BookingDto["status"], items, promotion: this.storedPromotion(booking), subtotal: { amountMinor: items.reduce((sum, item) => sum + item.price.amountMinor, 0), currency: booking.currency }, total: { amountMinor: booking.totalAmount, currency: booking.currency }, paymentState: this.paymentState(booking.totalAmount, net), createdAt: booking.createdAt.toISOString(), updatedAt: booking.updatedAt.toISOString(), capabilities: { canView: actor.capabilities.canView, canCreate: actor.capabilities.canCreate, canEdit: actor.capabilities.canEdit, canArchive: actor.capabilities.canArchive, canChangeStatus: actor.capabilities.canChangeStatus, canOverrideConflict: actor.capabilities.canOverrideConflict, canAddPayment: actor.capabilities.canAddPayment, canRefund: actor.capabilities.canRefund } }
   }
 
   private async projectionResources(query: BookingProjectionQuery, from: Date, until: Date): Promise<BookingProjectionResource[]> {
@@ -377,6 +617,11 @@ export class BookingsService {
   }
 
   private stringValue(value: unknown): string { return typeof value === "string" ? value : "" }
+  private snapshotAssignees(snapshot: Record<string, unknown> | null | undefined) {
+    const value = snapshot?.assignees
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is { id: string; initials: string; name: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).initials === "string" && typeof (item as Record<string, unknown>).name === "string"))
+  }
   private localParts(value: Date) {
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(value)
     const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00"
@@ -396,10 +641,10 @@ export class BookingsService {
   }
 
   private paymentState(total: number, net: number): BookingDto["paymentState"] { if (net < 0) return "refund"; if (net === 0) return total === 0 ? "paid" : "unpaid"; if (net < total) return "partial"; if (net === total) return "paid"; return "overpaid" }
-  private fromEntity = (item: BookingItemEntity): ItemInput => ({ type: item.type as ItemInput["type"], resourceId: item.resourceId, startAt: item.startAt.toISOString(), endAt: item.endAt.toISOString(), quantity: item.quantity, price: { amountMinor: item.priceAmount, currency: item.currency }, discount: { amountMinor: item.discountAmount, currency: item.currency }, preparationMinutes: item.preparationMinutes })
-  private toDtoItem = (item: BookingItemEntity): BookingDto["items"][number] => ({ id: item.id, type: item.type as BookingDto["items"][number]["type"], resourceId: item.resourceId, startAt: item.startAt.toISOString(), endAt: item.endAt.toISOString(), quantity: item.quantity, price: { amountMinor: item.priceAmount, currency: item.currency }, discount: { amountMinor: item.discountAmount, currency: item.currency }, preparationMinutes: item.preparationMinutes })
+  private fromEntity = (item: BookingItemEntity): ItemInput => ({ type: item.type as ItemInput["type"], resourceId: item.resourceId, startAt: item.startAt.toISOString(), endAt: item.endAt.toISOString(), quantity: item.quantity, price: { amountMinor: item.priceAmount, currency: item.currency }, discount: { amountMinor: item.discountAmount, currency: item.currency }, preparationMinutes: item.preparationMinutes, quoteSnapshotId: item.quoteSnapshotId, addOns: item.addOnSelections.map(({ assignmentId, quantity }) => ({ assignmentId, quantity })) })
+  private toDtoItem = (item: BookingItemEntity): BookingDto["items"][number] => ({ id: item.id, type: item.type as BookingDto["items"][number]["type"], resourceId: item.resourceId, startAt: item.startAt.toISOString(), endAt: item.endAt.toISOString(), quantity: item.quantity, price: { amountMinor: item.priceAmount, currency: item.currency }, discount: { amountMinor: item.discountAmount, currency: item.currency }, preparationMinutes: item.preparationMinutes, quoteSnapshotId: item.quoteSnapshotId, addOns: item.addOnSelections })
   private toAllocation = (allocation: ResourceAllocationEntity): AvailabilityAllocation => ({ id: allocation.id, resourceId: allocation.resourceId, sourceId: allocation.sourceId, startAt: allocation.startAt, endAt: allocation.endAt, quantity: allocation.quantity, capacityImpact: allocation.capacityImpact, status: allocation.status as AvailabilityAllocation["status"] })
-  private snapshot(booking: BookingEntity, items: BookingItemEntity[]) { return { id: booking.id, version: booking.version, customerId: booking.customerId, status: booking.status, totalAmount: booking.totalAmount, itemIds: items.map((item) => item.id) } }
+  private snapshot(booking: BookingEntity, items: BookingItemEntity[]) { return { id: booking.id, version: booking.version, customerId: booking.customerId, status: booking.status, totalAmount: booking.totalAmount, promotion: this.storedPromotion(booking), itemIds: items.map((item) => item.id) } }
   private async recordMutation(manager: EntityManager, booking: BookingEntity, action: string, actorId: string, requestId: string, changes: Record<string, unknown>) { const now = new Date(); await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "booking", entityId: booking.id, action, actorId, requestId, changes, createdAt: now })); await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: `booking.${action}`, aggregateType: "booking", aggregateId: booking.id, payload: { bookingId: booking.id, version: booking.version }, availableAt: now, processedAt: null, attempts: 0, createdAt: now })) }
   private assert(actor: SessionUser, capability: keyof SessionUser["capabilities"]) { if (!actor.capabilities[capability]) throw new ForbiddenException({ code: "PERMISSION_DENIED", message: `Capability ${capability} is required` }) }
   private versionConflict(booking: BookingEntity) { return new ConflictException({ code: "VERSION_CONFLICT", message: "Бронь была изменена другим сотрудником", details: { entityId: booking.id, serverVersion: booking.version } }) }

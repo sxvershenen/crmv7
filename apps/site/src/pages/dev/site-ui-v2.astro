@@ -1,0 +1,26 @@
+---
+import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
+import SitePageShell from "@crm/site-ui/astro/SitePageShell"
+import BaseLayout from "../../layouts/BaseLayout.astro"
+import NavigationIsland from "../../components/islands/NavigationIsland"
+import SiteUiV2GalleryIsland from "../../components/islands/SiteUiV2GalleryIsland"
+import BlogSection from "../../components/sections/BlogSection.astro"
+import Footer from "../../components/sections/Footer.astro"
+---
+
+<BaseLayout title="Public UI kit v2 — компоненты главной" description="Новая галерея компонентов, извлечённых из эталонной публичной главной" noindex>
+  <NavigationIsland client:load />
+  <SitePageShell>
+    <SitePageFrame>
+      <header class="site-section site-section--compact" aria-labelledby="v2-title">
+        <div class="site-section-eyebrow inline-flex items-center px-3 py-1 rounded-[var(--site-radius-round)] bg-[var(--site-color-brand-50)] text-[var(--site-color-brand-500)] text-[length:var(--site-text-eyebrow)] font-[var(--site-weight-semibold)] uppercase">Новый public design · canonical</div>
+        <h1 id="v2-title" class="site-type-h1 mt-4">Public UI kit v2</h1>
+        <p class="site-type-lead mt-4 max-w-4xl text-[var(--site-color-text-subtle)]">Живая витрина attached-дизайна: токены, actions, controls и те же shared components, которые рендерят главную страницу. Legacy v1 остаётся отдельным backup.</p>
+      </header>
+
+      <SiteUiV2GalleryIsland client:load />
+      <BlogSection />
+    </SitePageFrame>
+    <Footer />
+  </SitePageShell>
+</BaseLayout>

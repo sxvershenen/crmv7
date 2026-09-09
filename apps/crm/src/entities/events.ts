@@ -19,6 +19,7 @@ export type EventCategoryTone = (typeof eventCategoryTones)[number]
 
 export type EventCategory = {
   id: string
+  version?: number
   name: string
   description: string
   icon: EventCategoryIcon
@@ -49,9 +50,9 @@ export type CrmEvent = {
 }
 
 export type EventScenarioStage = { id: string; name: string; durationMinutes: number; comment: string }
-export type EventResourceOption = { id: string; name: string; category: string; capacity: number }
+export type EventResourceOption = { id: string; name: string; category: string; capacity: number; version: number }
 export type EventResourceBooking = { id: string; resourceId: string; resourceName: string; startsAt: string; endsAt: string; guestCount: number }
-export type EventPaymentOperation = { id: string; amount: number; date: string; kind: "payment" | "refund"; method: "card" | "cash" | "transfer" }
+export type EventPaymentOperation = { id: string; amount: number; date: string; kind: "payment" | "refund"; method: "card" | "cash" | "transfer"; sourcePaymentId?: string }
 export type EventEditorRecord = CrmEvent & {
   clientComment: string
   internalComments: CommentThreadItem[]

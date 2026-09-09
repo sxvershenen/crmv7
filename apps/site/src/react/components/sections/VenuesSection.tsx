@@ -1,164 +1,60 @@
 import React, { useState } from 'react';
-import { Layers, Users, ArrowUpRight, Filter, ChevronDown } from 'lucide-react';
+import { Layers, Users } from 'lucide-react';
 import { VENUES, VenueItem } from '../../data/resortData';
+import { useSwipeHint } from '../../utils/useSwipeHint';
+import { SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
 
 interface VenuesSectionProps {
   onOpenBookingModal: (venueTitle?: string) => void;
 }
 
 export const VenuesSection: React.FC<VenuesSectionProps> = ({ onOpenBookingModal }) => {
+  const swiperRef = useSwipeHint();
   const [capacityFilter, setCapacityFilter] = useState<'all' | 'small' | 'medium' | 'large'>('all');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [formatFilter, setFormatFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
+  const [dropdownOpen, setDropdownOpen] = useState<'capacity' | 'format' | null>(null);
 
   const filteredVenues = VENUES.filter((venue) => {
-    if (capacityFilter === 'small') return venue.capacityNumber <= 30;
-    if (capacityFilter === 'medium') return venue.capacityNumber > 30 && venue.capacityNumber <= 70;
-    if (capacityFilter === 'large') return venue.capacityNumber > 70;
-    return true;
+    const capacityOk = capacityFilter === 'small' ? venue.capacityNumber <= 30 : capacityFilter === 'medium' ? venue.capacityNumber > 30 && venue.capacityNumber <= 70 : capacityFilter === 'large' ? venue.capacityNumber > 70 : true;
+    const indoor = ['banquet-hall', 'yurt'].includes(venue.id);
+    const formatOk = formatFilter === 'all' || (formatFilter === 'indoor' ? indoor : !indoor);
+    return capacityOk && formatOk;
   });
 
   return (
-    <section id="venues" className="w-full py-8">
-      {/* Block Header */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[10px] font-semibold tracking-wider uppercase text-[#18191b] mb-2.5">
-            <Layers className="w-3 h-3 text-[#18191b]" />
-            Локации для аренды
-          </div>
-
-          <h2 className="text-[26px] sm:text-[32px] font-semibold text-[#18191b] leading-tight tracking-tight">Площадки и залы</h2>
-        </div>
-
-        {/* Dropdown Sort by Capacity & Format */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="h-[40px] px-4 rounded-full bg-white text-[#18191b] text-[13px] font-medium inline-flex items-center gap-2 hover:bg-neutral-100 transition-colors"
-          >
-            <Filter className="w-4 h-4 text-[#18191b]" />
-            <span className="hidden sm:inline">
-              {capacityFilter === 'all' && 'Все площадки (5)'}
-              {capacityFilter === 'small' && 'До 30 гостей'}
-              {capacityFilter === 'medium' && 'От 30 до 70 гостей'}
-              {capacityFilter === 'large' && 'От 70 до 300 гостей'}
-            </span>
-            <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {dropdownOpen && (
-            <div className="absolute right-0 top-[46px] w-52 bg-white rounded-2xl p-2 border border-neutral-200 shadow-xl z-30 animate-in fade-in zoom-in-95 duration-150">
-              <button
-                onClick={() => {
-                  setCapacityFilter('all');
-                  setDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  capacityFilter === 'all' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                Все площадки (5)
-              </button>
-              <button
-                onClick={() => {
-                  setCapacityFilter('small');
-                  setDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  capacityFilter === 'small' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                Камерные (до 30 человек)
-              </button>
-              <button
-                onClick={() => {
-                  setCapacityFilter('medium');
-                  setDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  capacityFilter === 'medium' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                Средние (до 70 человек)
-              </button>
-              <button
-                onClick={() => {
-                  setCapacityFilter('large');
-                  setDropdownOpen(false);
-                }}
-                className={`w-full text-left p-2 rounded-xl text-[12px] font-medium transition-colors ${
-                  capacityFilter === 'large' ? 'bg-[#f7f7f7] text-[#2B9E47]' : 'text-[#18191b] hover:bg-[#f7f7f7]'
-                }`}
-              >
-                Масштабные (до 300 человек)
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+    <section id="venues" data-section-key="venues" data-analytics-id="home.venues.view" className="w-full py-8">
+      <SiteActionSectionHeader
+        title="Площадки"
+        action={<div className="flex items-center gap-2"><SiteFilterMenu
+          width="md"
+          label={capacityFilter === 'all' ? 'Все площадки (5)' : capacityFilter === 'small' ? 'До 30 гостей' : capacityFilter === 'medium' ? 'От 30 до 70 гостей' : 'От 70 до 300 гостей'}
+          icon={<Users className="w-4 h-4 text-[var(--site-color-text-muted)]" />}
+          open={dropdownOpen === 'capacity'}
+          onToggle={() => setDropdownOpen((value) => value === 'capacity' ? null : 'capacity')}
+          options={[
+            { id: 'all', label: 'Любое число', selected: capacityFilter === 'all', onSelect: () => { setCapacityFilter('all'); setDropdownOpen(null); } },
+            { id: 'small', label: 'До 30', selected: capacityFilter === 'small', onSelect: () => { setCapacityFilter('small'); setDropdownOpen(null); } },
+            { id: 'medium', label: 'До 70', selected: capacityFilter === 'medium', onSelect: () => { setCapacityFilter('medium'); setDropdownOpen(null); } },
+            { id: 'large', label: 'От 70', selected: capacityFilter === 'large', onSelect: () => { setCapacityFilter('large'); setDropdownOpen(null); } },
+          ]}
+        /><SiteFilterMenu width="md" label={formatFilter === 'all' ? 'Любой формат' : formatFilter === 'indoor' ? 'В помещении' : 'На улице'} icon={<Layers className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={dropdownOpen === 'format'} onToggle={() => setDropdownOpen((value) => value === 'format' ? null : 'format')} options={[{ id: 'all', label: 'Любой формат', selected: formatFilter === 'all', onSelect: () => { setFormatFilter('all'); setDropdownOpen(null); } }, { id: 'indoor', label: 'В помещении', selected: formatFilter === 'indoor', onSelect: () => { setFormatFilter('indoor'); setDropdownOpen(null); } }, { id: 'outdoor', label: 'На улице', selected: formatFilter === 'outdoor', onSelect: () => { setFormatFilter('outdoor'); setDropdownOpen(null); } }]} /></div>}
+      />
 
       {/* 5 Cards Row on Desktop / Swiper on Mobile */}
-      <div className="flex lg:grid lg:grid-cols-5 gap-4 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 snap-swiper no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0">
+      <SiteResponsiveRail ref={swiperRef} variant="venues">
         {filteredVenues.map((venue: VenueItem) => (
-          <div
+          <SiteVenueCard
             key={venue.id}
-            onClick={() => onOpenBookingModal(`Площадка: ${venue.title}`)}
-            className="w-[260px] sm:w-[280px] lg:w-auto shrink-0 snap-swiper-card p-3 rounded-3xl bg-white flex flex-col justify-between cursor-pointer group transition-transform"
-          >
-            <div>
-              {/* Image with 8-12px padding inside card */}
-              <div className="relative h-[180px] w-full rounded-2xl overflow-hidden bg-neutral-100 mb-3.5">
-                <img
-                  src={venue.photo}
-                  alt={venue.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10" />
-
-                {/* Arrow Icon in bubble */}
-                <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center text-[#18191b] group-hover:bg-[#2B9E47] group-hover:text-white transition-colors">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </div>
-
-                {/* Area badge */}
-                <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[10px] text-white font-medium">
-                  {venue.area}
-                </div>
-              </div>
-
-              {/* Title & Capacity Bubble */}
-              <div className="flex items-center justify-between gap-1.5 mb-1.5 px-1">
-                <h3 className="text-[15px] font-semibold text-[#18191b] group-hover:text-[#2B9E47] transition-colors leading-tight truncate">
-                  {venue.title}
-                </h3>
-                {/* Guest bubble with user icon + capacity */}
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f7f7f7] text-[11px] font-medium text-[#18191b] shrink-0">
-                  <Users className="w-3 h-3 text-[#2B9E47]" />
-                  <span>{venue.capacityNumber}</span>
-                </div>
-              </div>
-
-              {/* Short Description */}
-              <p className="text-[12px] text-[#6b7280] leading-relaxed line-clamp-2 mb-3 px-1">
-                {venue.shortDesc}
-              </p>
-
-              {/* Suitable-for bubbles */}
-              <div className="flex flex-wrap gap-1 px-1 mb-2">
-                {venue.suitableFor.map((item, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-0.5 rounded-full bg-[#f7f7f7] text-[10px] font-medium text-[#2d3134]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-          </div>
+            onSelect={() => onOpenBookingModal(`Площадка: ${venue.title}`)}
+            image={venue.photo}
+            title={venue.title}
+            area={venue.area}
+            capacity={venue.capacityNumber}
+            description={venue.shortDesc}
+            tags={venue.suitableFor}
+          />
         ))}
-      </div>
+      </SiteResponsiveRail>
     </section>
   );
 };

@@ -6,3 +6,8 @@ export * from "./capabilities.js";
 export * from "./money.js";
 export * from "./idempotency.js";
 export * from "./phones.js";
+export * from "./offering-pricing.js";
+export * from "./offering-configuration.js";
+export * from "./operational-quote-acceptance.js";
+export * from "./outbox-delivery.js";
+export * from "./promotions.js";

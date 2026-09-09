@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Post, Req, Res } from "@nestjs/common"
+import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import type { Response } from "express"
 
@@ -18,6 +18,7 @@ export class AuthController {
 
   @Public()
   @Post("login")
+  @HttpCode(200)
   async login(
     @Body(new ZodValidationPipe(LoginRequestSchema)) input: LoginRequest,
     @Req() request: AuthenticatedRequest,
@@ -36,6 +37,7 @@ export class AuthController {
   }
 
   @Post("logout")
+  @HttpCode(200)
   async logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) {
     const cookieName = this.config.get<string>("SESSION_COOKIE_NAME", "sv_session")
     await this.authService.logout(
@@ -53,6 +55,7 @@ export class AuthController {
   }
 
   @Post("change-password")
+  @HttpCode(200)
   async changePassword(
     @Body(new ZodValidationPipe(ChangePasswordInputSchema)) input: ChangePasswordInput,
     @Req() request: AuthenticatedRequest,

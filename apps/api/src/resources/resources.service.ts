@@ -1,15 +1,17 @@
 import { randomUUID } from "node:crypto"
 
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
-import { DataSource, type EntityManager } from "typeorm"
+import { DataSource, type EntityManager, type FindOptionsWhere } from "typeorm"
 
-import type { SessionUser } from "@crm/contracts"
+import { IdSchema, type SessionUser } from "@crm/contracts"
 import { ChangeLogEntity, IdempotencyKeyEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 import { assertAvailable, checkAvailability, type AvailabilityAllocation } from "@crm/domain"
 
 import { toResourceDto } from "./resource.mapper.js"
 import type {
   ResourceAllocationCreate,
+  ResourceAllocationCancel,
+  ResourceAllocationListQuery,
   ResourceAllocationsQuery,
   ResourceBlockCancel,
   ResourceBlockCreate,
@@ -22,6 +24,7 @@ import type {
   ResourceCapabilities,
   ResourceUpdate,
 } from "./resources.contracts.js"
+import { ensureCmsSourceDraft } from "../cms/cms-source-draft.js"
 
 @Injectable()
 export class ResourcesService {
@@ -32,7 +35,11 @@ export class ResourcesService {
     const builder = this.dataSource.getRepository(ResourceEntity).createQueryBuilder("resource")
       .where(query.archived === true ? "resource.archived_at IS NOT NULL" : "resource.archived_at IS NULL")
     if (query.kind) {
-      const aliases: Record<string, string[]> = { houses: ["houses", "house"], venues: ["venues", "venue"] }
+      const aliases: Record<string, string[]> = {
+        houses: ["houses", "house"],
+        venues: ["venues", "venue"],
+        camping: ["camping", "campground", "campground_owned_tent", "campground_own_tent_area"],
+      }
       builder.andWhere("resource.kind IN (:...kinds)", { kinds: aliases[query.kind] ?? [query.kind] })
     }
     builder.orderBy("resource.name", "ASC").take(query.limit)
@@ -63,6 +70,7 @@ export class ResourcesService {
       })
       const saved = await manager.save(resource)
       await this.recordMutation(manager, saved, "created", actor.id, requestId, { after: this.snapshot(saved) })
+      await ensureCmsSourceDraft(manager, { sourceKind: "resource", sourceId: saved.id, sourceVersion: saved.version, title: saved.name, actorId: actor.id, requestId })
       return toResourceDto(saved, actor, [])
     })
   }
@@ -70,7 +78,7 @@ export class ResourcesService {
   async update(code: string, input: ResourceUpdate, actor: SessionUser, requestId: string): Promise<ResourceDto> {
     this.assertCapability(actor, "canEdit")
     return this.dataSource.transaction(async (manager) => {
-      const current = await manager.getRepository(ResourceEntity).findOne({ where: [{ code }, { id: code }] })
+      const current = await manager.getRepository(ResourceEntity).findOne({ where: this.resourceIdentityWhere(code) })
       if (!current) throw this.notFound()
       if (current.version !== input.version) throw this.versionConflict(current)
       const before = this.snapshot(current)
@@ -94,7 +102,7 @@ export class ResourcesService {
   async archive(code: string, input: ResourceArchive, actor: SessionUser, requestId: string): Promise<ResourceDto> {
     this.assertCapability(actor, "canArchive")
     return this.dataSource.transaction(async (manager) => {
-      const current = await manager.getRepository(ResourceEntity).findOne({ where: [{ code }, { id: code }] })
+      const current = await manager.getRepository(ResourceEntity).findOne({ where: this.resourceIdentityWhere(code) })
       if (!current) throw this.notFound()
       if (current.version !== input.version) throw this.versionConflict(current)
       const archivedAt = new Date()
@@ -205,6 +213,52 @@ export class ResourcesService {
     })
   }
 
+  async listAllocations(query: ResourceAllocationListQuery, actor: SessionUser) {
+    this.assertCapability(actor, "canView")
+    const builder = this.dataSource.getRepository(ResourceAllocationEntity).createQueryBuilder("allocation")
+      .where(query.includeCancelled ? "1 = 1" : "allocation.status <> :cancelled AND allocation.archived_at IS NULL", { cancelled: "cancelled" })
+    if (query.sourceType) builder.andWhere("allocation.source_type = :sourceType", { sourceType: query.sourceType })
+    if (query.sourceId) builder.andWhere("allocation.source_id = :sourceId", { sourceId: query.sourceId })
+    if (query.resourceId) builder.andWhere("allocation.resource_id = :resourceId", { resourceId: query.resourceId })
+    const rows = await builder.orderBy("allocation.start_at", "ASC").addOrderBy("allocation.id", "ASC").getMany()
+    return rows.map((row) => this.allocationSnapshot(row))
+  }
+
+  async cancelAllocation(allocationId: string, input: ResourceAllocationCancel, actor: SessionUser, requestId: string) {
+    this.assertCapability(actor, "canEdit")
+    return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+      const scope = `resource-allocation:${actor.id}`
+      const requestHash = JSON.stringify({ allocationId, ...input })
+      const existing = await manager.getRepository(IdempotencyKeyEntity).findOneBy({ scope, operationId: input.operationId })
+      if (existing) {
+        if (existing.requestHash !== requestHash) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "operationId уже использован с другими данными" })
+        if (existing.responseBody) return existing.responseBody
+      }
+      const allocation = await manager.getRepository(ResourceAllocationEntity).findOne({ where: { id: allocationId }, lock: { mode: "pessimistic_write" } })
+      if (!allocation) throw new NotFoundException({ code: "RESOURCE_ALLOCATION_NOT_FOUND", message: "Аллокация не найдена" })
+      const resource = await manager.getRepository(ResourceEntity).findOne({ where: { id: allocation.resourceId }, lock: { mode: "pessimistic_write" } })
+      if (!resource) throw this.notFound()
+      if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
+      if (allocation.status === "cancelled" || allocation.archivedAt) {
+        const responseBody = this.allocationSnapshot(allocation)
+        await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, requestHash, idempotencyKey: input.idempotencyKey, responseStatus: 200, responseBody, createdAt: new Date() }))
+        return responseBody
+      }
+      const before = this.allocationSnapshot(allocation)
+      const now = new Date()
+      const allocationResult = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder().update(ResourceAllocationEntity).set({ status: "cancelled", archivedAt: now, updatedBy: actor.id, updatedAt: () => "now()", version: () => '"version" + 1' }).where("id = :id AND version = :version", { id: allocation.id, version: allocation.version }).execute()
+      if (allocationResult.affected !== 1) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Аллокация была изменена другим сотрудником" })
+      const resourceResult = await manager.getRepository(ResourceEntity).createQueryBuilder().update(ResourceEntity).set({ version: () => '"version" + 1', updatedBy: actor.id, updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: resource.id, version: input.expectedVersion }).execute()
+      if (resourceResult.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: resource.id }))
+      const saved = await manager.getRepository(ResourceAllocationEntity).findOneByOrFail({ id: allocation.id })
+      const responseBody = this.allocationSnapshot(saved)
+      await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "resource_allocation", entityId: saved.id, action: "cancelled", actorId: actor.id, requestId, changes: { before, after: responseBody }, createdAt: now }))
+      await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: "resource.allocation.cancelled", aggregateType: "resource", aggregateId: resource.id, payload: { allocationId: saved.id, resourceId: resource.id, sourceId: saved.sourceId }, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+      await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, requestHash, idempotencyKey: input.idempotencyKey, responseStatus: 200, responseBody, createdAt: new Date() }))
+      return responseBody
+    })
+  }
+
   async allocations(code: string, query: ResourceAllocationsQuery, actor: SessionUser) {
     this.assertCapability(actor, "canView")
     const resource = await this.findByCode(code)
@@ -240,7 +294,7 @@ export class ResourcesService {
   async cancelBlock(code: string, blockId: string, input: ResourceBlockCancel, actor: SessionUser, requestId: string) {
     this.assertCapability(actor, "canEdit")
     return this.dataSource.transaction(async (manager) => {
-      const resource = await manager.getRepository(ResourceEntity).findOne({ where: [{ code }, { id: code }] })
+      const resource = await manager.getRepository(ResourceEntity).findOne({ where: this.resourceIdentityWhere(code) })
       if (!resource) throw this.notFound()
       if (resource.version !== input.version) throw this.versionConflict(resource)
       const allocation = await manager.getRepository(ResourceAllocationEntity).findOneBy({ id: blockId, resourceId: resource.id, sourceType: "resource_block" })
@@ -257,9 +311,13 @@ export class ResourcesService {
   }
 
   private async findByCode(code: string) {
-    const resource = await this.dataSource.getRepository(ResourceEntity).findOne({ where: [{ code }, { id: code }] })
+    const resource = await this.dataSource.getRepository(ResourceEntity).findOne({ where: this.resourceIdentityWhere(code) })
     if (!resource) throw this.notFound()
     return resource
+  }
+
+  private resourceIdentityWhere(identity: string): FindOptionsWhere<ResourceEntity>[] {
+    return IdSchema.safeParse(identity).success ? [{ id: identity }, { code: identity }] : [{ code: identity }]
   }
 
   private async resourceAllocations(resourceId: string) {

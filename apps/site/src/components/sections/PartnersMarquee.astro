@@ -1,30 +1,27 @@
 ---
-import { Building2 } from "lucide-react";
+import { Handshake, Building2 } from "lucide-react";
 import { PARTNERS_LIST } from "../../data/resortData";
 
 const partners = [...PARTNERS_LIST, ...PARTNERS_LIST];
 ---
 
-<div class="w-full py-8 overflow-hidden select-none">
-  <div class="text-center mb-4">
-    <span class="text-[10px] uppercase font-semibold tracking-wider text-[#6b7280]">
-      Нам доверяют корпоративные клиенты региона
-    </span>
+<section id="partners" data-section-key="partners" class="w-full py-8 overflow-hidden select-none">
+  <div class="flex items-center justify-between mb-5">
+    <span class="site-home-heading__eyebrow !mb-0"><span class="eyebrow-ico"><Handshake className="w-[11px] h-[11px]" /></span>Наши партнёры</span>
+    <span class="hidden lg:block text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)]">Дружим с теми, кто делает вкусно, красиво и по-настоящему</span>
   </div>
 
-  <div class="relative w-full overflow-hidden">
-    <div class="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#f7f7f7] to-transparent z-10 pointer-events-none"></div>
-    <div class="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#f7f7f7] to-transparent z-10 pointer-events-none"></div>
-
-    <div class="animate-marquee flex items-center gap-6">
+  <div data-partners-viewport class="site-partners-marquee relative w-full overflow-hidden px-1.5">
+    <div class="animate-marquee flex items-center gap-3">
       {partners.map((partner) => (
         <div
-          class="flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-white shrink-0 text-[#18191b] hover:bg-neutral-100 transition-colors"
+          data-partner-item
+          class="group bg-[var(--site-color-surface)] rounded-[var(--site-radius-round)] h-12 pl-1.5 pr-5 inline-flex items-center gap-3 whitespace-nowrap shrink-0"
         >
-          <Building2 className="w-4 h-4 text-[#2B9E47]" />
-          <span class="text-[13px] font-semibold tracking-tight">{partner}</span>
+          <span class="icon-tile !w-9 !h-9 !rounded-[var(--site-radius-round)] group-hover:bg-[var(--site-color-brand-500)] group-hover:text-[var(--site-color-text-inverse)] transition-colors"><Building2 className="w-4 h-4" /></span>
+          <span class="text-[length:var(--site-text-body-sm)] font-[var(--site-weight-medium)] text-[var(--site-color-text)] group-hover:text-[var(--site-color-brand-700)] transition-colors">{partner}</span>
         </div>
       ))}
     </div>
   </div>
-</div>
+</section>

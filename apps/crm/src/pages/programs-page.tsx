@@ -8,10 +8,11 @@ import { ProgramsControls, ProgramsNav } from "@app/components/programs/program-
 import { shiftIso } from "@app/components/programs/program-format"
 import { ProgramScheduler } from "@app/components/programs/program-scheduler"
 import { ProgramRegistrationsView, ProgramRunsView, ProgramsLoading, ProgramTemplatesView } from "@app/components/programs/program-views"
-import { apiProgramsRepository, type ProgramsRepository } from "@app/data/programs-repository"
+import { programsRepository, type ProgramsRepository } from "@app/data/programs-repository"
 import type { ProgramQuery, ProgramRegistrationSortKey, ProgramRunSortKey, ProgramSortKey, ProgramTemplateSortKey } from "@app/entities/programs"
 import { programPeriods, programRegistrationSortKeys, programRunSortKeys, programRunViews, programSections, programTemplateSortKeys } from "@app/entities/programs"
 import { usePrograms } from "@app/features/use-programs"
+import { useFixtureData } from "@app/lib/data-mode"
 
 const DEFAULT_DATE = "2026-08-24"
 const DEFAULT_RANGE_END = "2026-08-30"
@@ -24,7 +25,7 @@ function validDate(value: string | null, fallback: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value! : fallback
 }
 
-export function ProgramsPage({ repository = apiProgramsRepository }: { repository?: ProgramsRepository }) {
+export function ProgramsPage({ repository = programsRepository }: { repository?: ProgramsRepository }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const section = oneOf(searchParams.get("section"), programSections, "templates")
@@ -83,11 +84,11 @@ export function ProgramsPage({ repository = apiProgramsRepository }: { repositor
   })
   const changeRunStatus = async (id: string, nextStatus: Parameters<typeof updateRunStatus>[1]) => {
     await updateRunStatus(id, nextStatus)
-    setAnnouncement(`Статус проведения #${id} изменён локально`)
+    setAnnouncement(`Статус проведения #${id} сохранён`)
   }
   const changeRegistrationStatus = async (id: string, nextStatus: Parameters<typeof updateRegistrationStatus>[1]) => {
     await updateRegistrationStatus(id, nextStatus)
-    setAnnouncement(`Статус регистрации #${id} изменён локально`)
+    setAnnouncement(`Статус регистрации #${id} сохранён`)
   }
   const assignTemplateOwner = async (id: string) => {
     await assignTemplate(id)
@@ -134,7 +135,7 @@ export function ProgramsPage({ repository = apiProgramsRepository }: { repositor
           {section === "templates" ? <ProgramTemplatesView items={state.data.templates} onAssign={assignTemplateOwner} onSort={(key) => handleSort(key)} sortDirection={sortDirection} sortKey={sortKey as ProgramTemplateSortKey} /> : null}
           {section === "runs" && view === "table" ? <ProgramRunsView items={state.data.runs} onAssign={assignRunOwner} onSort={(key) => handleSort(key)} onStatusChange={changeRunStatus} sortDirection={sortDirection} sortKey={sortKey as ProgramRunSortKey} /> : null}
           {section === "runs" && view === "scheduler" ? <ProgramScheduler date={date} items={state.data.runs} onAssign={assignRunOwner} onStatusChange={changeRunStatus} period={period} /> : null}
-          {section === "registrations" ? <ProgramRegistrationsView items={state.data.registrations} onAssign={assignRegistrationOwner} onSort={(key) => handleSort(key)} onStatusChange={changeRegistrationStatus} sortDirection={sortDirection} sortKey={sortKey as ProgramRegistrationSortKey} /> : null}
+          {section === "registrations" ? <ProgramRegistrationsView items={state.data.registrations} {...(useFixtureData || import.meta.env.MODE === "test" ? { onAssign: assignRegistrationOwner } : {})} onSort={(key) => handleSort(key)} onStatusChange={changeRegistrationStatus} sortDirection={sortDirection} sortKey={sortKey as ProgramRegistrationSortKey} /> : null}
           <p className="text-[11px] text-muted-foreground">Показано: {items.length}</p>
         </>
       ) : null}

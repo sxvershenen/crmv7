@@ -5,12 +5,20 @@ import { apiClient, type ApiClientError } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
 
 export interface CustomerRepository {
+  assignSelf(id: string): Promise<Customer>
   list(query: CustomerQuery): Promise<Customer[]>
 }
 
 export interface CustomerEditorRepository {
   get(id: string): Promise<Customer | null>
-  save(customer: Customer): Promise<Customer>
+  save(customer: CustomerEditorInput): Promise<Customer>
+}
+
+export type CustomerEditorInput = Customer & {
+  additionalPhone?: string
+  email?: string
+  preferredChannel?: Customer["channels"][number]
+  preferences?: string
 }
 
 const collator = new Intl.Collator("ru-RU", { numeric: true, sensitivity: "base" })
@@ -58,11 +66,18 @@ export class FixtureCustomerRepository implements CustomerRepository, CustomerEd
     return Promise.resolve(selectCustomers(structuredClone(this.data), query))
   }
 
+  async assignSelf(id: string) {
+    const customer = this.data.find((item) => item.id === id)
+    if (!customer) throw new Error("Клиент не найден")
+    if (!customer.assignees.some((assignee) => assignee.id === "demo-manager")) customer.assignees.push({ id: "demo-manager", initials: "МК", name: "Марина Кириллова", colorClass: "bg-sky-100 text-sky-700" })
+    return structuredClone(customer)
+  }
+
   async get(id: string): Promise<Customer | null> {
     return Promise.resolve(structuredClone(this.data.find((customer) => customer.id === id) ?? null))
   }
 
-  async save(customer: Customer): Promise<Customer> {
+  async save(customer: CustomerEditorInput): Promise<Customer> {
     const next = structuredClone(customer)
     const index = this.data.findIndex((item) => item.id === customer.id)
     if (index >= 0) this.data[index] = next
@@ -94,16 +109,28 @@ export class ApiCustomerRepository implements CustomerRepository, CustomerEditor
     return selectCustomers(dtos.map((dto) => this.remember(dto)), query)
   }
 
+  async assignSelf(id: string) {
+    const current = this.records.get(id) ?? await this.client.get(`/customers/${encodeURIComponent(id)}`, CustomerDtoSchema)
+    const assigned = await this.client.post(`/customers/${encodeURIComponent(id)}/assign-self`, { version: current.version }, CustomerDtoSchema)
+    return this.remember(assigned)
+  }
+
   async get(id: string) {
     try { return this.remember(await this.client.get(`/customers/${encodeURIComponent(id)}`, CustomerDtoSchema)) }
     catch (error) { if (error instanceof Error && "code" in error && (error as ApiClientError).code === "NOT_FOUND") return null; throw error }
   }
 
-  async save(customer: Customer) {
+  async save(customer: CustomerEditorInput) {
+    const phones = [customer.phone, customer.additionalPhone]
+      .map((phone) => phone?.trim() ?? "")
+      .filter((phone, index, items) => phone.length > 0 && items.indexOf(phone) === index)
+    const channels = customer.preferredChannel
+      ? [customer.preferredChannel, ...customer.channels.filter((channel) => channel !== customer.preferredChannel)]
+      : customer.channels
     if (customer.id === "new") {
       const created = await this.client.post("/customers", {
-        name: customer.name, type: customer.type, phones: customer.phone ? [customer.phone] : [], channels: customer.channels,
-        email: null, notes: "", duplicateRisk: customer.duplicateRisk, assignees: customer.assignees,
+        name: customer.name, type: customer.type, phones, channels,
+        email: customer.email?.trim() || null, notes: customer.preferences ?? customer.notes ?? "", duplicateRisk: customer.duplicateRisk, assignees: customer.assignees,
       }, CustomerDtoSchema)
       return this.remember(created)
     }
@@ -112,8 +139,9 @@ export class ApiCustomerRepository implements CustomerRepository, CustomerEditor
       return this.remember(await this.client.post(`/customers/${encodeURIComponent(customer.id)}/archive`, { version: current.version }, CustomerDtoSchema))
     }
     const updated = await this.client.patch(`/customers/${encodeURIComponent(customer.id)}`, {
-      version: current.version, name: customer.name, type: customer.type, phones: customer.phone ? [customer.phone] : [],
-      channels: customer.channels, duplicateRisk: customer.duplicateRisk, assignees: customer.assignees,
+      version: current.version, name: customer.name, type: customer.type, phones,
+      channels, email: customer.email?.trim() || null, notes: customer.preferences ?? customer.notes ?? "",
+      duplicateRisk: customer.duplicateRisk, assignees: customer.assignees,
     }, CustomerDtoSchema)
     return this.remember(updated)
   }
@@ -122,7 +150,7 @@ export class ApiCustomerRepository implements CustomerRepository, CustomerEditor
     this.records.set(dto.id, dto)
     const lastVisitDaysAgo = dto.lastVisitAt ? Math.max(0, Math.floor((Date.now() - new Date(dto.lastVisitAt).getTime()) / 86_400_000)) : Number.MAX_SAFE_INTEGER
     return {
-      id: dto.id, version: dto.version, name: dto.name, phone: dto.phone ?? "", type: dto.type,
+      id: dto.id, version: dto.version, name: dto.name, phone: dto.phone ?? "", phones: dto.phones, email: dto.email ?? "", notes: dto.notes, type: dto.type,
       channels: dto.channels.filter((channel): channel is Customer["channels"][number] => ["Сайт", "Телефон", "Telegram", "VK", "Email"].includes(channel)),
       leadCount: dto.leadCount, activeLeadCount: dto.activeLeadCount, bookingCount: dto.bookingCount, futureBookingCount: dto.futureBookingCount,
       taskCount: dto.taskCount, turnover: dto.turnover / 100, debt: dto.debt / 100, duplicateRisk: dto.duplicateRisk,

@@ -22,7 +22,7 @@ const query: LeadQuery = {
 describe("useLeads local movement", () => {
   it("rolls an optimistic server failure back to its original stage", async () => {
     const lead = structuredClone(leadsFixture[0]!)
-    const repository: LeadRepository = { get: vi.fn(), list: vi.fn().mockResolvedValue([lead]), save: vi.fn().mockRejectedValue(new Error("Конфликт версии")) }
+    const repository: LeadRepository = { assignSelf: vi.fn(), get: vi.fn(), list: vi.fn().mockResolvedValue([lead]), save: vi.fn().mockRejectedValue(new Error("Конфликт версии")) }
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
     const { result } = renderHook(() => useLeads(query, repository), { wrapper })

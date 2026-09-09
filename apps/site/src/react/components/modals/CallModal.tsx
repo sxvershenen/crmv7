@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Phone, Calendar, Sparkles, Copy, Check } from 'lucide-react';
+import { useDialogBehavior } from '../../utils/useDialogBehavior';
 
 interface CallModalProps {
   isOpen: boolean;
@@ -9,19 +10,28 @@ interface CallModalProps {
 
 export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }) => {
   const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
+  const dialogRef = useDialogBehavior(isOpen, onClose);
 
   if (!isOpen) return null;
 
-  const handleCopy = (phone: string, index: number) => {
-    navigator.clipboard.writeText(phone);
-    setCopiedIndex(index);
-    onToast(`Номер ${phone} скопирован!`);
-    setTimeout(() => setCopiedIndex(null), 2000);
+  const handleCopy = async (phone: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(phone);
+      setCopiedIndex(index);
+      onToast(`Номер ${phone} скопирован!`);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      onToast("Не удалось скопировать номер — выделите его вручную");
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div 
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="call-dialog-title"
         className="relative w-full max-w-md bg-white rounded-3xl p-6 md:p-8 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -40,7 +50,7 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }
           Прямая связь с базой
         </div>
 
-        <h3 className="text-[24px] font-semibold text-[#18191b] leading-tight mb-2">
+        <h3 id="call-dialog-title" className="text-[24px] font-semibold text-[#18191b] leading-tight mb-2">
           Позвонить в «Свистоплясово»
         </h3>
         <p className="text-[13px] text-[#6b7280] mb-6 leading-relaxed">

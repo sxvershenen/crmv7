@@ -15,6 +15,7 @@ import {
   CommentThread,
   ConfirmationDialog,
   DatePicker,
+  DateTimePicker,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -31,6 +32,7 @@ import {
   PageNav,
   PageState,
   Skeleton,
+  Textarea,
   type CommentThreadItem,
   type EditorSaveState,
 } from "@crm/ui";
@@ -60,6 +62,13 @@ import type { BookingLookup } from "@app/data/directory-repository";
 import { useDirectoryAssignees, useDirectoryBookings, useDirectoryCustomers, useDirectoryData } from "@app/features/use-directory-data";
 import type { Lead, LeadStage } from "@app/entities/leads";
 import { leadStageMeta, leadStages } from "@app/entities/leads";
+import { useFixtureData } from "@app/lib/data-mode";
+import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime";
+
+// Vitest renders fixture-backed editors while production/dev API mode remains
+// authoritative. This keeps the test/demo-only preview affordances isolated
+// from the real API path.
+const useFixtureEditorData = useFixtureData || import.meta.env.MODE === "test";
 
 const tabs = [
   "main",
@@ -167,6 +176,31 @@ const previewComments: CommentThreadItem[] = [
   },
 ];
 
+function marketingFromLead(lead: Lead): MarketingAttributionDraft {
+  if (useFixtureEditorData) return createPreviewMarketing(lead.source, lead.utm);
+  const utm = lead.utmData ?? {};
+  return {
+    channel: lead.channel || "crm",
+    clientId: utm.clientId ?? "",
+    maxDialogId: utm.maxDialogId ?? "",
+    metricaClientId: utm.metricaClientId ?? "",
+    source: lead.source,
+    utmCampaign: utm.campaign ?? "",
+    utmContent: utm.content ?? "",
+    utmMedium: utm.medium ?? "",
+    utmSource: utm.source ?? lead.utm,
+    utmTerm: utm.term ?? "",
+    vkLeadId: utm.vkLeadId ?? "",
+  };
+}
+
+function commentsFromLead(lead: Lead): CommentThreadItem[] {
+  if (useFixtureEditorData) return previewComments;
+  return lead.comment?.trim()
+    ? [{ id: `lead-${lead.id}-comment`, text: lead.comment, author: "CRM", createdLabel: "Сохранено" }]
+    : [];
+}
+
 function oneOf<T extends string>(
   value: string | null,
   options: readonly T[],
@@ -181,6 +215,12 @@ function replaceDate(value: string, date: Date) {
   const original = new Date(value);
   original.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
   return original.toISOString();
+}
+function moscowLocalDateTime(value: string) {
+  return toBusinessDateTimeInput(value);
+}
+function moscowLocalToIso(value: string) {
+  return businessDateTimeToIso(value);
 }
 
 export function LeadEditorPage({
@@ -208,10 +248,11 @@ export function LeadEditorPage({
       setDraft({
         ...emptyLead,
         additionalPhone: "",
-        comments: previewComments,
+        comments: commentsFromLead(emptyLead),
+        desiredEndAt: emptyLead.plannedAt,
         linkedBookingIds: [],
-        marketing: createPreviewMarketing(emptyLead.source, emptyLead.utm),
-        plannedEndAt: emptyLead.plannedAt,
+        marketing: marketingFromLead(emptyLead),
+        plannedEndAt: emptyLead.desiredEndAt || emptyLead.plannedAt,
       });
       setLoading(false);
       return () => {
@@ -230,12 +271,12 @@ export function LeadEditorPage({
         setDraft({
           ...lead,
           additionalPhone: "",
-          comments: previewComments,
+          comments: commentsFromLead(lead),
           linkedBookingIds: directory.bookings
             .filter((booking) => booking.sourceLeadId === lead.id)
             .map((booking) => booking.id),
-          marketing: createPreviewMarketing(lead.source, lead.utm),
-          plannedEndAt: lead.plannedAt,
+          marketing: marketingFromLead(lead),
+          plannedEndAt: lead.desiredEndAt || lead.plannedAt,
         });
         setLoading(false);
       })
@@ -275,8 +316,25 @@ export function LeadEditorPage({
           ? {
               ...current,
               marketing: { ...current.marketing, [key]: value },
+              ...(key === "channel" ? { channel: value } : {}),
               ...(key === "source" ? { source: value } : {}),
-              ...(key === "utmSource" ? { utm: value } : {}),
+              ...(key.startsWith("utm") || ["clientId", "maxDialogId", "metricaClientId", "vkLeadId"].includes(key)
+                ? {
+                    utm: key === "utmSource" ? value : current.utm,
+                    utmData: {
+                      ...(current.utmData ?? {}),
+                      clientId: key === "clientId" ? value : current.marketing.clientId,
+                      maxDialogId: key === "maxDialogId" ? value : current.marketing.maxDialogId,
+                      metricaClientId: key === "metricaClientId" ? value : current.marketing.metricaClientId,
+                      campaign: key === "utmCampaign" ? value : current.marketing.utmCampaign,
+                      content: key === "utmContent" ? value : current.marketing.utmContent,
+                      medium: key === "utmMedium" ? value : current.marketing.utmMedium,
+                      source: key === "utmSource" ? value : current.marketing.utmSource,
+                      term: key === "utmTerm" ? value : current.marketing.utmTerm,
+                      vkLeadId: key === "vkLeadId" ? value : current.marketing.vkLeadId,
+                    },
+                  }
+                : {}),
             }
           : current,
       );
@@ -297,15 +355,9 @@ export function LeadEditorPage({
   const addComment = () => {
     const text = newComment.trim();
     if (!draft || !text) return;
-    update("comments", [
-      {
-        id: `local-${Date.now()}`,
-        text,
-        author: "Марина Кириллова",
-        createdLabel: "Только что",
-      },
-      ...draft.comments,
-    ]);
+    const comments = [{ id: `local-${Date.now()}`, text, author: "Марина Кириллова", createdLabel: "Только что" }, ...draft.comments];
+    setDraft((current) => current ? { ...current, comment: comments.map((item) => item.text).join("\n\n"), comments } : current);
+    setSaveState("dirty");
     setNewComment("");
   };
 
@@ -459,15 +511,12 @@ function LeadMain({
   );
   return (
     <div className="space-y-3">
-      <EditorSection
-        subtitle="Поля доступны сразу, без отдельного режима редактирования."
-        title="Основные данные"
-      >
+      <EditorSection title="Контакт и запрос">
         <div className="grid items-start gap-4 sm:grid-cols-6">
           <FormField
             className="sm:col-span-6"
             htmlFor="lead-title"
-            label="Название заявки"
+            label="Что нужно"
           >
             <Input
               id="lead-title"
@@ -476,7 +525,7 @@ function LeadMain({
             />
           </FormField>
           <FormField
-            className="sm:col-span-4"
+            className="sm:col-span-3"
             htmlFor="lead-client"
             label="Клиент"
           >
@@ -519,25 +568,11 @@ function LeadMain({
               value={draft.phone}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="lead-phone-extra"
-            label="Доп. телефон"
-          >
-            <Input
-              id="lead-phone-extra"
-              inputMode="tel"
-              onChange={(event) =>
-                update("additionalPhone", event.target.value)
-              }
-              placeholder="Не указан"
-              value={draft.additionalPhone}
-            />
-          </FormField>
-        </div>
-      </EditorSection>
-      <EditorSection title="Запрос">
-        <div className="grid items-start gap-4 sm:grid-cols-6">
+          {useFixtureEditorData ? (
+            <FormField className="sm:col-span-3" htmlFor="lead-phone-extra" label="Доп. телефон">
+              <Input id="lead-phone-extra" inputMode="tel" onChange={(event) => update("additionalPhone", event.target.value)} placeholder="Не указан" value={draft.additionalPhone} />
+            </FormField>
+          ) : null}
           <FormField
             className="sm:col-span-3"
             htmlFor="lead-direction"
@@ -552,7 +587,7 @@ function LeadMain({
             />
           </FormField>
           <FormField
-            className="sm:col-span-2"
+            className="sm:col-span-3"
             htmlFor="lead-guests"
             label="Количество гостей"
           >
@@ -566,48 +601,46 @@ function LeadMain({
               value={draft.guestCount}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="lead-date-from"
-            label="Дата с"
-          >
+          <FormField className="sm:col-span-4" htmlFor="lead-dates" label="Желаемые даты">
             <DatePicker
               className="w-full max-w-none"
               density="form"
-              id="lead-date-from"
-              label="Начало запроса"
-              onValueChange={(date) =>
-                date && update("plannedAt", replaceDate(draft.plannedAt, date))
-              }
-              value={dateFromIso(draft.plannedAt)}
+              id="lead-dates"
+              label="Желаемые даты"
+              mode="range"
+              onValueChange={(range) => {
+                if (!range?.from || !range.to) return;
+                const end = replaceDate(draft.plannedEndAt, range.to);
+                update("plannedAt", replaceDate(draft.plannedAt, range.from));
+                update("plannedEndAt", end);
+                update("desiredEndAt", end);
+              }}
+              value={{ from: dateFromIso(draft.plannedAt), to: dateFromIso(draft.plannedEndAt) }}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="lead-date-to"
-            label="Дата по"
-          >
-            <DatePicker
-              className="w-full max-w-none"
-              density="form"
-              id="lead-date-to"
-              label="Окончание запроса"
-              onValueChange={(date) =>
-                date &&
-                update("plannedEndAt", replaceDate(draft.plannedEndAt, date))
-              }
-              value={dateFromIso(draft.plannedEndAt)}
-            />
+          <FormField className="sm:col-span-2" htmlFor="lead-next-contact" label="Следующий контакт">
+            <DateTimePicker id="lead-next-contact" label="Следующий контакт" onValueChange={(value) => update("nextContactAt", moscowLocalToIso(value))} placeholder="Не назначен" value={moscowLocalDateTime(draft.nextContactAt)} />
+          </FormField>
+          <FormField className="sm:col-span-3" htmlFor="lead-source" label="Источник">
+            <FormSelect id="lead-source" label="Источник заявки" onValueChange={(value) => update("source", value)} options={sourceOptions} value={draft.source} />
+          </FormField>
+          <FormField className="sm:col-span-3" htmlFor="lead-promo" label="Промокод">
+            <Input id="lead-promo" aria-label="Промокод заявки" onChange={(event) => update("promo", event.target.value)} placeholder="Без промокода" value={draft.promo === "Без промокода" ? "" : draft.promo} />
           </FormField>
         </div>
       </EditorSection>
       <EditorSection title="Комментарии менеджеров">
-        <CommentThread
-          comments={draft.comments}
-          draft={newComment}
-          onAdd={onAddComment}
-          onDraftChange={onCommentChange}
-        />
+        {useFixtureEditorData ? (
+          <CommentThread comments={draft.comments} draft={newComment} onAdd={onAddComment} onDraftChange={onCommentChange} />
+        ) : (
+          <Textarea
+            aria-label="Комментарий заявки"
+            onChange={(event) => update("comment", event.target.value)}
+            placeholder="Внутренний комментарий команды"
+            rows={5}
+            value={draft.comment ?? ""}
+          />
+        )}
       </EditorSection>
     </div>
   );
@@ -626,7 +659,7 @@ function LeadSidebar({
   return (
     <div className="overflow-hidden rounded-xl border bg-background">
       <ListSection
-        count={5}
+        count={2}
         icon={IconUsers}
         title="Операционная сводка"
         tone="task"
@@ -665,42 +698,6 @@ function LeadSidebar({
               shortcut
               values={draft.linkedBookingIds}
             />
-          </div>
-        </ListRow>
-        <ListRow>
-          <div className="grid gap-1.5 px-4 py-3">
-            <span className="text-xs font-medium">Источник</span>
-            <FormSelect
-              id="lead-source"
-              label="Источник заявки"
-              onValueChange={(value) => update("source", value)}
-              options={sourceOptions}
-              value={draft.source}
-            />
-          </div>
-        </ListRow>
-        <ListRow>
-          <div className="grid gap-1.5 px-4 py-3">
-            <span className="text-xs font-medium">Промокод</span>
-            <Input
-              aria-label="Промокод заявки"
-              onChange={(event) => update("promo", event.target.value)}
-              value={draft.promo}
-            />
-          </div>
-        </ListRow>
-        <ListRow>
-          <div className="flex items-center gap-2 px-4 py-3 text-xs">
-            <IconCalendarEvent
-              aria-hidden="true"
-              className="size-3.5 text-muted-foreground"
-            />
-            <span className="min-w-0 flex-1 text-muted-foreground">
-              Следующий контакт
-            </span>
-            <span className="shrink-0 tabular-nums">
-              {draft.nextContactLabel}
-            </span>
           </div>
         </ListRow>
       </ListSection>
@@ -759,6 +756,7 @@ function LeadRelatedTab({
   if (tab === "marketing")
     return (
       <EditorMarketingAttribution
+        available
         idPrefix="lead-marketing"
         onChange={updateMarketing}
         value={draft.marketing}

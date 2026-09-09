@@ -1,4 +1,5 @@
 import type { Assignee, StatusTone } from "@crm/ui"
+import type { BookingPromotion } from "@crm/contracts"
 
 export const bookingCategories = ["all", "houses", "camping", "tents", "bath", "venues"] as const
 export const bookingViews = ["agenda", "scheduler", "table"] as const
@@ -7,6 +8,7 @@ export const bookingStatuses = ["draft", "confirmed", "unpaid", "debt", "paid", 
 export type BookingCategory = (typeof bookingCategories)[number]
 export type BookingView = (typeof bookingViews)[number]
 export type BookingStatus = (typeof bookingStatuses)[number]
+export type BookingLifecycleStatus = "draft" | "unconfirmed" | "confirmed" | "in_progress" | "completed" | "cancelled" | "archived"
 export type BookingSortKey = "id" | "client" | "arrival" | "resource" | "status" | "total" | "assignee"
 export type SortDirection = "asc" | "desc"
 export type BookingOperationKind = "arrival" | "preparation" | "departure" | "block"
@@ -40,11 +42,14 @@ export type Booking = {
   preparationEndHour: number
   guestCount: number
   status: BookingStatus
+  /** Authoritative operational lifecycle; payment-derived list status remains separate. */
+  lifecycleStatus?: BookingLifecycleStatus
   amount: number
   paid: number
   source: string
   utm: string
   promo: string
+  promotion?: BookingPromotion | null
   /** Nullable typed relation; display labels are derived from the linked lead. */
   sourceLeadId: string | null
   assignees: Assignee[]
@@ -63,6 +68,20 @@ export type BookingEditorPosition = {
   resourceName: string
   startAt: string
   total: number
+  /** Authoritative preparation buffer returned by the booking API. */
+  preparationMinutes?: number
+  quoteSnapshotId?: string | null
+  calculatedInputKey?: string | null
+  addOns?: BookingEditorAddOn[]
+}
+
+export type BookingEditorAddOn = {
+  assignmentId: string
+  addOnOfferingId: string
+  label: string
+  serviceType: "quantity_service" | "person_service"
+  quantity: number
+  price: number
 }
 
 export type BookingEditorComment = {

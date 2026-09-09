@@ -1,0 +1,75 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro"
+import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
+import SitePageShell from "@crm/site-ui/astro/SitePageShell"
+import NavigationIsland from "../components/islands/NavigationIsland"
+import HeroIsland from "../components/islands/HeroIsland"
+import EventsIsland from "../components/islands/EventsIsland"
+import HousesIsland from "../components/islands/HousesIsland"
+import SaunaChanIsland from "../components/islands/SaunaChanIsland"
+import ProgramsIsland from "../components/islands/ProgramsIsland"
+import VenuesIsland from "../components/islands/VenuesIsland"
+import ReviewsIsland from "../components/islands/ReviewsIsland"
+import TerritoryMapIsland from "../components/islands/TerritoryMapIsland"
+import FaqLocationIsland from "../components/islands/FaqLocationIsland"
+import BookingQuizIsland from "../components/islands/BookingQuizIsland"
+import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
+import ListingIsland from "../components/islands/ListingIsland"
+import BlogSection from "../components/sections/BlogSection.astro"
+import WhyUsSection from "../components/sections/WhyUsSection.astro"
+import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
+import Footer from "../components/sections/Footer.astro"
+import { siteIdentity } from "../lib/content"
+import { PublicProfileIntro } from "@crm/site-ui"
+import { getPublishedListing, getPublishedPage, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+
+const path = `/${Astro.params.path ?? ""}`.replace(/\/$/, "") || "/"
+const [publishedSiteSettings, page] = await Promise.all([getPublishedSiteSettings(), getPublishedPage(path)])
+if (!page) Astro.response.status = 404
+const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
+const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
+const effectiveHero = page?.hero ?? publishedSiteSettings?.value.heroDefault
+const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
+const sectionEnabled = (key: string) => Boolean(page?.sections.some((section) => section.key === key))
+const hasListing = Boolean(page?.sections.some((section) => section.renderer === "listing"))
+const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : null
+const listing = page && hasListing ? await getPublishedListing(path, Astro.url.searchParams) : null
+const robots = !page
+  ? "noindex_nofollow"
+  : listing?.robots ?? (page.seo.indexPolicy === "noindex_follow" ? "noindex_follow" : page.seo.indexPolicy === "noindex_nofollow" ? "noindex_nofollow" : "index_follow")
+const canonical = page?.seo.canonical.mode === "custom"
+  ? page.seo.canonical.url
+  : new URL(path, Astro.site).toString()
+---
+
+<BaseLayout
+  title={page?.seo.title ?? `Страница не найдена — ${siteIdentity.name}`}
+  description={page?.seo.description ?? siteIdentity.description}
+  canonical={canonical}
+  robots={robots}
+  social={page?.seo.social}
+  structuredData={page ? toSiteStructuredData(page.seo.structuredData) : []}
+>
+  <NavigationIsland {...(navigation ? { navigation } : {})} client:load />
+  <SitePageShell>
+    {page ? <SitePageFrame>
+      {hero && <HeroIsland {hero} client:load />}
+      {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} />}
+      {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
+      {sectionEnabled("events") && <EventsIsland client:visible />}
+      {sectionEnabled("houses") && <HousesIsland client:visible />}
+      {sectionEnabled("sauna-chan") && <SaunaChanIsland client:visible />}
+      {sectionEnabled("programs") && <ProgramsIsland client:visible />}
+      {sectionEnabled("venues") && <VenuesIsland client:visible />}
+      {sectionEnabled("blog") && <BlogSection />}
+      {sectionEnabled("why-us") && <WhyUsSection />}
+      {sectionEnabled("reviews") && <ReviewsIsland client:visible />}
+      {sectionEnabled("map") && <TerritoryMapIsland client:visible />}
+      {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}
+      {sectionEnabled("calculator") && <BookingQuizIsland client:visible />}
+      {sectionEnabled("partners") && <PartnersMarquee />}
+    </SitePageFrame> : <main class="site-container site-section"><h1 class="site-type-h1">Страница не найдена</h1><p class="site-type-body">Проверьте адрес или вернитесь на главную страницу.</p><a class="site-button site-button--primary" href="/">На главную</a></main>}
+    {page && sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+  </SitePageShell>
+  <FloatingHelperIsland client:idle />
+</BaseLayout>

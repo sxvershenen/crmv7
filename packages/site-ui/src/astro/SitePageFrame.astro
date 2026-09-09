@@ -1,0 +1,13 @@
+---
+interface Props {
+  as?: "div" | "main"
+  variant?: "home" | "detail"
+  class?: string
+}
+
+const { as: Element = "main", class: className, variant = "home" } = Astro.props
+---
+
+<Element class:list={["site-page-frame", `site-page-frame--${variant}`, className]}>
+  <slot />
+</Element>

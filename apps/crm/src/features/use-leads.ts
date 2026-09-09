@@ -8,11 +8,30 @@ type LeadsState =
   | { status: "ready"; data: Lead[] }
   | { status: "error"; message: string }
 
+const repositoryIds = new WeakMap<object, number>()
+let nextRepositoryId = 1
+function repositoryId(repository: LeadRepository) {
+  const existing = repositoryIds.get(repository)
+  if (existing) return existing
+  const id = nextRepositoryId++
+  repositoryIds.set(repository, id)
+  return id
+}
+
 export function useLeads(query: LeadQuery, repository: LeadRepository = leadRepository) {
   const queryClient = useQueryClient()
-  const queryKey = ["leads", query, repository] as const
+  const queryKey = ["leads", query, repositoryId(repository)] as const
   const result = useQuery({ queryKey, queryFn: () => repository.list(query) })
   const mutation = useMutation({ mutationFn: (lead: Lead) => repository.save(lead) })
+  const assignment = useMutation({
+    mutationFn: (id: string) => repository.assignSelf(id),
+    onSuccess: (assigned) => {
+      // Reflect the server response immediately; invalidation below still
+      // reconciles every other lead query in the background.
+      queryClient.setQueryData<Lead[]>(queryKey, (previous) => previous?.map((lead) => lead.id === assigned.id ? assigned : lead))
+      void queryClient.invalidateQueries({ queryKey: ["leads"] })
+    },
+  })
   const state: LeadsState = result.isPending ? { status: "loading" } : result.isError ? { status: "error", message: result.error instanceof Error ? result.error.message : "Не удалось загрузить заявки" } : { status: "ready", data: result.data }
 
   const moveLead = async (leadId: string, stage: LeadStage) => {
@@ -26,6 +45,7 @@ export function useLeads(query: LeadQuery, repository: LeadRepository = leadRepo
   }
 
   return {
+    assignSelf: (id: string) => assignment.mutateAsync(id),
     moveLead,
     retry: () => { void result.refetch() },
     state,

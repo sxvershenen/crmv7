@@ -17,7 +17,7 @@ import {
   Checkbox,
   ConfirmationDialog,
   DatePicker,
-  DateTimePicker,
+  DateTimeRangePicker,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -45,6 +45,7 @@ import {
 } from "@crm/ui";
 
 import { useEditorLayoutChrome } from "@app/app/editor-layout-context";
+import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime";
 import { formatEventDateTime } from "@app/components/events/event-format";
 import { EventIcon } from "@app/components/events/event-presentation";
 import { OrderedStageList } from "@app/components/shared/ordered-stage-list";
@@ -108,10 +109,10 @@ function inputNumber(value: string) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 function editorDateTime(value: string) {
-  return value.slice(0, 16);
+  return toBusinessDateTimeInput(value);
 }
 function storedDateTime(value: string, fallback: string) {
-  return value ? `${value}:00+03:00` : fallback;
+  return value ? businessDateTimeToIso(value) : fallback;
 }
 function moveItem<T>(items: T[], from: number, to: number) {
   const next = [...items];
@@ -618,33 +619,11 @@ function EventMain({
               value={draft.phone}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="event-start"
-            label="Начало"
-          >
-            <DateTimePicker
-              id="event-start"
-              label="Начало мероприятия"
-              onValueChange={(value) =>
-                update("startsAt", storedDateTime(value, draft.startsAt))
-              }
-              value={editorDateTime(draft.startsAt)}
-            />
-          </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="event-end"
-            label="Окончание"
-          >
-            <DateTimePicker
-              id="event-end"
-              label="Окончание мероприятия"
-              onValueChange={(value) =>
-                update("endsAt", storedDateTime(value, draft.endsAt))
-              }
-              value={editorDateTime(draft.endsAt)}
-            />
+          <FormField className="sm:col-span-4" htmlFor="event-period" label="Период проведения">
+            <DateTimeRangePicker id="event-period" label="Период мероприятия" onValueChange={(value) => {
+              update("startsAt", storedDateTime(value.from, draft.startsAt));
+              update("endsAt", storedDateTime(value.to, draft.endsAt));
+            }} value={{ from: editorDateTime(draft.startsAt), to: editorDateTime(draft.endsAt) }} />
           </FormField>
           <FormField
             className="sm:col-span-2"
@@ -743,29 +722,8 @@ function EventResources({
               value={resourceId}
             />
           </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="event-resource-start"
-            label="Начало"
-          >
-            <DateTimePicker
-              id="event-resource-start"
-              label="Начало брони ресурса"
-              onValueChange={setStartsAt}
-              value={startsAt}
-            />
-          </FormField>
-          <FormField
-            className="sm:col-span-3"
-            htmlFor="event-resource-end"
-            label="Окончание"
-          >
-            <DateTimePicker
-              id="event-resource-end"
-              label="Окончание брони ресурса"
-              onValueChange={setEndsAt}
-              value={endsAt}
-            />
+          <FormField className="sm:col-span-4" htmlFor="event-resource-period" label="Период брони">
+            <DateTimeRangePicker id="event-resource-period" label="Период брони ресурса" onValueChange={(value) => { setStartsAt(value.from); setEndsAt(value.to) }} value={{ from: startsAt, to: endsAt }} />
           </FormField>
           <FormField
             className="sm:col-span-2"
@@ -1059,7 +1017,7 @@ function EventPaymentEditor({
     if (!refund) return;
     update("paid", Math.max(0, draft.paid - refund.amount));
     update("paymentOperations", [
-      { ...refund, id: `event-refund-${Date.now()}`, kind: "refund", date },
+      { ...refund, id: `event-refund-${Date.now()}`, kind: "refund", date, sourcePaymentId: refund.id },
       ...draft.paymentOperations,
     ]);
   };

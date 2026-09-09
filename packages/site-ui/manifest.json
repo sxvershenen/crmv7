@@ -1,0 +1,46 @@
+{
+  "$schema": "./manifest.schema.json",
+  "package": "@crm/site-ui",
+  "version": "1.0.0",
+  "rendererVersion": "site-ui@1",
+  "schemaVersion": 1,
+  "theme": "./theme.css",
+  "schemas": "./src/schemas.ts",
+  "componentInventory": "./component-inventory-v2.json",
+  "framework": {
+    "documentOwner": "astro",
+    "interactiveRenderer": "react-islands",
+    "spaRootAllowed": false,
+    "meaningfulContentMustPrerender": true
+  },
+  "sectionKeys": [
+    "hero", "events", "houses", "sauna-chan", "programs", "venues", "blog",
+    "why-us", "reviews", "map", "faq", "directions", "calculator", "partners", "footer"
+  ],
+  "pageKinds": [
+    "home", "landing", "category", "resource_listing", "resource_detail",
+    "program_listing", "program_detail", "program_occurrence", "event_listing",
+    "event_detail", "article_listing", "article", "information", "legal",
+    "custom_code_page"
+  ],
+  "actions": ["navigate", "booking", "lead", "call", "external", "filter", "share", "privacy"],
+  "analyticsId": {
+    "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+    "format": "{scope}.{section}.{action}[.{variant}]",
+    "examples": ["home.hero.booking", "resource.card.open", "booking.dates.apply"]
+  },
+  "media": {
+    "publicFormats": ["webp", "avif"],
+    "required": ["src", "alt", "width", "height"],
+    "decorativeAlt": "",
+    "focalPointRange": [0, 100]
+  },
+  "budgets": {
+    "defaultHydration": "none",
+    "interactiveSectionHydration": "visible-or-idle",
+    "animationRespectsReducedMotion": true,
+    "layoutShift": "width-height-or-aspect-ratio-required"
+  },
+  "forbiddenImports": ["@crm/ui", "@crm/db", "typeorm", "apps/api", "/api/internal/v1"],
+  "releaseGates": ["typecheck", "lint", "build", "a11y", "visual", "analytics-contract"]
+}
