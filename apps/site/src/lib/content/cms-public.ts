@@ -1,11 +1,7 @@
 import {
-  PublicPageSchema,
-  PublicListingResultSchema,
-  PublicSiteSettingsSchema,
   type CmsHeroConfig,
   type CmsSiteSettingsValue,
   type PublicPage,
-  type PublicListingResult,
   type PublicSiteSettings,
 } from "@crm/contracts"
 import type {
@@ -17,6 +13,7 @@ import type {
   SiteHeroCta,
 } from "@crm/site-ui"
 import { DEFAULT_HERO_CONFIG, DEFAULT_PUBLIC_NAVIGATION } from "../../data/publicContentDefaults"
+import { createPublicContentSource, resolvePublishedRoute, usesFixtureContent } from "./source"
 
 const iconNames = new Set<SiteNavigationIcon>([
   "home", "flame", "sparkles", "layers", "calendar", "compass", "map-pin", "calculator", "arrow-right",
@@ -26,36 +23,17 @@ function publicApiBaseUrl() {
   return (import.meta.env.CMS_PUBLIC_API_BASE_URL || "http://127.0.0.1:3000/api/public/v1").replace(/\/$/, "")
 }
 
-async function fetchDocument<T>(path: string, parse: (value: unknown) => T): Promise<T | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 2_500)
-  try {
-    const response = await fetch(`${publicApiBaseUrl()}${path}`, {
-      headers: { accept: "application/json" },
-      signal: controller.signal,
-    })
-    if (!response.ok) return null
-    return parse(await response.json())
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
+export const fixtureContentEnabled = usesFixtureContent(import.meta.env)
+
+export function getPublishedRoute(pathname: string, searchParams = new URLSearchParams()) {
+  return resolvePublishedRoute(createPublicContentSource(publicApiBaseUrl()), pathname, searchParams)
 }
 
-export function getPublishedSiteSettings(): Promise<PublicSiteSettings | null> {
-  return fetchDocument("/site-settings", (value) => PublicSiteSettingsSchema.parse(value))
-}
-
-export function getPublishedPage(pathname: string): Promise<PublicPage | null> {
-  const query = new URLSearchParams({ path: pathname, locale: "ru-RU" })
-  return fetchDocument(`/pages/resolve?${query.toString()}`, (value) => PublicPageSchema.parse(value))
-}
-
-export function getPublishedListing(pathname: string, searchParams: URLSearchParams): Promise<PublicListingResult | null> {
-  const query = new URLSearchParams(searchParams)
-  query.set("path", pathname)
-  return fetchDocument(`/listings/resolve?${query.toString()}`, (value) => PublicListingResultSchema.parse(value))
+/** Legacy static blog/resource routes migrate separately from the CMS route adapter. */
+export async function getPublishedSiteSettings(): Promise<PublicSiteSettings | null> {
+  if (fixtureContentEnabled) return null
+  const result = await createPublicContentSource(publicApiBaseUrl()).settings()
+  return result.status === "published" ? result.value : null
 }
 
 export function toSiteStructuredData(bindings: PublicPage["seo"]["structuredData"]): Array<Record<string, unknown>> {

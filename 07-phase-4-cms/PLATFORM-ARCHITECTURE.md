@@ -92,6 +92,10 @@ Pipeline: `validate → build immutable artifacts → approve → write manifest
 
 Текущий `apps/site` — Astro server output с published API и provider-neutral publication. Отдельные route slices ещё мигрируют с fixtures; Astro-first/islands/public-API boundaries сохраняются.
 
+Главная и catch-all CMS route используют `ContentSource`: `published | not_found | unavailable`. Только JSON `404` с API code `NOT_FOUND` при доступных published settings становится страницей 404. Network/timeout/redirect/schema errors, missing settings, `freshness.ready=false`, несовпадающие path/releaseId и недоступный обязательный listing дают `503`, `no-store`, noindex и `Retry-After`; error HTML не содержит booking islands или schema успешной страницы. Page/settings/listing должны относиться к одному release; новый запрос повторно читает active pointer. Materialized `hero=null` окончателен: frontend не повторяет inheritance. Отсутствующий blog slot не включается автоматически.
+
+`SITE_CONTENT_SOURCE=fixture` разрешает статическую главную только в Astro dev (noindex); production игнорирует флаг. Это не завершает section bindings: опубликованные legacy section consumers, `/blog` и `/resources/[slug]` ещё требуют отдельных typed migrations; их статическое содержимое и legacy settings adapter не являются production-ready CMS delivery.
+
 - draft preview должен обновляться за секунды через isolated workspace/HMR;
 - целевой production runtime — Astro server/hybrid, public API, server-rendered SEO HTML, CDN cache + tag/path invalidation;
 - Provider-neutral atomic publication уже реализована. Hosting adapter, CDN и revalidation mechanism выбираются на go-live; static output остаётся возможным deployment-вариантом с честным SLO и не заменяет published API или server-rendered SEO HTML.

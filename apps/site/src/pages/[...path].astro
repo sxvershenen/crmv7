@@ -21,40 +21,52 @@ import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
 import { siteIdentity } from "../lib/content"
 import { PublicProfileIntro } from "@crm/site-ui"
-import { getPublishedListing, getPublishedPage, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import ContentFailure from "../components/ContentFailure.astro"
+import { getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
 
 const path = `/${Astro.params.path ?? ""}`.replace(/\/$/, "") || "/"
-const [publishedSiteSettings, page] = await Promise.all([getPublishedSiteSettings(), getPublishedPage(path)])
-if (!page) Astro.response.status = 404
+const result = await getPublishedRoute(path, Astro.url.searchParams)
+const page = result.status === "published" ? result.value.page : null
+const publishedSiteSettings = result.status === "published" ? result.value.settings : null
+const listing = result.status === "published" ? result.value.listing : null
+const failure = result.status !== "published" ? result.status : null
+if (failure) {
+  Astro.response.status = failure === "not_found" ? 404 : 503
+  Astro.response.statusText = failure === "not_found" ? "Not Found" : "Service Unavailable"
+  Astro.response.headers.set("Cache-Control", "no-store")
+  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  if (failure === "unavailable") Astro.response.headers.set("Retry-After", "60")
+}
 const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
-const effectiveHero = page?.hero ?? publishedSiteSettings?.value.heroDefault
+const effectiveHero = page?.hero
 const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
 const sectionEnabled = (key: string) => Boolean(page?.sections.some((section) => section.key === key))
-const hasListing = Boolean(page?.sections.some((section) => section.renderer === "listing"))
 const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : null
-const listing = page && hasListing ? await getPublishedListing(path, Astro.url.searchParams) : null
 const robots = !page
   ? "noindex_nofollow"
   : listing?.robots ?? (page.seo.indexPolicy === "noindex_follow" ? "noindex_follow" : page.seo.indexPolicy === "noindex_nofollow" ? "noindex_nofollow" : "index_follow")
 const canonical = page?.seo.canonical.mode === "custom"
   ? page.seo.canonical.url
   : new URL(path, Astro.site).toString()
+const failureTitle = failure === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"
 ---
 
 <BaseLayout
-  title={page?.seo.title ?? `Страница не найдена — ${siteIdentity.name}`}
-  description={page?.seo.description ?? siteIdentity.description}
+  title={page?.seo.title ?? `${failureTitle} — ${siteIdentity.name}`}
+  description={page?.seo.description ?? "Попробуйте открыть страницу позже."}
+  contentAvailable={Boolean(page)}
   canonical={canonical}
   robots={robots}
   social={page?.seo.social}
   structuredData={page ? toSiteStructuredData(page.seo.structuredData) : []}
 >
-  <NavigationIsland {...(navigation ? { navigation } : {})} client:load />
+  {page && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
   <SitePageShell>
     {page ? <SitePageFrame>
       {hero && <HeroIsland {hero} client:load />}
       {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} />}
+      {!profileKind && !hero && !listing && <h1 class="site-type-h1">{page.title}</h1>}
       {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
       {sectionEnabled("events") && <EventsIsland client:visible />}
       {sectionEnabled("houses") && <HousesIsland client:visible />}
@@ -68,8 +80,8 @@ const canonical = page?.seo.canonical.mode === "custom"
       {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}
       {sectionEnabled("calculator") && <BookingQuizIsland client:visible />}
       {sectionEnabled("partners") && <PartnersMarquee />}
-    </SitePageFrame> : <main class="site-container site-section"><h1 class="site-type-h1">Страница не найдена</h1><p class="site-type-body">Проверьте адрес или вернитесь на главную страницу.</p><a class="site-button site-button--primary" href="/">На главную</a></main>}
+    </SitePageFrame> : <ContentFailure status={failure!} />}
     {page && sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
   </SitePageShell>
-  <FloatingHelperIsland client:idle />
+  {page && <FloatingHelperIsland client:idle />}
 </BaseLayout>

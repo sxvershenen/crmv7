@@ -17,6 +17,7 @@ interface Props {
     imageAlt?: string | undefined
   } | undefined
   structuredData?: Array<Record<string, unknown>>
+  contentAvailable?: boolean
 }
 
 const {
@@ -27,6 +28,7 @@ const {
   robots,
   social,
   structuredData = [],
+  contentAvailable = true,
 } = Astro.props
 
 const robotsContent = robots === "noindex_follow" ? "noindex, follow" : robots === "noindex_nofollow" || noindex ? "noindex, nofollow" : null
@@ -39,7 +41,7 @@ const websiteSchema = {
 }
 
 const jsonLd = [
-  ...(Astro.url.pathname === "/" ? [websiteSchema] : []),
+  ...(contentAvailable && Astro.url.pathname === "/" ? [websiteSchema] : []),
   ...structuredData,
 ]
 
@@ -80,7 +82,7 @@ const serializeJsonLd = (value: Record<string, unknown>) => JSON.stringify(value
     <div class="site-theme min-h-screen bg-[var(--site-color-bg)] text-[var(--site-color-text)] font-[family-name:var(--site-font-sans)] antialiased flex flex-col selection:bg-[color-mix(in_srgb,var(--site-color-brand-500)_20%,transparent)] selection:text-[var(--site-color-brand-500)]">
       <slot />
     </div>
-    <ScrollRevealController />
-    <ModalHub client:load />
+    {contentAvailable && <ScrollRevealController />}
+    {contentAvailable && <ModalHub client:load />}
   </body>
 </html>

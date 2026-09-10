@@ -8,6 +8,7 @@
     "build": "astro build",
     "typecheck": "astro check",
     "test:e2e": "playwright test -c playwright.config.ts",
+    "test:e2e:cms": "playwright test -c playwright.cms.config.ts",
     "architecture": "node scripts/check-site-ui-architecture.mjs",
     "lint": "pnpm architecture && eslint src --ext .ts,.tsx astro.config.ts"
   },

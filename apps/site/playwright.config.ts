@@ -4,6 +4,7 @@ const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "content-delivery.spec.ts",
   fullyParallel: false,
   retries: 0,
   reporter: "line",
@@ -14,7 +15,8 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "pnpm exec astro dev --host 127.0.0.1 --port 4326 --force",
+        command: "node e2e/support/site-server.mjs",
+        env: { SITE_TEST_PORT: "4326", SITE_CONTENT_SOURCE: "fixture" },
         url: "http://127.0.0.1:4326",
         reuseExistingServer: false,
         timeout: 120_000,

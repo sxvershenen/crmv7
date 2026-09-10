@@ -1,0 +1,14 @@
+---
+interface Props {
+  status: "not_found" | "unavailable"
+}
+const { status } = Astro.props
+---
+
+<main class="site-container site-section">
+  <h1 class="site-type-h1">{status === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"}</h1>
+  <p class="site-type-body">{status === "not_found"
+    ? "Проверьте адрес или вернитесь на главную страницу."
+    : "Не удалось загрузить страницу. Попробуйте обновить её немного позже."}</p>
+  <a class="site-button site-button--primary" href="/">На главную</a>
+</main>

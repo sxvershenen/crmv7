@@ -52,4 +52,6 @@ pnpm dev:api
 
 OpenAPI: `/api/internal/v1/openapi.json`, `/api/admin/v1/openapi.json`, `/api/public/v1/openapi.json` на API host.
 
+Главная и CMS routes по умолчанию требуют опубликованный Public API (`CMS_PUBLIC_API_BASE_URL`, default `http://127.0.0.1:3000/api/public/v1`). Сбой API возвращает `503`, без подмены демонстрационными данными. Для просмотра статической главной без API: `SITE_CONTENT_SOURCE=fixture pnpm dev:site`. Этот режим работает только в Astro dev, помечает главную noindex и игнорируется production build. Переменные public frontend задаются окружением команды или в `apps/site/.env`.
+
 Полный release gate: `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`, `pnpm -r build`. Для локальной задачи сначала используйте targeted commands из testing matrix. UI galleries: `/dev/ui`, `/dev/ui/admin`, `/dev/site-ui-v2`.

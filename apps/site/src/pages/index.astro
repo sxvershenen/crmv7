@@ -19,35 +19,49 @@ import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
-import { getPublishedPage, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import ContentFailure from "../components/ContentFailure.astro"
+import { fixtureContentEnabled, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
 
-const [publishedSiteSettings, publishedPage] = await Promise.all([getPublishedSiteSettings(), getPublishedPage("/")])
+const result = fixtureContentEnabled ? null : await getPublishedRoute("/")
+const publishedPage = result?.status === "published" ? result.value.page : null
+const publishedSiteSettings = result?.status === "published" ? result.value.settings : null
+const failure = result && result.status !== "published" ? result.status : null
+const contentAvailable = !failure
+if (failure) {
+  Astro.response.status = failure === "not_found" ? 404 : 503
+  Astro.response.statusText = failure === "not_found" ? "Not Found" : "Service Unavailable"
+  Astro.response.headers.set("Cache-Control", "no-store")
+  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  if (failure === "unavailable") Astro.response.headers.set("Retry-After", "60")
+}
 const canonical = publishedPage?.seo.canonical.mode === "custom"
   ? publishedPage.seo.canonical.url
   : new URL(publicRoute("/").pathname, Astro.site).toString()
-const robots = publishedPage?.seo.indexPolicy
+const robots = failure || fixtureContentEnabled ? "noindex_nofollow" : publishedPage?.seo.indexPolicy
 const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
-const effectiveHero = publishedPage?.hero ?? publishedSiteSettings?.value.heroDefault
+// Inheritance and disabled slots have already been materialized by the release.
+const effectiveHero = publishedPage?.hero
 const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
-// Blog was introduced after the original homepage section registry. Until CMS
-// publishes an explicit blog section, keep this additive static section visible.
-const sectionEnabled = (key: string) => key === "blog" || !publishedPage || publishedPage.sections.some((section) => section.key === key)
+const sectionEnabled = (key: string) => fixtureContentEnabled || Boolean(publishedPage?.sections.some((section) => section.key === key))
+const failureTitle = failure === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"
 ---
 
 <BaseLayout
-  title={publishedPage?.seo.title ?? siteIdentity.title}
-  description={publishedPage?.seo.description ?? siteIdentity.description}
+  title={failure ? failureTitle : publishedPage?.seo.title ?? siteIdentity.title}
+  description={failure ? "Попробуйте открыть страницу позже." : publishedPage?.seo.description ?? siteIdentity.description}
+  {contentAvailable}
   canonical={canonical}
   robots={robots}
   social={publishedPage?.seo.social}
   structuredData={publishedPage ? toSiteStructuredData(publishedPage.seo.structuredData) : []}
 >
-  <NavigationIsland {...(navigation ? { navigation } : {})} client:load />
+  {contentAvailable && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
 
   <SitePageShell>
-    <SitePageFrame>
-      {(!publishedPage || hero) && <HeroIsland {...(hero ? { hero } : {})} client:load />}
+    {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
+      {(fixtureContentEnabled || hero) && <HeroIsland {...(hero ? { hero } : {})} client:load />}
+      {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {sectionEnabled("events") && <EventsIsland client:visible />}
       {sectionEnabled("houses") && <HousesIsland client:visible />}
       {sectionEnabled("sauna-chan") && <SaunaChanIsland client:visible />}
@@ -60,10 +74,10 @@ const sectionEnabled = (key: string) => key === "blog" || !publishedPage || publ
       {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}
       {sectionEnabled("calculator") && <BookingQuizIsland client:visible />}
       {sectionEnabled("partners") && <PartnersMarquee />}
-    </SitePageFrame>
+    </SitePageFrame>}
 
-    {sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {contentAvailable && sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
   </SitePageShell>
 
-  <FloatingHelperIsland client:idle />
+  {contentAvailable && <FloatingHelperIsland client:idle />}
 </BaseLayout>
