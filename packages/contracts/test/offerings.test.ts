@@ -106,7 +106,7 @@ describe("P4.5A offering contracts", () => {
       minimumGuests: 10,
       maximumGuests: 120,
     });
-    expect(created).toMatchObject({ templateCode: "EVT-WEDDING", offeringCode: "WEDDING-PACKAGE", preparationBeforeMinutes: 0 });
+    expect(created).toMatchObject({ templateCode: "EVT-WEDDING", offeringCode: "WEDDING-PACKAGE", icon: "heart", tone: "rose", preparationBeforeMinutes: 0 });
     expect(EventServiceFormatSchema.options).toEqual(["wedding", "corporate", "birthday", "other"]);
     expect(EventServiceTemplateCreateBodySchema.safeParse({ ...created, minimumGuests: 121, maximumGuests: 120 }).success).toBe(false);
 
@@ -120,6 +120,43 @@ describe("P4.5A offering contracts", () => {
       preparationBeforeMinutes: 30,
       preparationAfterMinutes: 30,
     }).expectedSubjectVersion).toBe(4);
+    expect(EventServiceTemplateMutationBodySchema.parse({
+      ...operation,
+      expectedSubjectVersion: 4,
+      format: "corporate",
+      icon: "building",
+      tone: "violet",
+      defaultDurationMinutes: 240,
+      minimumGuests: null,
+      maximumGuests: null,
+      preparationBeforeMinutes: 0,
+      preparationAfterMinutes: 0,
+    })).toMatchObject({ icon: "building", tone: "violet" });
+    expect(EventServiceTemplateMutationBodySchema.safeParse({
+      ...operation,
+      expectedSubjectVersion: 4,
+      operationalName: "Новое имя",
+      internalComment: "Внутренняя заметка",
+      format: "corporate",
+      defaultDurationMinutes: 240,
+      minimumGuests: null,
+      maximumGuests: null,
+      preparationBeforeMinutes: 0,
+      preparationAfterMinutes: 0,
+    }).success).toBe(false);
+    expect(EventServiceTemplateMutationBodySchema.parse({
+      ...operation,
+      expectedSubjectVersion: 4,
+      expectedOfferingVersion: 2,
+      operationalName: "Новое имя",
+      internalComment: "Внутренняя заметка",
+      format: "corporate",
+      defaultDurationMinutes: 240,
+      minimumGuests: null,
+      maximumGuests: null,
+      preparationBeforeMinutes: 0,
+      preparationAfterMinutes: 0,
+    })).toMatchObject({ operationalName: "Новое имя", internalComment: "Внутренняя заметка", expectedOfferingVersion: 2 });
     expect(EventServiceTemplateMutationBodySchema.safeParse({
       ...operation,
       expectedSubjectVersion: 4,

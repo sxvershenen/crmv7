@@ -3,9 +3,11 @@ import { IconAlertTriangle, IconCalendarEvent, IconPlus, IconSearch } from "@tab
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 import type { EventServiceTemplate, EventServiceTemplateCreateBody } from "@crm/contracts"
-import { Button, EditorSection, FormField, FormSelect, Input, PageFrame, PageState, StatusBadge } from "@crm/ui"
+import { Button, EditorSection, FormField, FormSelect, Input, PageFrame, PageState, StatusBadge, Textarea } from "@crm/ui"
 
 import { eventServiceRepository, type EventServiceRepository } from "@app/data/event-services-repository"
+import { EventIcon } from "@app/components/events/event-presentation"
+import { eventIconOptions, eventToneOptions } from "@app/components/events/event-presentation-data"
 
 type EventServiceFormat = EventServiceTemplate["format"]
 const formatOptions: Array<{ value: EventServiceFormat; label: string }> = [{ value: "wedding", label: "Свадьба" }, { value: "corporate", label: "Корпоратив" }, { value: "birthday", label: "День рождения" }, { value: "other", label: "Другое" }]
@@ -50,7 +52,7 @@ export function EventServiceOfferingsPage({ repository = eventServiceRepository 
     {!error && items?.length ? <div className="divide-y overflow-hidden rounded-xl border bg-background" data-slot="event-service-registry">{items.map((item) => {
       const label = item.offering ? "Категория мероприятия" : "Категория не подготовлена"
       const href = item.offering ? `/events/categories/${item.offering.offeringId}` : `/events/categories/${item.template.id}`
-      return <div className="flex flex-wrap items-center gap-3 p-3" key={item.template.id}><IconCalendarEvent aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{label}</p><p className="truncate text-xs text-muted-foreground">{formatOptions.find((option) => option.value === item.template.format)?.label} · {item.template.defaultDurationMinutes} мин</p></div><StatusBadge tone={item.offering?.state === "active" ? "success" : item.offering?.state === "archived" ? "neutral" : "warning"}>{item.offering?.state === "active" ? "Активно" : item.offering?.state === "archived" ? "В архиве" : item.offering ? "Черновик" : "Нужна настройка"}</StatusBadge><Button aria-label={`Открыть ${label}`} onClick={() => navigate(href, { state: { from: `${location.pathname}${location.search}`, templateId: item.template.id } })} size="sm" variant="outline">Открыть</Button></div>
+      return <div className="flex flex-wrap items-center gap-3 p-3" key={item.template.id}><EventIcon icon={item.template.icon} size="md" tone={item.template.tone} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{label}</p><p className="truncate text-xs text-muted-foreground">{formatOptions.find((option) => option.value === item.template.format)?.label} · {item.template.defaultDurationMinutes} мин · {eventToneOptions.find((option) => option.value === item.template.tone)?.label}</p></div><StatusBadge tone={item.offering?.state === "active" ? "success" : item.offering?.state === "archived" ? "neutral" : "warning"}>{item.offering?.state === "active" ? "Активно" : item.offering?.state === "archived" ? "В архиве" : item.offering ? "Черновик" : "Нужна настройка"}</StatusBadge><Button aria-label={`Открыть ${label}`} onClick={() => navigate(href, { state: { from: `${location.pathname}${location.search}`, templateId: item.template.id } })} size="sm" variant="outline">Открыть</Button></div>
     })}</div> : null}
   </PageFrame>
 }
@@ -60,7 +62,7 @@ export function EventServiceCreatePage({ repository = eventServiceRepository }: 
   const location = useLocation()
   const from = typeof location.state === "object" && location.state && "from" in location.state && typeof location.state.from === "string" ? location.state.from : "/events/categories"
   const [calendars, setCalendars] = useState<Awaited<ReturnType<EventServiceRepository["listActiveBusinessCalendars"]>>["items"] | null>(null)
-  const [form, setForm] = useState({ operationalName: "", offeringCode: "event_service_new", format: "wedding" as EventServiceFormat, defaultDurationMinutes: 240, minimumGuests: "10", maximumGuests: "80", preparationBeforeMinutes: 60, preparationAfterMinutes: 30, timezone: "Europe/Moscow" })
+  const [form, setForm] = useState({ operationalName: "", internalComment: "", offeringCode: "event_service_new", format: "wedding" as EventServiceFormat, icon: "heart" as EventServiceTemplate["icon"], tone: "rose" as EventServiceTemplate["tone"], defaultDurationMinutes: 240, minimumGuests: "10", maximumGuests: "80", preparationBeforeMinutes: 60, preparationAfterMinutes: 30, timezone: "Europe/Moscow" })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -79,7 +81,7 @@ export function EventServiceCreatePage({ repository = eventServiceRepository }: 
     setPending(true); setError(null)
     try {
       const code = form.offeringCode.trim()
-      const body: EventServiceTemplateCreateBody = { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), operationalName: form.operationalName.trim(), offeringCode: code, templateCode: code, internalComment: "", salesMode: "quoted", priceDisplayMode: "from", currency: "RUB", timezone: form.timezone, taxMode: "tax_included", businessCalendarId: calendar.id, format: form.format, defaultDurationMinutes: form.defaultDurationMinutes, minimumGuests: form.minimumGuests.trim() ? Number(form.minimumGuests) : null, maximumGuests: form.maximumGuests.trim() ? Number(form.maximumGuests) : null, preparationBeforeMinutes: form.preparationBeforeMinutes, preparationAfterMinutes: form.preparationAfterMinutes }
+      const body: EventServiceTemplateCreateBody = { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), operationalName: form.operationalName.trim(), offeringCode: code, templateCode: code, internalComment: form.internalComment, salesMode: "quoted", priceDisplayMode: "from", currency: "RUB", timezone: form.timezone, taxMode: "tax_included", businessCalendarId: calendar.id, format: form.format, icon: form.icon, tone: form.tone, defaultDurationMinutes: form.defaultDurationMinutes, minimumGuests: form.minimumGuests.trim() ? Number(form.minimumGuests) : null, maximumGuests: form.maximumGuests.trim() ? Number(form.maximumGuests) : null, preparationBeforeMinutes: form.preparationBeforeMinutes, preparationAfterMinutes: form.preparationAfterMinutes }
       const result = await repository.create(body)
       setDirty(false)
       navigate(`/events/categories/${result.offering.id}`, { replace: true, state: { from, templateId: result.template.id } })
@@ -89,7 +91,10 @@ export function EventServiceCreatePage({ repository = eventServiceRepository }: 
     <div className="grid items-end gap-4 sm:grid-cols-6">
       <FormField className="sm:col-span-3" htmlFor="event-service-create-name" label="Название"><Input autoFocus id="event-service-create-name" onChange={(event) => update({ operationalName: event.target.value })} placeholder="Например, Свадебное мероприятие" value={form.operationalName} /></FormField>
       <FormField className="sm:col-span-3" htmlFor="event-service-create-offering-code" label="Код"><Input id="event-service-create-offering-code" onChange={(event) => update({ offeringCode: event.target.value })} value={form.offeringCode} /></FormField>
+      <FormField className="sm:col-span-6" htmlFor="event-service-create-internal-comment" label="Внутренняя заметка"><Textarea id="event-service-create-internal-comment" onChange={(event) => update({ internalComment: event.target.value })} placeholder="Только для команды; на сайт не публикуется" value={form.internalComment} /></FormField>
       <FormSelect className="sm:col-span-3" id="event-service-create-format" label="Формат" onValueChange={(value) => update({ format: value as EventServiceFormat })} options={formatOptions} value={form.format} />
+      <FormSelect className="sm:col-span-3" id="event-service-create-icon" label="Иконка" onValueChange={(value) => update({ icon: value as typeof form.icon })} options={eventIconOptions} value={form.icon} />
+      <FormSelect className="sm:col-span-3" id="event-service-create-tone" label="Цвет" onValueChange={(value) => update({ tone: value as typeof form.tone })} options={eventToneOptions} value={form.tone} />
       <FormField className="sm:col-span-3" htmlFor="event-service-create-duration" label="Длительность, минут"><Input id="event-service-create-duration" min="1" onChange={(event) => update({ defaultDurationMinutes: Math.max(1, Number(event.target.value) || 1) })} type="number" value={form.defaultDurationMinutes} /></FormField>
       <FormField className="sm:col-span-3" htmlFor="event-service-create-min" label="Минимум гостей"><Input id="event-service-create-min" min="0" onChange={(event) => update({ minimumGuests: event.target.value })} value={form.minimumGuests} /></FormField>
       <FormField className="sm:col-span-3" htmlFor="event-service-create-max" label="Максимум гостей"><Input id="event-service-create-max" min="0" onChange={(event) => update({ maximumGuests: event.target.value })} value={form.maximumGuests} /></FormField>

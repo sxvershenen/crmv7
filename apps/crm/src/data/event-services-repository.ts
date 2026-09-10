@@ -223,11 +223,13 @@ function fixtureTemplate(overrides: Partial<EventServiceTemplateRegistryItem["te
     createdAt: fixtureNow(),
     defaultDurationMinutes: 240,
     format: "wedding" as const,
+    icon: "heart" as const,
     id: fixtureIds.template,
     maximumGuests: 80,
     minimumGuests: 10,
     preparationAfterMinutes: 30,
     preparationBeforeMinutes: 60,
+    tone: "rose" as const,
     updatedAt: fixtureNow(),
     version: 1,
     ...overrides,
@@ -258,11 +260,11 @@ function fixtureOffering(state: "draft" | "active" | "archived" = "active", over
   }
 }
 
-function fixtureEditorial() {
+function fixtureEditorial(offering: ReturnType<typeof fixtureOffering>) {
   return {
-    source: { sourceKind: "catalog_offering" as const, sourceId: fixtureIds.offering, sourceVersion: 1, createdAt: fixtureNow() },
+    source: { sourceKind: "catalog_offering" as const, sourceId: offering.id, sourceVersion: offering.version, createdAt: fixtureNow() },
     node: { id: fixtureIds.node, version: 1, kind: "event_detail" as const, status: "active" as const },
-    currentRevision: { id: fixtureIds.revision, revision: 1, state: "draft" as const, path: "/drafts/event-services/wedding-standard", title: "Свадебное мероприятие — страница", contentHash: "a".repeat(64) },
+    currentRevision: { id: fixtureIds.revision, revision: 1, state: "draft" as const, path: `/drafts/event-services/${offering.code.toLocaleLowerCase()}`, title: `${offering.operationalName} — страница`, contentHash: "a".repeat(64) },
     latestPublished: null,
     publication: { eligible: false as const, blockers: ["offering_not_active" as const, "safe_public_projection_missing" as const] },
   }
@@ -278,7 +280,7 @@ function fixtureEditor(template = fixtureTemplate(), offering = fixtureOffering(
     priceBooks: [],
     addOnAssignments: [],
     addOnCatalog: [],
-    editorial: fixtureEditorial(),
+    editorial: fixtureEditorial(offering),
     ownerVersions: { catalog: offering.version, subject: { aggregateVersion: template.version, primary: { type: "event_service_template", id: template.id, version: template.version } }, pricing: 1, draftPriceBook: null, addOnAssignments: 1, editorial: { nodeId: fixtureIds.node, nodeVersion: 1, draftRevisionId: fixtureIds.revision, contentHash: "a".repeat(64) } },
     capabilities: { catalog: { canEdit: true, canChangeState: true, canArchive: true }, subject: { canEdit: true, canManageBindings: false }, pricing: { canView: true, canEditDraft: true, canActivate: true }, addOns: { canSearch: false, canCreate: false, canAssign: false }, editorial: { canEdit: false, canReview: true, canPublish: false }, canPreviewQuote: false },
   })
@@ -321,14 +323,11 @@ export class FixtureEventServiceRepository implements EventServiceRepository {
 
   async create(input: EventServiceTemplateCreateBody) {
     const body = EventServiceTemplateCreateBodySchema.parse(input)
-    const template = fixtureTemplate({ id: crypto.randomUUID(), code: body.templateCode, format: body.format, defaultDurationMinutes: body.defaultDurationMinutes, minimumGuests: body.minimumGuests, maximumGuests: body.maximumGuests, preparationBeforeMinutes: body.preparationBeforeMinutes, preparationAfterMinutes: body.preparationAfterMinutes })
+    const template = fixtureTemplate({ id: crypto.randomUUID(), code: body.templateCode, format: body.format, icon: body.icon, tone: body.tone, defaultDurationMinutes: body.defaultDurationMinutes, minimumGuests: body.minimumGuests, maximumGuests: body.maximumGuests, preparationBeforeMinutes: body.preparationBeforeMinutes, preparationAfterMinutes: body.preparationAfterMinutes })
     const offering = fixtureOffering("draft", { id: crypto.randomUUID(), code: body.offeringCode, operationalName: body.operationalName, internalComment: body.internalComment, businessCalendarId: body.businessCalendarId, currency: body.currency, timezone: body.timezone, salesMode: body.salesMode, priceDisplayMode: body.priceDisplayMode, taxMode: body.taxMode, version: 1 })
     const editor = fixtureEditor(template, offering)
-    editor.editorial = null
-    editor.ownerVersions.editorial = null
     editor.capabilities = { ...editor.capabilities, canPreviewQuote: false }
     this.state.items.unshift({ template, offering: fixtureSummary(template, offering) })
-    this.state.items[0]!.offering!.cmsReady = false
     this.state.editors.set(offering.id, editor)
     return this.dossier(template, editor)
   }
@@ -338,10 +337,16 @@ export class FixtureEventServiceRepository implements EventServiceRepository {
     const item = this.state.items.find((candidate) => candidate.template.id === templateId)
     if (!item) throw new Error("Формат мероприятия не найден")
     if (body.expectedSubjectVersion !== item.template.version) throw Object.assign(new Error("Версия формата изменилась"), { status: 409 })
-    item.template = fixtureTemplate({ ...item.template, format: body.format, defaultDurationMinutes: body.defaultDurationMinutes, minimumGuests: body.minimumGuests, maximumGuests: body.maximumGuests, preparationBeforeMinutes: body.preparationBeforeMinutes, preparationAfterMinutes: body.preparationAfterMinutes, version: item.template.version + 1, updatedAt: new Date().toISOString() })
+    const offeringChanged = body.operationalName !== undefined || body.internalComment !== undefined
     const editor = item.offering ? this.state.editors.get(item.offering.offeringId) : null
-    if (editor) { editor.ownerVersions.subject.aggregateVersion = item.template.version; editor.ownerVersions.subject.primary = { type: "event_service_template", id: item.template.id, version: item.template.version }; editor.bindings = editor.bindings.map((binding) => ({ ...binding, preparationBeforeMinutes: item.template.preparationBeforeMinutes, preparationAfterMinutes: item.template.preparationAfterMinutes })) }
-    if (item.offering) { item.offering.eventServiceTemplateVersion = item.template.version; item.offering.subjectVersion = item.template.version }
+    if (offeringChanged) {
+      if (!editor) throw Object.assign(new Error("Event-service offering не найден"), { status: 409 })
+      if (body.expectedOfferingVersion !== editor.offering.version) throw Object.assign(new Error("Версия коммерческой записи изменилась"), { status: 409 })
+      editor.offering = { ...editor.offering, ...(body.operationalName === undefined ? {} : { operationalName: body.operationalName }), ...(body.internalComment === undefined ? {} : { internalComment: body.internalComment }), version: editor.offering.version + 1, updatedAt: new Date().toISOString() }
+    }
+    item.template = fixtureTemplate({ ...item.template, format: body.format, ...(body.icon === undefined ? {} : { icon: body.icon }), ...(body.tone === undefined ? {} : { tone: body.tone }), defaultDurationMinutes: body.defaultDurationMinutes, minimumGuests: body.minimumGuests, maximumGuests: body.maximumGuests, preparationBeforeMinutes: body.preparationBeforeMinutes, preparationAfterMinutes: body.preparationAfterMinutes, version: item.template.version + 1, updatedAt: new Date().toISOString() })
+    if (editor) { editor.ownerVersions.catalog = editor.offering.version; editor.ownerVersions.subject.aggregateVersion = item.template.version; editor.ownerVersions.subject.primary = { type: "event_service_template", id: item.template.id, version: item.template.version }; editor.bindings = editor.bindings.map((binding) => ({ ...binding, preparationBeforeMinutes: item.template.preparationBeforeMinutes, preparationAfterMinutes: item.template.preparationAfterMinutes })) }
+    if (item.offering) { item.offering.offeringVersion = editor?.offering.version ?? item.offering.offeringVersion; item.offering.eventServiceTemplateVersion = item.template.version; item.offering.subjectVersion = item.template.version }
     return { template: structuredClone(item.template), subjectVersion: item.template.version }
   }
 

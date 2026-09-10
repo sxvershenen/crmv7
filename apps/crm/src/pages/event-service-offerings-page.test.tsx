@@ -60,10 +60,13 @@ describe("CRM event categories workspace", () => {
 
     const duration = (await screen.findAllByLabelText("Длительность, минут")).at(-1)!
     expect(duration).toBeEnabled()
+    fireEvent.change(screen.getByLabelText("Название"), { target: { value: "Обновлённая категория" } })
+    fireEvent.change(screen.getByLabelText("Внутренняя заметка"), { target: { value: "Заметка CRM" } })
     fireEvent.change(duration, { target: { value: "300" } })
     await user.click(screen.getByRole("button", { name: "Сохранить формат" }))
     expect(await screen.findByText("Данные изменились на сервере")).toBeInTheDocument()
     const firstCommand = updateTemplate.mock.calls[0]?.[1]
+    expect(firstCommand).toMatchObject({ operationalName: "Обновлённая категория", internalComment: "Заметка CRM", expectedOfferingVersion: 1 })
     await user.click(screen.getByRole("button", { name: "Повторить" }))
     expect(updateTemplate.mock.calls[1]?.[1]).toEqual(firstCommand)
   })

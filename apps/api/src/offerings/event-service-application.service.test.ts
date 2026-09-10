@@ -39,6 +39,18 @@ describe("event-service application guards", () => {
     expect(clauses.join(" ")).toContain("binding.role = 'primary'")
   })
 
+  it("returns template-owned presentation fields without consulting legacy event categories", () => {
+    const service = new EventServiceApplicationService({} as never)
+    const value = (service as unknown as { templateDto(template: unknown): Record<string, unknown> }).templateDto({
+      id: "22222222-2222-4222-8222-222222222222", version: 3, code: "wedding_standard", format: "wedding",
+      icon: "building", tone: "violet", defaultDurationMinutes: 240, minimumGuests: 10, maximumGuests: 80,
+      preparationBeforeMinutes: 60, preparationAfterMinutes: 30, archivedAt: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+    })
+    expect(value).toMatchObject({ icon: "building", tone: "violet" })
+    expect(value).not.toHaveProperty("eventCategoryId")
+  })
+
   it("allows only flat guest packages through the shared price-book commands", async () => {
     const editor = new OfferingEditorApplicationService({} as never)
     const offering = { id: "offering", kind: "event_service" }

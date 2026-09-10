@@ -1123,6 +1123,8 @@ export class ResourceGroupMemberEntity extends MutableEntity {
 export class EventServiceTemplateEntity extends MutableEntity {
   @Column({ type: "text" }) code!: string
   @Column({ type: "text" }) format!: string
+  @Column({ type: "text", default: "heart" }) icon!: string
+  @Column({ type: "text", default: "rose" }) tone!: string
   @Column({ name: "default_duration_minutes", type: "integer" }) defaultDurationMinutes!: number
   @Column({ name: "minimum_guests", type: "integer", nullable: true }) minimumGuests!: number | null
   @Column({ name: "maximum_guests", type: "integer", nullable: true }) maximumGuests!: number | null

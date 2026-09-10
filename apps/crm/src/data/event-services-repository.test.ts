@@ -13,7 +13,7 @@ function createBody(): EventServiceTemplateCreateBody {
     operationalName: "Корпоративная категория",
     offeringCode: "EVENT-CORPORATE",
     templateCode: "EVENT-CORPORATE",
-    internalComment: "",
+    internalComment: "Внутренняя заметка",
     salesMode: "quoted",
     priceDisplayMode: "from",
     currency: "RUB",
@@ -21,6 +21,8 @@ function createBody(): EventServiceTemplateCreateBody {
     taxMode: "tax_included",
     businessCalendarId: id("a"),
     format: "corporate",
+    icon: "building",
+    tone: "violet",
     defaultDurationMinutes: 180,
     minimumGuests: 5,
     maximumGuests: 120,
@@ -74,6 +76,16 @@ describe("FixtureEventServiceRepository", () => {
   it("keeps create, package activation and immutable quote reload in one repository boundary", async () => {
     const repository = new FixtureEventServiceRepository()
     const created = await repository.create(createBody())
+    expect(created.template).toMatchObject({ icon: "building", tone: "violet" })
+    const updated = await repository.updateTemplate(created.template.id, {
+      ...commandMeta(), expectedSubjectVersion: created.template.version, expectedOfferingVersion: created.offering.version,
+      operationalName: "Обновлённая категория", internalComment: "Обновлённая заметка", format: created.template.format,
+      icon: created.template.icon, tone: created.template.tone, defaultDurationMinutes: created.template.defaultDurationMinutes,
+      minimumGuests: created.template.minimumGuests, maximumGuests: created.template.maximumGuests,
+      preparationBeforeMinutes: created.template.preparationBeforeMinutes, preparationAfterMinutes: created.template.preparationAfterMinutes,
+    })
+    expect(updated.template).toMatchObject({ icon: "building", tone: "violet" })
+    expect((await repository.getByOfferingId(created.offering.id))?.dossier.offering).toMatchObject({ operationalName: "Обновлённая категория", internalComment: "Обновлённая заметка", version: 2 })
     const draft = await repository.createDraftPriceBook(created.offering.id, priceBookBody())
     const active = await repository.activatePriceBook(created.offering.id, draft.priceBook.id, { ...commandMeta(), expectedPricingVersion: draft.pricingVersion, reason: "Тестовая активация" })
     const quote = await repository.previewQuote(created.offering.id, previewBody())
@@ -129,7 +141,8 @@ describe("ApiEventServiceRepository", () => {
     await repository.list({ q: "свадьба" })
     await repository.getByTemplateId(item.template.id)
     await repository.create(createBody())
-    await repository.updateTemplate(item.template.id, { ...commandMeta(), expectedSubjectVersion: 1, format: "corporate", defaultDurationMinutes: 180, minimumGuests: 5, maximumGuests: 120, preparationBeforeMinutes: 45, preparationAfterMinutes: 30 })
+    await repository.updateTemplate(item.template.id, { ...commandMeta(), expectedSubjectVersion: 1, format: "corporate", icon: "cake", tone: "amber", defaultDurationMinutes: 180, minimumGuests: 5, maximumGuests: 120, preparationBeforeMinutes: 45, preparationAfterMinutes: 30 })
+    await repository.updateTemplate(item.template.id, { ...commandMeta(), expectedSubjectVersion: 1, expectedOfferingVersion: linked.data.dossier.offering.version, operationalName: "Обновлённая категория", internalComment: "Заметка CRM", format: "corporate", icon: "cake", tone: "amber", defaultDurationMinutes: 180, minimumGuests: 5, maximumGuests: 120, preparationBeforeMinutes: 45, preparationAfterMinutes: 30 })
     await repository.prepare(item.template.id, { ...commandMeta(), expectedEventServiceTemplateVersion: 1 })
     await repository.reopen(item.template.id, { ...commandMeta(), expectedSubjectVersion: 1 })
     await repository.previewQuote(linked.data.dossier.offering.id, previewBody())
@@ -137,6 +150,8 @@ describe("ApiEventServiceRepository", () => {
 
     expect(get).toHaveBeenCalledWith("/event-services?limit=25&q=%D1%81%D0%B2%D0%B0%D0%B4%D1%8C%D0%B1%D0%B0", expect.anything())
     expect(post).toHaveBeenCalledWith(`/event-services/${linked.data.dossier.offering.id}/quotes/preview`, expect.objectContaining({ quoteType: "event_service_preview", startsAt: previewBody().startsAt }), expect.anything())
+    expect(post).toHaveBeenCalledWith("/event-services", expect.objectContaining({ icon: "building", tone: "violet" }), expect.anything())
+    expect(patch).toHaveBeenCalledWith(`/event-services/templates/${item.template.id}`, expect.objectContaining({ operationalName: "Обновлённая категория", internalComment: "Заметка CRM", expectedOfferingVersion: linked.data.dossier.offering.version }), expect.anything())
     expect(get).toHaveBeenCalledWith(`/event-services/quotes/${quote.quoteId}`, expect.anything())
     expect(request).not.toHaveBeenCalled()
   })

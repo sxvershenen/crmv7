@@ -95,6 +95,7 @@ export class EventServiceApplicationService {
       if (await manager.findOne(CatalogOfferingEntity, { where: { code: input.offeringCode } })) throw conflict("OFFERING_CODE_CONFLICT", "Код event-service offering уже занят", { code: input.offeringCode })
       const template = await manager.save(manager.create(EventServiceTemplateEntity, {
         id: randomUUID(), code: input.templateCode, format: input.format, defaultDurationMinutes: input.defaultDurationMinutes,
+        icon: input.icon, tone: input.tone,
         minimumGuests: input.minimumGuests, maximumGuests: input.maximumGuests,
         preparationBeforeMinutes: input.preparationBeforeMinutes, preparationAfterMinutes: input.preparationAfterMinutes,
         createdBy: context.actor.id, updatedBy: context.actor.id, archivedAt: null,
@@ -147,14 +148,31 @@ export class EventServiceApplicationService {
       const template = await manager.createQueryBuilder(EventServiceTemplateEntity, "template").setLock("pessimistic_write").where("template.id = :templateId", { templateId }).getOne()
       if (!template || template.archivedAt !== null) throw new NotFoundException({ code: "EVENT_SERVICE_TEMPLATE_NOT_FOUND", message: "Шаблон мероприятия не найден" })
       this.assertVersion(template.version, input.expectedSubjectVersion, "eventServiceTemplate")
+      const offeringChanged = input.operationalName !== undefined || input.internalComment !== undefined
+      let offering: CatalogOfferingEntity | null = null
+      if (offeringChanged) {
+        const candidates = await this.findExactOfferings(manager, template.id, true)
+        if (candidates.length !== 1) throw conflict(candidates.length ? "EVENT_SERVICE_OFFERING_AMBIGUOUS" : "EVENT_SERVICE_OFFERING_NOT_FOUND", "Event-service offering не найден однозначно", { offeringIds: candidates.map((item) => item.id) })
+        offering = candidates[0]!
+        if (input.expectedOfferingVersion === undefined) throw conflict("VERSION_CONFLICT", "Для изменения коммерческих данных требуется версия offering", { segment: "offering" })
+        this.assertVersion(offering.version, input.expectedOfferingVersion, "offering")
+        Object.assign(offering, {
+          ...(input.operationalName === undefined ? {} : { operationalName: input.operationalName }),
+          ...(input.internalComment === undefined ? {} : { internalComment: input.internalComment }),
+          updatedBy: context.actor.id,
+        })
+      }
       Object.assign(template, {
-        format: input.format, defaultDurationMinutes: input.defaultDurationMinutes, minimumGuests: input.minimumGuests,
+        format: input.format, ...(input.icon === undefined ? {} : { icon: input.icon }), ...(input.tone === undefined ? {} : { tone: input.tone }), defaultDurationMinutes: input.defaultDurationMinutes, minimumGuests: input.minimumGuests,
         maximumGuests: input.maximumGuests, preparationBeforeMinutes: input.preparationBeforeMinutes,
         preparationAfterMinutes: input.preparationAfterMinutes, updatedBy: context.actor.id,
       })
       const saved = await manager.save(template)
       const response = EventServiceTemplateMutationResultSchema.parse({ template: this.templateDto(saved), subjectVersion: saved.version })
-      await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event_service_template", entityId: saved.id, action: "updated", actorId: context.actor.id, requestId: context.requestId, changes: { ...input, expectedSubjectVersion: undefined }, createdAt: new Date() }))
+      if (offering) await manager.save(offering)
+      const changes = { ...input, expectedSubjectVersion: undefined, expectedOfferingVersion: undefined }
+      await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event_service_template", entityId: saved.id, action: "updated", actorId: context.actor.id, requestId: context.requestId, changes, createdAt: new Date() }))
+      if (offering) await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "catalog_offering", entityId: offering.id, action: "updated", actorId: context.actor.id, requestId: context.requestId, changes, createdAt: new Date() }))
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, fingerprint, response)
       return response
     })
@@ -331,7 +349,7 @@ export class EventServiceApplicationService {
   }
 
   private templateDto(template: EventServiceTemplateEntity) {
-    return { id: template.id, version: template.version, code: template.code, format: template.format as "wedding" | "corporate" | "birthday" | "other", defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests, preparationBeforeMinutes: template.preparationBeforeMinutes, preparationAfterMinutes: template.preparationAfterMinutes, archivedAt: template.archivedAt?.toISOString() ?? null, createdAt: template.createdAt.toISOString(), updatedAt: template.updatedAt.toISOString() }
+    return { id: template.id, version: template.version, code: template.code, format: template.format as "wedding" | "corporate" | "birthday" | "other", icon: template.icon as "heart" | "building" | "cake" | "bus", tone: template.tone as "rose" | "violet" | "amber" | "sky", defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests, preparationBeforeMinutes: template.preparationBeforeMinutes, preparationAfterMinutes: template.preparationAfterMinutes, archivedAt: template.archivedAt?.toISOString() ?? null, createdAt: template.createdAt.toISOString(), updatedAt: template.updatedAt.toISOString() }
   }
 
   private summary(offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, cmsReady = true, editorialNodeId: string | null = null) {

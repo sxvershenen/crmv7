@@ -571,9 +571,16 @@ export const ResourceGroupMemberSchema = z.object({
 export type ResourceGroupMember = z.infer<typeof ResourceGroupMemberSchema>;
 
 export const EventServiceFormatSchema = z.enum(["wedding", "corporate", "birthday", "other"]);
+/** Presentation-only category markers owned by the event-service template. */
+export const EventServiceTemplateIconSchema = z.enum(["heart", "building", "cake", "bus"]);
+export type EventServiceTemplateIcon = z.infer<typeof EventServiceTemplateIconSchema>;
+export const EventServiceTemplateToneSchema = z.enum(["rose", "violet", "amber", "sky"]);
+export type EventServiceTemplateTone = z.infer<typeof EventServiceTemplateToneSchema>;
 const EventServiceTemplateEditableFieldsSchema = z.object({
   code: z.string().trim().min(1).max(120),
   format: EventServiceFormatSchema,
+  icon: EventServiceTemplateIconSchema,
+  tone: EventServiceTemplateToneSchema,
   defaultDurationMinutes: z.number().int().positive().max(525_600),
   minimumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
   maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
@@ -618,6 +625,8 @@ export const EventServiceTemplateCreateBodySchema = z.object({
   maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable().default(null),
   preparationBeforeMinutes: z.number().int().nonnegative().max(10_080).default(0),
   preparationAfterMinutes: z.number().int().nonnegative().max(10_080).default(0),
+  icon: EventServiceTemplateIconSchema.default("heart"),
+  tone: EventServiceTemplateToneSchema.default("rose"),
 }).strict().superRefine((value, context) => {
   if (value.minimumGuests !== null && value.maximumGuests !== null && value.minimumGuests > value.maximumGuests) {
     context.addIssue({ code: "custom", path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" });
@@ -626,7 +635,12 @@ export const EventServiceTemplateCreateBodySchema = z.object({
 export type EventServiceTemplateCreateBody = z.infer<typeof EventServiceTemplateCreateBodySchema>;
 
 export const EventServiceTemplateMutationBodySchema = OfferingSubjectMutationMetaSchema.extend({
+  expectedOfferingVersion: VersionSchema.optional(),
+  operationalName: z.string().trim().min(1).max(500).optional(),
+  internalComment: z.string().max(20_000).optional(),
   format: EventServiceFormatSchema,
+  icon: EventServiceTemplateIconSchema.optional(),
+  tone: EventServiceTemplateToneSchema.optional(),
   defaultDurationMinutes: z.number().int().positive().max(525_600),
   minimumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
   maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
@@ -635,6 +649,9 @@ export const EventServiceTemplateMutationBodySchema = OfferingSubjectMutationMet
 }).strict().superRefine((value, context) => {
   if (value.minimumGuests !== null && value.maximumGuests !== null && value.minimumGuests > value.maximumGuests) {
     context.addIssue({ code: "custom", path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" });
+  }
+  if ((value.operationalName !== undefined || value.internalComment !== undefined) && value.expectedOfferingVersion === undefined) {
+    context.addIssue({ code: "custom", path: ["expectedOfferingVersion"], message: "expectedOfferingVersion is required when offering fields change" });
   }
 });
 export type EventServiceTemplateMutationBody = z.infer<typeof EventServiceTemplateMutationBodySchema>;
