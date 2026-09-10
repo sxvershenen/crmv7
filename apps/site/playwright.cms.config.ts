@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
+const production = process.env.SITE_TEST_RUNTIME === "production"
+
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "content-delivery.spec.ts",
@@ -14,9 +16,16 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: "node e2e/support/site-server.mjs",
+      command: production ? "pnpm build && node dist/server/entry.mjs" : "node e2e/support/site-server.mjs",
       url: "http://127.0.0.1:4327/",
-      env: { SITE_TEST_PORT: "4327", SITE_CONTENT_SOURCE: "cms", CMS_PUBLIC_API_BASE_URL: "http://127.0.0.1:4398/api/public/v1" },
+      // The production run deliberately requests fixtures: the build must still
+      // read the published API and fail closed when it becomes unavailable.
+      env: {
+        SITE_TEST_PORT: "4327", HOST: "127.0.0.1", PORT: "4327",
+        SITE_CONTENT_SOURCE: production ? "fixture" : "cms",
+        CMS_PUBLIC_API_BASE_URL: "http://127.0.0.1:4398/api/public/v1",
+      },
+      timeout: 120_000,
       reuseExistingServer: false,
     },
   ],

@@ -9,11 +9,12 @@
     "typecheck": "astro check",
     "test:e2e": "playwright test -c playwright.config.ts",
     "test:e2e:cms": "playwright test -c playwright.cms.config.ts",
+    "test:e2e:cms:production": "SITE_TEST_RUNTIME=production playwright test -c playwright.cms.config.ts",
     "architecture": "node scripts/check-site-ui-architecture.mjs",
     "lint": "pnpm architecture && eslint src --ext .ts,.tsx astro.config.ts"
   },
   "dependencies": {
-    "@astrojs/node": "^10.1.4",
+    "@astrojs/node": "^11.1.5",
     "@astrojs/react": "^6.0.4",
     "@crm/contracts": "workspace:*",
     "@crm/site-ui": "workspace:*",

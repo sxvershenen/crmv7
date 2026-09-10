@@ -13,6 +13,8 @@ test("fixture content requires an explicit development flag", () => {
 })
 
 test("renders release content in SSR and respects disabled hero and absent blog", async ({ page, request }) => {
+  const errors: Error[] = []
+  page.on("pageerror", (error) => errors.push(error))
   for (const path of ["/", "/cms-test"]) {
     const response = await request.get(path)
     expect(response.status()).toBe(200)
@@ -23,7 +25,25 @@ test("renders release content in SSR and respects disabled hero and absent blog"
     await expect(page.locator("#hero, #blog")).toHaveCount(0)
     await expect(page.locator("body")).not.toContainText("Глобальный hero не должен воскреснуть")
     await expect(page.getByText("Раздел из CMS", { exact: true }).first()).toBeAttached()
+    await expect(page.locator('astro-island[component-url*="NavigationIsland"]')).not.toHaveAttribute("ssr", "")
   }
+  expect(errors).toEqual([])
+})
+
+test("serves built CSS and JavaScript without exposing source files", async ({ page, request }) => {
+  test.skip(process.env.SITE_TEST_RUNTIME !== "production", "Production asset delivery")
+  await page.goto("/cms-test")
+  const cssUrl = await page.locator('link[rel="stylesheet"][href^="/_astro/"]').first().getAttribute("href")
+  const scriptUrl = await page.locator('astro-island[component-url*="NavigationIsland"]').getAttribute("component-url")
+  for (const [url, contentType] of [[cssUrl, /text\/css/], [scriptUrl, /javascript/]] as const) {
+    expect(url).toBeTruthy()
+    const asset = await request.get(url!)
+    expect(asset.status()).toBe(200)
+    expect(asset.headers()["content-type"]).toMatch(contentType)
+  }
+  const source = await request.get("/src/lib/content/source.ts")
+  expect(source.status()).not.toBe(200)
+  expect(await source.text()).not.toContain("createPublicContentSource")
 })
 
 for (const scenario of ["outage", "timeout", "disconnect", "redirect", "invalid", "invalid-json", "proxy-not-found", "settings-missing", "mixed-settings", "wrong-path", "not-ready"]) {

@@ -34,7 +34,7 @@ psql "$DATABASE_URL" -XAtc 'SELECT timestamp,name FROM migrations ORDER BY id DE
 
 `<changed>`/`<case>` — подставить существующий файл/сценарий; пути считаются от выбранного package. `packages/db test` запускает только `src/test-database-safety.test.ts`; все migration tests — `pnpm --filter @crm/db exec vitest run src/migrations`. Полные runtime suites: `pnpm test:integration`, `pnpm test:e2e`, `pnpm test:e2e:api`, `pnpm --filter @crm/site test:e2e`. `apps/site`, `packages/site-ui` и `packages/ui` не имеют `test` script; для public consumers используются typecheck/lint, site architecture и site Playwright.
 
-`pnpm --filter @crm/site test:e2e:cms` проверяет SSR delivery через отдельный HTTP contract stub без БД: published/404/503, invalid responses, timeout, release mismatch, обязательный listing и error UI desktop/mobile/keyboard. Это не API/DB integration gate. Обычный site Playwright явно включает fixture mode. Оба harness запускают Astro через `dev()` под управлением Playwright, без CLI `--force` и замены рабочего dev-сервера.
+`pnpm --filter @crm/site test:e2e:cms` проверяет SSR delivery через отдельный HTTP contract stub без БД: published/404/503, invalid responses, timeout, release mismatch, обязательный listing и error UI desktop/mobile/keyboard. `pnpm --filter @crm/site test:e2e:cms:production` запускает тот же suite после build на standalone Node runtime, дополнительно проверяет CSS/JS delivery и игнорирование fixture flag. Это не API/DB integration gate. Production suite оставляет dist с адресом stub; перед обычным запуском нужен build с рабочим API-адресом. Обычный site Playwright явно включает fixture mode. Dev harness используют `dev()` под управлением Playwright, без CLI `--force` и замены рабочего dev-сервера.
 
 ## Accessibility
 

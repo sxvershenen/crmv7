@@ -54,4 +54,6 @@ OpenAPI: `/api/internal/v1/openapi.json`, `/api/admin/v1/openapi.json`, `/api/pu
 
 Главная и CMS routes по умолчанию требуют опубликованный Public API (`CMS_PUBLIC_API_BASE_URL`, default `http://127.0.0.1:3000/api/public/v1`). Сбой API возвращает `503`, без подмены демонстрационными данными. Для просмотра статической главной без API: `SITE_CONTENT_SOURCE=fixture pnpm dev:site`. Этот режим работает только в Astro dev, помечает главную noindex и игнорируется production build. Переменные public frontend задаются окружением команды или в `apps/site/.env`.
 
+Standalone site: `pnpm --filter @crm/site build`, затем `HOST=127.0.0.1 PORT=4329 node apps/site/dist/server/entry.mjs` из корня репозитория. `CMS_PUBLIC_API_BASE_URL` задаётся при сборке; `HOST`/`PORT` — при запуске. `pnpm --filter @crm/site test:e2e:cms:production` собирает и запускает приложение с HTTP contract stub, без БД. После теста для обычного запуска повторите build с нужным API-адресом.
+
 Полный release gate: `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`, `pnpm -r build`. Для локальной задачи сначала используйте targeted commands из testing matrix. UI galleries: `/dev/ui`, `/dev/ui/admin`, `/dev/site-ui-v2`.
