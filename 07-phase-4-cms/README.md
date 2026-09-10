@@ -20,7 +20,7 @@
 - Поддержаны назначенные quantity/person add-ons. Shared-capacity Event resources и scheduled-resource add-ons заблокированы; legacy manual/unpriced flows сохранены без автоматической миграции.
 - CMS — editorial-only `/content/tree` и canonical drafts. Operational pricing/fulfillment остаются в CRM; CMS draft сам по себе не даёт public eligibility. Customer Event не создаёт CMS draft или payment.
 - DB tests требуют отдельную disposable test database и restricted role. Старые результаты прогонов — исторические, не текущий gate.
-- Standalone site runtime проверяется HTTP contract stub без БД; production backend/CDN/deployment gates этим не закрыты. Full-homepage visual baselines расходятся с текущими секциями why-us/partners; требуется отдельная сверка эталонов без автоматического обновления снимков.
+- Standalone site runtime проверяется HTTP contract stub без БД; production backend/CDN/deployment gates этим не закрыты. Full-homepage visual baselines сверены с текущими секциями why-us/partners; стандартный site E2E теперь проходит.
 - Homepage editorial snapshot теперь typed и release-pinned; operational карточки секций пока сохраняют отдельную safe-projection migration boundary и не должны восприниматься как CMS-owned facts.
 
 ## Следующий инкремент
