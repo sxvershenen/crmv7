@@ -158,6 +158,55 @@ export const PublicHouseProjectionPinSchema = z.object({
 }).strict();
 export type PublicHouseProjectionPin = z.infer<typeof PublicHouseProjectionPinSchema>;
 
+/** Public campground projection: one sellable tent/pitch Resource, never a whole-camp group. */
+export const PublicCampgroundFulfillmentSchema = z.object({
+  salesUnit: z.enum(["owned_tent", "own_tent_pitch"]),
+  allocationMode: z.enum(["discrete_inventory", "shared_capacity"]),
+  capacityUnit: z.literal("tent"),
+  capacityTotal: z.number().int().positive().max(1_000_000),
+  guestCapacityTotal: z.number().int().positive().max(1_000_000).nullable(),
+  pricingMode: z.literal("rate_plan"),
+  availabilityMode: z.enum(["resource", "request_only"]),
+}).strict().superRefine((value, context) => {
+  if (value.salesUnit === "owned_tent" && (value.allocationMode !== "discrete_inventory" || value.capacityTotal !== 1 || value.guestCapacityTotal === null)) {
+    context.addIssue({ code: "custom", path: ["capacityTotal"], message: "An owned tent must expose one sellable unit and a guest capacity" });
+  }
+  if (value.salesUnit === "own_tent_pitch" && (value.allocationMode !== "shared_capacity" || value.guestCapacityTotal !== null)) {
+    context.addIssue({ code: "custom", path: ["guestCapacityTotal"], message: "An own-tent pitch must expose shared tent capacity without a fixed guest capacity" });
+  }
+});
+export type PublicCampgroundFulfillment = z.infer<typeof PublicCampgroundFulfillmentSchema>;
+
+export const PublicCampgroundSummarySchema = PublicOfferingSummarySchema.safeExtend({
+  kind: z.literal("campground"),
+  path: CmsPathSchema,
+  releaseId: IdSchema,
+  fulfillment: PublicCampgroundFulfillmentSchema,
+}).strict();
+export type PublicCampgroundSummary = z.infer<typeof PublicCampgroundSummarySchema>;
+export const PublicCampgroundDetailQuerySchema = z.object({ path: CmsPathSchema }).strict();
+export type PublicCampgroundDetailQuery = z.infer<typeof PublicCampgroundDetailQuerySchema>;
+export const PublicCampgroundListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type PublicCampgroundListQuery = z.infer<typeof PublicCampgroundListQuerySchema>;
+export const PublicCampgroundListResponseSchema = z.object({
+  items: z.array(PublicCampgroundSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+  releaseId: IdSchema,
+  asOf: DateTimeSchema,
+}).strict();
+export type PublicCampgroundListResponse = z.infer<typeof PublicCampgroundListResponseSchema>;
+export const PublicCampgroundProjectionPinSchema = z.object({
+  contract: z.literal("public.campground-summary.v1"),
+  offeringId: IdSchema,
+  kind: z.literal("campground"),
+  nodeId: IdSchema,
+  profileRevisionId: IdSchema,
+}).strict();
+export type PublicCampgroundProjectionPin = z.infer<typeof PublicCampgroundProjectionPinSchema>;
+
 export const PublicAddOnSummaryParamsSchema = z.object({
   offeringId: IdSchema,
 }).strict();

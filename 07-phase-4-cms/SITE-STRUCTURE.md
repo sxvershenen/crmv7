@@ -57,6 +57,8 @@
 
 Текущий опубликованный house slice использует `/houses/{house-slug}` — это фактический CMS path, создаваемый source locator и обслуживаемый catch-all route. Целевой `/domiki/{house-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
 
+Текущий опубликованный campground slice использует `/campgrounds/{campground-slug}` — фактический CMS path для отдельного sellable Resource (`owned_tent` или `own_tent_pitch`). Целевой `/kemping/{campground-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

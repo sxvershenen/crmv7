@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { materializeRelease } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
+import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 
 const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
@@ -193,6 +194,30 @@ describe("materializeRelease", () => {
     })
     expect(materializeRelease([house] as never).issues).toEqual([
       expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/venues/sosna" }),
+    ])
+  })
+
+  it("pins an approved campground projection dependency for the vertical route", () => {
+    const campgroundDependency = createPublicCampgroundProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const campground = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/campgrounds/pitches", slug: "pitches",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: campgroundDependency,
+    })
+    const result = materializeRelease([campground] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.dependencies).toContainEqual(campgroundDependency)
+  })
+
+  it("rejects a campground projection attached to a non-campground canonical path", () => {
+    const campgroundDependency = createPublicCampgroundProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const campground = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/houses/pitches", slug: "pitches",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: campgroundDependency,
+    })
+    expect(materializeRelease([campground] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/houses/pitches" }),
     ])
   })
 })

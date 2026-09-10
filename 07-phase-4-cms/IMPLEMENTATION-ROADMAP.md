@@ -25,7 +25,9 @@ Homepage editorial binding gate закрыт: стандартные секци�
 
 House vertical route gate закрыт: `public.house-summary.v1` проверяет exact `CatalogOffering(kind=house)` → active CMS profile/revision → одну primary fixed Resource → active calendar, а public API отдаёт bounded list и detail по canonical CMS path. `/houses/*` требует совпадающие CMS page и house projection из одного release; missing/malformed/mixed operational response даёт `503` без partial HTML. Price отсутствует — честный `request_only`, availability не вычисляется в странице.
 
-1. Мигрировать оставшиеся vertical routes в порядке campground → addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
+Campground vertical route gate закрыт: `public.campground-summary.v1` проверяет exact `CatalogOffering(kind=campground)` → active CMS profile/revision → одну primary Resource → совместимые `CampgroundOfferingTerms`/capacity mode → единственную active campground membership → active calendar. `owned_tent` и `own_tent_pitch` разделены в public contract; whole-camp rental не появляется. `/campgrounds/*` требует совпадающие CMS page и campground projection из одного release, shared capacity не суммируется в браузере, а отсутствие price остаётся `request_only`. Public quote/acceptance для campground — отдельный commercial boundary.
+
+1. Мигрировать оставшиеся vertical routes в порядке addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
 2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
 3. Генерировать sitemap/robots/canonical/schema из active release.
 

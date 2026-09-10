@@ -427,6 +427,26 @@ export class OfferingEditorApplicationService {
       if (!binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0 || !calendar || !current?.path.startsWith("/houses/")) {
         blockers.push("safe_public_projection_missing")
       }
+    } else if (offering.kind === "campground") {
+      const terms = await manager.findOne(CampgroundOfferingTermsEntity, { where: { offeringId: offering.id } })
+      const primaryBindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+      const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
+      const expectedMode = terms?.sellableUnit === "owned_tent" ? "fixed" : terms?.sellableUnit === "own_tent_pitch" ? "shared" : null
+      const expectedRole = terms?.sellableUnit === "owned_tent" ? "owned_tent" : terms?.sellableUnit === "own_tent_pitch" ? "own_tent_area" : null
+      const resource = binding?.resourceId ? await manager.findOne(ResourceEntity, { where: { id: binding.resourceId, archivedAt: IsNull() } }) : null
+      const memberships = resource && expectedRole ? await manager.query(`
+        SELECT member.id
+        FROM resource_group_members member
+        JOIN resource_groups resource_group ON resource_group.id = member.group_id
+        WHERE member.resource_id = $1 AND member.role = $2 AND member.archived_at IS NULL
+          AND resource_group.kind = 'campground' AND resource_group.state = 'active' AND resource_group.archived_at IS NULL
+      `, [resource.id, expectedRole]) as Array<{ id: string }> : []
+      const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
+      const termsValid = terms?.offeringKind === "campground" && terms.capacityUnit === "tent" && terms.pricingBasis === "per_night"
+        && ((terms.sellableUnit === "owned_tent" && terms.inventoryMode === "discrete_inventory") || (terms.sellableUnit === "own_tent_pitch" && terms.inventoryMode === "shared_capacity"))
+      if (!termsValid || !expectedMode || !expectedRole || !binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["camping", "campground", "campground_owned_tent", "campground_own_tent_area"].includes(resource.kind) || resource.capacityMode !== expectedMode || resource.capacityTotal <= 0 || memberships.length !== 1 || !calendar || !current?.path.startsWith("/campgrounds/")) {
+        blockers.push("safe_public_projection_missing")
+      }
     } else if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
     const revision = (row: CmsNodeRevisionEntity | null) => row ? {
       id: row.id, revision: row.revision, state: row.state, path: row.path, title: row.title, contentHash: row.contentHash,

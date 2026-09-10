@@ -77,6 +77,44 @@ createServer(async (request, response) => {
     if (scenario === "house-wrong-path") house.path = "/houses/other"
     return send(house)
   }
+  if (url.pathname.endsWith("/offerings/campgrounds/detail")) {
+    if (scenario === "campground-missing") return send({ code: "NOT_FOUND" }, 404)
+    if (scenario === "campground-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
+    const path = url.searchParams.get("path")
+    const campground = {
+      offeringId: id,
+      kind: "campground",
+      path,
+      releaseId,
+      title: "Кемпинг из CMS",
+      summary: "Операционные факты кемпинга из safe public projection.",
+      price: { mode: "from", amount: { amountMinor: 180000, currency: "RUB" } },
+      priceBasisLabel: "за ночь",
+      quoteAvailable: false,
+      requestAvailable: true,
+      capacity: { unit: "tent", available: 15 },
+      readiness: "ready",
+      timezone: "Europe/Moscow",
+      currency: "RUB",
+      sourceVersions: { offering: 3, pricing: 4, priceBook: 2, calendar: 2, contentReleaseId: releaseId, profileRevisionId: id },
+      asOf,
+      fulfillment: { salesUnit: "own_tent_pitch", allocationMode: "shared_capacity", capacityUnit: "tent", capacityTotal: 15, guestCapacityTotal: null, pricingMode: "rate_plan", availabilityMode: "resource" },
+    }
+    if (scenario === "campground-empty") {
+      campground.price = { mode: "request" }
+      campground.priceBasisLabel = null
+      campground.readiness = "request_only"
+      campground.fulfillment.availabilityMode = "request_only"
+    }
+    if (scenario === "campground-private") campground.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "campground-invalid") delete campground.fulfillment
+    if (scenario === "campground-version") {
+      campground.releaseId = nextReleaseId
+      campground.sourceVersions.contentReleaseId = nextReleaseId
+    }
+    if (scenario === "campground-wrong-path") campground.path = "/campgrounds/other"
+    return send(campground)
+  }
   if (url.pathname.endsWith("/pages/resolve")) {
     if (scenario === "not-found") return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "proxy-not-found") return send({ message: "proxy route missing" }, 404)
@@ -122,9 +160,9 @@ createServer(async (request, response) => {
     if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({
       nodeId: id, revisionId: id, releaseId,
-      kind: path === "/" ? "home" : path === "/houses/forest" && scenario.startsWith("house-") ? "resource_detail" : "resource_listing",
+      kind: path === "/" ? "home" : (path === "/houses/forest" || path === "/campgrounds/pitches") && (scenario.startsWith("house-") || scenario.startsWith("campground-")) ? "resource_detail" : "resource_listing",
       path: scenario === "wrong-path" ? "/wrong-path" : path,
-      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : "Описание опубликованной страницы", hero: null,
+      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Кемпинг из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Операционные факты кемпинга из safe public projection." : "Описание опубликованной страницы", hero: null,
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },

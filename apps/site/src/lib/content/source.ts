@@ -1,6 +1,7 @@
 import {
   PublicListingResultSchema,
   PublicHouseSummarySchema,
+  PublicCampgroundSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -9,6 +10,7 @@ import {
   PublicSiteSettingsSchema,
   type PublicListingResult,
   type PublicHouseSummary,
+  type PublicCampgroundSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -23,6 +25,7 @@ export interface ContentSource {
   settings(): Promise<ContentResult<PublicSiteSettings>>
   listing(path: string, searchParams: URLSearchParams): Promise<ContentResult<PublicListingResult>>
   house(path: string): Promise<ContentResult<PublicHouseSummary>>
+  campground(path: string): Promise<ContentResult<PublicCampgroundSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -67,6 +70,10 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
       const query = new URLSearchParams({ path })
       return document(`/offerings/houses/detail?${query}`, (value) => PublicHouseSummarySchema.parse(value))
     },
+    campground(path) {
+      const query = new URLSearchParams({ path })
+      return document(`/offerings/campgrounds/detail?${query}`, (value) => PublicCampgroundSummarySchema.parse(value))
+    },
   }
 }
 
@@ -75,6 +82,7 @@ export type PublishedRoute = ContentResult<{
   settings: PublicSiteSettings
   listing: PublicListingResult | null
   house: PublicHouseSummary | null
+  campground: PublicCampgroundSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -108,7 +116,15 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     house = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house } }
+  let campground: PublicCampgroundSummary | null = null
+  if (page.value.kind === "resource_detail" && path.startsWith("/campgrounds/")) {
+    const result = await source.campground(path)
+    if (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    campground = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {
