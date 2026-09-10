@@ -2,6 +2,7 @@ import {
   PublicListingResultSchema,
   PublicHouseSummarySchema,
   PublicCampgroundSummarySchema,
+  PublicAddOnSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -11,6 +12,7 @@ import {
   type PublicListingResult,
   type PublicHouseSummary,
   type PublicCampgroundSummary,
+  type PublicAddOnSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -26,6 +28,7 @@ export interface ContentSource {
   listing(path: string, searchParams: URLSearchParams): Promise<ContentResult<PublicListingResult>>
   house(path: string): Promise<ContentResult<PublicHouseSummary>>
   campground(path: string): Promise<ContentResult<PublicCampgroundSummary>>
+  addon(offeringId: string): Promise<ContentResult<PublicAddOnSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -74,6 +77,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
       const query = new URLSearchParams({ path })
       return document(`/offerings/campgrounds/detail?${query}`, (value) => PublicCampgroundSummarySchema.parse(value))
     },
+    addon(offeringId) {
+      return document(`/offerings/addons/${encodeURIComponent(offeringId)}`, (value) => PublicAddOnSummarySchema.parse(value))
+    },
   }
 }
 
@@ -83,6 +89,7 @@ export type PublishedRoute = ContentResult<{
   listing: PublicListingResult | null
   house: PublicHouseSummary | null
   campground: PublicCampgroundSummary | null
+  addon: PublicAddOnSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -124,7 +131,17 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     campground = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground } }
+  let addon: PublicAddOnSummary | null = null
+  if (page.value.kind === "addon_detail" && path.startsWith("/addons/")) {
+    const dependency = page.value.dependencies.find((candidate) => candidate.type === "crm_projection" && candidate.version === "public.addon-summary.v1")
+    if (!dependency) return { status: "unavailable" }
+    const result = await source.addon(dependency.id)
+    if (result.status !== "published" || result.value.offeringId !== dependency.id || result.value.sourceVersions.contentReleaseId !== page.value.releaseId || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    addon = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

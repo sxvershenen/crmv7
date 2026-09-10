@@ -27,7 +27,9 @@ House vertical route gate закрыт: `public.house-summary.v1` проверя
 
 Campground vertical route gate закрыт: `public.campground-summary.v1` проверяет exact `CatalogOffering(kind=campground)` → active CMS profile/revision → одну primary Resource → совместимые `CampgroundOfferingTerms`/capacity mode → единственную active campground membership → active calendar. `owned_tent` и `own_tent_pitch` разделены в public contract; whole-camp rental не появляется. `/campgrounds/*` требует совпадающие CMS page и campground projection из одного release, shared capacity не суммируется в браузере, а отсутствие price остаётся `request_only`. Public quote/acceptance для campground — отдельный commercial boundary.
 
-1. Мигрировать оставшиеся vertical routes в порядке addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
+Addon vertical route gate закрыт: существующий `public.addon-summary.v1` подключён к CMS `addon_detail` через release dependency с exact offering ID; `/addons/*` сверяет `offeringId`, `contentReleaseId`, title и не рендерит route без dependency, malformed data или outage. Strict add-on terms и conservative price/readiness projection остаются operational authority; route показывает request fallback, если price отсутствует.
+
+1. Мигрировать оставшиеся vertical routes в порядке venue → program → event service, учитывая готовность safe resolver каждого kind.
 2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
 3. Генерировать sitemap/robots/canonical/schema из active release.
 

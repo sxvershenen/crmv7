@@ -17,6 +17,7 @@ import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
 import ListingIsland from "../components/islands/ListingIsland"
 import HouseDetail from "../components/sections/HouseDetail.astro"
 import CampgroundDetail from "../components/sections/CampgroundDetail.astro"
+import AddonDetail from "../components/sections/AddonDetail.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
@@ -35,6 +36,7 @@ const publishedSiteSettings = result.status === "published" ? result.value.setti
 const listing = result.status === "published" ? result.value.listing : null
 const house = result.status === "published" ? result.value.house : null
 const campground = result.status === "published" ? result.value.campground : null
+const addon = result.status === "published" ? result.value.addon : null
 const failure = result.status !== "published" ? result.status : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -75,6 +77,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
       {house && <HouseDetail house={house} />}
       {campground && <CampgroundDetail campground={campground} />}
+      {addon && <AddonDetail addon={addon} />}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} client:visible />

@@ -59,6 +59,8 @@
 
 Текущий опубликованный campground slice использует `/campgrounds/{campground-slug}` — фактический CMS path для отдельного sellable Resource (`owned_tent` или `own_tent_pitch`). Целевой `/kemping/{campground-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
 
+Текущий опубликованный add-on slice использует `/addons/{addon-slug}`. Для route delivery offering identity берётся из release dependency, а не из CMS текста; целевой `/dopy/{addon-slug}` и legacy alias map остаются отдельным миграционным gate.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

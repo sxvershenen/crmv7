@@ -1,0 +1,38 @@
+---
+import type { PublicAddOnSummary } from "@crm/contracts"
+import { ArrowRight, PackageCheck } from "lucide-react"
+
+interface Props {
+  addon: PublicAddOnSummary
+}
+
+const { addon } = Astro.props
+const price = addon.price.mode === "request" ? null : new Intl.NumberFormat("ru-RU", { style: "currency", currency: addon.price.amount.currency, maximumFractionDigits: 0 }).format(addon.price.amount.amountMinor / 100)
+const quantity = addon.terms.quantity
+const quantityLabel = quantity.maximum === null ? `от ${quantity.minimum}` : `от ${quantity.minimum} до ${quantity.maximum}`
+const serviceLabel = addon.terms.serviceType === "person_service" ? "Услуга для гостей" : "Дополнительная услуга"
+const unitLabel = quantity.unit === "participants" ? "участника" : "единицы"
+const readinessLabel = addon.readiness === "ready" ? "Можно добавить к заявке" : addon.readiness === "temporarily_unavailable" ? "Временно недоступно" : "Уточним доступность"
+---
+
+<section class="site-section site-section--compact" data-section-key="addon-detail" data-route-kind="addon">
+  <div class="grid gap-3 lg:grid-cols-12 lg:gap-4">
+    <div class="lg:col-span-7 rounded-[var(--site-radius-xl)] bg-[var(--site-color-surface)] p-5 sm:p-7">
+      <div class="flex items-center gap-2 text-[length:var(--site-text-caption)] font-[var(--site-weight-medium)] text-[var(--site-color-brand-700)]">
+        <PackageCheck className="h-4 w-4" /> {serviceLabel}
+      </div>
+      <p class="mt-5 max-w-prose text-[length:var(--site-text-body)] leading-relaxed text-[var(--site-color-text-muted)]">{addon.summary ?? "Описание услуги готовится редакцией."}</p>
+      <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Количество</dt><dd class="mt-1 font-[var(--site-weight-medium)]">{quantityLabel} {unitLabel}</dd></div>
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Тариф</dt><dd class="mt-1 font-[var(--site-weight-medium)]">{addon.priceBasisLabel ?? "Уточняется"}</dd></div>
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Статус</dt><dd class="mt-1 font-[var(--site-weight-medium)]">{readinessLabel}</dd></div>
+      </dl>
+    </div>
+    <aside class="lg:col-span-5 rounded-[var(--site-radius-xl)] bg-[var(--site-color-surface)] p-5 sm:p-7">
+      <div class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">стоимость</div>
+      <div class="mt-1 text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] text-[var(--site-color-brand-700)]">{price ?? "По запросу"}</div>
+      {addon.priceBasisLabel && <div class="mt-1 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{addon.priceBasisLabel}</div>}
+      <button data-site-action="booking" data-site-item={`Дополнение: ${addon.title}`} class="site-button site-button--primary mt-5 w-full">Оставить заявку <ArrowRight className="h-4 w-4" /></button>
+    </aside>
+  </div>
+</section>
