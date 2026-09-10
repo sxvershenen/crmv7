@@ -30,6 +30,7 @@ import { ProgramRegistrationQuoteAcceptance1788123200000 } from "./migrations/17
 import { EventServiceOfferingCore1788123600000 } from "./migrations/1788123600000-event-service-offering-core.js"
 import { EventServiceTemplatePresentation1788124000000 } from "./migrations/1788124000000-event-service-template-presentation.js"
 import { EventOrderAcceptance1788124400000 } from "./migrations/1788124400000-event-order-acceptance.js"
+import { VenueOfferingIntegrity1788124800000 } from "./migrations/1788124800000-venue-offering-integrity.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -65,4 +66,5 @@ export const databaseMigrations = [
   EventServiceOfferingCore1788123600000,
   EventServiceTemplatePresentation1788124000000,
   EventOrderAcceptance1788124400000,
+  VenueOfferingIntegrity1788124800000,
 ]

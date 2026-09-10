@@ -12,6 +12,7 @@ import {
   type AddOnLibraryQuery,
   type AddOnLibraryResponse,
   type StayOfferingBindingsReplace,
+  type VenueOfferingBindingsReplace,
   type OfferingAddOnAssignmentsReplace,
   type OfferingAddOnAssignment,
   type OfferingBindingsReplaceResult,
@@ -35,7 +36,7 @@ import {
   ResourceGroupEntity,
   ResourceGroupMemberEntity,
 } from "@crm/db"
-import { DomainError, validateCampgroundOfferingBindings, validateHouseOfferingBindings, validateOfferingAddOnAssignments } from "@crm/domain"
+import { DomainError, validateCampgroundOfferingBindings, validateHouseOfferingBindings, validateOfferingAddOnAssignments, validateVenueOfferingBindings } from "@crm/domain"
 
 import { canonicalSha256 } from "./offering-mutation-support.js"
 import type { OfferingRequestContext } from "./offering-editor-application.service.js"
@@ -98,6 +99,44 @@ export class OfferingConfigurationApplicationService {
       const created = retained
       const subjectVersion = await this.bumpSegment(manager, offering, "subjectVersion", input.expectedSubjectVersion, context.actor.id)
       const response = OfferingBindingsReplaceResultSchema.parse({ offeringId: offering.id, subjectVersion, bindingsHash: requestedHash, bindings: created.map(toBindingDto) })
+      await this.recordOfferingConfiguration(manager, offering, "crm.offering.bindings_replaced", input.operationId, context, { calendar: null, subject: subjectVersion, addOns: null }, requestedHash)
+      await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
+      return response
+    })
+  }
+
+  async replaceVenueBindings(input: VenueOfferingBindingsReplace, context: OfferingRequestContext): Promise<OfferingBindingsReplaceResult> {
+    this.assertBindingsEdit(context)
+    const scope = `offering:${input.offeringId}:venue-bindings:replace`
+    return this.serializable(async (manager) => {
+      const hash = canonicalSha256({ command: "venue.bindings.replace", offeringId: input.offeringId, input })
+      const replay = await this.replay<OfferingBindingsReplaceResult>(manager, scope, input.operationId, input.idempotencyKey, hash)
+      if (replay) return replay
+      const offering = await this.lockOffering(manager, input.offeringId)
+      if (offering.kind !== "venue") throw unprocessable("OFFERING_KIND_UNSUPPORTED", "Venue bindings доступны только для площадок")
+      this.assertSegmentVersion(offering.subjectVersion, input.expectedSubjectVersion, "subject", offering.id)
+      const resources = await this.lockAndValidateBindingResources(manager, input.bindings.map((item) => item.target.id))
+      this.validateDomain(() => validateVenueOfferingBindings(input.bindings, resources.map((resource) => ({ id: resource.id, kind: resource.kind, capacityMode: resource.capacityMode as "fixed" | "shared", capacityTotal: resource.capacityTotal, archived: resource.archivedAt !== null }))))
+      const requestedHash = bindingsHash(input.bindings)
+      const current = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, archivedAt: IsNull() }, order: { createdAt: "ASC", id: "ASC" } })
+      if (bindingsHash(current.map(toBindingDraft)) === requestedHash) {
+        const response = OfferingBindingsReplaceResultSchema.parse({ offeringId: offering.id, subjectVersion: offering.subjectVersion, bindingsHash: requestedHash, bindings: current.map(toBindingDto) })
+        await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
+        return response
+      }
+      const now = new Date(), currentByKey = new Map(current.map((item) => [bindingKey(toBindingDraft(item)), item]))
+      const retained: OfferingBindingEntity[] = [], changed: OfferingBindingEntity[] = []
+      for (const binding of input.bindings) {
+        const existing = currentByKey.get(bindingKey(binding))
+        if (existing) {
+          if (canonicalSha256(toBindingDraft(existing)) !== canonicalSha256(binding)) { existing.quantityDefault = binding.defaultQuantity; existing.capacityImpactDefault = binding.defaultCapacityImpact; existing.preparationBeforeMinutes = binding.preparationBeforeMinutes; existing.preparationAfterMinutes = binding.preparationAfterMinutes; existing.availabilityRequired = binding.availabilityRequired; existing.updatedBy = context.actor.id; changed.push(existing) }
+          retained.push(existing); currentByKey.delete(bindingKey(binding))
+        } else { const entity = manager.create(OfferingBindingEntity, bindingEntity(offering.id, binding, context.actor.id)); retained.push(entity); changed.push(entity) }
+      }
+      for (const removed of currentByKey.values()) { removed.archivedAt = now; removed.updatedBy = context.actor.id; await manager.save(removed) }
+      if (changed.length) await manager.save(changed)
+      const subjectVersion = await this.bumpSegment(manager, offering, "subjectVersion", input.expectedSubjectVersion, context.actor.id)
+      const response = OfferingBindingsReplaceResultSchema.parse({ offeringId: offering.id, subjectVersion, bindingsHash: requestedHash, bindings: retained.map(toBindingDto) })
       await this.recordOfferingConfiguration(manager, offering, "crm.offering.bindings_replaced", input.operationId, context, { calendar: null, subject: subjectVersion, addOns: null }, requestedHash)
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response

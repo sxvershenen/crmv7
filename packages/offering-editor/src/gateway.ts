@@ -20,7 +20,10 @@ import type {
   InternalOfferingQuoteResult,
   StayOfferingListQuery,
   StayOfferingListResponse,
+  VenueOfferingListQuery,
+  VenueOfferingListResponse,
   HouseOfferingBindingsReplaceBody,
+  VenueOfferingBindingsReplaceBody,
   OfferingAddOnAssignmentsReplaceBody,
   OfferingAddOnAssignmentsReplaceResult,
   OfferingBindingTargetLookupQuery,
@@ -29,6 +32,9 @@ import type {
   OfferingCustomAddOnCreateBody,
   OfferingCustomAddOnCreateResult,
   OfferingPricingMutationResult,
+  ResourcePrimaryVenueOfferingLookupResponse,
+  ResourceVenueOfferingCreateBody,
+  ResourceVenueOfferingCreateResult,
 } from "@crm/contracts"
 
 /**
@@ -39,9 +45,11 @@ export interface OfferingEditorGateway {
   listHouses(query: HouseOfferingListQuery): Promise<HouseOfferingListResponse>
   listCampgrounds(query: StayOfferingListQuery & { kind: "campground" }): Promise<StayOfferingListResponse>
   listAddOns(query: AddOnOfferingListQuery): Promise<AddOnOfferingListResponse>
+  listVenues(query: VenueOfferingListQuery): Promise<VenueOfferingListResponse>
   getHouseEditor(offeringId: string): Promise<InternalOfferingEditor | null>
   getCampgroundEditor(offeringId: string): Promise<InternalOfferingEditor | null>
   getAddOnEditor(offeringId: string): Promise<InternalOfferingEditor | null>
+  getVenueEditor(offeringId: string): Promise<InternalOfferingEditor | null>
   createAddOn(body: AddOnOfferingCreateBody): Promise<AddOnOfferingCreateResult>
   replaceAddOnTerms(offeringId: string, body: AddOnTermsMutationBody): Promise<AddOnTermsMutationResult>
   listBindingTargets(query: OfferingBindingTargetLookupQuery): Promise<OfferingBindingTargetLookupResponse>
@@ -53,6 +61,10 @@ export interface OfferingEditorGateway {
   replaceCampgroundBindings(
     offeringId: string,
     body: CampgroundOfferingBindingsReplaceBody,
+  ): Promise<OfferingBindingsReplaceResult>
+  replaceVenueBindings(
+    offeringId: string,
+    body: VenueOfferingBindingsReplaceBody,
   ): Promise<OfferingBindingsReplaceResult>
   replaceAddOnAssignments(
     offeringId: string,

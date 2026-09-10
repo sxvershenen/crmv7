@@ -7,6 +7,7 @@ import {
   validateAddOnPricingForActivation,
   validateCampgroundPricingForActivation,
   validateHousePricingForActivation,
+  validateVenuePricingForActivation,
   type HousePriceRule,
   type HousePricingSnapshot,
 } from "../src/offering-pricing.js";
@@ -278,6 +279,53 @@ describe("house price-book activation validation", () => {
     const codes = validateHousePricingForActivation(value, { from: "2027-01-01", toExclusive: "2027-01-05" }).map((issue) => issue.code);
     expect(codes).toContain("CALENDAR_DATE_MISSING");
     expect(codes).toContain("UNSUPPORTED_PRICING_DIMENSION");
+  });
+});
+
+describe("venue price-book activation validation", () => {
+  it("accepts valid rate-plan duration bounds without inheriting house restrictions", () => {
+    const original = snapshot();
+    const value: HousePricingSnapshot = {
+      ...original,
+      offering: { ...original.offering, id: "venue-meadow", kind: "venue" },
+      priceBook: { ...original.priceBook, offeringId: "venue-meadow" },
+      ratePlans: original.ratePlans.map((plan) => ({
+        ...plan,
+        pricingBasis: "per_day" as const,
+        minDurationMinutes: 60,
+        maxDurationMinutes: 240,
+        rules: [],
+      })),
+    };
+    expect(validateVenuePricingForActivation(value, { from: "2027-01-01", toExclusive: "2027-01-05" })).toEqual([]);
+  });
+
+  it("fails closed when venue duration bounds are inverted", () => {
+    const original = snapshot();
+    const value: HousePricingSnapshot = {
+      ...original,
+      offering: { ...original.offering, id: "venue-meadow", kind: "venue" },
+      priceBook: { ...original.priceBook, offeringId: "venue-meadow" },
+      ratePlans: original.ratePlans.map((plan) => ({
+        ...plan,
+        pricingBasis: "per_day" as const,
+        minDurationMinutes: 240,
+        maxDurationMinutes: 60,
+        rules: [],
+      })),
+    };
+    expect(validateVenuePricingForActivation(value, { from: "2027-01-01", toExclusive: "2027-01-05" })).toContainEqual(expect.objectContaining({ code: "PRICE_RULE_INVALID", path: "ratePlans.rate-standard.maxDurationMinutes" }));
+  });
+
+  it("keeps duration selectors fail-closed with an explicit venue message", () => {
+    const original = snapshot([rule({ id: "duration", durationMinutes: { min: 60, max: 120 } })]);
+    const value: HousePricingSnapshot = {
+      ...original,
+      offering: { ...original.offering, id: "venue-meadow", kind: "venue" },
+      priceBook: { ...original.priceBook, offeringId: "venue-meadow" },
+      ratePlans: original.ratePlans.map((plan) => ({ ...plan, pricingBasis: "per_day" as const })),
+    };
+    expect(validateVenuePricingForActivation(value, { from: "2027-01-01", toExclusive: "2027-01-05" })).toContainEqual(expect.objectContaining({ code: "UNSUPPORTED_PRICING_DIMENSION", message: "Duration-правила площадки пока не поддерживаются; используйте bounds тарифа" }));
   });
 });
 

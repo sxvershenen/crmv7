@@ -4,22 +4,17 @@
 
 ## P4.5 — Offering и публичная миграция
 
-### Ближайший operational slice: venue
-
-- Зафиксировать typed fulfillment/capacity площадки и закончить CRM Resource dossier, guided commercial identity и canonical CMS draft.
-- Публичная проекция — отдельный allowlisted resolver; draft/editor не дают eligibility.
-- Переиспользовать pricing/calendar/quote/delivery runtime. Не строить второй каталог, pricing engine или operational editor в CMS.
-
 ### Оставшиеся commercial boundaries
 
 - Campground quote ещё требует typed operational acceptance context.
+- Venue использует typed exclusive Resource, canonical CMS draft и safe public projection, но его server quote/acceptance остаются отдельным order contract.
 - Request-only/scheduled-resource add-ons и shared-capacity Event resources остаются fail-closed до отдельной fulfillment semantics.
 - Audited repair для ambiguous legacy mappings отделён от ordinary UI; не угадывать bindings/basis и не включать автоматический backfill.
 - Acceptance любого нового order type: exact subject/version/composition, DB-clock expiry после locks, atomic capacity/lifecycle/accepted link/audit/outbox и DB guards. Quote preview не резервирует capacity; accepted history не пересчитывается.
 
 ### P4.5E — Typed public projections
 
-- После add-on slice нужны resolver/contracts остальных offering kinds: listing/detail/price readiness и, где предусмотрено сценарием, quote/availability.
+- После add-on и venue slices нужны resolver/contracts house, campground, program и event-service: listing/detail/price readiness и, где предусмотрено сценарием, quote/availability.
 - Exact profile/revision relation, release-pinned dependencies, strict allowlist, source versions/hash/asOf и честный unavailable/request fallback обязательны.
 - Operational change инвалидирует active projection независимо от CMS release; existing fenced delivery/cache-effect port используется повторно.
 - Non-leak tests проверяют отсутствие draft/internal/customer fields. CMS source locator сам по себе не разрешает public output.

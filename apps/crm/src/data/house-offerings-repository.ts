@@ -10,6 +10,7 @@ import {
   AddOnLibraryResponseSchema,
   CampgroundOfferingBindingsReplaceBodySchema,
   HouseOfferingBindingsReplaceBodySchema,
+  VenueOfferingBindingsReplaceBodySchema,
   HouseOfferingListQuerySchema,
   HouseOfferingListResponseSchema,
   HousePriceBookActivateBodySchema,
@@ -19,9 +20,14 @@ import {
   HousePriceBookScheduleBodySchema,
   OfferingPricingMutationResultSchema,
   ResourcePrimaryStayOfferingLookupResponseSchema,
+  ResourcePrimaryVenueOfferingLookupResponseSchema,
   ResourceStayOfferingQuotePreviewBodySchema,
   ResourceStayOfferingCreateBodySchema,
   ResourceStayOfferingCreateResultSchema,
+  ResourceVenueOfferingCreateBodySchema,
+  ResourceVenueOfferingCreateResultSchema,
+  VenueOfferingListQuerySchema,
+  VenueOfferingListResponseSchema,
   OfferingAddOnAssignmentsReplaceBodySchema,
   OfferingAddOnAssignmentsReplaceResultSchema,
   OfferingBindingsReplaceResultSchema,
@@ -37,6 +43,7 @@ import {
   type AddOnTermsMutationBody,
   type CampgroundOfferingBindingsReplaceBody,
   type HouseOfferingBindingsReplaceBody,
+  type VenueOfferingBindingsReplaceBody,
   type HouseOfferingListQuery,
   type HousePriceBookActivateBody,
   type HousePriceBookDraftCreateBody,
@@ -48,6 +55,8 @@ import {
   type OfferingBindingTargetLookupQuery,
   type OfferingCustomAddOnCreateBody,
   type ResourceStayOfferingCreateBody,
+  type ResourceVenueOfferingCreateBody,
+  type VenueOfferingListQuery,
   type ResourceStayOfferingQuotePreviewBody,
   type StayOfferingListQuery,
 } from "@crm/contracts"
@@ -76,6 +85,15 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
     if (parsed.state) params.set("state", parsed.state)
     if (parsed.cursor) params.set("cursor", parsed.cursor)
     return this.client.get(`/offerings?${params.toString()}`, StayOfferingListResponseSchema)
+  }
+
+  listVenues(query: VenueOfferingListQuery) {
+    const parsed = VenueOfferingListQuerySchema.parse(query)
+    const params = new URLSearchParams({ kind: "venue", limit: String(parsed.limit) })
+    if (parsed.q) params.set("q", parsed.q)
+    if (parsed.state) params.set("state", parsed.state)
+    if (parsed.cursor) params.set("cursor", parsed.cursor)
+    return this.client.get(`/offerings?${params.toString()}`, VenueOfferingListResponseSchema)
   }
 
   listAddOns(input: AddOnOfferingListQuery) {
@@ -128,6 +146,17 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
     }
   }
 
+  async getVenueEditor(offeringId: string) {
+    try {
+      const editor = await this.client.get(`/offerings/${encodeURIComponent(offeringId)}/editor`, InternalOfferingEditorSchema)
+      if (editor.offering.kind !== "venue") throw new Error("Маршрут площадки получил предложение другого типа")
+      return editor
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 404) return null
+      throw error
+    }
+  }
+
   resolvePrimaryStayOffering(resourceId: string) {
     return this.client.get(`/offerings/by-resource/${encodeURIComponent(resourceId)}`, ResourcePrimaryStayOfferingLookupResponseSchema)
   }
@@ -135,6 +164,15 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
   createStayOffering(resourceId: string, input: ResourceStayOfferingCreateBody) {
     const body = ResourceStayOfferingCreateBodySchema.parse(input)
     return this.client.post(`/offerings/by-resource/${encodeURIComponent(resourceId)}`, body, ResourceStayOfferingCreateResultSchema)
+  }
+
+  resolvePrimaryVenueOffering(resourceId: string) {
+    return this.client.get(`/offerings/venues/by-resource/${encodeURIComponent(resourceId)}`, ResourcePrimaryVenueOfferingLookupResponseSchema)
+  }
+
+  createVenueOffering(resourceId: string, input: ResourceVenueOfferingCreateBody) {
+    const body = ResourceVenueOfferingCreateBodySchema.parse(input)
+    return this.client.post(`/offerings/venues/by-resource/${encodeURIComponent(resourceId)}`, body, ResourceVenueOfferingCreateResultSchema)
   }
 
   previewResourceStayQuote(resourceId: string, input: ResourceStayOfferingQuotePreviewBody) {
@@ -170,6 +208,11 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
   replaceCampgroundBindings(offeringId: string, input: CampgroundOfferingBindingsReplaceBody) {
     const body = CampgroundOfferingBindingsReplaceBodySchema.parse(input)
     return this.client.request(`/offerings/${encodeURIComponent(offeringId)}/bindings`, { body, method: "PUT" }, OfferingBindingsReplaceResultSchema)
+  }
+
+  replaceVenueBindings(offeringId: string, input: VenueOfferingBindingsReplaceBody) {
+    const body = VenueOfferingBindingsReplaceBodySchema.parse(input)
+    return this.client.request(`/offerings/${encodeURIComponent(offeringId)}/venue-bindings`, { body, method: "PUT" }, OfferingBindingsReplaceResultSchema)
   }
 
   replaceAddOnAssignments(offeringId: string, input: OfferingAddOnAssignmentsReplaceBody) {

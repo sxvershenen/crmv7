@@ -31,6 +31,13 @@ export type CampgroundFulfillmentInput = Readonly<{
   salesUnit: "owned_tent" | "own_tent_pitch";
   allocationMode: "discrete_inventory" | "shared_capacity";
 }>;
+export type VenueResourceFact = Readonly<{
+  id: string;
+  kind: string;
+  capacityMode: "fixed" | "shared";
+  capacityTotal: number;
+  archived: boolean;
+}>;
 export type CampgroundResourceFact = Readonly<{
   id: string;
   capacityMode: "fixed" | "shared";
@@ -166,6 +173,33 @@ export function validateHouseOfferingBindings(bindings: readonly HouseBindingInp
     const key = `${binding.target.id}:${binding.role}`;
     if (seen.has(key)) invalid("OFFERING_BINDING_INVALID", "Одинаковая resource-role связь указана дважды", "bindings", { key });
     seen.add(key);
+    if (!Number.isInteger(binding.defaultQuantity) || binding.defaultQuantity <= 0) invalid("OFFERING_BINDING_INVALID", "Количество binding должно быть положительным", "bindings");
+    if (!Number.isInteger(binding.defaultCapacityImpact) || binding.defaultCapacityImpact < 0) invalid("OFFERING_BINDING_INVALID", "Capacity impact не может быть отрицательным", "bindings");
+  }
+}
+
+/** A venue sells one exclusive Resource; capacity and availability stay Resource-owned. */
+export function validateVenueOfferingBindings(bindings: readonly HouseBindingInput[], resources: readonly VenueResourceFact[]): void {
+  const primary = bindings.filter((binding) => binding.role === "primary");
+  if (primary.length !== 1 || primary[0]!.target.type !== "resource") {
+    invalid("OFFERING_BINDING_INVALID", "Площадка требует ровно один primary binding к Resource", "bindings");
+  }
+  const primaryResource = resources.find((resource) => resource.id === primary[0]!.target.id);
+  if (!primaryResource || primaryResource.archived || (primaryResource.kind !== "venues" && primaryResource.kind !== "venue")) {
+    invalid("OFFERING_BINDING_INVALID", "Primary binding площадки должен ссылаться на активный Resource kind=venues", "bindings");
+  }
+  if (primaryResource.capacityMode !== "fixed" || primaryResource.capacityTotal <= 0) {
+    invalid("OFFERING_BINDING_INVALID", "Площадка требует положительную fixed capacity Resource", "bindings");
+  }
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    if (binding.target.type !== "resource") invalid("OFFERING_BINDING_INVALID", "Площадка может ссылаться только на Resource", "bindings");
+    const key = `${binding.target.id}:${binding.role}`;
+    if (seen.has(key)) invalid("OFFERING_BINDING_INVALID", "Одинаковая resource-role связь указана дважды", "bindings", { key });
+    seen.add(key);
+    if (binding.role === "primary" && (binding.defaultQuantity !== 1 || binding.defaultCapacityImpact !== 1 || !binding.availabilityRequired)) {
+      invalid("OFFERING_BINDING_INVALID", "Primary binding площадки должен резервировать один доступный Resource", "bindings");
+    }
     if (!Number.isInteger(binding.defaultQuantity) || binding.defaultQuantity <= 0) invalid("OFFERING_BINDING_INVALID", "Количество binding должно быть положительным", "bindings");
     if (!Number.isInteger(binding.defaultCapacityImpact) || binding.defaultCapacityImpact < 0) invalid("OFFERING_BINDING_INVALID", "Capacity impact не может быть отрицательным", "bindings");
   }

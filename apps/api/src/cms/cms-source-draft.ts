@@ -91,7 +91,7 @@ export async function ensureCatalogOfferingEditorialDraft(
 ): Promise<{ status: "linked" | "created" | "promoted"; link: CmsSourceLinkEntity } | { status: "report_only"; report: LegacyCatalogOfferingPromotionReport | LegacyProgramOfferingPromotionReport }> {
   const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: input.offeringId })
   if (!offering || offering.archivedAt !== null) throw new Error(`Active catalog offering ${input.offeringId} was not found`)
-  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "program" && offering.kind !== "event_service") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
+  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
 
   const links = manager.getRepository(CmsSourceLinkEntity)
   const existing = await links.findOneBy({ sourceKind: "catalog_offering", sourceId: offering.id })
@@ -173,8 +173,9 @@ export async function ensureCatalogOfferingEditorialDraft(
   const link = await createCmsSourceDraft(manager, {
     sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
     title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-    pathPart: offering.kind === "program" ? "programs" : offering.kind === "campground" ? "campgrounds" : "houses",
+    pathPart: offering.kind === "program" ? "programs" : offering.kind === "campground" ? "campgrounds" : offering.kind === "venue" ? "venues" : "houses",
     pageKind: offering.kind === "program" ? "program_detail" : "resource_detail",
+    relations: [{ kind: "catalog_offering", entityId: offering.id }],
   })
   return { status: "created", link }
 }
@@ -186,7 +187,7 @@ async function assertEditorialNode(manager: EntityManager, link: CmsSourceLinkEn
 
 async function createCmsSourceDraft(
   manager: EntityManager,
-  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string; pageKind?: CmsPageKind },
+  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string; pageKind?: CmsPageKind; relations?: Array<{ kind: "catalog_offering"; entityId: string }> },
 ) {
   const existing = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: input.sourceKind, sourceId: input.sourceId })
   if (existing) return existing
@@ -207,13 +208,13 @@ async function createCmsSourceDraft(
     route: { path, slug: input.sourceId, parentNodeId: null, sortOrder: 0 }, title,
     summary, hero: { mode: "inherit" as const }, sections: [],
     seo: { title: title.slice(0, 70), description: seoDescription, indexPolicy: "noindex_follow", canonical: { mode: "self" }, structuredData: [] },
-    relations: [], schemaVersion: 1,
+    relations: input.relations ?? [], schemaVersion: 1,
   }
   const contentHash = hash(content)
   await manager.save(manager.create(CmsNodeEntity, { id: nodeId, kind: input.pageKind ?? mapping.pageKind, status: "active", createdBy: input.actorId, updatedBy: input.actorId, archivedAt: null }))
   await manager.save(manager.create(CmsNodeRevisionEntity, {
     id: revisionId, nodeId, revision: 1, state: "draft", path, slug: input.sourceId, parentNodeId: null, sortOrder: 0,
-    title, summary: content.summary, hero: content.hero, sections: [], seo: content.seo, relations: [], schemaVersion: 1, contentHash, createdBy: input.actorId, createdAt: now,
+    title, summary: content.summary, hero: content.hero, sections: [], seo: content.seo, relations: content.relations, schemaVersion: 1, contentHash, createdBy: input.actorId, createdAt: now,
   }))
   const link = await manager.save(manager.create(CmsSourceLinkEntity, {
     id: randomUUID(), sourceKind: input.sourceKind, sourceId: input.sourceId, sourceVersion: input.sourceVersion,

@@ -429,6 +429,44 @@ export function validateAddOnPricingForActivation(
   return deepFreeze(issues);
 }
 
+/** Venue pricing reuses the shared PriceBook/rule runtime; only its commercial basis is narrowed here. */
+export function validateVenuePricingForActivation(
+  snapshot: HousePricingSnapshot,
+  coverageWindow: HousePricingCoverageWindow,
+): readonly HousePricingValidationIssue[] {
+  const issues = validateHousePricingForActivation(snapshot, coverageWindow)
+    .filter((issue) => issue.code !== "RATE_PLAN_BASIS_UNSUPPORTED" && !(
+      issue.code === "UNSUPPORTED_PRICING_DIMENSION"
+      && issue.path.startsWith("priceRules.")
+      && issue.path.endsWith(".durationMinutes")
+    ));
+  const supportedBases = new Set(["per_day", "per_slot", "per_hour", "flat_package"]);
+  for (const plan of snapshot.ratePlans.filter((candidate) => !candidate.archived)) {
+    if (!supportedBases.has(plan.pricingBasis)) issues.push({
+      code: "RATE_PLAN_BASIS_UNSUPPORTED",
+      path: `ratePlans.${plan.id}.pricingBasis`,
+      message: "Площадка использует per_day, per_slot, per_hour или flat_package",
+    });
+    if (plan.quantityMetric !== "guests") issues.push({
+      code: "RATE_PLAN_QUANTITY_UNSUPPORTED",
+      path: `ratePlans.${plan.id}.quantityMetric`,
+      message: "Тариф площадки должен использовать quantityMetric=guests",
+    });
+    if (plan.includedQuantity === null || plan.baseExtraUnitAmountMinor === null) issues.push({
+      code: "RATE_PLAN_QUANTITY_UNSUPPORTED",
+      path: `ratePlans.${plan.id}`,
+      message: "Тариф площадки должен задавать includedQuantity и extraUnitPrice для гостей",
+    });
+    if (plan.minDurationMinutes !== null && plan.minDurationMinutes <= 0) issues.push({ code: "PRICE_RULE_INVALID", path: `ratePlans.${plan.id}.minDurationMinutes`, message: "Минимальная длительность должна быть положительной" });
+    if (plan.maxDurationMinutes !== null && plan.maxDurationMinutes <= 0) issues.push({ code: "PRICE_RULE_INVALID", path: `ratePlans.${plan.id}.maxDurationMinutes`, message: "Максимальная длительность должна быть положительной" });
+    if (plan.minDurationMinutes !== null && plan.maxDurationMinutes !== null && plan.minDurationMinutes > plan.maxDurationMinutes) issues.push({ code: "PRICE_RULE_INVALID", path: `ratePlans.${plan.id}.maxDurationMinutes`, message: "Максимальная длительность меньше минимальной" });
+    for (const rule of plan.rules.filter((rule) => rule.enabled && !rule.archived)) {
+      if (rule.durationMinutes !== null) issues.push({ code: "UNSUPPORTED_PRICING_DIMENSION", path: `priceRules.${rule.id}.durationMinutes`, message: "Duration-правила площадки пока не поддерживаются; используйте bounds тарифа" });
+    }
+  }
+  return deepFreeze(issues);
+}
+
 export function validateHousePricingForActivation(
   snapshot: HousePricingSnapshot,
   coverageWindow: HousePricingCoverageWindow,

@@ -9,8 +9,8 @@
 | P4.1–P4.2 | Public UI kit/homepage, CMS frontend/core, Admin/Public API | Новые страницы используют существующие boundaries |
 | P4.3 | Atomic/direct publication, provider-neutral delivery, Admin delivery health/detail/replay API | Render-ready preview/diff, сквозная UI/cache observability |
 | P4.4 | Local media storage, processing и immutable public variants | Production storage/CDN, scanner, cleanup/DLQ/metrics |
-| P4.5 operational | House/campground pricing и Resource dossier; add-on, program и event-service dossiers; Booking, ProgramRegistration и Event quote acceptance | Venue slice; campground acceptance context; неподдержанные order/add-on types остаются fail-closed |
-| P4.5 public | Release-pinned add-on listing/detail projection | Typed resolvers остальных offering kinds и route-by-route CMS migration |
+| P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
+| P4.5 public | Release-pinned add-on и venue listing/detail projections | Typed resolvers house/campground/program/event-service и route-by-route CMS migration |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
 | P4.6–P4.9 | Отдельные foundations описаны в профильных specs | Public intake, visitor analytics, controlled code и go-live не завершены |
 
@@ -23,8 +23,8 @@
 
 ## Следующий инкремент
 
-1. Узкий venue operational slice: typed fulfillment/capacity в CRM, canonical CMS draft и отдельный fail-closed public resolver. Не расширять его до общего перепроектирования offering engine.
-2. P4.5F route-by-route migration, preview/diff и сквозная delivery visibility; затем P4.6 public intake. Уже реализованный delivery API использовать повторно.
+1. P4.5F route-by-route migration: завершить bindings главной и последовательно переводить vertical routes на typed CMS delivery только по мере готовности safe resolver.
+2. Render-ready preview/diff и сквозная delivery visibility; затем P4.6 public intake. Уже реализованный delivery API использовать повторно.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.
 

@@ -9,6 +9,7 @@ import {
   NonNegativeMoneySchema,
   VersionSchema,
 } from "./primitives.js";
+import { ResourceSpaceTypeSchema } from "./resources.js";
 
 const NonNegativeMinorAmountSchema = z.number().int().nonnegative().safe();
 
@@ -133,7 +134,13 @@ export const OfferingFulfillmentSchema = z.discriminatedUnion("kind", [
       });
     }
   }),
-  z.object({ kind: z.literal("venue") }).strict(),
+  /** A venue is one exclusive operational Resource; pricing is resolved by its active RatePlan. */
+  z.object({
+    kind: z.literal("venue"),
+    allocationMode: z.literal("exclusive_resource"),
+    capacityUnit: z.literal("guests"),
+    pricingMode: z.literal("rate_plan"),
+  }).strict(),
   z.object({ kind: z.literal("event_service") }).strict(),
   z.object({ kind: z.literal("program") }).strict(),
 ]);
@@ -208,6 +215,17 @@ export type HouseOfferingListResponse = z.infer<typeof HouseOfferingListResponse
 export const StayOfferingListResponseSchema = HouseOfferingListResponseSchema;
 export type StayOfferingListResponse = z.infer<typeof StayOfferingListResponseSchema>;
 
+export const VenueOfferingListQuerySchema = z.object({
+  kind: z.literal("venue").default("venue"),
+  q: z.string().trim().min(1).max(200).optional(),
+  state: CatalogOfferingStateSchema.optional(),
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type VenueOfferingListQuery = z.infer<typeof VenueOfferingListQuerySchema>;
+export const VenueOfferingListResponseSchema = HouseOfferingListResponseSchema;
+export type VenueOfferingListResponse = z.infer<typeof VenueOfferingListResponseSchema>;
+
 export const AddOnOfferingListQuerySchema = z.object({
   kind: z.literal("addon").default("addon"),
   q: z.string().trim().min(1).max(200).optional(),
@@ -240,11 +258,11 @@ export const AddOnOfferingListResponseSchema = z.object({
 }).strict();
 export type AddOnOfferingListItem = z.infer<typeof AddOnOfferingListItemSchema>;
 export type AddOnOfferingListResponse = z.infer<typeof AddOnOfferingListResponseSchema>;
-export const OfferingListQuerySchema = z.union([StayOfferingListQuerySchema, AddOnOfferingListQuerySchema]);
+export const OfferingListQuerySchema = z.union([StayOfferingListQuerySchema, VenueOfferingListQuerySchema, AddOnOfferingListQuerySchema]);
 export type OfferingListQuery = z.infer<typeof OfferingListQuerySchema>;
 /** Flat query description for OpenAPI; runtime validation remains the stricter kind-discriminated union above. */
 export const OfferingListOpenApiQuerySchema = z.object({
-  kind: z.enum(["house", "campground", "addon"]).default("house"),
+  kind: z.enum(["house", "campground", "venue", "addon"]).default("house"),
   q: z.string().trim().min(1).max(200).optional(),
   state: CatalogOfferingStateSchema.optional(),
   serviceType: AddOnServiceTypeSchema.optional(),
@@ -254,7 +272,7 @@ export const OfferingListOpenApiQuerySchema = z.object({
   cursor: z.string().min(1).max(2048).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 }).strict();
-export const OfferingListResponseSchema = z.union([StayOfferingListResponseSchema, AddOnOfferingListResponseSchema]);
+export const OfferingListResponseSchema = z.union([StayOfferingListResponseSchema, VenueOfferingListResponseSchema, AddOnOfferingListResponseSchema]);
 export type OfferingListResponse = z.infer<typeof OfferingListResponseSchema>;
 
 /**
@@ -292,6 +310,28 @@ export const ResourceStayOfferingCreateBodySchema = z.object({
 export type ResourceStayOfferingCreateBody = z.infer<typeof ResourceStayOfferingCreateBodySchema>;
 export const ResourceStayOfferingCreateResultSchema = ResourcePrimaryStayOfferingSummarySchema;
 export type ResourceStayOfferingCreateResult = z.infer<typeof ResourceStayOfferingCreateResultSchema>;
+
+export const ResourcePrimaryVenueOfferingSummarySchema = z.object({
+  offeringId: IdSchema,
+  kind: z.literal("venue"),
+  code: z.string().min(1).max(120),
+  operationalName: z.string().min(1).max(500),
+  state: CatalogOfferingStateSchema,
+}).strict();
+export type ResourcePrimaryVenueOfferingSummary = z.infer<typeof ResourcePrimaryVenueOfferingSummarySchema>;
+export const ResourcePrimaryVenueOfferingLookupResponseSchema = z.discriminatedUnion("resolution", [
+  z.object({ resolution: z.literal("none") }).strict(),
+  z.object({ resolution: z.literal("linked"), offering: ResourcePrimaryVenueOfferingSummarySchema }).strict(),
+  z.object({ resolution: z.literal("ambiguous"), candidates: z.array(ResourcePrimaryVenueOfferingSummarySchema).min(2).max(100) }).strict(),
+]);
+export type ResourcePrimaryVenueOfferingLookupResponse = z.infer<typeof ResourcePrimaryVenueOfferingLookupResponseSchema>;
+export const ResourceVenueOfferingCreateBodySchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+}).strict();
+export type ResourceVenueOfferingCreateBody = z.infer<typeof ResourceVenueOfferingCreateBodySchema>;
+export const ResourceVenueOfferingCreateResultSchema = ResourcePrimaryVenueOfferingSummarySchema;
+export type ResourceVenueOfferingCreateResult = z.infer<typeof ResourceVenueOfferingCreateResultSchema>;
 
 /**
  * Read-only selector for typed fulfillment targets. The first delivery slice
@@ -510,6 +550,32 @@ export const HouseOfferingBindingsReplaceBodySchema = OfferingSubjectMutationMet
   });
 });
 export type HouseOfferingBindingsReplaceBody = z.infer<typeof HouseOfferingBindingsReplaceBodySchema>;
+
+function validateVenueBindings(
+  value: { bindings: Array<z.infer<typeof OfferingBindingSchema> | Omit<z.infer<typeof OfferingBindingSchema>, "id" | "offeringId" | "version">> },
+  context: z.RefinementCtx,
+) {
+  const primaries = value.bindings.filter((binding) => binding.role === "primary");
+  if (primaries.length !== 1 || primaries[0]!.target.type !== "resource") {
+    context.addIssue({ code: "custom", path: ["bindings"], message: "A venue requires exactly one primary Resource binding" });
+  }
+  value.bindings.forEach((binding, index) => {
+    if (binding.target.type !== "resource") context.addIssue({ code: "custom", path: ["bindings", index, "target"], message: "Venue bindings may only target Resources" });
+    if (binding.role === "primary" && (binding.defaultQuantity !== 1 || binding.defaultCapacityImpact !== 1 || !binding.availabilityRequired)) {
+      context.addIssue({ code: "custom", path: ["bindings", index], message: "A venue primary binding must reserve one available Resource" });
+    }
+  });
+}
+
+export const VenueOfferingBindingsReplaceSchema = OfferingSubjectMutationMetaSchema.extend({
+  offeringId: IdSchema,
+  bindings: z.array(OfferingBindingSchema.omit({ id: true, offeringId: true, version: true })).min(1).max(100),
+}).strict().superRefine(validateVenueBindings);
+export type VenueOfferingBindingsReplace = z.infer<typeof VenueOfferingBindingsReplaceSchema>;
+export const VenueOfferingBindingsReplaceBodySchema = OfferingSubjectMutationMetaSchema.extend({
+  bindings: z.array(OfferingBindingSchema.omit({ id: true, offeringId: true, version: true })).min(1).max(100),
+}).strict().superRefine(validateVenueBindings);
+export type VenueOfferingBindingsReplaceBody = z.infer<typeof VenueOfferingBindingsReplaceBodySchema>;
 
 function validateCampgroundBindings(
   value: { bindings: Array<z.infer<typeof OfferingBindingSchema> | Omit<z.infer<typeof OfferingBindingSchema>, "id" | "offeringId" | "version">> },
@@ -2326,6 +2392,44 @@ export const PublicAddOnSummarySchema = PublicOfferingSummarySchema.safeExtend({
   terms: PublicAddOnTermsSchema,
 }).strict();
 export type PublicAddOnSummary = z.infer<typeof PublicAddOnSummarySchema>;
+
+/** Public venue projection: availability is a readiness mode, never an interval count. */
+export const PublicVenueFulfillmentSchema = z.object({
+  allocationMode: z.literal("exclusive_resource"),
+  capacityUnit: z.literal("guests"),
+  capacityTotal: z.number().int().nonnegative().max(1_000_000),
+  pricingMode: z.literal("rate_plan"),
+  spaceType: ResourceSpaceTypeSchema.nullable(),
+  availabilityMode: z.enum(["resource", "request_only"]),
+}).strict();
+export type PublicVenueFulfillment = z.infer<typeof PublicVenueFulfillmentSchema>;
+export const PublicVenueSummarySchema = PublicOfferingSummarySchema.safeExtend({
+  kind: z.literal("venue"),
+  fulfillment: PublicVenueFulfillmentSchema,
+}).strict();
+export type PublicVenueSummary = z.infer<typeof PublicVenueSummarySchema>;
+export const PublicVenueSummaryParamsSchema = z.object({ offeringId: IdSchema }).strict();
+export type PublicVenueSummaryParams = z.infer<typeof PublicVenueSummaryParamsSchema>;
+export const PublicVenueListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type PublicVenueListQuery = z.infer<typeof PublicVenueListQuerySchema>;
+export const PublicVenueListResponseSchema = z.object({
+  items: z.array(PublicVenueSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+  releaseId: IdSchema,
+  asOf: DateTimeSchema,
+}).strict();
+export type PublicVenueListResponse = z.infer<typeof PublicVenueListResponseSchema>;
+export const PublicVenueProjectionPinSchema = z.object({
+  contract: z.literal("public.venue-summary.v1"),
+  offeringId: IdSchema,
+  kind: z.literal("venue"),
+  nodeId: IdSchema,
+  profileRevisionId: IdSchema,
+}).strict();
+export type PublicVenueProjectionPin = z.infer<typeof PublicVenueProjectionPinSchema>;
 
 export const PublicAddOnSummaryParamsSchema = z.object({
   offeringId: IdSchema,

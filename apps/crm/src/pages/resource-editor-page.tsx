@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { IconAlertTriangle, IconCalendarEvent, IconClock, IconDotsVertical, IconExternalLink, IconHome, IconLinkOff, IconLock, IconLockOpen, IconPlus, IconSettings, IconTent, IconTrash, IconUser, IconWorld } from "@tabler/icons-react"
+import { IconAlertTriangle, IconBuildingCommunity, IconCalendarEvent, IconClock, IconDotsVertical, IconExternalLink, IconHome, IconLinkOff, IconLock, IconLockOpen, IconPlus, IconSettings, IconTent, IconTrash, IconUser, IconWorld } from "@tabler/icons-react"
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import {
@@ -28,8 +28,8 @@ import {
   type EditorSaveState,
   type IconBoxVariant,
 } from "@crm/ui"
-import { CampgroundOfferingWorkspace, HouseOfferingWorkspace, type OfferingEditorGateway } from "@crm/offering-editor"
-import type { InternalOfferingEditor, ResourcePrimaryStayOfferingLookupResponse, ResourceStayOfferingCreateBody, ResourceStayOfferingCreateResult } from "@crm/contracts"
+import { CampgroundOfferingWorkspace, HouseOfferingWorkspace, VenueOfferingWorkspace, type OfferingEditorGateway } from "@crm/offering-editor"
+import type { InternalOfferingEditor, ResourcePrimaryStayOfferingLookupResponse, ResourceStayOfferingCreateBody, ResourceStayOfferingCreateResult, ResourcePrimaryVenueOfferingLookupResponse, ResourceVenueOfferingCreateBody, ResourceVenueOfferingCreateResult } from "@crm/contracts"
 
 import { useEditorLayoutChrome } from "@app/app/editor-layout-context"
 import { EditorPreviewHistory } from "@app/components/shared/editor-preview-tabs"
@@ -62,6 +62,8 @@ function inputNumber(value: string) { const parsed = Number(value); return Numbe
 export type ResourceOfferingLookupGateway = {
   resolvePrimaryStayOffering(resourceId: string): Promise<ResourcePrimaryStayOfferingLookupResponse>
   createStayOffering(resourceId: string, input: ResourceStayOfferingCreateBody): Promise<ResourceStayOfferingCreateResult>
+  resolvePrimaryVenueOffering(resourceId: string): Promise<ResourcePrimaryVenueOfferingLookupResponse>
+  createVenueOffering(resourceId: string, input: ResourceVenueOfferingCreateBody): Promise<ResourceVenueOfferingCreateResult>
 }
 
 export function ResourceEditorPage({ repository = resourceRepository, offeringGateway = houseOfferingGateway }: { repository?: ResourceEditorRepository; offeringGateway?: OfferingEditorGateway & ResourceOfferingLookupGateway }) {
@@ -77,7 +79,7 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
   const [saveState, setSaveState] = useState<EditorSaveState>("saved")
 
   const validKind = isResourceKind(kind) ? kind : null
-  const supportsOffering = validKind === "houses" || validKind === "camping"
+  const supportsOffering = validKind === "houses" || validKind === "camping" || validKind === "venues"
   const tab = requestedTab === "offering" && !supportsOffering ? "main" : requestedTab
   const tabItems = supportsOffering ? [...baseTabItems, offeringTabItem] : baseTabItems
   const offeringNavigationGuard = useRef<(() => boolean) | null>(null)
@@ -99,8 +101,8 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
   const update = useCallback(<K extends keyof ResourceEditorRecord,>(key: K, value: ResourceEditorRecord[K]) => { setDraft((current) => current ? { ...current, [key]: value } : current); setSaveState("dirty") }, [])
   const updateRules = useCallback(<K extends keyof ResourceEditorRules,>(key: K, value: ResourceEditorRules[K]) => { setDraft((current) => current ? { ...current, rules: { ...current.rules, [key]: value } } : current); setSaveState("dirty") }, [])
   const setStatus = useCallback((status: ResourceActivityStatus) => update("active", status === "active"), [update])
-  const setKind = useCallback((nextKind: ResourceKind) => { setDraft((current) => current ? { ...current, kind: nextKind, spaceType: nextKind === "venues" ? current.spaceType ?? "outdoor" : null } : current); setSaveState("dirty") }, [])
-  const setCapacityMode = useCallback((mode: string) => { setDraft((current) => { if (!current) return current; const total = current.capacity.total; return { ...current, capacity: mode === "shared" ? { mode: "shared", occupied: 0, total } : { mode: "fixed", total } } }); setSaveState("dirty") }, [])
+  const setKind = useCallback((nextKind: ResourceKind) => { setDraft((current) => { if (!current) return current; const capacity = nextKind === "venues" ? { mode: "fixed" as const, total: current.capacity.total } : current.capacity; return { ...current, kind: nextKind, capacity, spaceType: nextKind === "venues" ? current.spaceType ?? "outdoor" : null } }); setSaveState("dirty") }, [])
+  const setCapacityMode = useCallback((mode: string) => { setDraft((current) => { if (!current) return current; const total = current.capacity.total; if (current.kind === "venues") return { ...current, capacity: { mode: "fixed", total } }; return { ...current, capacity: mode === "shared" ? { mode: "shared", occupied: 0, total } : { mode: "fixed", total } } }); setSaveState("dirty") }, [])
   const setCapacityTotal = useCallback((total: number) => { setDraft((current) => current ? { ...current, capacity: current.capacity.mode === "shared" ? { ...current.capacity, total } : { mode: "fixed", total } } : current); setSaveState("dirty") }, [])
   const setOccupied = useCallback((occupied: number) => { setDraft((current) => current?.capacity.mode === "shared" ? { ...current, capacity: { ...current.capacity, occupied } } : current); setSaveState("dirty") }, [])
   const addBlock = useCallback((from: string, to: string, reason: string) => { const text = reason.trim(); if (!draft?.permissions.canManageBlocks || !from || !to || !text) return; const block: ResourceEditorBlock = { from, id: `block-${Date.now()}`, reason: text, status: "active", to }; setDraft((current) => current ? { ...current, blocks: [block, ...current.blocks], hasActiveBlock: true } : current); setSaveState("dirty") }, [draft?.permissions.canManageBlocks])
@@ -116,17 +118,18 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
       setSaveState("saved")
       if (!wasNew || saved.id === "new") return
 
-      const createsStaySaleDossier = saved.kind === "houses" || saved.kind === "camping"
-      if (createsStaySaleDossier) {
+      const createsSaleDossier = saved.kind === "houses" || saved.kind === "camping" || saved.kind === "venues"
+      if (createsSaleDossier) {
         try {
-          await offeringGateway.createStayOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
+          if (saved.kind === "venues") await offeringGateway.createVenueOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
+          else await offeringGateway.createStayOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
         } catch (reason) {
           setSetupError(reason instanceof Error ? reason.message : "Ресурс сохранён, но цену и страницу не удалось подготовить.")
         }
       }
 
       const next = new URLSearchParams(location.search)
-      if (createsStaySaleDossier) next.set("tab", "offering")
+      if (createsSaleDossier) next.set("tab", "offering")
       navigate(`/resources/${saved.kind}/${saved.id}${next.size ? `?${next}` : ""}`, { replace: true })
     } catch {
       setSaveState("conflict")
@@ -160,6 +163,7 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
 }
 
 function ResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
+  if (resource.kind === "venues") return <VenueResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
   const [lookup, setLookup] = useState<ResourcePrimaryStayOfferingLookupResponse | null>(null)
   const [editor, setEditor] = useState<InternalOfferingEditor | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -203,6 +207,22 @@ function ResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { g
 
   const workspaceProps = { createAddOnsCommandMeta, createCommandMeta, createSubjectCommandMeta, editorialHref, gateway, layout: "embedded" as const, offeringId: lookup.offering.offeringId, onEditorChange: setEditor, onNavigationGuardChange }
   return expectedKind === "campground" ? <CampgroundOfferingWorkspace {...workspaceProps} /> : <HouseOfferingWorkspace {...workspaceProps} />
+}
+
+function VenueResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
+  const [lookup, setLookup] = useState<ResourcePrimaryVenueOfferingLookupResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const load = useCallback(async () => { if (resource.id === "new") return; setLookup(null); setError(null); try { setLookup(await gateway.resolvePrimaryVenueOffering(resource.id)) } catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось найти предложение площадки") } }, [gateway, resource.id])
+  useEffect(() => { void load() }, [load])
+  const createOffering = useCallback(async () => { if (creating) return; setCreating(true); setCreateError(null); try { const offering = await gateway.createVenueOffering(resource.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() }); setLookup({ resolution: "linked", offering }) } catch (reason) { setCreateError(reason instanceof Error ? reason.message : "Не удалось создать условия продажи") } finally { setCreating(false) } }, [creating, gateway, resource.id])
+  if (resource.id === "new") return <div className="rounded-xl border bg-background"><PageState icon={IconBuildingCommunity} title="Сначала сохраните площадку">При первом сохранении система подготовит цену, binding и canonical CMS-черновик.</PageState></div>
+  if (error) return <div className="rounded-xl border bg-background"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={() => void load()} title="Досье площадки не загрузилось" tone="danger">{error}</PageState></div>
+  if (!lookup) return <ResourceEditorLoading />
+  if (lookup.resolution === "none") return <div className="rounded-xl border bg-background"><PageState actionLabel={creating ? "Подготавливаем…" : "Подготовить цену и страницу"} icon={IconLinkOff} onAction={() => void createOffering()} title="Цена и страница ещё не настроены">Будет создано одно venue offering с exact primary Resource binding и canonical CMS draft.{createError ? <span className="mt-2 block text-danger" role="alert">{createError}</span> : null}</PageState></div>
+  if (lookup.resolution === "ambiguous") return <EditorSection subtitle="Система не выбирает старую связь автоматически." title="Нужна проверка данных"><div className="divide-y rounded-lg border">{lookup.candidates.map((candidate) => <div className="flex items-center gap-3 p-3" key={candidate.offeringId}><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{candidate.operationalName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{candidate.code}</p></div><StatusBadge tone="warning">Дубль</StatusBadge></div>)}</div></EditorSection>
+  return <VenueOfferingWorkspace gateway={gateway} offeringId={lookup.offering.offeringId} onNavigationGuardChange={onNavigationGuardChange} />
 }
 
 function ResourceOverflow({ onOpenSchedule }: { onOpenSchedule: () => void }) { return <DropdownMenu><DropdownMenuTrigger render={<Button aria-label="Дополнительные действия ресурса" size="icon-sm" variant="ghost" />}><IconDotsVertical aria-hidden="true" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={onOpenSchedule}><IconExternalLink aria-hidden="true" />Открыть расписание</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }

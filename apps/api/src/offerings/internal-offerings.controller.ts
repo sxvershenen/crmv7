@@ -12,6 +12,7 @@ import {
   ResourceStayOfferingQuotePreviewBodySchema,
   OfferingBindingTargetLookupQuerySchema,
   ResourceStayOfferingCreateBodySchema,
+  ResourceVenueOfferingCreateBodySchema,
   type OfferingListQuery,
   type AddOnOfferingCreateBody,
   type AddOnTermsMutationBody,
@@ -23,6 +24,7 @@ import {
   type ResourceStayOfferingQuotePreviewBody,
   type OfferingBindingTargetLookupQuery,
   type ResourceStayOfferingCreateBody,
+  type ResourceVenueOfferingCreateBody,
 } from "@crm/contracts"
 
 import { RequireCapabilities } from "../common/require-capability.decorator.js"
@@ -66,6 +68,17 @@ export class InternalOfferingsController {
   @RequireCapabilities("canCreate", "canEdit")
   createStayOfferingFromResource(@Param("resourceId", new ParseUUIDPipe({ version: "4" })) resourceId: string, @Body(new ZodValidationPipe(ResourceStayOfferingCreateBodySchema)) body: ResourceStayOfferingCreateBody, @Req() request: AuthenticatedRequest) {
     return this.offerings.createStayOfferingFromResource(resourceId, body, this.context(request))
+  }
+
+  @Get("venues/by-resource/:resourceId")
+  primaryVenueOfferingForResource(@Param("resourceId", new ParseUUIDPipe({ version: "4" })) resourceId: string, @Req() request: AuthenticatedRequest) {
+    return this.offerings.primaryVenueOfferingForResource(resourceId, this.context(request))
+  }
+
+  @Post("venues/by-resource/:resourceId")
+  @RequireCapabilities("canCreate", "canEdit")
+  createVenueOfferingFromResource(@Param("resourceId", new ParseUUIDPipe({ version: "4" })) resourceId: string, @Body(new ZodValidationPipe(ResourceVenueOfferingCreateBodySchema)) body: ResourceVenueOfferingCreateBody, @Req() request: AuthenticatedRequest) {
+    return this.offerings.createVenueOfferingFromResource(resourceId, body, this.context(request))
   }
 
   @Post("by-resource/:resourceId/quotes/preview")

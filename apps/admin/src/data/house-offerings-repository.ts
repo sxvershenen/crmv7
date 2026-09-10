@@ -9,6 +9,7 @@ import {
   AddOnLibraryResponseSchema,
   CampgroundOfferingBindingsReplaceBodySchema,
   HouseOfferingBindingsReplaceBodySchema,
+  VenueOfferingBindingsReplaceBodySchema,
   HouseOfferingListQuerySchema,
   HouseOfferingListResponseSchema,
   HousePriceBookActivateBodySchema,
@@ -29,6 +30,8 @@ import {
   OfferingCustomAddOnCreateResultSchema,
   StayOfferingListQuerySchema,
   StayOfferingListResponseSchema,
+  VenueOfferingListQuerySchema,
+  VenueOfferingListResponseSchema,
   type AddOnLibraryQuery,
   type AddOnLibraryResponse,
   type AddOnOfferingCreateBody,
@@ -38,6 +41,7 @@ import {
   type AddOnTermsMutationBody,
   type AddOnTermsMutationResult,
   type CampgroundOfferingBindingsReplaceBody,
+  type VenueOfferingBindingsReplaceBody,
   type HouseOfferingListQuery,
   type HouseOfferingListResponse,
   type HousePriceBookActivateBody,
@@ -58,6 +62,7 @@ import {
   type OfferingCustomAddOnCreateBody,
   type OfferingCustomAddOnCreateResult,
   type StayOfferingListQuery,
+  type VenueOfferingListQuery,
 } from "@crm/contracts"
 import type { OfferingEditorGateway } from "@crm/offering-editor"
 
@@ -85,6 +90,11 @@ export class AdminHouseOfferingGateway implements OfferingEditorGateway {
   async listAddOns(input: AddOnOfferingListQuery): Promise<AddOnOfferingListResponse> {
     const query = AddOnOfferingListQuerySchema.parse(input)
     return this.call(() => this.client.get(`/offerings?${addOnListParams(query).toString()}`, AddOnOfferingListResponseSchema))
+  }
+
+  async listVenues(input: VenueOfferingListQuery) {
+    const query = VenueOfferingListQuerySchema.parse(input)
+    return this.call(() => this.client.get(`/offerings?${listParams(query).toString()}`, VenueOfferingListResponseSchema))
   }
 
   async getHouseEditor(offeringId: string): Promise<InternalOfferingEditor | null> {
@@ -120,6 +130,17 @@ export class AdminHouseOfferingGateway implements OfferingEditorGateway {
     }
   }
 
+  async getVenueEditor(offeringId: string): Promise<InternalOfferingEditor | null> {
+    try {
+      const editor = await this.client.get(`/offerings/${encodeURIComponent(offeringId)}/editor`, InternalOfferingEditorSchema)
+      if (editor.offering.kind !== "venue") throw new Error("Маршрут площадки получил предложение другого типа")
+      return editor
+    } catch (error) {
+      if (error instanceof AdminApiError && error.status === 404) return null
+      throw normalizeHouseOfferingError(error)
+    }
+  }
+
   async createAddOn(input: AddOnOfferingCreateBody): Promise<AddOnOfferingCreateResult> {
     const body = AddOnOfferingCreateBodySchema.parse(input)
     return this.call(() => this.client.post("/offerings/addons", body, AddOnOfferingCreateResultSchema))
@@ -148,6 +169,11 @@ export class AdminHouseOfferingGateway implements OfferingEditorGateway {
   async replaceCampgroundBindings(offeringId: string, input: CampgroundOfferingBindingsReplaceBody): Promise<OfferingBindingsReplaceResult> {
     const body = CampgroundOfferingBindingsReplaceBodySchema.parse(input)
     return this.call(() => this.client.put(`/offerings/${encodeURIComponent(offeringId)}/bindings`, body, OfferingBindingsReplaceResultSchema))
+  }
+
+  async replaceVenueBindings(offeringId: string, input: VenueOfferingBindingsReplaceBody): Promise<OfferingBindingsReplaceResult> {
+    const body = VenueOfferingBindingsReplaceBodySchema.parse(input)
+    return this.call(() => this.client.put(`/offerings/${encodeURIComponent(offeringId)}/venue-bindings`, body, OfferingBindingsReplaceResultSchema))
   }
 
   async replaceAddOnAssignments(offeringId: string, input: OfferingAddOnAssignmentsReplaceBody): Promise<OfferingAddOnAssignmentsReplaceResult> {
@@ -227,7 +253,7 @@ export function normalizeHouseOfferingError(error: unknown): unknown {
 
 export const houseOfferingGateway = new AdminHouseOfferingGateway()
 
-function listParams(query: HouseOfferingListQuery | StayOfferingListQuery) {
+function listParams(query: HouseOfferingListQuery | StayOfferingListQuery | VenueOfferingListQuery) {
   const params = new URLSearchParams({ kind: query.kind, limit: String(query.limit) })
   if (query.q) params.set("q", query.q)
   if (query.state) params.set("state", query.state)

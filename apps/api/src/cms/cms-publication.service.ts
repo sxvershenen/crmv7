@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common"
-import { DataSource, In, type EntityManager } from "typeorm"
+import { DataSource, In, IsNull, type EntityManager } from "typeorm"
 
 import {
   CmsReleaseDetailSchema,
@@ -32,6 +32,7 @@ import {
 import {
   ChangeLogEntity,
   AddonOfferingTermsEntity,
+  BusinessCalendarEntity,
   CatalogOfferingEntity,
   CmsActiveReleaseEntity,
   CmsNodeEntity,
@@ -43,9 +44,13 @@ import {
   CmsSourceLinkEntity,
   IdempotencyKeyEntity,
   OutboxEventEntity,
+  OfferingBindingEntity,
+  PriceBookEntity,
+  ResourceEntity,
 } from "@crm/db"
 
 import { createPublicAddOnProjectionDependency } from "../offerings/public-addon-projection.js"
+import { createPublicVenueProjectionDependency } from "../offerings/public-venue-projection.js"
 
 type Candidate = {
   node: CmsNodeEntity
@@ -282,7 +287,7 @@ export class CmsPublicationService {
       if (!item) throw new ConflictException({ code: "CMS_RELEASE_INVALID", message: "Релиз содержит CatalogOffering без страницы" })
       const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: item.nodeId })
       const revision = await manager.getRepository(CmsNodeRevisionEntity).findOneBy({ id: item.revisionId })
-      const expected = node && revision ? await this.safeAddOnProjectionDependency(manager, { node, revision }, link) : null
+      const expected = node && revision ? await this.safeProjectionDependency(manager, { node, revision }, link) : null
       const dependencies = ReleaseDependencyRefSchema.array().safeParse(item.dependencies)
       const actual = dependencies.success
         ? dependencies.data.find((dependency) => dependency.type === "crm_projection" && dependency.id === link.sourceId)
@@ -311,11 +316,43 @@ export class CmsPublicationService {
         ...candidate,
         sourceKind: link?.sourceKind ?? null,
         safeProjectionDependency: link?.sourceKind === blockedCatalogSourceKind
-          ? await this.safeAddOnProjectionDependency(manager, candidate, link)
+          ? await this.safeProjectionDependency(manager, candidate, link)
           : null,
       })
     }
     return resolved
+  }
+
+  private async safeProjectionDependency(
+    manager: EntityManager,
+    candidate: { node: CmsNodeEntity; revision: CmsNodeRevisionEntity },
+    link: CmsSourceLinkEntity,
+  ): Promise<ReleaseDependencyRef | null> {
+    const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (offering?.kind === "venue") return this.safeVenueProjectionDependency(manager, candidate, link)
+    return this.safeAddOnProjectionDependency(manager, candidate, link)
+  }
+
+  private async safeVenueProjectionDependency(
+    manager: EntityManager,
+    candidate: { node: CmsNodeEntity; revision: CmsNodeRevisionEntity },
+    link: CmsSourceLinkEntity,
+  ): Promise<ReleaseDependencyRef | null> {
+    const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (!offering || offering.kind !== "venue" || offering.state !== "active" || offering.archivedAt !== null) return null
+    if (candidate.node.kind !== "resource_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
+    if (!profile || profile.archivedAt !== null) return null
+    const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
+    if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
+    const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+    if (bindings.length !== 1 || !bindings[0]!.resourceId) return null
+    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId, archivedAt: IsNull() })
+    if (!resource || resource.archivedAt !== null || !["venue", "venues"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) return null
+    const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
+    const priceBook = offering.activePriceBookId ? await manager.getRepository(PriceBookEntity).findOneBy({ id: offering.activePriceBookId, offeringId: offering.id, state: "active", archivedAt: IsNull() }) : null
+    if (!calendar || !priceBook) return null
+    return createPublicVenueProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
   }
 
   private async safeAddOnProjectionDependency(
@@ -468,13 +505,11 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     if (blockedOperationalSource) {
       issues.push(issue("CMS_OPERATIONAL_SOURCE_PUBLIC_PROFILE_REQUIRED", "Operational Event/ProgramOccurrence нельзя публиковать до появления явной allowlisted public offering/profile projection", candidate.revision.path))
     } else if (candidate.sourceKind === blockedCatalogSourceKind) {
-      const safeAddOnProjection = (
-        candidate.node.kind === "addon_detail"
-        && candidate.safeProjectionDependency?.type === "crm_projection"
-        && candidate.safeProjectionDependency.version === "public.addon-summary.v1"
+      const safeProjection = candidate.safeProjectionDependency?.type === "crm_projection"
+        && ((candidate.node.kind === "addon_detail" && candidate.safeProjectionDependency.version === "public.addon-summary.v1")
+          || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1"))
         && candidate.safeProjectionDependency.contentHash
-      )
-      if (!safeAddOnProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
+      if (!safeProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
     } else if (candidate.revision.relations.length > 0) {
       issues.push(issue("CRM_PROJECTION_UNRESOLVED", "Связи с CRM не имеют закреплённой публичной проекции", candidate.revision.path))
     }

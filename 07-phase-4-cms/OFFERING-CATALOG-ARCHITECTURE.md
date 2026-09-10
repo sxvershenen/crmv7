@@ -228,6 +228,8 @@ Operational:
 
 Quote formula is server-owned: selected base rule + validated extra guests + selected options. CMS shows only published explanation and returned figures.
 
+Реализованный operational slice не дублирует terms в отдельной venue-таблице: `Resource` владеет `spaceType` и fixed capacity, primary `OfferingBinding` — exclusive availability и setup/cleanup, `RatePlan` — basis, duration bounds, included guests и extra guest amount. Guided CRM flow создаёт один `CatalogOffering(kind=venue)`, exact primary binding и canonical `catalog_offering → resource_detail` CMS-черновик. `public.venue-summary.v1` читает только active release и exact projection dependency; interval availability count наружу не выдаётся. Shared capacity, duration selectors в price rules и venue order acceptance остаются fail-closed до отдельного контракта.
+
 ### 4.5 Мероприятия под заказ
 
 Постоянная категория мероприятия — `EventServiceTemplate` с exact primary `CatalogOffering(kind=event_service)` binding. Она не равна фактическому CRM `Event`, который содержит клиента, телефон, даты, планирование и оплаты. Несколько категорий могут иметь одинаковый `format`; это классификация, не identity.
