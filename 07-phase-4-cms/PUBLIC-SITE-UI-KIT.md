@@ -39,6 +39,8 @@ apps/site/
 
 Package exports CSS, React components, framework-neutral types/variants and Astro-compatible class/attribute contracts. Meaningful content остаётся SSR. React используется только для реального interaction; Astro JSX нельзя передавать как `children` в React SSR component — вся такая композиция должна находиться по одну сторону renderer boundary.
 
+`apps/site` must include `packages/site-ui/src` in the Tailwind source graph; the architecture gate fails when package utilities are omitted. The stable `site-ui@1` renderer identifier remains for CMS compatibility even though the rejected v1 gallery is not canonical.
+
 ## 3. Foundations
 
 Global style editing happens through semantic CSS variables, not page files.
@@ -148,6 +150,8 @@ UI kit provides presentation and interaction, not authoritative availability/pri
 - booking summary, conflict/unavailable message and alternative dates;
 - multi-step form progress;
 - consent and success/error/retry states.
+
+Resource booking reuses calculator controls and density. At `1280×720` and wider the desktop dialog must fit each step without an inner vertical scrollbar. Blog remains one SSR-meaningful React island with the approved intentional treatment: no category badge, hover zooms media only, compact rows keep muted description/right action, and the mobile rail follows the public card-rail gutter.
 
 `BookingDialog` composes these pieces and emits typed user intent. Site/public API owns data fetching; CRM backend remains authoritative for availability, totals and final Lead/Booking operations.
 

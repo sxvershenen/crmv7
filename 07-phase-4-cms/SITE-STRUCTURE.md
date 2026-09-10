@@ -1,5 +1,7 @@
 # Site structure and page system
 
+Этот документ описывает target architecture и будущие gates; текущая реализация определяется Phase 4 status, source и фактическими проверками.
+
 Это target architecture, а не утверждённый список URL. Финальные slugs и набор indexable pages утверждаются после семантики и миграционного crawl текущего сайта.
 
 ## 1. Типы страниц
@@ -12,7 +14,7 @@
 | Category | curated subset с уникальным intent | CMS taxonomy |
 | Resource detail | домик/доп/площадка и т.п. | CRM identity + CMS public profile |
 | Program detail | постоянная программа | CRM template + CMS profile |
-| Event detail | мероприятие/формат | CRM event + CMS profile |
+| Event detail | мероприятие/формат | EventServiceTemplate/offering + CMS public profile; customer Event private |
 | Article/listing | информационный кластер | CMS |
 | Information/legal | о базе, контакты, privacy и т.п. | CMS/settings |
 | Custom code | исключительный уникальный experience | Git artifact + CMS manifest |

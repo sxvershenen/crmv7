@@ -1,5 +1,7 @@
 # Platform architecture
 
+Этот документ описывает target contracts и будущие gates; текущая реализация определяется Phase 4 status, source и фактическими проверками.
+
 ## 1. Authority и bounded contexts
 
 | Контекст | Authoritative owner | Что хранит |
@@ -14,7 +16,7 @@
 | Analytics | analytics module/worker | consent-aware events, attribution, conversion facts, aggregates |
 | Delivery | Outbox + jobs | fan-out, publication schedule, cache purge/rebuild, retry/DLQ |
 
-CMS не получает право менять operational поля через content DTO. При наличии operational capability `apps/admin` может монтировать тот же typed editor и вызывать тот же CRM Catalog/Pricing application service, что CRM; это второй UI entry point к одной записи, а не второй owner. Аналогично CRM может открыть shared CMS content panel/deep link к той же revision. `PublicResourceProfile` и `PublicProgramProfile` содержат только public copy/media/SEO/display settings и typed relation к существующей entity. Произвольный operational `Event` не получает public profile: публичным является отдельный allowlisted `EventServiceTemplate`/offering, а не клиентский заказ.
+CMS не получает право менять operational поля через content DTO. `apps/admin` может дать deep link в CRM dossier, а CRM Catalog/Pricing application service остаётся одной backend boundary; operational editor не монтируется в CMS и не создаёт второй UI owner. Аналогично CRM может открыть shared CMS content panel/deep link к той же revision. `PublicResourceProfile` и `PublicProgramProfile` содержат только public copy/media/SEO/display settings и typed relation к существующей entity. Произвольный operational `Event` не получает public profile: публичным является отдельный allowlisted `EventServiceTemplate`/offering, а не клиентский заказ.
 
 Полная коммерческая модель шести направлений и её UI/data-flow: `OFFERING-CATALOG-ARCHITECTURE.md`.
 
@@ -84,17 +86,19 @@ Revision lifecycle:
 
 Publish blockers: duplicate path, invalid canonical/schema, missing required data/alt, broken node/CRM/media dependency, unready media, failed code build, unauthorized renderer, unsafe HTML, redirect loop.
 
-Pipeline: `validate → build immutable artifacts → approve → write manifest transaction → CAS active pointer → invalidate/warm caches`. Manual and scheduled activations serialize on the site pointer. Versioned cache keys prevent mixed releases if purge fails after activation; the failure remains visible and retryable. Preview records `baseReleaseId` and becomes stale when the base changes. Emergency rollback activates a complete prior manifest. Approver separation, backup/restore and RPO/RTO are P4.0 decisions.
+Pipeline: `validate → build immutable artifacts → approve → write manifest transaction → CAS active pointer → invalidate/warm caches`. Manual and scheduled activations serialize on the site pointer. Versioned cache keys prevent mixed releases if purge fails after activation; the failure remains visible and retryable. Preview records `baseReleaseId` and becomes stale when the base changes. Emergency rollback activates a complete prior manifest. Content release requires a reviewer; code release requires an approver other than the author; emergency capability is separate and audited.
 
 ## 5. Astro delivery
 
-Текущий `apps/site` — static Astro + fixtures. D-048 explicitly replaces only the static-runtime part of D-039 while preserving Astro-first/islands/public-API boundaries:
+Текущий `apps/site` — Astro server output с published API и provider-neutral publication. Отдельные route slices ещё мигрируют с fixtures; Astro-first/islands/public-API boundaries сохраняются.
 
 - draft preview должен обновляться за секунды через isolated workspace/HMR;
 - целевой production runtime — Astro server/hybrid, public API, server-rendered SEO HTML, CDN cache + tag/path invalidation;
-- если hosting заставляет оставить static output, publish запускает signed atomic rebuild/deploy и UI показывает честный SLO; client-only загрузка SEO-контента не допускается.
+- Provider-neutral atomic publication уже реализована. Hosting adapter, CDN и revalidation mechanism выбираются на go-live; static output остаётся возможным deployment-вариантом с честным SLO и не заменяет published API или server-rendered SEO HTML.
+- Engineering targets are preview update within 5 seconds and content-only production publish p95 within 60 seconds; these are targets, not achieved SLOs or provider commitments.
+- Environments are local, isolated preview, staging and production; preview is private/noindex and production never reads drafts.
 
-Rendering/hosting decision является P4.0 gate. Нельзя реализовывать publish pipeline до выбора adapter/CDN/revalidation mechanism.
+Provider/CDN/data-location/revalidation choice remains a go-live decision and does not block the current provider-neutral publication path.
 
 ## 6. API namespaces
 
@@ -133,7 +137,7 @@ CMS release ──┘                    │
                Astro site
 ```
 
-Availability, price and payment are never copied into CMS revisions. Public API resolves safe live/read-model values. Cards/pages must define missing/stale fallback; CMS preview can use a permitted snapshot but labels it. Operational save from either CRM or CMS changes one aggregate/version; editorial save from either entry point creates one CMS revision. Active operational change and CMS publication have different lifecycle and actions in UI.
+Availability, price and payment are never copied into CMS revisions. Public API resolves safe live/read-model values. Cards/pages must define missing/stale fallback; CMS preview can use a permitted snapshot but labels it. Operational save in CRM changes one aggregate/version; CMS saves only one editorial revision and deep-links to CRM for operational changes. Active operational change and CMS publication have different lifecycle and actions in UI.
 
 Public eligibility mapping before migrations:
 
@@ -182,7 +186,7 @@ Flow:
 
 Also enforce decoded-pixel/decompression-bomb limits, normalized filenames, per-user/site quotas, SVG active-content policy, EXIF/GPS stripping, orientation/color-profile rules and cleanup of failed staging objects. UI may show a local preview immediately, but a CMS reference becomes publishable only at server `ready`.
 
-Original хранится private, если это утверждено storage policy; публичная доставка изображений идёт через WebP variants. SVG sanitizes separately; video/documents keep their formats. Dedup uses content hash. Published usage blocks physical delete; replace creates a new blob/version.
+Engineering default is an S3-compatible storage abstraction (a compatible local service is allowed in development); provider, data location and retention still require go-live approval. Original хранится private while an asset may be reprocessed; публичная доставка изображений идёт через immutable WebP variants. SVG sanitizes separately; video/documents keep their formats. Dedup uses content hash. Published usage blocks physical delete; replace creates a new blob/version, and purge is an explicit retention workflow.
 
 Schema references populate usage graph directly. Custom code build must emit asset manifest; dynamic untracked media URLs block publish.
 
@@ -229,7 +233,7 @@ Every admin mutation: secure session, CSRF, explicit capability, version, idempo
 
 No `synchronize`; every step is forward migration + tested rollback/operational recovery.
 
-## 13. P4.0 decisions and blockers
+## 13. Remaining architecture and go-live blockers
 
 - v1 content is Russian-only; internationalization requires a later explicit design for locale-scoped revisions/routes, translation relations, fallback, canonical and hreflang;
 - Astro server/hybrid hosting adapter versus static build SLO;

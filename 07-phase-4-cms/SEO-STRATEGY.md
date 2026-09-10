@@ -128,3 +128,7 @@ No numeric 3/6/12-month targets are set without current domain baseline, seasona
 6. add curated landings only from evidence;
 7. connect analytics and content-version reports;
 8. run competitor/semantic research and populate editorial calendar.
+
+## 11. Planning input gate
+
+Mass landing/page work waits for evidence: confirm production domain, geography, real services/resources and team owners; collect SERP competitors by pillar; record source, date and uncertainty; then update `SITE-STRUCTURE.md` and the editorial backlog. Each backlog item needs distinct intent, owner/reviewer, status, evidence/source, dependencies, review/publish date and internal-link role. Workflow is `evidence → brief → draft → editorial/SEO/claims review → approved → scheduled → published → measured → refresh/archive`; invented titles, prices, claims, schedules or publishing cadence are not baseline requirements.

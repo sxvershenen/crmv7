@@ -1,5 +1,7 @@
 # CMS UX specification
 
+Этот документ описывает target UX и будущие gates; текущая реализация определяется Phase 4 status, source и фактическими проверками.
+
 ## 1. Продуктовая граница
 
 CMS живёт в отдельном `apps/admin` и управляет только тем, что посетитель видит на сайте: content, composition, media, SEO и publication. Между CRM и CMS есть app switcher и deep links, но operational поля имеют единственный UI entry point в CRM. Копии цены, доступности, вместимости, привязок и client-side «синхронизация» запрещены.
@@ -100,7 +102,7 @@ List/view/filter state хранится в URL: `q`, `status`, `type`, `owner`, 
 
 `/seo/pages/:nodeId` is a report/drilldown route only; «Редактировать» deep-links to the canonical content editor `...?tab=seo`, so SEO fields never have two editors.
 
-`/content/categories` и `/content/public-profiles` остаются technical/reporting routes для taxonomy/profile diagnostics и миграции. Основной CRUD коммерческого контента идёт через `/offers/*`; один offering editor собирает operational и editorial panels без копирования данных.
+`/content/categories` и `/content/public-profiles` остаются technical/reporting routes для taxonomy/profile diagnostics и миграции. Основной CRUD коммерческого контента идёт через единый `/content/tree`; `/offers/*` — только canonical locator/deep link к CMS node. Operational editor открывается в CRM, а CMS хранит и редактирует только editorial revision.
 
 ## 4. Обзор CMS
 
@@ -234,29 +236,20 @@ Faceted URLs по умолчанию не индексируются. Тольк
 
 ## 11. Предложения и публичные профили
 
-Полная domain model: `OFFERING-CATALOG-ARCHITECTURE.md`. Primary entry — предметный `/offers/:kind/:offeringId`, а не generic profile editor.
+Полная domain model: `OFFERING-CATALOG-ARCHITECTURE.md`. `/offers/:kind/:offeringId` — locator к canonical CMS node, а не primary operational editor.
 
 Tabs:
 
-- **Обзор:** operational/content/publication readiness, public preview, blockers and next action.
-- **Условия и цены:** CRM-owned shared panel with active/draft price book, calendar/rule explanation and quote preview; editable only through the shared operational command service.
-- **Состав:** type-specific resources/capacity/stages/packages/options; visible label may be `Места и зона`, `Аренда и гости`, `Формат и пакеты`.
-- **Контент страницы:** public title/summary/description, benefits, included/not included, restrictions, related offers, sections and preview.
-- **Медиа и SEO:** gallery/focal point/alt plus canonical/index/social/schema checks without duplicate SEO editor.
+- **Контент:** public title/summary/description, benefits, included/not included, restrictions, related offers, sections and preview.
+- **Медиа:** gallery, focal point, alt and usage state.
+- **SEO:** canonical/index/social/schema checks without duplicate SEO editor.
 - **Публикация и история:** draft/live diff, first-launch readiness, schedule, versions, audit and rollback links.
 
-Для программ дополнительно: audience, duration display, stages/public schedule source, category, participant tiers, booking lead-time rules and catering/add-on options. Для event service: format/category, named packages, included/maximum guests, extra guest price, options and lead CTA. Произвольный operational CRM `Event` не eligible for publication and never donates customer/internal comments to CMS. Occurrence fields appear only through an allowlisted safe projection and cannot be edited through content JSON. «Доп» либо привязан к `CatalogOffering(kind=addon)`, либо является CMS-only non-bookable content without price/availability.
+Commercial summary — компактная read-only сводка в существующем редакторе, не новая вкладка: offering kind, display mode, readiness/freshness и typed blockers; price/availability/capacity/bindings/tariffs ведут в CRM.
 
-Pricing calendar UX:
+Для программ и event service CMS показывает только editorial title/description, relation, public schedule copy и safe readiness summary; package/rate/capacity/options остаются read-only и ведут в CRM. Произвольный operational CRM `Event` не eligible for publication и никогда не передаёт customer/internal comments в CMS. Occurrence fields появляются только через allowlisted safe projection и не редактируются через content JSON. «Доп» либо привязан к `CatalogOffering(kind=addon)`, либо является CMS-only non-bookable content without price/availability.
 
-- month/week grid shows effective price and weekday/weekend/holiday/special class;
-- range selection assigns a rate rule or exact override;
-- inspector explains the winning rule, priority and price-book version;
-- simulator accepts date/time, guests/participants, quantity and selected options;
-- gaps and equal-priority overlaps are warnings/blockers before activation;
-- mobile uses compact tariff/rule cards and a focused date inspector, not a squeezed desktop table.
-
-Action bar never conflates lifecycles: `Сохранить условия`, `Активировать прайс-лист`, `Сохранить черновик`, `Опубликовать страницу`. `Запустить на сайте` appears only as a coordinated first-launch command backed by one server orchestration and reports each gate separately.
+Calendar/rule explanation, quote preview и activation blockers приходят из CRM/public projection; CMS не редактирует price book, calendar или tariffs. Action bar ограничен `Сохранить черновик`, `На проверку`, `Опубликовать страницу`; `Запустить на сайте` допускается только как editorial first-launch orchestration после read-only CRM readiness gates.
 
 ## 12. Blog/materials
 
@@ -397,4 +390,4 @@ This matrix is the target product review of every top-level CMS area. A section 
 | Audit | keep | actor/surface/request/entity/version/change summary, filters/export capability and deep links; no PII spill |
 | Data quality | make first-class route | broken relations/media/links, stale source versions, pricing gaps/ambiguity, unpublished/archived dependencies and remediation action |
 
-Primary navigation exposes business work and common editorial tasks. Registry/diagnostic areas remain available but do not compete with the six offering directions for everyday authoring.
+Primary navigation exposes the single editorial tree and common content tasks. Registry/diagnostic areas remain available, while offering kinds are represented as typed tree nodes and canonical locators rather than separate CMS workspaces.

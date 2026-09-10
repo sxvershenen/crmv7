@@ -141,6 +141,8 @@ Starting engineering proposal, not legal policy:
 - raw IP in analytics: never; security logs use separately approved minimal TTL;
 - irreversible monthly aggregates: up to 25 months if approved.
 
+The current engineering default for security/rate-limit raw IP is a separate log with a maximum seven-day TTL; it is not an analytics identity and remains subject to the approved policy. Я.Метрика, provider/data location and Russian personal-data localization require explicit owner/legal approval before production.
+
 Before production, the operator/legal/privacy owner must approve purposes, notices/consent, retention, access/export/delete, providers, data location and cross-border flows. The current official text requires an accessible privacy policy for Internet collection and contains localization restrictions for collection of Russian citizens' personal data: [Федеральный закон № 152-ФЗ, официальный текст](https://ips.pravo.gov.ru/api/ips/legislation/document?baseid=None&hash=98490812b3409e2a8d78a11ca9010f434ea3d9250a11dbbdb78690cd5551bdd6).
 
 ## 10. Я.Метрика

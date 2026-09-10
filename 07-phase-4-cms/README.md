@@ -1,6 +1,6 @@
 # Phase 4 — current status
 
-Это единственная точка current status и следующего инкремента. Историческое evidence находится в `logs/` (старые Next/Remaining не являются текущими задачами); долговременный порядок и acceptance gates — в `IMPLEMENTATION-ROADMAP.md`. Не читать их целиком для обычной implementation-задачи.
+Это единственная точка current status и следующего инкремента. Оставшийся scope и acceptance gates — в `IMPLEMENTATION-ROADMAP.md`. История проверок и инкрементов хранится в Git: `git ls-tree --name-only a1a649f:07-phase-4-cms/logs`, затем `git show a1a649f:<path>`. Историю читать только для конкретного спорного факта.
 
 ## Статус
 
@@ -51,9 +51,7 @@
 | URL types/navigation/internal links | `SITE-STRUCTURE.md` |
 | SEO/content quality | `SEO-STRATEGY.md` |
 | Analytics/attribution/privacy/Метрика | `ANALYTICS.md` |
-| Stable technical defaults | `P4-0-DECISIONS.md` |
 | Order/acceptance gate | нужный раздел `IMPLEMENTATION-ROADMAP.md` |
 | CRM composition/promotion/reporting stages | `CRM-MARKETING-IMPLEMENTATION.md` |
-| Evidence of completed increment | один соответствующий файл в `logs/` |
 
-`COMPETITOR-ANALYSIS.md` и `CONTENT-CALENDAR.md` — planning inputs, а не implementation pre-read. Реальные search/competitor выводы требуют live data/source evidence.
+SEO research и content workflow — в `SEO-STRATEGY.md`; будущие страницы требуют реального source evidence.

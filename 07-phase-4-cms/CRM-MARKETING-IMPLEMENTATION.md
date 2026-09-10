@@ -2,7 +2,7 @@
 
 ## Поддерживаемый scope
 
-CRM composition, backend-owned promotion registry/application и operational reporting реализованы. Этот документ хранит контракт, а не очередь повторной реализации; историческое evidence — `logs/2026-09-05-crm-marketing.md`.
+CRM composition, backend-owned promotion registry/application и operational reporting реализованы. Этот документ хранит контракт, а не очередь повторной реализации.
 
 - Booking composition: отдельные секции позиций, услуги перед финансовой сводкой, понятные quote/retry states; незавершённый расчёт блокирует сохранение.
 - Promotion: normalized unique code, versioned writes, permissions/audit/outbox и server-owned immutable application. Gross offering quote не меняется; скидка применяется к заказу. Unchanged composition/code сохраняет исторический application, confirmed commercial terms нельзя менять молча.
@@ -19,4 +19,4 @@ CRM composition, backend-owned promotion registry/application и operational rep
 
 ## Gates
 
-Contracts + domain tests for percent/fixed/caps/scopes/dates/non-stacking; PostgreSQL migration and uniqueness/CAS/audit; booking create/update and immutable quote acceptance regressions; CRM route/repository/component tests; desktop/mobile/keyboard/error/loading/conflict checks. Record actual verification in the dated track log, not here.
+Contracts + domain tests for percent/fixed/caps/scopes/dates/non-stacking; PostgreSQL migration and uniqueness/CAS/audit; booking create/update and immutable quote acceptance regressions; CRM route/repository/component tests; desktop/mobile/keyboard/error/loading/conflict checks. Record actual verification in the task result/commit; update this contract only when behavior changes.

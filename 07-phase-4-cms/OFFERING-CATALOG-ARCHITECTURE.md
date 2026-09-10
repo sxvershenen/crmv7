@@ -13,7 +13,7 @@
 5. мероприятия под заказ: свадьбы, корпоративы и другие форматы;
 6. готовые программы.
 
-Для пользователя CMS это шесть понятных рабочих разделов, а не один абстрактный список `Public profiles`. Для backend это не шесть несвязанных систем: общие коммерческие правила живут в shared offering/pricing model, а особенности исполнения остаются в `Resource`, `ResourceGroup`, `ProgramTemplate`, `ProgramOccurrence`, `Event` и новых специализированных шаблонах.
+Для пользователя CMS эти offering kinds представлены typed nodes в одном canonical tree и locator/deep-link flow, а не шестью независимыми рабочими разделами и не одним generic `Public profiles`. Для backend это не шесть несвязанных систем: общие коммерческие правила живут в shared offering/pricing model, а особенности исполнения остаются в `Resource`, `ResourceGroup`, `ProgramTemplate`, `ProgramOccurrence`, `Event` и новых специализированных шаблонах.
 
 Этот scope включает ручные календарные цены, тарифы и детерминированные правила. Автоматическое demand-based dynamic pricing, при котором алгоритм сам меняет цену из-за спроса/загрузки, по-прежнему не входит в первый релиз.
 
@@ -65,7 +65,7 @@ Operational facts редактируются в CRM, editorial facts — в CMS.
 
 Связывает предложение с тем, что реально исполняется:
 
-- target: `Resource | ResourceGroup | ProgramTemplate | EventServiceTemplate`;
+- target: `Resource | ProgramTemplate | EventServiceTemplate`; campground shared capacity binds to a dedicated `Resource`. `ResourceGroup` остаётся navigation/operational grouping и не является sellable binding в v1; если имя сохранено в schema enum, оно reserved и не runtime-supported.
 - role: `primary | required | optional | shared_area | inventory_unit`;
 - quantity/capacity impact defaults;
 - interval/preparation policy;
@@ -349,7 +349,7 @@ Only explicit `content_only` services/landings may exist without an operational 
 
 ### 6.3 Edit and publish
 
-- Operational save becomes visible in both apps immediately; draft/active price-book state is explicit.
+- Operational save in CRM becomes visible in both apps immediately; draft/active price-book state is explicit.
 - Editorial save becomes one immutable CMS draft revision visible in both apps.
 - Production content changes only after publication.
 - Public operational projection changes on activation/effective time and emits cache invalidation.
@@ -435,7 +435,7 @@ For AI generation the agent receives field schemas and fixtures, not database cr
 5. **P4.5E — Public projections:** allowlisted offering-kind DTOs, release pinning and no-leak tests.
 6. **P4.5F — Route migration:** one vertical slice at a time, with meaningful SSR content and proportionate visual/SEO regression.
 
-These are architectural increments, not a second current-status list. Open only the relevant roadmap section, keep each implementation task bounded, and record acceptance evidence in one Phase 4 track log. Ownership follows root/scoped `AGENTS.md`.
+These are architectural increments, not a second current-status list. Open only the relevant roadmap section and keep each implementation task bounded; record the command/result with the implementation change and update current status only when the gate changes. Ownership follows root/scoped `AGENTS.md`.
 
 ## 11. Confirmed P4.5A product semantics
 

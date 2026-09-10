@@ -43,9 +43,9 @@ Backend возвращает capabilities (`canEdit`, `canChangeStatus`, `canAdd
 
 Показать кто/когда изменил, affected fields, local vs server value. Действия: refresh/retry/apply selected changes/save copy if allowed/close.
 
-## Multi-surface offering editor
+## Shared offering command boundary
 
-CRM и CMS могут показывать один commercial offering editor, но transport adapters `/internal/v1` и `/admin/v1` обязаны вызывать один `OfferingEditorApplicationService` и одни domain commands. Composite read model возвращает offering/subject/pricing/editorial/public readiness, field ownership, capabilities и отдельные source versions.
+Commercial editor находится в CRM; CMS открывает canonical editorial node и при необходимости ссылку в CRM. Существующие transport adapters `/internal/v1` и `/admin/v1` вызывают один `OfferingEditorApplicationService` и одни domain commands; наличие Admin API не требует второго operational UI. Composite read model сохраняет owner-specific readiness, capabilities и source versions.
 
 Mutation changes are owner-segmented:
 

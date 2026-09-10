@@ -9,20 +9,20 @@
 - Public site читает только published public API/projections, не обращается к БД/internal API, не публикует draft/internal/PII и не подтверждает бронь.
 - Один бизнес-факт не имеет двух authority; границы проходят через typed contracts, audit/outbox, notifications и cache invalidation.
 
-Приоритет при конфликте: явная задача пользователя → актуальное решение в `DECISIONS.md` → рабочая спецификация контура → код как свидетельство реализованного состояния. `reference/*` — только архив для разрешения конкретной неоднозначности.
+Приоритет при конфликте: явная задача пользователя → актуальное решение в `DECISIONS.md` → рабочая спецификация контура → код как свидетельство реализованного состояния. История решений и исходные ТЗ доступны через Git; они не переопределяют текущие правила.
 
 ## Контекстный бюджет
 
 1. Определить контур и проверить dirty worktree; затем либо открыть релевантный код/тесты для собственной работы, либо делегировать discovery без дублирующего чтения.
 2. До кода читать одну primary spec и максимум одну зависимую; остальное — только по выявленной границе.
-3. Не читать целиком human README/MANIFEST, `DECISIONS.md`, `IMPLEMENTATION_LOG.md`, roadmap или `logs/`: найти heading через `rg` и открыть только его диапазон.
+3. Не загружать всю документацию: `rg` по заголовкам → нужный раздел. Реализованные детали искать в текущем code/test consumer; историю Git открывать только для конкретного пробела.
 4. При изменении scoped-каталога один раз прочитать его ближайший `AGENTS.md`; не перечитывать уже переданный в task контекст.
 
 ## Маршруты
 
 | Задача | Основной контекст |
 |---|---|
-| Общий scope / стек | `00-core/project-scope.md` / `00-core/stack.md` — только нужный из них |
+| Scope / запуск / стек | нужный раздел `README.md`; версии и команды — `package.json` нужного workspace |
 | CRM UI | `apps/crm/AGENTS.md`, затем текущие page/components/tests |
 | CMS UI | `apps/admin/AGENTS.md`, затем нужный раздел `07-phase-4-cms/CMS-UX-SPEC.md` |
 | Backend/domain/PostgreSQL | `04-domain-backend/domain-model.md`, затем один профильный backend-документ |
@@ -35,7 +35,7 @@
 | Public intake/integration | `07-phase-4-cms/PLATFORM-ARCHITECTURE.md` + релевантные contracts/code |
 | SEO/site structure/content | один из `07-phase-4-cms/SEO-STRATEGY.md` / `07-phase-4-cms/SITE-STRUCTURE.md`; live-выводы только по source evidence |
 | Analytics/я.Метрика | `07-phase-4-cms/ANALYTICS.md` |
-| Tests/security/release | один из `06-quality-process/testing-security.md` / `06-quality-process/stage-deliverables.md` |
+| Tests/security/release | `06-quality-process/testing-security.md` |
 
 Текущий статус и следующий инкремент находятся только в `07-phase-4-cms/README.md`. `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md` открывать точечно при изменении порядка или проверке acceptance gate.
 
@@ -65,14 +65,17 @@
 - Integration review: worker summary + `git diff`; source перечитывать только при необходимости.
 - Параллельная запись только в disjoint owned files, обычно ≤2 workers.
 - Task packet: цель, owned files, одна spec/section, ограничения, acceptance commands.
-- Workers не меняют roadmap, `DECISIONS.md`, `IMPLEMENTATION_LOG.md` и logs; документацию после интеграции обновляет main.
+- Workers не меняют roadmap, `DECISIONS.md`, Phase 4 status; документацию после интеграции обновляет main.
 
-## Планы и логи
+## Документация без накопления истории
 
-- Task plan — во встроенном plan. Roadmap менять только при изменении scope/order/gate, Phase 4 status — в её README.
-- Main agent обновляет один `07-phase-4-cms/logs/YYYY-MM-DD-<track>.md` только при значимом acceptance change.
-- `DECISIONS.md` — durable решения, `IMPLEMENTATION_LOG.md` — крупные milestones; README/spec/AGENTS не progress log.
-- Завершённые временные планы и подробные сессионные отчёты удалять после переноса уникальных действующих ограничений в spec/decision и незакрытых пунктов в текущий план. История выполнения остаётся в Git; не хранить одинаковый статус в нескольких документах.
+- Task plan — во встроенном plan; текущий статус/следующий шаг — только Phase 4 README; roadmap — оставшийся scope/order/gate. Закрытые задачи из плана удалять.
+- `DECISIONS.md` содержит только действующий нетривиальный выбор и причину. Исправлять заменённое решение, сохраняя ID; не дописывать противоречащую историю и описание уже видимого кода.
+- В той же задаче обновлять основной документ, если код изменил архитектуру, authority, API/контракт, основной UX flow, запуск или ограничения. Удалять старое утверждение, не оставлять его рядом с новым. При переносе контура обновлять маршрут в `AGENTS.md`/README и ссылки.
+- Приёмка включает проверку затронутой документации против итогового кода. Если расхождение обнаружено в scope задачи, исправить до коммита; если за его пределами — явно сообщить, не объявлять всю документацию актуальной. Локальная правка без изменения документированного контракта не требует нового текста.
+- У каждой темы один основной документ. Новая spec нужна только для отдельного контракта, который не помещается в существующий раздел; не создавать отдельные inventory/status/handoff/summary файлы задачи.
+- История реализации, команды и результаты проверок — итог задачи и Git. Постоянные сессионные logs и дублирующий implementation journal не вести. Незакрытое требование переносить в основной план/spec до удаления временного материала.
+- Исторические ТЗ, decisions и acceptance evidence до свёртки: `git show a1a649f:<path>`; список старых файлов — `git ls-tree -r --name-only a1a649f`. Открывать только при конкретной неоднозначности.
 - После каждого завершённого изменения, выполненного по запросу пользователя, создавать отдельный git-коммит с понятным сообщением.
 - Не включать в коммит чужие или unrelated dirty changes.
 - `git push` выполнять только по прямому запросу пользователя.

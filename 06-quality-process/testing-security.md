@@ -38,6 +38,16 @@ psql "$DATABASE_URL" -XAtc 'SELECT timestamp,name FROM migrations ORDER BY id DE
 
 Проверять keyboard, focus-visible и focus restoration, labels/errors, DnD alternatives, screen-reader announcements, WCAG AA, touch targets не менее `44px`, safe area, отсутствие color-only semantics и accessible name для icon-only controls.
 
+## Acceptance invariants
+
+- UI получает business facts через repository/API; fixtures включаются только явным data mode и не становятся authority.
+- API/domain сохраняют permission checks, optimistic concurrency, idempotency, audit/outbox и immutable snapshots там, где это требует контракт.
+- Public site использует published public API/projection, SSR meaningful HTML и не получает DB/internal API/PII.
+- Незавершённая mutation показывает честный unavailable/disabled/error state, а сохранённые данные и accepted commercial facts не меняются после reload обычным update.
+- Для migration/DB/concurrency failure setup или race останавливают acceptance; production publish/recovery provider checks относятся к go-live.
+
 ## Security
 
 Проверять input validation, parameterized queries, CSRF, secure cookies, constrained CORS, public rate limit, отсутствие PII в логах, backend permission checks, masking, brute-force protection и safe uploads. Backup/restore и production provider checks относятся к go-live gate, а не к каждому локальному UI изменению.
+
+Engineering recovery targets, пока не подтверждённые provider drill: metadata RPO до 5 минут; assets используют versioned object storage; RTO до 30 минут; rollback activation target — менее 10 минут. До go-live нужны backup/restore verification, retention/legal approval, data-location/provider review и emergency rollback procedure; эти цели нельзя считать достигнутыми по одному конфигу.

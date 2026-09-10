@@ -22,11 +22,11 @@
 Проживание, баня/чан, площадки, палаточный кемпинг; есть inventory и capacity resources.
 Resource/ResourceGroup имеют настраиваемые `icon` + `color` из ограниченных наборов.
 
-Resource — физический inventory, а не прайс-лист и не public page. `ResourceGroup` выражает композицию кемпинга/общей зоны и участвует в authoritative allocations. Sellable unit, тариф и публичная eligibility принадлежат `CatalogOffering`.
+Resource — физический inventory, а не прайс-лист и не public page. `ResourceGroup` группирует кемпинг для навигации; продаётся и аллоцируется конкретный Resource, не группа целиком. Sellable unit, тариф и публичная eligibility принадлежат `CatalogOffering`.
 
 ## Commercial catalog and pricing
 
-`CatalogOffering` — стабильное продаваемое предложение типов `house | campground | addon | venue | event_service | program`. Через typed `OfferingBinding` оно связано с Resource/ResourceGroup/ProgramTemplate/EventServiceTemplate.
+`CatalogOffering` — стабильное продаваемое предложение типов `house | campground | addon | venue | event_service | program`. Поддерживаемый typed binding зависит от kind: Resource, ProgramTemplate или EventServiceTemplate. Для campground primary binding — только совместимый Resource; ResourceGroup не является sellable subject.
 
 `PriceBook → RatePlan → PriceRule` хранит immutable after activation версии: basis, weekday/weekend/calendar-holiday/custom-date rules, participant/guest/booking-lead tiers и extra-unit price. `BusinessCalendar` классифицирует локальные даты. Reusable и offering-specific catering/equipment/service add-ons являются `CatalogOffering(kind=addon)` и подключаются через `OfferingAddOnAssignment`, поэтому второго каталога и скопированных цен нет. Backend Quote выбирает один детерминированный набор правил; Booking/Event/Registration сохраняет immutable calculation snapshot и source versions.
 
