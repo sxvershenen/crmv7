@@ -12,7 +12,7 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
   it("documents only implemented public reads and never leaks CMS administration", () => {
     const publicDocument = JSON.stringify(publicOpenApiDocument);
     expect(Object.keys(publicOpenApiDocument.paths ?? {})).toEqual([
-      "/pages/resolve", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}",
+      "/pages/resolve", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/event-services", "/offerings/event-services/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}",
     ]);
     expect(publicDocument).not.toContain("CmsNodeMutation");
     expect(publicDocument).not.toContain("MediaUploadGrant");
@@ -27,6 +27,8 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(publicOpenApiDocument.paths?.["/offerings/venues/{offeringId}"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));
     expect(publicOpenApiDocument.paths?.["/offerings/programs"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));
     expect(publicOpenApiDocument.paths?.["/offerings/programs/{offeringId}"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));
+    expect(publicOpenApiDocument.paths?.["/offerings/event-services"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));
+    expect(publicOpenApiDocument.paths?.["/offerings/event-services/{offeringId}"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));
   });
 
   it("keeps implemented content operations authenticated in admin OpenAPI", () => {

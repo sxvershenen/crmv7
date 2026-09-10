@@ -4,6 +4,7 @@ import { materializeRelease } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
+import { createPublicEventServiceProjectionDependency } from "../offerings/public-event-service-projection.js"
 
 const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
@@ -243,6 +244,30 @@ describe("materializeRelease", () => {
     })
     expect(materializeRelease([program] as never).issues).toEqual([
       expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/events/rafting" }),
+    ])
+  })
+
+  it("pins an approved event-service projection for the vertical route", () => {
+    const eventServiceDependency = createPublicEventServiceProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const eventService = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "event_detail", path: "/events/corporate", slug: "corporate",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: eventServiceDependency,
+    })
+    const result = materializeRelease([eventService] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.dependencies).toContainEqual(eventServiceDependency)
+  })
+
+  it("rejects an event-service projection attached to a non-event canonical path", () => {
+    const eventServiceDependency = createPublicEventServiceProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const eventService = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "event_detail", path: "/programs/corporate", slug: "corporate",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: eventServiceDependency,
+    })
+    expect(materializeRelease([eventService] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/programs/corporate" }),
     ])
   })
 })

@@ -33,9 +33,10 @@ Venue vertical route gate закрыт: `public.venue-summary.v1` подключ
 
 Program vertical route gate закрыт: `public.program-summary.v1` подключён к CMS `program_detail` через release dependency с exact offering ID; `/programs/*` сверяет `offeringId`, `path`, `contentReleaseId`, title и не рендерит route без dependency, malformed data, no-price/no-occurrence response или outage. Generic public listing продолжает отдавать безопасные program cards, а typed detail projection показывает только template limits, duration, next open occurrence и conservative price/readiness; registrations, customer fields и quote acceptance остаются за CRM.
 
-1. Мигрировать оставшийся vertical route: event service, учитывая отдельную customer Event/order boundary и готовность safe resolver.
-2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
-3. Генерировать sitemap/robots/canonical/schema из active release.
+Event-service vertical route gate закрыт: `public.event-service-summary.v1` подключён к CMS `event_detail` через release dependency с exact offering ID; `/events/*` сверяет `offeringId`, `path`, `contentReleaseId`, title и не рендерит route без dependency, malformed data или outage. Typed detail projection показывает только редакционный summary, allowlisted format, duration, guest bounds и request-only readiness; customer Event, PII, resource selections и private event-order quote flow остаются за CRM.
+
+1. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
+2. Генерировать sitemap/robots/canonical/schema из active release.
 
 Для каждой страницы: meaningful SSR HTML, один H1, crawlable links, metadata, image dimensions, минимальная hydration и desktop/mobile/keyboard/visual checks по затронутому сценарию. Production outage/invalid response не становится fixture fallback или ложным индексируемым 404. Renderer key/version/schema и порядок/config sections валидируются. Не менять одобренный дизайн без задачи.
 

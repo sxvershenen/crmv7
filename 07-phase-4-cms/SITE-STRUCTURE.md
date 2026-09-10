@@ -65,6 +65,8 @@
 
 Текущий опубликованный program slice использует `/programs/{program-slug}`. Detail route закрепляет CatalogOffering/program template за release и показывает только template limits, duration, next open occurrence и conservative price/readiness; customer registrations и occurrence internals остаются CRM-owned.
 
+Текущий опубликованный event-service slice использует `/events/{event-slug}`. Detail route закрепляет CatalogOffering/EventServiceTemplate за release и показывает только редакционный summary, формат, длительность и диапазон гостей; customer Event, PII, resource selections и event-order quote остаются CRM-owned, а public price/availability остаются request-only.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

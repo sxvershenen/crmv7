@@ -3,6 +3,7 @@ import { CmsPathSchema } from "../content.js";
 import { CurrencySchema, DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "../primitives.js";
 import { ResourceSpaceTypeSchema } from "../resources.js";
 import { AddOnCategoryKeySchema, CatalogOfferingKindSchema } from "./catalog.js";
+import { EventServiceFormatSchema } from "./event-service.js";
 
 export const PublicOfferingPriceSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("exact"), amount: NonNegativeMoneySchema }).strict(),
@@ -162,6 +163,55 @@ export const PublicProgramProjectionPinSchema = z.object({
   profileRevisionId: IdSchema,
 }).strict();
 export type PublicProgramProjectionPin = z.infer<typeof PublicProgramProjectionPinSchema>;
+
+/** Public event-service projection: a reusable category, never a customer event/order. */
+export const PublicEventServiceFulfillmentSchema = z.object({
+  durationMinutes: z.number().int().positive().max(525_600),
+  minimumGuests: z.number().int().nonnegative().nullable(),
+  maximumGuests: z.number().int().nonnegative().max(1_000_000).nullable(),
+  availabilityMode: z.literal("request_only"),
+}).strict().superRefine((value, context) => {
+  if (value.minimumGuests !== null && value.maximumGuests !== null && value.minimumGuests > value.maximumGuests) {
+    context.addIssue({ code: "custom", path: ["maximumGuests"], message: "maximumGuests must be greater than or equal to minimumGuests" });
+  }
+});
+export type PublicEventServiceFulfillment = z.infer<typeof PublicEventServiceFulfillmentSchema>;
+
+export const PublicEventServiceSummarySchema = PublicOfferingSummarySchema.safeExtend({
+  kind: z.literal("event_service"),
+  path: CmsPathSchema,
+  releaseId: IdSchema,
+  format: EventServiceFormatSchema,
+  fulfillment: PublicEventServiceFulfillmentSchema,
+}).strict().superRefine((value, context) => {
+  if (value.price.mode !== "request") context.addIssue({ code: "custom", path: ["price"], message: "Event-service public price must remain request-only" });
+  if (value.quoteAvailable) context.addIssue({ code: "custom", path: ["quoteAvailable"], message: "Event-service quote preview is private" });
+  if (!value.requestAvailable) context.addIssue({ code: "custom", path: ["requestAvailable"], message: "Event-service public request must remain available" });
+  if (value.readiness !== "request_only") context.addIssue({ code: "custom", path: ["readiness"], message: "Event-service public readiness must remain request-only" });
+});
+export type PublicEventServiceSummary = z.infer<typeof PublicEventServiceSummarySchema>;
+export const PublicEventServiceSummaryParamsSchema = z.object({ offeringId: IdSchema }).strict();
+export type PublicEventServiceSummaryParams = z.infer<typeof PublicEventServiceSummaryParamsSchema>;
+export const PublicEventServiceListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type PublicEventServiceListQuery = z.infer<typeof PublicEventServiceListQuerySchema>;
+export const PublicEventServiceListResponseSchema = z.object({
+  items: z.array(PublicEventServiceSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+  releaseId: IdSchema,
+  asOf: DateTimeSchema,
+}).strict();
+export type PublicEventServiceListResponse = z.infer<typeof PublicEventServiceListResponseSchema>;
+export const PublicEventServiceProjectionPinSchema = z.object({
+  contract: z.literal("public.event-service-summary.v1"),
+  offeringId: IdSchema,
+  kind: z.literal("event_service"),
+  nodeId: IdSchema,
+  profileRevisionId: IdSchema,
+}).strict();
+export type PublicEventServiceProjectionPin = z.infer<typeof PublicEventServiceProjectionPinSchema>;
 
 /** Public house projection: the Resource supplies capacity, while pricing and readiness remain operational facts. */
 export const PublicHouseFulfillmentSchema = z.object({

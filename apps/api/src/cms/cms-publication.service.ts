@@ -47,6 +47,7 @@ import {
   CmsPublicProfileEntity,
   CmsSiteSettingsRevisionEntity,
   CmsSourceLinkEntity,
+  EventServiceTemplateEntity,
   IdempotencyKeyEntity,
   OutboxEventEntity,
   OfferingBindingEntity,
@@ -60,6 +61,7 @@ import { createPublicHouseProjectionDependency } from "../offerings/public-house
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicVenueProjectionDependency } from "../offerings/public-venue-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
+import { createPublicEventServiceProjectionDependency } from "../offerings/public-event-service-projection.js"
 
 type Candidate = {
   node: CmsNodeEntity
@@ -342,6 +344,7 @@ export class CmsPublicationService {
     if (offering?.kind === "campground") return this.safeCampgroundProjectionDependency(manager, candidate, link)
     if (offering?.kind === "venue") return this.safeVenueProjectionDependency(manager, candidate, link)
     if (offering?.kind === "program") return this.safeProgramProjectionDependency(manager, candidate, link)
+    if (offering?.kind === "event_service") return this.safeEventServiceProjectionDependency(manager, candidate, link)
     return this.safeAddOnProjectionDependency(manager, candidate, link)
   }
 
@@ -408,6 +411,27 @@ export class CmsPublicationService {
     const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
     if (!template || !calendar) return null
     return createPublicProgramProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
+  }
+
+  private async safeEventServiceProjectionDependency(
+    manager: EntityManager,
+    candidate: { node: CmsNodeEntity; revision: CmsNodeRevisionEntity },
+    link: CmsSourceLinkEntity,
+  ): Promise<ReleaseDependencyRef | null> {
+    const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (!offering || offering.kind !== "event_service" || offering.state !== "active" || offering.archivedAt !== null) return null
+    if (candidate.node.kind !== "event_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if (!candidate.revision.path.startsWith("/events/")) return null
+    const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
+    if (!profile || profile.archivedAt !== null) return null
+    const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
+    if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
+    const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+    if (bindings.length !== 1 || !bindings[0]!.eventServiceTemplateId) return null
+    const template = await manager.getRepository(EventServiceTemplateEntity).findOneBy({ id: bindings[0]!.eventServiceTemplateId, archivedAt: IsNull() })
+    const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
+    if (!template || !calendar) return null
+    return createPublicEventServiceProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
   }
 
   private async safeCampgroundProjectionDependency(
@@ -600,10 +624,12 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.house-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.campground-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1")
-          || (candidate.node.kind === "program_detail" && candidate.safeProjectionDependency.version === "public.program-summary.v1"))
+          || (candidate.node.kind === "program_detail" && candidate.safeProjectionDependency.version === "public.program-summary.v1")
+          || (candidate.node.kind === "event_detail" && candidate.safeProjectionDependency.version === "public.event-service-summary.v1"))
         && (candidate.safeProjectionDependency.version !== "public.house-summary.v1" || candidate.revision.path.startsWith("/houses/"))
         && (candidate.safeProjectionDependency.version !== "public.campground-summary.v1" || candidate.revision.path.startsWith("/campgrounds/"))
         && (candidate.safeProjectionDependency.version !== "public.program-summary.v1" || candidate.revision.path.startsWith("/programs/"))
+        && (candidate.safeProjectionDependency.version !== "public.event-service-summary.v1" || candidate.revision.path.startsWith("/events/"))
         && candidate.safeProjectionDependency.contentHash
       if (!safeProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
     } else if (candidate.revision.relations.length > 0) {

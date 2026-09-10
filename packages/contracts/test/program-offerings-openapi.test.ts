@@ -38,5 +38,6 @@ describe("program offering OpenAPI isolation", () => {
       expect(publicOpenApiDocument.paths?.[path]).toBeUndefined()
     }
     expect(JSON.stringify(publicOpenApiDocument)).not.toContain("EventServiceOfferingQuoteResult")
+    expect(publicOpenApiDocument.paths?.["/offerings/event-services/{offeringId}"]?.get).toBeDefined()
   })
 })

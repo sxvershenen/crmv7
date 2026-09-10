@@ -358,6 +358,36 @@ for (const scenario of ["program-missing", "program-outage", "program-private", 
   })
 }
 
+test("binds an event-service route to a reusable public category without customer order data", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=event-service-published")
+  const response = await request.get("/events/corporate")
+  expect(response.status()).toBe(200)
+  const html = await response.text()
+  expect(html).toContain("Мероприятие из CMS")
+  expect(html).not.toContain("resourceSelections")
+  expect(html).not.toContain("customerPhone")
+  await page.goto("/events/corporate")
+  await expect(page.locator("h1")).toHaveText("Мероприятие из CMS")
+  await expect(page.locator('[data-route-kind="event-service"]')).toContainText("от 10 до 80 гостей")
+  await expect(page.locator('[data-route-kind="event-service"]')).toContainText("По запросу")
+  await expect(page.locator('[data-route-kind="event-service"] [data-site-action="booking"]')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+for (const scenario of ["event-service-missing", "event-service-outage", "event-service-private", "event-service-invalid", "event-service-version", "event-service-wrong-path", "event-service-wrong-id", "event-service-no-dependency"]) {
+  test(`fails closed for ${scenario} event-service delivery`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    const response = await request.get("/events/corporate")
+    expect(response.status()).toBe(503)
+    expect(response.headers()["cache-control"]).toBe("no-store")
+    expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
+    const html = await response.text()
+    expect(html).toContain("Сайт временно недоступен")
+    expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    expect(html).not.toContain("Мероприятие из CMS")
+  })
+}
+
 test("binds an add-on route to the existing release-pinned safe projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=addon-published")
   const response = await request.get("/addons/firewood")

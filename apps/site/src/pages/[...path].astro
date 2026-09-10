@@ -20,6 +20,7 @@ import CampgroundDetail from "../components/sections/CampgroundDetail.astro"
 import AddonDetail from "../components/sections/AddonDetail.astro"
 import VenueDetail from "../components/sections/VenueDetail.astro"
 import ProgramDetail from "../components/sections/ProgramDetail.astro"
+import EventServiceDetail from "../components/sections/EventServiceDetail.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
@@ -41,6 +42,7 @@ const campground = result.status === "published" ? result.value.campground : nul
 const addon = result.status === "published" ? result.value.addon : null
 const venue = result.status === "published" ? result.value.venue : null
 const program = result.status === "published" ? result.value.program : null
+const eventService = result.status === "published" ? result.value.eventService : null
 const failure = result.status !== "published" ? result.status : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -53,7 +55,7 @@ const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSetting
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
 const effectiveHero = page?.hero
 const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
-const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : null
+const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : page?.kind === "event_detail" ? "Мероприятие" : null
 const robots = !page
   ? "noindex_nofollow"
   : listing?.robots ?? (page.seo.indexPolicy === "noindex_follow" ? "noindex_follow" : page.seo.indexPolicy === "noindex_nofollow" ? "noindex_nofollow" : "index_follow")
@@ -84,6 +86,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {addon && <AddonDetail addon={addon} />}
       {venue && <VenueDetail venue={venue} />}
       {program && <ProgramDetail program={program} />}
+      {eventService && <EventServiceDetail eventService={eventService} />}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} client:visible />

@@ -5,6 +5,7 @@ import {
   PublicAddOnSummarySchema,
   PublicVenueSummarySchema,
   PublicProgramSummarySchema,
+  PublicEventServiceSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -17,6 +18,7 @@ import {
   type PublicAddOnSummary,
   type PublicVenueSummary,
   type PublicProgramSummary,
+  type PublicEventServiceSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -35,6 +37,7 @@ export interface ContentSource {
   addon(offeringId: string): Promise<ContentResult<PublicAddOnSummary>>
   venue(offeringId: string): Promise<ContentResult<PublicVenueSummary>>
   program(offeringId: string): Promise<ContentResult<PublicProgramSummary>>
+  eventService(offeringId: string): Promise<ContentResult<PublicEventServiceSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -92,6 +95,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     program(offeringId) {
       return document(`/offerings/programs/${encodeURIComponent(offeringId)}`, (value) => PublicProgramSummarySchema.parse(value))
     },
+    eventService(offeringId) {
+      return document(`/offerings/event-services/${encodeURIComponent(offeringId)}`, (value) => PublicEventServiceSummarySchema.parse(value))
+    },
   }
 }
 
@@ -104,6 +110,7 @@ export type PublishedRoute = ContentResult<{
   addon: PublicAddOnSummary | null
   venue: PublicVenueSummary | null
   program: PublicProgramSummary | null
+  eventService: PublicEventServiceSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -177,7 +184,19 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     program = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue, program } }
+  if (page.value.kind === "event_detail" && !path.startsWith("/events/")) return { status: "unavailable" }
+  let eventService: PublicEventServiceSummary | null = null
+  if (page.value.kind === "event_detail" && path.startsWith("/events/")) {
+    const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.event-service-summary.v1")
+    if (dependencies.length !== 1) return { status: "unavailable" }
+    const dependency = dependencies[0]!
+    const result = await source.eventService(dependency.id)
+    if (result.status !== "published" || result.value.offeringId !== dependency.id || result.value.sourceVersions.contentReleaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    eventService = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue, program, eventService } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

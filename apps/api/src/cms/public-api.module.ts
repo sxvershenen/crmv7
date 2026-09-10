@@ -19,6 +19,8 @@ import { PublicCampgroundOfferingController } from "./public-campground-offering
 import { PublicCampgroundOfferingService } from "./public-campground-offering.service.js"
 import { PublicProgramOfferingController } from "./public-program-offering.controller.js"
 import { PublicProgramOfferingService } from "./public-program-offering.service.js"
+import { PublicEventServiceOfferingController } from "./public-event-service-offering.controller.js"
+import { PublicEventServiceOfferingService } from "./public-event-service-offering.service.js"
 
-@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService] })
+@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService] })
 export class PublicApiModule {}
