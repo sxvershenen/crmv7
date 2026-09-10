@@ -27,6 +27,7 @@ import {
   CustomerEntity,
   EventCategoryEntity,
   EventEntity,
+  EventServiceTemplateEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,
   OfferingAddonAssignmentEntity,
@@ -437,7 +438,10 @@ describe.sequential("internal API + PostgreSQL", () => {
     await dataSource.getRepository(CatalogOfferingEntity).update({ id: offeringId }, { state: "active", activePriceBookId: priceBookId, pricingVersion: 2 })
     const preview = await adminAgent.post(`/api/internal/v1/programs/${templateId}/offering/quotes/preview`).send({
       ratePlanKey: null, serviceDate, participants: 4, currency: "RUB", addOns: [], operationId: randomUUID(), idempotencyKey: `program-preview-${randomUUID()}`,
-    }).expect(200)
+    }).then((response) => {
+      if (response.status !== 200) throw new Error(`event quote ${response.status}: ${JSON.stringify(response.body)}`)
+      return response
+    })
     expect(preview.body).toMatchObject({ quoteType: "template_preview", acceptanceReady: false, offeringId, programTemplateId: templateId, total: { amountMinor: 8_000, currency: "RUB" }, provenance: { subjectVersion: 1, programTemplateVersion: 1, pricingVersion: 2, matchedRuleIds: [ruleId] }, immutableSnapshot: true })
     expect(await dataSource.getRepository(OfferingQuoteSnapshotEntity).findOneByOrFail({ id: preview.body.quoteId })).toMatchObject({ quoteType: "template_preview", offeringId, programTemplateId: templateId, subjectVersion: 1, programTemplateVersion: 1, operationalContext: null })
     const startsAt = new Date(`${serviceDate}T06:00:00.000Z`), endsAt = new Date(`${serviceDate}T08:00:00.000Z`), occurrenceId = randomUUID()
@@ -489,7 +493,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     await dataSource.getRepository(CatalogOfferingEntity).update({ id: packageOfferingId }, { state: "active", activePriceBookId: packageBookId, pricingVersion: 2 })
     const packagePreview = await adminAgent.post(`/api/admin/v1/programs/${concurrentTemplateId}/offering/quotes/preview`).send({
       ratePlanKey: "package", serviceDate, participants: 12, currency: "RUB", addOns: [], operationId: randomUUID(), idempotencyKey: `program-package-${randomUUID()}`,
-    }).expect(200)
+    }).then((response) => { if (response.status !== 200) throw new Error(`event quote ${response.status}: ${JSON.stringify(response.body)}`); return response })
     expect(packagePreview.body).toMatchObject({ quoteType: "template_preview", acceptanceReady: false, total: { amountMinor: 11_000 }, lines: [{ kind: "base", quantity: 1 }, { kind: "extra_unit", quantity: 2 }] })
 
     const invalidTemplateId = randomUUID(), invalidNodeId = randomUUID()
@@ -1252,9 +1256,46 @@ describe.sequential("internal API + PostgreSQL", () => {
     }))
     await dataSource.getRepository(EventCategoryEntity).delete(event.body.id)
     expect((await dataSource.getRepository(EventEntity).findOneByOrFail({ id: eventRow.id })).categoryId).toBeNull()
+
+    const dates = futureStayDates()
+    const clientCategory = await adminAgent.post("/api/internal/v1/events/categories").send({ name: "Категория клиентских мероприятий", description: "", icon: "heart", tone: "rose", operationId: randomUUID(), idempotencyKey: "event-category-client-category" }).expect(201)
+    const calendarId = randomUUID()
+    await dataSource.getRepository(BusinessCalendarEntity).save(dataSource.getRepository(BusinessCalendarEntity).create({
+      id: calendarId, code: "RU-EVENT-CATEGORY", name: "Календарь категорий мероприятий", timezone: "Europe/Moscow", countryCode: "RU", source: "official_ru", sourceVersion: "category-v1", state: "active", importedAt: new Date(), coverageFrom: dates.arrivalDate, coverageToExclusive: dates.coverageEndDate, contentHash: "c".repeat(64), createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await dataSource.getRepository(BusinessCalendarDateEntity).save(dataSource.getRepository(BusinessCalendarDateEntity).create({ id: randomUUID(), calendarId, localDate: dates.arrivalDate, officialClass: "weekday", officialLabel: null, sourceVersion: "category-v1", createdBy: adminId, updatedBy: adminId, archivedAt: null }))
+    const cmsBefore = await dataSource.getRepository(CmsNodeEntity).count()
+    const serviceIds: string[] = []
+    for (let index = 1; index <= 3; index += 1) {
+      const command = { operationId: randomUUID(), idempotencyKey: `event-category-service-${index}`, templateCode: `EVENT-CATEGORY-${index}`, offeringCode: `EVENT-CATEGORY-OFFERING-${index}`, operationalName: `Свадебное предложение ${index}`, internalComment: "", salesMode: "quoted", priceDisplayMode: "from", currency: "RUB", timezone: "Europe/Moscow", taxMode: "tax_included", businessCalendarId: calendarId, format: "wedding", defaultDurationMinutes: 240, minimumGuests: 1, maximumGuests: 100, preparationBeforeMinutes: 0, preparationAfterMinutes: 0, icon: "heart", tone: "rose" }
+      const created = await adminAgent.post("/api/internal/v1/event-services").send(command).expect(201)
+      const replay = await adminAgent.post("/api/internal/v1/event-services").send(command).expect(201)
+      expect(replay.body.offering.id).toBe(created.body.offering.id)
+      serviceIds.push(created.body.offering.id)
+    }
+    expect(new Set(serviceIds)).toHaveLength(3)
+    expect(await dataSource.getRepository(EventServiceTemplateEntity).count()).toBe(3)
+    expect(await dataSource.getRepository(CatalogOfferingEntity).countBy({ kind: "event_service" })).toBe(3)
+    expect(await dataSource.getRepository(CmsNodeEntity).count()).toBe(cmsBefore + 3)
+
+    const eventCmsBefore = await dataSource.getRepository(CmsNodeEntity).count()
+    const clientEventIds: string[] = []
+    for (let index = 1; index <= 2; index += 1) {
+      const clientEvent = await adminAgent.post("/api/internal/v1/events").send({ name: `Клиентское мероприятие ${index}`, categoryId: clientCategory.body.id, phone: `+7 900 100-00-0${index}`, startsAt: `${dates.arrivalDate}T10:00:00.000Z`, endsAt: `${dates.arrivalDate}T12:00:00.000Z`, guestCount: 10, total: { amountMinor: 0, currency: "RUB" }, status: "planning", operationId: randomUUID(), idempotencyKey: `event-category-client-${index}` }).expect(201)
+      clientEventIds.push(clientEvent.body.id)
+    }
+    expect(await dataSource.getRepository(CmsNodeEntity).count()).toBe(eventCmsBefore)
+    const firstEventPage = await adminAgent.get(`/api/internal/v1/events?categoryId=${clientCategory.body.id}&limit=1&from=${encodeURIComponent(`${dates.arrivalDate}T00:00:00.000Z`)}&to=${encodeURIComponent(`${dates.coverageEndDate}T00:00:00.000Z`)}`).expect(200)
+    expect(firstEventPage.body.items).toHaveLength(1)
+    expect(firstEventPage.body.nextCursor).toBeTruthy()
+    const secondEventPage = await adminAgent.get(`/api/internal/v1/events?categoryId=${clientCategory.body.id}&limit=1&from=${encodeURIComponent(`${dates.arrivalDate}T00:00:00.000Z`)}&to=${encodeURIComponent(`${dates.coverageEndDate}T00:00:00.000Z`)}&cursor=${encodeURIComponent(firstEventPage.body.nextCursor)}`).expect(200)
+    expect(secondEventPage.body.items).toHaveLength(1)
+    expect(new Set([...firstEventPage.body.items, ...secondEventPage.body.items].map((item: { id: string }) => item.id))).toEqual(new Set(clientEventIds))
+    const malformedCursor = Buffer.from(JSON.stringify({ startsAt: `${dates.arrivalDate}T10:00:00.000Z`, id: "bad-id" }), "utf8").toString("base64url")
+    await adminAgent.get(`/api/internal/v1/events?categoryId=${clientCategory.body.id}&limit=1&cursor=${encodeURIComponent(malformedCursor)}`).expect(422).expect(({ body }) => expect(body.code).toBe("INVALID_CURSOR"))
   })
 
-  it("projects every new CRM public-content source into an explicitly linked CMS draft", async () => {
+  it("projects publishable CRM sources while keeping operational Events out of CMS", async () => {
     const resource = await adminAgent.post("/api/internal/v1/resources").send({ kind: "house", name: "Домик-черновик", capacityMode: "fixed", capacityTotal: 1, settings: {} }).expect(201)
     const programCategory = await adminAgent.post("/api/internal/v1/programs/categories").send({ name: "Категория программ", description: "", icon: "snowflake", tone: "sky", operationId: randomUUID(), idempotencyKey: `projection-program-category-${randomUUID()}` }).expect(201)
     const template = await adminAgent.post("/api/internal/v1/programs/templates").send({ name: "Программа-черновик", categoryId: programCategory.body.id, durationMinutes: 60, participantLimit: 10, basePrice: { amountMinor: 1000, currency: "RUB" }, operationId: randomUUID(), idempotencyKey: `projection-template-${randomUUID()}` }).expect(201)
@@ -1267,17 +1308,18 @@ describe.sequential("internal API + PostgreSQL", () => {
 
     const expected = new Map([
       [resource.body.id, "resource"], [programCategory.body.id, "program_category"], [template.body.id, "program_template"],
-      [occurrence.body.id, "program_occurrence"], [eventCategory.body.id, "event_category"], [event.body.id, "event"],
+      [occurrence.body.id, "program_occurrence"], [eventCategory.body.id, "event_category"],
     ])
     const rows = await dataSource.query(`SELECT link.source_id AS "sourceId", link.source_kind AS "sourceKind", link.sync_state AS "syncState", link.node_id AS "nodeId", revision.state,
         revision.summary, revision.sections, revision.seo
       FROM cms_source_links link JOIN cms_node_revisions revision ON revision.node_id = link.node_id AND revision.revision = 1
       WHERE link.source_id = ANY($1::uuid[])`, [[...expected.keys()]]) as Array<{ sourceId: string; sourceKind: string; syncState: string; nodeId: string; state: string; summary: string | null; sections: unknown[]; seo: unknown }>
-    expect(rows).toHaveLength(6)
+    expect(rows).toHaveLength(5)
     for (const row of rows) expect(row).toMatchObject({ sourceKind: expected.get(row.sourceId), syncState: "draft", state: "draft" })
     const cmsList = await adminAgent.get("/api/admin/v1/content/nodes?limit=20").expect(200)
-    expect(cmsList.body.items.filter((item: { source: unknown }) => item.source !== null)).toHaveLength(6)
-    for (const sourceKind of ["event", "program_occurrence"]) {
+    expect(cmsList.body.items.filter((item: { source: unknown }) => item.source !== null)).toHaveLength(5)
+    expect(await dataSource.getRepository(CmsSourceLinkEntity).countBy({ sourceKind: "event", sourceId: event.body.id })).toBe(0)
+    for (const sourceKind of ["program_occurrence"]) {
       const technicalDraft = rows.find((row) => row.sourceKind === sourceKind)!
       expect(technicalDraft.summary).toBeNull()
       expect(technicalDraft.sections).toEqual([])
@@ -1288,10 +1330,10 @@ describe.sequential("internal API + PostgreSQL", () => {
     const blocked = await adminAgent.post(`/api/admin/v1/content/nodes/${resourceDraft.nodeId}/publish`).send({ operationId: randomUUID(), idempotencyKey: `source-route-publish-${randomUUID()}`, expectedVersion: 1 }).expect(422)
     expect(blocked.body).toMatchObject({ code: "CMS_SOURCE_ROUTE_REQUIRED", fieldErrors: { "route.path": expect.any(Array) } })
 
-    for (const sourceKind of ["event", "program_occurrence"] as const) {
+    for (const sourceKind of ["program_occurrence"] as const) {
       const technicalDraft = rows.find((row) => row.sourceKind === sourceKind)!
-      const slug = sourceKind === "event" ? "private-operational-event" : "private-program-occurrence"
-      const relationKind = sourceKind === "event" ? "public_event_offering" : "program_occurrence"
+      const slug = "private-program-occurrence"
+      const relationKind = "program_occurrence"
       const edited = await adminAgent.patch(`/api/admin/v1/content/nodes/${technicalDraft.nodeId}`).send({
         operationId: randomUUID(), idempotencyKey: `unsafe-source-edit-${sourceKind}-${randomUUID()}`, expectedVersion: 1,
         route: { path: `/${slug}`, slug, parentNodeId: null, sortOrder: 0 }, hero: { mode: "disabled" },
@@ -1953,7 +1995,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     const [bookingGuardQuote, eventGuardQuote, registrationGuardQuote] = await Promise.all([cloneQuote(new Date(Date.now() + 60 * 60 * 1000)), cloneQuote(new Date(Date.now() + 60 * 60 * 1000)), cloneQuote(new Date(Date.now() + 60 * 60 * 1000))])
     const insertGuardedLink = (quoteSnapshotId: string, target: "booking" | "event" | "registration", targetId: string, targetVersion: number) => dataSource.query(`INSERT INTO accepted_offering_quote_links (id, quote_snapshot_id, booking_item_id, event_id, program_registration_id, target_version, accepted_by, operation_id, request_id, entry_surface) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'internal')`, [randomUUID(), quoteSnapshotId, target === "booking" ? targetId : null, target === "event" ? targetId : null, target === "registration" ? targetId : null, targetVersion, adminId, randomUUID(), "direct-db-guard"])
     await expect(insertGuardedLink(bookingGuardQuote, "booking", clockBooking.created.body.items[0].id, clockBooking.prepared.body.version)).rejects.toThrow(/acceptance-compatible/i)
-    await expect(insertGuardedLink(eventGuardQuote, "event", dbEventId, 1)).rejects.toThrow(/not implemented/i)
+    await expect(insertGuardedLink(eventGuardQuote, "event", dbEventId, 1)).rejects.toThrow(/event order quote required/i)
     await expect(insertGuardedLink(registrationGuardQuote, "registration", dbRegistrationId, 1)).rejects.toThrow(/not acceptance-compatible/i)
     expect(await dataSource.getRepository(ChangeLogEntity).countBy({ entityType: "catalog_offering_pricing", entityId: offeringId })).toBe(2)
     await app.get(OutboxDispatcherService).dispatchBatch()
@@ -2106,6 +2148,267 @@ describe.sequential("internal API + PostgreSQL", () => {
     await adminAgent.post(`/api/internal/v1/programs/registrations/${registrationId}/transition`).send({ version: 1, operationId: randomUUID(), idempotencyKey: "registration-quote-unsupported-0001", status: "confirmed", quoteAcceptance: { quoteSnapshotId: randomUUID() } }).expect(422)
     expect(await dataSource.getRepository(EventEntity).findOneByOrFail({ id: eventId })).toMatchObject({ status: "planning", version: 1 })
     expect(await dataSource.getRepository(ProgramRegistrationEntity).findOneByOrFail({ id: registrationId })).toMatchObject({ status: "new", version: 1 })
+  })
+
+  it("creates an EventService-backed Event quote from an active calendar and price book", async () => {
+    const date = futureStayDates().arrivalDate
+    const nextDate = new Date(`${date}T00:00:00.000Z`)
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+    const nextDateIso = nextDate.toISOString().slice(0, 10)
+    const calendarId = randomUUID()
+    await dataSource.getRepository(BusinessCalendarEntity).save(dataSource.getRepository(BusinessCalendarEntity).create({
+      id: calendarId, code: "RU-EVENT-QUOTE", name: "Календарь event quote", timezone: "Europe/Moscow", countryCode: "RU",
+      source: "official_ru", sourceVersion: "event-quote-v1", state: "active", importedAt: new Date(), coverageFrom: date,
+      coverageToExclusive: nextDateIso, contentHash: "e".repeat(64), createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await dataSource.getRepository(BusinessCalendarDateEntity).save(dataSource.getRepository(BusinessCalendarDateEntity).create({
+      id: randomUUID(), calendarId, localDate: date, officialClass: "weekday", officialLabel: null, sourceVersion: "event-quote-v1", createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    const category = await adminAgent.post("/api/internal/v1/events/categories").send({
+      name: "Event quote category", description: "", icon: "bus", tone: "sky", operationId: randomUUID(), idempotencyKey: `event-quote-category-${randomUUID()}`,
+    }).expect(201)
+    const dossier = await adminAgent.post("/api/internal/v1/event-services").send({
+      operationId: randomUUID(), idempotencyKey: `event-service-create-${randomUUID()}`, templateCode: "EVENT-QUOTE-SERVICE", offeringCode: "EVENT-QUOTE-OFFERING",
+      operationalName: "Event quote service", internalComment: "integration", salesMode: "quoted", priceDisplayMode: "exact", currency: "RUB",
+      timezone: "Europe/Moscow", taxMode: "not_taxable", businessCalendarId: calendarId, format: "corporate", defaultDurationMinutes: 240,
+      minimumGuests: 1, maximumGuests: 100, preparationBeforeMinutes: 0, preparationAfterMinutes: 0, icon: "building", tone: "violet",
+    }).expect(201)
+    const offeringId = dossier.body.offering.id as string
+    const priceBookId = randomUUID()
+    const priceBooks = dataSource.getRepository(PriceBookEntity)
+    const priceBook = await priceBooks.save(priceBooks.create({
+      id: priceBookId, offeringId, revision: 1, name: "Event quote price book", currency: "RUB", timezone: "Europe/Moscow", state: "draft",
+      validFrom: date, validToExclusive: nextDateIso, supersedesPriceBookId: null, changeReason: "integration", scheduledActivationAt: null,
+      scheduledBy: null, activatedAt: null, activatedBy: null, retiredAt: null, retiredBy: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    const ratePlans = dataSource.getRepository(RatePlanEntity)
+    await ratePlans.save(ratePlans.create({
+      id: randomUUID(), priceBookId: priceBook.id, key: "standard", label: "Стандарт", pricingBasis: "flat_package", baseAmountMinor: 25_000,
+      baseExtraUnitAmountMinor: null, quantityMetric: "guests", includedQuantity: 100, minimumQuantity: 1, maximumQuantity: 100,
+      minimumDurationMinutes: null, maximumDurationMinutes: null, sortOrder: 0, isDefault: true, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    priceBook.state = "active"
+    priceBook.activatedAt = new Date()
+    priceBook.activatedBy = adminId
+    await priceBooks.save(priceBook)
+    const offerings = dataSource.getRepository(CatalogOfferingEntity)
+    const offering = await offerings.findOneByOrFail({ id: offeringId })
+    offering.state = "active"
+    offering.activePriceBookId = priceBook.id
+    await offerings.save(offering)
+
+    const event = await adminAgent.post("/api/internal/v1/events").send({
+      name: "Event quote integration", categoryId: category.body.id, phone: "+7 900 000-00-01", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+      guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard", addOnSelections: [], resourceSelections: [], status: "planning",
+      comment: "", operationId: randomUUID(), idempotencyKey: `event-quote-create-${randomUUID()}`,
+    }).expect(201)
+    expect(event.body).toMatchObject({ pricingMode: "quote_required", commercialOfferingId: offeringId, total: { amountMinor: 0, currency: "RUB" }, status: "planning" })
+    const quote = await adminAgent.post(`/api/internal/v1/events/${event.body.id}/quote`).send({
+      quoteType: "event_order", eventId: event.body.id, expectedEventVersion: event.body.version, ratePlanKey: "standard", currency: "RUB",
+      addOns: [], resourceSelections: [], operationId: randomUUID(), idempotencyKey: `event-quote-request-${randomUUID()}`,
+    }).then((response) => {
+      if (response.status !== 200) throw new Error(`event quote ${response.status}: ${JSON.stringify(response.body)}`)
+      return response
+    })
+    expect(quote.body).toMatchObject({ quoteType: "event_order", acceptanceReady: true, eventId: event.body.id, eventVersion: event.body.version, total: { amountMinor: 25_000, currency: "RUB" }, inputs: { addOns: [], resourceSelections: [] } })
+    expect(quote.body.lines).toEqual([expect.objectContaining({ kind: "base", amount: { amountMinor: 25_000, currency: "RUB" } })])
+    expect(quote.body.provenance).toMatchObject({ priceBookId: priceBook.id })
+    expect(await dataSource.getRepository(OfferingQuoteSnapshotEntity).countBy({ id: quote.body.quoteId, quoteType: "event_order" })).toBe(1)
+    expect(await dataSource.getRepository(CmsSourceLinkEntity).countBy({ sourceKind: "event", sourceId: event.body.id })).toBe(0)
+    const acceptCommand = {
+      version: event.body.version, operationId: randomUUID(), idempotencyKey: `event-quote-accept-${randomUUID()}`,
+      status: "booked", quoteAcceptance: { quoteSnapshotId: quote.body.quoteId },
+    }
+    const accepted = await adminAgent.post(`/api/internal/v1/events/${event.body.id}/transition`).send(acceptCommand).expect(201)
+    expect(accepted.body).toMatchObject({ status: "booked", version: event.body.version + 1, total: { amountMinor: 25_000, currency: "RUB" }, acceptedQuote: quote.body })
+    expect((await adminAgent.post(`/api/internal/v1/events/${event.body.id}/transition`).send(acceptCommand).expect(201)).body).toEqual(accepted.body)
+  })
+
+  it("enforces Event add-on required, scope, currency, quantity and scheduled-price boundaries", async () => {
+    const date = futureStayDates().arrivalDate
+    const nextDate = new Date(`${date}T00:00:00.000Z`)
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+    const nextDateIso = nextDate.toISOString().slice(0, 10)
+    const now = new Date()
+    const calendarId = randomUUID()
+    await dataSource.getRepository(BusinessCalendarEntity).save({
+      id: calendarId, code: `RU-EVENT-ADDON-${calendarId.slice(0, 8)}`, name: "Календарь event add-ons", timezone: "Europe/Moscow", countryCode: "RU",
+      source: "official_ru", sourceVersion: "event-addon-v1", state: "active", importedAt: now, coverageFrom: date, coverageToExclusive: nextDateIso,
+      contentHash: "a".repeat(64), createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    await dataSource.getRepository(BusinessCalendarDateEntity).save({
+      id: randomUUID(), calendarId, localDate: date, officialClass: "weekday", officialLabel: null, sourceVersion: "event-addon-v1", createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    })
+    const category = await adminAgent.post("/api/internal/v1/events/categories").send({
+      name: "Event add-on matrix", description: "", icon: "bus", tone: "sky", operationId: randomUUID(), idempotencyKey: `event-addon-category-${randomUUID()}`,
+    }).expect(201)
+    const dossier = await adminAgent.post("/api/internal/v1/event-services").send({
+      operationId: randomUUID(), idempotencyKey: `event-addon-service-${randomUUID()}`, templateCode: `EVENT-ADDON-${calendarId.slice(0, 8)}`, offeringCode: `EVENT-ADDON-${calendarId.slice(0, 8)}`,
+      operationalName: "Event add-on service", internalComment: "integration", salesMode: "quoted", priceDisplayMode: "exact", currency: "RUB",
+      timezone: "Europe/Moscow", taxMode: "not_taxable", businessCalendarId: calendarId, format: "corporate", defaultDurationMinutes: 240,
+      minimumGuests: 1, maximumGuests: 100, preparationBeforeMinutes: 0, preparationAfterMinutes: 0, icon: "building", tone: "violet",
+    }).expect(201)
+    const offeringId = dossier.body.offering.id as string
+    const priceBooks = dataSource.getRepository(PriceBookEntity)
+    const ratePlans = dataSource.getRepository(RatePlanEntity)
+    const offerings = dataSource.getRepository(CatalogOfferingEntity)
+    const terms = dataSource.getRepository(AddonOfferingTermsEntity)
+    const assignments = dataSource.getRepository(OfferingAddonAssignmentEntity)
+    const mainPriceBook = await priceBooks.save(priceBooks.create({
+      id: randomUUID(), offeringId, revision: 1, name: "Event add-on base", currency: "RUB", timezone: "Europe/Moscow", state: "draft",
+      validFrom: date, validToExclusive: nextDateIso, supersedesPriceBookId: null, changeReason: "integration", scheduledActivationAt: null,
+      scheduledBy: null, activatedAt: null, activatedBy: null, retiredAt: null, retiredBy: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await ratePlans.save(ratePlans.create({
+      id: randomUUID(), priceBookId: mainPriceBook.id, key: "standard", label: "Стандарт", pricingBasis: "flat_package", baseAmountMinor: 25_000,
+      baseExtraUnitAmountMinor: null, quantityMetric: "guests", includedQuantity: 100, minimumQuantity: 1, maximumQuantity: 100,
+      minimumDurationMinutes: null, maximumDurationMinutes: null, sortOrder: 0, isDefault: true, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await priceBooks.update({ id: mainPriceBook.id }, { state: "active", activatedAt: now, activatedBy: adminId })
+    await offerings.update({ id: offeringId }, { state: "active", activePriceBookId: mainPriceBook.id })
+
+    const createAddOn = async (input: {
+      code: string; name: string; serviceType: "person_service" | "quantity_service"; unitAmount: number;
+      minimumQuantity: number; maximumQuantity: number; quantityStep: number; scope?: "reusable" | "offering_specific"; ownerOfferingId?: string | null;
+      required?: boolean; ratePlanKey?: string | null;
+    }) => {
+      const addOnOfferingId = randomUUID()
+      const addOnPriceBookId = randomUUID()
+      const assignmentId = randomUUID()
+      await offerings.save(offerings.create({
+        id: addOnOfferingId, code: `${input.code}-${addOnOfferingId.slice(0, 8)}`, kind: "addon", operationalName: input.name, internalComment: "integration",
+        state: "active", subjectVersion: 1, pricingVersion: 1, addonAssignmentsVersion: 1, salesMode: "selectable", priceDisplayMode: "exact", currency: "RUB",
+        timezone: "Europe/Moscow", taxMode: "not_taxable", businessCalendarId: calendarId, leadDirection: "services", defaultAssigneeId: null,
+        scope: input.scope ?? "reusable", ownerOfferingId: input.ownerOfferingId ?? null, activePriceBookId: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+      }))
+      await terms.save(terms.create({
+        offeringId: addOnOfferingId, offeringKind: "addon", serviceType: input.serviceType, standalone: true, categoryKey: "event",
+        applicableOfferingKinds: ["event_service"], minimumQuantity: input.minimumQuantity, maximumQuantity: input.maximumQuantity,
+        defaultQuantity: input.minimumQuantity, quantityStep: input.quantityStep, createdAt: now, createdBy: adminId,
+      }))
+      await priceBooks.save(priceBooks.create({
+        id: addOnPriceBookId, offeringId: addOnOfferingId, revision: 1, name: input.name, currency: "RUB", timezone: "Europe/Moscow", state: "draft",
+        validFrom: date, validToExclusive: nextDateIso, supersedesPriceBookId: null, changeReason: "integration", scheduledActivationAt: null,
+        scheduledBy: null, activatedAt: null, activatedBy: null, retiredBy: null, retiredAt: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+      }))
+      await ratePlans.save(ratePlans.create({
+        id: randomUUID(), priceBookId: addOnPriceBookId, key: input.ratePlanKey ?? "standard", label: input.name,
+        pricingBasis: input.serviceType === "person_service" ? "per_person" : "per_unit", baseAmountMinor: input.unitAmount,
+        baseExtraUnitAmountMinor: null, quantityMetric: input.serviceType === "person_service" ? "participants" : "units", includedQuantity: null,
+        minimumQuantity: null, maximumQuantity: null, minimumDurationMinutes: null, maximumDurationMinutes: null,
+        sortOrder: 0, isDefault: true, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+      }))
+      await priceBooks.update({ id: addOnPriceBookId }, { state: "active", activatedAt: now, activatedBy: adminId })
+      await offerings.update({ id: addOnOfferingId }, { activePriceBookId: addOnPriceBookId })
+      await assignments.save(assignments.create({
+        id: assignmentId, offeringId, addonOfferingId: addOnOfferingId, addonOfferingKind: "addon", enabled: true, required: input.required ?? false,
+        recommended: !(input.required ?? false), groupKey: input.code.toLowerCase().replace(/[^a-z0-9]+/g, "_"), minimumQuantity: input.minimumQuantity, maximumQuantity: input.maximumQuantity,
+        defaultQuantity: input.minimumQuantity, displayOrder: 10, labelOverride: input.name, descriptionOverride: null,
+        ratePlanKeyOverride: input.ratePlanKey ?? null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+      }))
+      return { addOnOfferingId, addOnPriceBookId, assignmentId }
+    }
+    const person = await createAddOn({ code: "EVENT-PERSON", name: "Завтрак на гостя", serviceType: "person_service", unitAmount: 850, minimumQuantity: 1, maximumQuantity: 100, quantityStep: 1, required: true, ratePlanKey: "person" })
+    const quantity = await createAddOn({ code: "EVENT-QUANTITY", name: "Поздний выезд", serviceType: "quantity_service", unitAmount: 2_500, minimumQuantity: 2, maximumQuantity: 4, quantityStep: 2 })
+    const scoped = await createAddOn({ code: "EVENT-SCOPED", name: "Услуга владельца", serviceType: "quantity_service", unitAmount: 1_000, minimumQuantity: 1, maximumQuantity: 4, quantityStep: 1, scope: "offering_specific", ownerOfferingId: offeringId })
+    const foreignAssignmentId = randomUUID()
+    await assignments.save(assignments.create({
+      id: foreignAssignmentId, offeringId: person.addOnOfferingId, addonOfferingId: quantity.addOnOfferingId, addonOfferingKind: "addon", enabled: true, required: false,
+      recommended: false, groupKey: "foreign", minimumQuantity: 2, maximumQuantity: 4, defaultQuantity: 2, displayOrder: 1, labelOverride: "Чужая привязка",
+      descriptionOverride: null, ratePlanKeyOverride: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    const event = await adminAgent.post("/api/internal/v1/events").send({
+      name: "Event add-on matrix", categoryId: category.body.id, phone: "+7 900 000-00-02", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+      guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard",
+      addOnSelections: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: quantity.assignmentId, quantity: 2 }], resourceSelections: [], status: "planning",
+      comment: "", operationId: randomUUID(), idempotencyKey: `event-addon-create-${randomUUID()}`,
+    }).expect(201)
+    const quoteInput = {
+      quoteType: "event_order", eventId: event.body.id, expectedEventVersion: event.body.version, ratePlanKey: "standard", currency: "RUB",
+      addOns: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: quantity.assignmentId, quantity: 2 }], resourceSelections: [],
+    }
+    const quoteResponse = await adminAgent.post(`/api/internal/v1/events/${event.body.id}/quote`).send({ ...quoteInput, operationId: randomUUID(), idempotencyKey: `event-addon-quote-${randomUUID()}` })
+    expect(quoteResponse.status, JSON.stringify({ quote: quoteResponse.body, event: event.body, quoteInput })).toBe(200)
+    const quote = quoteResponse
+    expect(quote.body).toMatchObject({ total: { amountMinor: 47_000, currency: "RUB" }, inputs: { addOns: quoteInput.addOns } })
+    expect(quote.body.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "addon", addOnAssignmentId: person.assignmentId, quantity: 20, amount: { amountMinor: 17_000, currency: "RUB" } }),
+      expect.objectContaining({ kind: "addon", addOnAssignmentId: quantity.assignmentId, quantity: 2, amount: { amountMinor: 5_000, currency: "RUB" } }),
+    ]))
+    expect(quote.body.provenance.addOns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ assignmentId: person.assignmentId, addOnOfferingId: person.addOnOfferingId, serviceType: "person_service", assignmentVersion: 1 }),
+      expect.objectContaining({ assignmentId: quantity.assignmentId, addOnOfferingId: quantity.addOnOfferingId, serviceType: "quantity_service", assignmentVersion: 1 }),
+    ]))
+    expect(Date.parse(quote.body.validUntil) - Date.parse(quote.body.calculatedAt)).toBeLessThanOrEqual(15 * 60 * 1000)
+
+    const scopedEvent = await adminAgent.post("/api/internal/v1/events").send({
+      name: "Event scoped add-on", categoryId: category.body.id, phone: "+7 900 000-00-03", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+      guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard",
+      addOnSelections: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: scoped.assignmentId, quantity: 1 }], resourceSelections: [], status: "planning",
+      comment: "", operationId: randomUUID(), idempotencyKey: `event-scoped-create-${randomUUID()}`,
+    }).expect(201)
+    const scopedQuote = await adminAgent.post(`/api/internal/v1/events/${scopedEvent.body.id}/quote`).send({
+      quoteType: "event_order", eventId: scopedEvent.body.id, expectedEventVersion: scopedEvent.body.version, ratePlanKey: "standard", currency: "RUB",
+      addOns: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: scoped.assignmentId, quantity: 1 }], resourceSelections: [], operationId: randomUUID(), idempotencyKey: `event-scoped-quote-${randomUUID()}`,
+    }).expect(200)
+    expect(scopedQuote.body).toMatchObject({ total: { amountMinor: 43_000, currency: "RUB" }, provenance: { addOns: expect.arrayContaining([expect.objectContaining({ assignmentId: scoped.assignmentId, addOnOfferingId: scoped.addOnOfferingId })]) } })
+
+    const foreignEvent = await adminAgent.post("/api/internal/v1/events").send({
+      name: "Event foreign add-on", categoryId: category.body.id, phone: "+7 900 000-00-04", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+      guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard",
+      addOnSelections: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: foreignAssignmentId, quantity: 2 }], resourceSelections: [], status: "planning",
+      comment: "", operationId: randomUUID(), idempotencyKey: `event-foreign-create-${randomUUID()}`,
+    }).expect(201)
+    const foreignQuote = await adminAgent.post(`/api/internal/v1/events/${foreignEvent.body.id}/quote`).send({
+      quoteType: "event_order", eventId: foreignEvent.body.id, expectedEventVersion: foreignEvent.body.version, ratePlanKey: "standard", currency: "RUB",
+      addOns: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: foreignAssignmentId, quantity: 2 }], resourceSelections: [], operationId: randomUUID(), idempotencyKey: `event-foreign-quote-${randomUUID()}`,
+    })
+    expect(foreignQuote.status, JSON.stringify(foreignQuote.body)).toBe(422)
+    expect(foreignQuote.body.code).toBe("ADDON_ASSIGNMENT_UNAVAILABLE")
+
+    const requiredEvent = await adminAgent.post("/api/internal/v1/events").send({
+      name: "Event required add-on", categoryId: category.body.id, phone: "+7 900 000-00-05", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+      guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard",
+      addOnSelections: [{ assignmentId: quantity.assignmentId, quantity: 2 }], resourceSelections: [], status: "planning",
+      comment: "", operationId: randomUUID(), idempotencyKey: `event-required-create-${randomUUID()}`,
+    }).expect(201)
+    const requiredQuote = await adminAgent.post(`/api/internal/v1/events/${requiredEvent.body.id}/quote`).send({
+      quoteType: "event_order", eventId: requiredEvent.body.id, expectedEventVersion: requiredEvent.body.version, ratePlanKey: "standard", currency: "RUB",
+      addOns: [{ assignmentId: quantity.assignmentId, quantity: 2 }], resourceSelections: [], operationId: randomUUID(), idempotencyKey: `event-required-quote-${randomUUID()}`,
+    })
+    expect(requiredQuote.status, JSON.stringify(requiredQuote.body)).toBe(422)
+    expect(requiredQuote.body.code).toBe("ADDON_REQUIRED")
+
+    const expectQuoteError = async (body: Record<string, unknown>, code: string, status = 422) => {
+      const response = await adminAgent.post(`/api/internal/v1/events/${event.body.id}/quote`).send({ ...quoteInput, ...body, operationId: randomUUID(), idempotencyKey: `event-addon-error-${randomUUID()}` })
+      expect(response.status, JSON.stringify(response.body)).toBe(status)
+      expect(response.body.code).toBe(code)
+    }
+    await expectQuoteError({ addOns: [{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: person.assignmentId, quantity: 20 }] }, "VALIDATION_ERROR", 400)
+    await expectQuoteError({ currency: "USD" }, "PRICING_CURRENCY_MISMATCH")
+    const expectCompositionError = async (addOns: Array<{ assignmentId: string; quantity: number }>, code: string) => {
+      const candidate = await adminAgent.post("/api/internal/v1/events").send({
+        name: "Event add-on boundary", categoryId: category.body.id, phone: "+7 900 000-00-06", startsAt: `${date}T12:00:00.000Z`, endsAt: `${date}T16:00:00.000Z`,
+        guestCount: 20, pricingMode: "quote_required", commercialOfferingId: offeringId, ratePlanKey: "standard", addOnSelections: addOns, resourceSelections: [], status: "planning",
+        comment: "", operationId: randomUUID(), idempotencyKey: `event-boundary-create-${randomUUID()}`,
+      }).expect(201)
+      const response = await adminAgent.post(`/api/internal/v1/events/${candidate.body.id}/quote`).send({
+        quoteType: "event_order", eventId: candidate.body.id, expectedEventVersion: candidate.body.version, ratePlanKey: "standard", currency: "RUB",
+        addOns, resourceSelections: [], operationId: randomUUID(), idempotencyKey: `event-boundary-quote-${randomUUID()}`,
+      })
+      expect(response.status, JSON.stringify(response.body)).toBe(422)
+      expect(response.body.code).toBe(code)
+    }
+    await expectCompositionError([{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: quantity.assignmentId, quantity: 1 }], "ADDON_QUANTITY_OUT_OF_RANGE")
+    await expectCompositionError([{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: quantity.assignmentId, quantity: 3 }], "ADDON_QUANTITY_OUT_OF_RANGE")
+    await expectCompositionError([{ assignmentId: person.assignmentId, quantity: 20 }, { assignmentId: quantity.assignmentId, quantity: 5 }], "ADDON_QUANTITY_OUT_OF_RANGE")
+    await expectCompositionError([{ assignmentId: person.assignmentId, quantity: 19 }, { assignmentId: quantity.assignmentId, quantity: 2 }], "ADDON_PARTICIPANT_QUANTITY_MISMATCH")
+    await priceBooks.save(priceBooks.create({
+      id: randomUUID(), offeringId: quantity.addOnOfferingId, revision: 2, name: "Поздний выезд — ожидает активации", currency: "RUB", timezone: "Europe/Moscow", state: "scheduled",
+      validFrom: date, validToExclusive: nextDateIso, supersedesPriceBookId: quantity.addOnPriceBookId, changeReason: "integration", scheduledActivationAt: new Date(Date.now() - 1_000),
+      scheduledBy: adminId, activatedAt: null, activatedBy: null, retiredAt: null, retiredBy: null, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await expectQuoteError({}, "ADDON_PRICE_BOOK_NOT_ACTIVE", 409)
   })
 
   it("rejects expired price activation, finite calendar gaps and malformed offering ids", async () => {

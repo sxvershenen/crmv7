@@ -75,13 +75,14 @@ export function EventsControls(props: EventsControlsProps) {
 
   const views = <ViewTabs ariaLabel="Вид мероприятий" items={[{ icon: IconTable, label: "Таблица", value: "table" }, { icon: IconCalendarEvent, label: "Scheduler", value: "scheduler" }]} onValueChange={(next) => props.onViewChange(next as EventView)} value={props.view} />
   const filterSheet = <EventFilterSheet {...props} />
+  const mobileToolbarActions = <div className="flex min-w-0 justify-end gap-1">{views}{filterSheet}<IconButton label="Категории мероприятий" onClick={props.onOpenCategories} variant="outline"><IconSettings aria-hidden="true" /></IconButton></div>
 
   return (
     <SettingsBar
       actions={<>{views}<IconButton label="Управление категориями мероприятий" onClick={props.onOpenCategories} variant="outline"><IconSettings aria-hidden="true" /></IconButton></>}
       filters={<><CategorySelect categories={props.categories} onChange={(value) => props.onFilterChange("category", value, "all")} value={props.filterValues.category} />{props.view === "scheduler" ? <PeriodSelect onChange={props.onPeriodChange} value={props.period} /> : null}{filterSheet}</>}
-      mobileActions={<>{views}{filterSheet}<IconButton label="Категории мероприятий" onClick={props.onOpenCategories} variant="outline"><IconSettings aria-hidden="true" /></IconButton></>}
-      mobilePrimary={primary}
+      mobileActions={<span aria-hidden="true" className="hidden" />}
+      mobilePrimary={<div className="grid w-full min-w-0 gap-2"><div className="min-w-0">{primary}</div>{mobileToolbarActions}</div>}
       primary={primary}
     />
   )

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
@@ -45,7 +45,7 @@ describe("CRM add-on offering routes", () => {
     await user.click(screen.getByRole("button", { name: "Создать услугу" }))
 
     expect(gateway.createAddOn).toHaveBeenCalledWith(expect.objectContaining({ operationalName: "Прокат велосипеда", businessCalendarId: "22222222-2222-4222-8222-222222222222", scope: "reusable", terms: expect.objectContaining({ serviceType: "quantity_service" }) }))
-    expect(screen.getByTestId("location")).toHaveTextContent("/offers/addons/99999999-9999-4999-8999-999999999999")
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/offers/addons/99999999-9999-4999-8999-999999999999"))
   })
 
   it("keeps tabs in the URL, exposes typed usage and links the canonical CMS workspace", async () => {

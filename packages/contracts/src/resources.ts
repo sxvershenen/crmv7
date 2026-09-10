@@ -76,6 +76,17 @@ export const ResourceAllocationCreateSchema = z.object({
 export type ResourceAllocationCreate = z.infer<typeof ResourceAllocationCreateSchema>;
 export const ResourceAllocationDtoSchema = ResourceAllocationSchema;
 export type ResourceAllocationDto = z.infer<typeof ResourceAllocationDtoSchema>;
+export const EventAllocationReplaceSchema = IdempotentOperationSchema.omit({ expectedVersion: true }).extend({
+  eventId: IdSchema,
+  expectedEventVersion: VersionSchema,
+  allocations: z.array(ResourceAllocationCreateSchema.pick({ resourceId: true, startAt: true, endAt: true, quantity: true, capacityImpact: true })).max(100),
+}).strict().superRefine((value, context) => {
+  value.allocations.forEach((allocation, index) => {
+    if (new Date(allocation.startAt) >= new Date(allocation.endAt)) context.addIssue({ code: "custom", path: ["allocations", index, "endAt"], message: "Invalid allocation interval" });
+  });
+});
+export type EventAllocationReplace = z.infer<typeof EventAllocationReplaceSchema>;
+export const EventAllocationReplaceResultSchema = z.object({ eventVersion: VersionSchema, allocations: z.array(ResourceAllocationDtoSchema) }).strict();
 export const ResourceBlockDtoSchema = ResourceAllocationSchema.extend({ sourceType: z.literal("resource_block"), reason: z.string() }).strict();
 export type ResourceBlockDto = z.infer<typeof ResourceBlockDtoSchema>;
 export const ResourceAvailabilityQuerySchema = z.object({

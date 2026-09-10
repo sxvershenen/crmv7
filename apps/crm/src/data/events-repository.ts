@@ -5,8 +5,55 @@ import { bookingResourcesFixture } from "@app/fixtures/bookings"
 import { eventAssigneesFixture, eventCategoriesFixture, eventsFixture } from "@app/fixtures/events"
 import { ApiClientError, apiClient } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
-import { CustomerDtoSchema, EventCategoryDetailSchema, EventCategorySchema, EventDtoSchema, PaymentListResponseSchema, ResourceAllocationDtoSchema, ResourceDtoSchema, SessionUserSchema } from "@crm/contracts"
+import { CustomerDtoSchema, EventAllocationReplaceResultSchema, EventCategoryDetailSchema, EventCategorySchema, EventDtoSchema, EventOrderQuoteResultSchema, EventServiceTemplateRegistryResponseSchema, InternalOfferingEditorSchema, PaymentListResponseSchema, ResourceAllocationDtoSchema, ResourceDtoSchema, SessionUserSchema, type EventAllocationReplace, type EventOrderQuoteBody, type EventOrderQuoteResult, type EventServiceTemplateRegistryResponse, type InternalOfferingEditor } from "@crm/contracts"
 import { z } from "zod"
+import { fixtureAddOnPricing, FixtureEventServiceRepository } from "./event-services-repository"
+
+const fixtureEventServiceRepository = new FixtureEventServiceRepository()
+
+// Event fixtures use the booking fixture's readable keys internally, while the
+// Event contract still carries UUID resource identities. Keep this translation
+// local so the shared booking fixtures remain unchanged.
+const eventFixtureResourceIds: Record<string, string> = {
+  "house-pine": "10000000-0000-4000-8000-000000000001",
+  "house-lake": "10000000-0000-4000-8000-000000000002",
+  "camp-north": "10000000-0000-4000-8000-000000000003",
+  "tent-meadow": "10000000-0000-4000-8000-000000000004",
+  "house-birch": "10000000-0000-4000-8000-000000000005",
+  "tent-river": "10000000-0000-4000-8000-000000000006",
+  "bath-main": "10000000-0000-4000-8000-000000000007",
+  "venue-meadow": "10000000-0000-4000-8000-000000000008",
+}
+const eventFixtureResourceKeys = new Map(Object.entries(eventFixtureResourceIds).map(([key, id]) => [id, key]))
+const eventFixtureResourceModes: Record<string, "fixed" | "shared"> = {
+  "house-pine": "fixed",
+  "house-lake": "fixed",
+  "camp-north": "shared",
+  "tent-meadow": "shared",
+  "house-birch": "fixed",
+  "tent-river": "shared",
+  "bath-main": "fixed",
+  "venue-meadow": "fixed",
+}
+
+export function eventFixtureResourceId(resourceKey: string) {
+  return eventFixtureResourceIds[resourceKey] ?? resourceKey
+}
+
+export function eventFixtureResourceKey(resourceId: string) {
+  return eventFixtureResourceKeys.get(resourceId) ?? resourceId
+}
+
+type FixtureEventAllocation = {
+  id: string
+  eventId: string
+  resourceId: string
+  startAt: string
+  endAt: string
+  quantity: number
+  capacityImpact: number
+  status: "accepted" | "cancelled"
+}
 
 export interface EventsRepository {
   list(query: EventQuery): Promise<EventsDataset>
@@ -18,7 +65,11 @@ export interface EventEditorRepository {
   get(id: string): Promise<EventEditorRecord | null>
   listCategories(): Promise<EventCategory[]>
   listResources(): Promise<EventResourceOption[]>
+  listCommercialOfferings?(): Promise<EventServiceTemplateRegistryResponse>
+  getCommercialOffering?(offeringId: string): Promise<InternalOfferingEditor | null>
   save(event: EventEditorRecord): Promise<EventEditorRecord>
+  quote?(eventId: string, input: Pick<EventOrderQuoteBody, "ratePlanKey" | "currency" | "addOns" | "resourceSelections">): Promise<EventOrderQuoteResult>
+  acceptQuote?(eventId: string, quoteSnapshotId: string): Promise<EventEditorRecord>
 }
 
 export interface EventCategoryEditorRepository {
@@ -33,12 +84,13 @@ export function createEmptyEventCategory(): EventCategoryEditorRecord {
 function toEditorRecord(event: CrmEvent): EventEditorRecord {
   return {
     ...structuredClone(event),
+    ...(event.resourceSelections === undefined ? {} : { resourceSelections: event.resourceSelections.map((selection) => ({ resourceId: eventFixtureResourceId(selection.resourceId) })) }),
     clientComment: "Просим предусмотреть место для детской зоны.",
     internalComments: [{ id: `event-comment-${event.id}-1`, author: "Марина Кириллова", createdLabel: "Сегодня, 13:48", text: "Клиент подтвердил тайминг и количество гостей." }, { id: `event-comment-${event.id}-2`, author: "Алексей Воронов", createdLabel: "23 авг, 18:12", text: "Согласовал базовый сценарий с ведущим." }],
     paymentOperations: event.paid > 0 ? [{ id: `event-payment-${event.id}-1`, amount: event.paid, date: "2026-08-23", kind: "payment", method: "card" }] : [],
     resourceBookings: [
-      { id: `event-resource-${event.id}-1`, resourceId: "house-lake", resourceName: "Дом у озера с очень длинным названием", startsAt: event.startsAt, endsAt: event.endsAt, guestCount: Math.min(event.guestCount, 8) },
-      { id: `event-resource-${event.id}-2`, resourceId: "camp-north", resourceName: "Кемпинг Север", startsAt: event.startsAt, endsAt: event.endsAt, guestCount: Math.min(event.guestCount, 16) },
+      { id: `event-resource-${event.id}-1`, resourceId: eventFixtureResourceId("house-lake"), resourceName: "Дом у озера с очень длинным названием", startsAt: event.startsAt, endsAt: event.endsAt, guestCount: Math.min(event.guestCount, 8) },
+      { id: `event-resource-${event.id}-2`, resourceId: eventFixtureResourceId("camp-north"), resourceName: "Кемпинг Север", startsAt: event.startsAt, endsAt: event.endsAt, guestCount: Math.min(event.guestCount, 16) },
     ],
     scenarioStages: [
       { id: `event-stage-${event.id}-1`, name: "Подготовка площадки и проверка оборудования", durationMinutes: 60, comment: "Ответственный приезжает заранее" },
@@ -109,6 +161,8 @@ export class FixtureEventsRepository implements EventsRepository, EventEditorRep
   private events = structuredClone(eventsFixture)
   private categories = structuredClone(eventCategoriesFixture)
   private editorData = new Map<string, EventEditorRecord>()
+  private quotes = new Map<string, EventOrderQuoteResult>()
+  private resourceAllocations = new Map<string, FixtureEventAllocation[]>()
   private categoryEditorData = new Map<string, EventCategoryEditorRecord>()
 
   async list(query: EventQuery): Promise<EventsDataset> {
@@ -126,6 +180,9 @@ export class FixtureEventsRepository implements EventsRepository, EventEditorRep
     const event = this.events.find((item) => item.id === id)
     if (!event) throw new Error("Мероприятие не найдено")
     event.status = status
+    const editor = this.editorData.get(id)
+    if (editor) editor.status = status
+    if (status === "cancelled") this.releaseEventResources(id)
     return Promise.resolve(structuredClone(event))
   }
 
@@ -149,17 +206,118 @@ export class FixtureEventsRepository implements EventsRepository, EventEditorRep
   async listCategories() { return Promise.resolve(structuredClone(this.categories)) }
 
   async listResources(): Promise<EventResourceOption[]> {
-    return Promise.resolve(bookingResourcesFixture.map(({ capacity, category, id, name }) => ({ capacity, category, id, name, version: 1 })))
+    return Promise.resolve(bookingResourcesFixture.map(({ capacity, category, id, name }) => ({ capacity, category, id: eventFixtureResourceId(id), name, version: 1 })))
   }
+
+  async listCommercialOfferings() { return fixtureEventServiceRepository.list({ state: "active", limit: 100 }) }
+
+  async getCommercialOffering(offeringId: string) { return (await fixtureEventServiceRepository.getByOfferingId(offeringId))?.editor ?? null }
 
   async save(event: EventEditorRecord) {
     const next = structuredClone(event)
+    if (next.id === "new") {
+      next.id = crypto.randomUUID()
+      next.version = 1
+    } else {
+      const previous = this.editorData.get(next.id)
+      next.version = (previous?.version ?? next.version ?? 1) + 1
+    }
     this.editorData.set(next.id, next)
     const flat = toListRecord(next)
     const index = this.events.findIndex((item) => item.id === next.id)
     if (index >= 0) this.events[index] = flat
     else this.events.unshift(flat)
     return Promise.resolve(structuredClone(next))
+  }
+
+  async quote(eventId: string, input: Pick<EventOrderQuoteBody, "ratePlanKey" | "currency" | "addOns" | "resourceSelections">): Promise<EventOrderQuoteResult> {
+    const event = this.editorData.get(eventId) ?? await this.get(eventId)
+    if (!event || event.pricingMode !== "quote_required" || !event.commercialOfferingId) throw new Error("Для этого мероприятия серверный расчёт недоступен")
+    if (event.ratePlanKey !== input.ratePlanKey || JSON.stringify(event.addOnSelections ?? []) !== JSON.stringify(input.addOns) || JSON.stringify(event.resourceSelections ?? []) !== JSON.stringify(input.resourceSelections)) throw new Error("Состав мероприятия изменился. Сохраните изменения заново")
+    const linked = await fixtureEventServiceRepository.getByOfferingId(event.commercialOfferingId)
+    const resources = await this.listResources()
+    const resourceById = new Map(resources.map((resource) => [resource.id, resource]))
+    const resourcePins = input.resourceSelections.map((selection) => {
+      if (eventFixtureResourceModes[eventFixtureResourceKey(selection.resourceId)] !== "fixed") throw new Error("Ресурсы с общей вместимостью пока не поддерживаются для этого заказа")
+      const resource = resourceById.get(selection.resourceId)
+      if (!resource) throw new Error("Выбранный ресурс недоступен")
+      return { resourceId: resource.id, version: resource.version }
+    })
+    const assignments = linked?.editor.addOnAssignments.filter((assignment) => assignment.enabled) ?? []
+    const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]))
+    const selectedIds = new Set<string>()
+    const addOnLines: EventOrderQuoteResult["lines"] = []
+    const addOnProvenance: NonNullable<EventOrderQuoteResult["provenance"]>["addOns"] = []
+    let addOnTotal = 0
+    for (const selection of input.addOns) {
+      if (selectedIds.has(selection.assignmentId)) throw new Error("Дополнительную услугу можно выбрать только один раз")
+      selectedIds.add(selection.assignmentId)
+      const assignment = assignmentById.get(selection.assignmentId)
+      const pricing = assignment ? fixtureAddOnPricing[assignment.addOnOfferingId] : undefined
+      if (!assignment || !pricing) throw new Error("Выбранная дополнительная услуга недоступна")
+      const minimum = assignment.minQuantityOverride ?? 1
+      const maximum = assignment.maxQuantityOverride ?? Number.MAX_SAFE_INTEGER
+      if (selection.quantity < minimum || selection.quantity > maximum) throw new Error("Количество дополнительной услуги вне допустимого диапазона")
+      if (pricing.serviceType === "person_service" && selection.quantity !== event.guestCount) throw new Error("Количество услуги на гостя должно совпадать с числом гостей")
+      const serviceQuantity = selection.quantity
+      const amountMinor = pricing.unitAmount * serviceQuantity
+      addOnTotal += amountMinor
+      addOnLines.push({ kind: "addon", label: pricing.label, serviceDate: "", quantity: serviceQuantity, unitAmount: { amountMinor: pricing.unitAmount, currency: input.currency }, amount: { amountMinor, currency: input.currency }, ratePlanId: pricing.ratePlanId, ratePlanVersion: 1, matchedRuleId: null, matchedRuleVersion: null, addOnAssignmentId: assignment.id, addOnOfferingId: assignment.addOnOfferingId, explanation: pricing.serviceType === "person_service" ? "per_person" : "per_unit" })
+      addOnProvenance.push({ assignmentId: assignment.id, addOnOfferingId: assignment.addOnOfferingId, serviceType: pricing.serviceType, offeringVersion: 1, pricingVersion: 1, assignmentVersion: assignment.version, priceBookId: pricing.priceBookId, priceBookVersion: 1, businessCalendarId: "11111111-1111-4111-8111-111111111111", businessCalendarVersion: 1 })
+    }
+    const requiredMissing = assignments.some((assignment) => assignment.required && !selectedIds.has(assignment.id))
+    if (requiredMissing) throw new Error("Не выбраны обязательные дополнительные услуги")
+    const preview = await fixtureEventServiceRepository.previewQuote(event.commercialOfferingId, {
+      quoteType: "event_service_preview", startsAt: event.startsAt, endsAt: event.endsAt, guests: event.guestCount, currency: input.currency, ratePlanKey: input.ratePlanKey,
+      addOns: [], operationId: crypto.randomUUID(), idempotencyKey: `fixture-event-quote-${eventId}`,
+    })
+    const result = EventOrderQuoteResultSchema.parse({
+      ...preview, quoteType: "event_order", acceptanceReady: true, eventId, eventVersion: event.version ?? 1, total: { amountMinor: preview.total.amountMinor + addOnTotal, currency: input.currency },
+      inputs: { ...preview.inputs, addOns: input.addOns, resourceSelections: input.resourceSelections },
+      lines: [...preview.lines, ...addOnLines.map((line) => ({ ...line, serviceDate: preview.inputs.serviceDate }))],
+      provenance: { ...preview.provenance, addOns: addOnProvenance, resourceSelections: resourcePins }, immutableSnapshot: true,
+    })
+    this.quotes.set(result.quoteId, result)
+    return structuredClone(result)
+  }
+
+  async acceptQuote(eventId: string, quoteSnapshotId: string): Promise<EventEditorRecord> {
+    const current = this.editorData.get(eventId) ?? await this.get(eventId)
+    if (!current) throw new Error("Мероприятие не найдено")
+    const quote = this.quotes.get(quoteSnapshotId)
+    if (!quote || quote.eventId !== eventId) throw new Error("Снимок расчёта не найден")
+    if ((current.version ?? 1) !== quote.eventVersion || current.status === "booked") throw new Error("Расчёт устарел. Рассчитайте стоимость заново")
+    if (Date.parse(quote.validUntil) <= Date.now()) throw new Error("Срок действия расчёта истёк. Рассчитайте стоимость заново")
+    const resources = await this.listResources()
+    const resourceById = new Map(resources.map((resource) => [resource.id, resource]))
+    const allocations = quote.inputs.resourceSelections.map((selection) => {
+      const resource = resourceById.get(selection.resourceId)
+      if (!resource || quote.provenance.resourceSelections.find((pin) => pin.resourceId === selection.resourceId)?.version !== resource.version) throw new Error("Снимок ресурса устарел. Рассчитайте стоимость заново")
+      const startAt = quote.provenance.preparationStartsAt
+      const endAt = quote.provenance.preparationEndsAt
+      const quantity = 1
+      if (this.hasResourceConflict(selection.resourceId, startAt, endAt)) throw new Error("Выбранный ресурс уже занят в этом интервале")
+      return { id: crypto.randomUUID(), eventId, resourceId: selection.resourceId, startAt, endAt, quantity, capacityImpact: quantity, status: "accepted" as const }
+    })
+    const resourceNames = new Map(resources.map((resource) => [resource.id, resource.name]))
+    const acceptedResourceBookings: EventResourceBooking[] = allocations.map((allocation) => ({ id: allocation.id, resourceId: allocation.resourceId, resourceName: resourceNames.get(allocation.resourceId) ?? allocation.resourceId, startsAt: allocation.startAt, endsAt: allocation.endAt, guestCount: allocation.quantity }))
+    const accepted = { ...current, status: "booked" as const, version: (current.version ?? 1) + 1, total: quote.total.amountMinor / 100, acceptedQuote: quote, resourceBookings: acceptedResourceBookings }
+    this.resourceAllocations.set(eventId, allocations)
+    this.editorData.set(eventId, accepted)
+    const index = this.events.findIndex((item) => item.id === eventId)
+    if (index >= 0) this.events[index] = toListRecord(accepted)
+    return structuredClone(accepted)
+  }
+
+  private hasResourceConflict(resourceId: string, startAt: string, endAt: string) {
+    const start = Date.parse(startAt)
+    const end = Date.parse(endAt)
+    return [...this.resourceAllocations.values()].flat().some((allocation) => allocation.status === "accepted" && allocation.resourceId === resourceId && start < Date.parse(allocation.endAt) && end > Date.parse(allocation.startAt))
+  }
+
+  private releaseEventResources(eventId: string) {
+    const allocations = this.resourceAllocations.get(eventId)
+    if (allocations) this.resourceAllocations.set(eventId, allocations.map((allocation) => ({ ...allocation, status: "cancelled" as const })))
   }
 
   async getCategory(id: string): Promise<EventCategoryEditorRecord | null> {
@@ -213,7 +371,7 @@ function mapApiCategoryDetail(dto: ReturnType<typeof EventCategoryDetailSchema.p
 
 function mapEvent(dto: ReturnType<typeof EventDtoSchema.parse>, category?: EventCategory): CrmEvent {
   return {
-    id: dto.id, name: dto.name, categoryId: dto.categoryId ?? "uncategorized", categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "heart", categoryTone: category?.tone ?? "rose",
+    id: dto.id, version: dto.version, name: dto.name, categoryId: dto.categoryId ?? "uncategorized", categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "heart", categoryTone: category?.tone ?? "rose", commercialOfferingId: dto.commercialOfferingId, pricingMode: dto.pricingMode, ratePlanKey: dto.ratePlanKey, addOnSelections: dto.addOnSelections, resourceSelections: dto.resourceSelections, acceptedQuote: dto.acceptedQuote,
     clientName: dto.customerId ?? "Без клиента", phone: dto.phone, startsAt: dto.startsAt, endsAt: dto.endsAt, guestCount: dto.guestCount,
     status: dto.archived ? "archived" : eventStatusFromApi[dto.status], total: dto.total.amountMinor / 100, paid: dto.paid.amountMinor / 100,
     requiresAction: dto.requiresAction, hasConflict: dto.hasConflict, assignees: dto.assigneeIds.map(assigneeFromId),
@@ -234,6 +392,7 @@ function toApiEditorRecord(dto: ReturnType<typeof EventDtoSchema.parse>, resourc
 
 export class ApiEventsRepository implements EventsRepository, EventEditorRepository, EventCategoryEditorRepository {
   private readonly records = new Map<string, ReturnType<typeof EventDtoSchema.parse>>()
+  private readonly commandIntents = new Map<string, { fingerprint: string; operationId: string; idempotencyKey: string; expectedVersion?: number }>()
   constructor(private readonly client: ApiEventsClient = apiClient) {}
 
   async list(query: EventQuery): Promise<EventsDataset> {
@@ -296,40 +455,116 @@ export class ApiEventsRepository implements EventsRepository, EventEditorReposit
     return Array.isArray(resources) ? resources.map((resource) => ({ id: resource.id, name: resource.name, category: resource.kind, capacity: resource.capacityTotal, version: resource.version })) : []
   }
 
+  async listCommercialOfferings() {
+    return this.client.get("/event-services?state=active&limit=100", EventServiceTemplateRegistryResponseSchema)
+  }
+
+  async getCommercialOffering(offeringId: string) {
+    try { return await this.client.get(`/offerings/${encodeURIComponent(offeringId)}/editor`, InternalOfferingEditorSchema) }
+    catch (error) { if (error instanceof ApiClientError && error.status === 404) return null; throw error }
+  }
+
   async save(record: EventEditorRecord): Promise<EventEditorRecord> {
     const money = (value: number) => ({ amountMinor: Math.round(value * 100), currency: "RUB" })
-    const current = record.id === "new" ? null : await this.dto(record.id)
+    const current = record.id === "new" ? null : await this.refreshDto(record.id)
+    const chainScopes = new Set<string>()
     const customerId = await this.resolveCustomerId(record, current?.customerId ?? null)
+    const priced = record.pricingMode === "quote_required"
     const common = {
       name: record.name,
       categoryId: canonicalId(record.categoryId === "uncategorized" ? null : record.categoryId),
+      commercialOfferingId: record.commercialOfferingId ?? null,
+      ratePlanKey: record.ratePlanKey ?? null,
+      addOnSelections: record.addOnSelections ?? [],
+      resourceSelections: record.resourceSelections ?? [],
       customerId,
       phone: record.phone,
       startsAt: record.startsAt,
       endsAt: record.endsAt,
       guestCount: Math.max(0, record.guestCount),
-      total: money(record.total),
+      ...(priced ? {} : { total: money(record.total) }),
       comment: record.clientComment,
       requiresAction: record.requiresAction,
       assigneeIds: record.assignees.map((assignee) => assignee.id),
       scenario: record.scenarioStages.map(({ id, name, durationMinutes, comment }) => ({ ...(canonicalId(id) ? { id } : {}), name, durationMinutes, comment })),
     }
-    let updated = record.id === "new"
-      ? await this.client.post("/events", { ...common, status: record.status === "booked" ? "booked" : record.status === "completed" ? "completed" : record.status === "cancelled" ? "cancelled" : "inquiry", operationId: operationId(), idempotencyKey: idempotencyKey("event-create") }, EventDtoSchema)
-      : await this.client.patch(`/events/${encodeURIComponent(record.id)}`, { ...common, version: current!.version, operationId: operationId(), idempotencyKey: idempotencyKey(`event-${record.id}`) }, EventDtoSchema)
+    const desiredStatus = record.status === "in_work" || record.status === "archived" ? "planning" : eventStatusToApi[record.status]
+    let updated: ReturnType<typeof EventDtoSchema.parse>
+    if (record.id === "new") {
+      const createShape = { ...common, pricingMode: record.pricingMode ?? "legacy_manual", currency: "RUB", status: desiredStatus }
+      const createScope = "event-create"
+      chainScopes.add(createScope)
+      const intent = this.commandIntent(createScope, createShape)
+      updated = await this.client.post("/events", { ...createShape, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventDtoSchema)
+    } else {
+      const saveScope = `event-save:${record.id}`
+      chainScopes.add(saveScope)
+      const intent = this.commandIntent(saveScope, common, current!.version)
+      updated = await this.client.patch(`/events/${encodeURIComponent(record.id)}`, { ...common, version: intent.expectedVersion ?? current!.version, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventDtoSchema)
+    }
     this.records.set(updated.id, updated)
-    if (record.id !== "new" && record.status !== "archived" && eventStatusFromApi[updated.status] !== record.status) {
-      updated = await this.client.post(`/events/${encodeURIComponent(updated.id)}/transition`, { version: updated.version, operationId: operationId(), idempotencyKey: idempotencyKey(`event-transition-${updated.id}`), status: eventStatusToApi[record.status] }, EventDtoSchema)
+    const transitionScope = record.id !== "new" && record.status !== "archived" ? `event-save-transition:${updated.id}:${desiredStatus}` : null
+    if (transitionScope) chainScopes.add(transitionScope)
+    if (transitionScope && eventStatusFromApi[updated.status] !== record.status) {
+      const transitionShape = { status: desiredStatus }
+      const intent = this.commandIntent(transitionScope, transitionShape, updated.version)
+      updated = await this.client.post(`/events/${encodeURIComponent(updated.id)}/transition`, { version: intent.expectedVersion ?? updated.version, ...transitionShape, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventDtoSchema)
       this.records.set(updated.id, updated)
     }
-    if (record.status === "archived" && !updated.archived) {
-      updated = await this.client.post(`/events/${encodeURIComponent(updated.id)}/archive`, { version: updated.version, operationId: operationId(), idempotencyKey: idempotencyKey(`event-archive-${updated.id}`) }, EventDtoSchema)
+    const archiveScope = record.status === "archived" ? `event-save-archive:${updated.id}` : null
+    if (archiveScope) chainScopes.add(archiveScope)
+    if (archiveScope && !updated.archived) {
+      const archiveShape = { archived: true }
+      const intent = this.commandIntent(archiveScope, archiveShape, updated.version)
+      updated = await this.client.post(`/events/${encodeURIComponent(updated.id)}/archive`, { version: intent.expectedVersion ?? updated.version, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventDtoSchema)
       this.records.set(updated.id, updated)
     }
-    await this.reconcileResourceBookings(updated.id, record.resourceBookings)
+    if (record.pricingMode !== "quote_required") {
+      chainScopes.add(`event-allocation-replace:${updated.id}`)
+      await this.reconcileResourceBookings(updated.id, record.resourceBookings, updated.version)
+    }
     await this.reconcilePayments(updated.id, record.paymentOperations)
     const authoritative = await this.dto(updated.id)
-    return toApiEditorRecord(authoritative, await this.listResourceBookings(updated.id), await this.listPayments(updated.id))
+    const resourceBookings = await this.listResourceBookings(updated.id)
+    const paymentOperations = await this.listPayments(updated.id)
+    for (const scope of chainScopes) this.commandIntents.delete(scope)
+    return toApiEditorRecord(authoritative, resourceBookings, paymentOperations)
+  }
+
+  async quote(eventId: string, input: Pick<EventOrderQuoteBody, "ratePlanKey" | "currency" | "addOns" | "resourceSelections">) {
+    let current = await this.refreshDto(eventId)
+    if (current.status === "inquiry") {
+      const planningScope = `event-quote-planning:${eventId}`
+      const planningShape = { status: "planning" as const }
+      const planningIntent = this.commandIntent(planningScope, planningShape, current.version)
+      const planned = await this.client.post(`/events/${encodeURIComponent(eventId)}/transition`, { version: planningIntent.expectedVersion ?? current.version, ...planningShape, operationId: planningIntent.operationId, idempotencyKey: planningIntent.idempotencyKey }, EventDtoSchema)
+      this.commandIntents.delete(planningScope)
+      this.records.set(planned.id, planned)
+      current = planned
+    } else {
+      this.commandIntents.delete(`event-quote-planning:${eventId}`)
+    }
+    const scope = `event-quote:${eventId}`
+    const shape = { ...input, eventId, quoteType: "event_order" as const }
+    const intent = this.commandIntent(scope, shape, current.version)
+    const request = { ...shape, expectedEventVersion: intent.expectedVersion ?? current.version }
+    const result = await this.client.post(`/events/${encodeURIComponent(eventId)}/quote`, { ...request, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventOrderQuoteResultSchema)
+    this.commandIntents.delete(scope)
+    return result
+  }
+
+  async acceptQuote(eventId: string, quoteSnapshotId: string) {
+    const current = await this.refreshDto(eventId)
+    const shape = { status: "booked" as const, quoteAcceptance: { quoteSnapshotId } }
+    const scope = `event-quote-accept:${eventId}`
+    const intent = this.commandIntent(scope, shape, current.version)
+    const input = { version: intent.expectedVersion ?? current.version, ...shape }
+    const updated = await this.client.post(`/events/${encodeURIComponent(eventId)}/transition`, { ...input, operationId: intent.operationId, idempotencyKey: intent.idempotencyKey }, EventDtoSchema)
+    this.records.set(updated.id, updated)
+    const resourceBookings = await this.listResourceBookings(updated.id)
+    const paymentOperations = await this.listPayments(updated.id)
+    this.commandIntents.delete(scope)
+    return toApiEditorRecord(updated, resourceBookings, paymentOperations)
   }
 
   private async listPayments(eventId: string): Promise<EventEditorRecord["paymentOperations"]> {
@@ -365,24 +600,23 @@ export class ApiEventsRepository implements EventsRepository, EventEditorReposit
     return Array.isArray(allocations) ? allocations.map((allocation) => ({ id: allocation.id, resourceId: allocation.resourceId, resourceName: names.get(allocation.resourceId) ?? allocation.resourceId, startsAt: allocation.startAt, endsAt: allocation.endAt, guestCount: allocation.quantity })) : []
   }
 
-  private async reconcileResourceBookings(sourceId: string, desired: EventEditorRecord["resourceBookings"]) {
+  private async reconcileResourceBookings(sourceId: string, desired: EventEditorRecord["resourceBookings"], expectedEventVersion: number) {
     const current = await this.client.get(`/resources/allocations?sourceType=event&sourceId=${encodeURIComponent(sourceId)}&includeCancelled=false`, ResourceAllocationDtoSchema.array())
     const activeAllocations = Array.isArray(current) ? current : []
-    const desiredIds = new Set(desired.filter((booking) => {
-      const existing = activeAllocations.find((item) => item.id === booking.id)
-      return Boolean(existing && existing.resourceId === booking.resourceId && existing.startAt === booking.startsAt && existing.endAt === booking.endsAt && existing.quantity === booking.guestCount)
-    }).map((booking) => booking.id))
-    for (const allocation of activeAllocations.filter((item) => !desiredIds.has(item.id))) {
-      const resource = (await this.listResources()).find((item) => item.id === allocation.resourceId)
-      if (!resource) continue
-      await this.client.post(`/resources/allocations/${encodeURIComponent(allocation.id)}/cancel`, { expectedVersion: resource.version, operationId: operationId(), idempotencyKey: idempotencyKey(`event-allocation-cancel-${allocation.id}`) }, ResourceAllocationDtoSchema)
-    }
-    for (const booking of desired) {
-      if (desiredIds.has(booking.id)) continue
-      const resource = (await this.listResources()).find((item) => item.id === booking.resourceId)
-      if (!resource) throw new Error("Выбранный ресурс недоступен")
-      await this.client.post("/resources/allocations", { resourceId: resource.id, sourceType: "event", sourceId, startAt: booking.startsAt, endAt: booking.endsAt, quantity: booking.guestCount, capacityImpact: booking.guestCount, status: "tentative", operationId: operationId(), expectedVersion: resource.version, overrideConflict: false }, ResourceAllocationDtoSchema)
-    }
+    const sortAllocation = (left: { resourceId: string; startAt: string; endAt: string; quantity: number; capacityImpact: number }, right: typeof left) =>
+      `${left.resourceId}|${left.startAt}|${left.endAt}|${left.quantity}|${left.capacityImpact}`.localeCompare(`${right.resourceId}|${right.startAt}|${right.endAt}|${right.quantity}|${right.capacityImpact}`)
+    const currentShape = activeAllocations.map((item) => ({ resourceId: item.resourceId, startAt: item.startAt, endAt: item.endAt, quantity: item.quantity, capacityImpact: item.capacityImpact })).sort(sortAllocation)
+    const desiredShape: EventAllocationReplace["allocations"] = desired.map((booking) => ({ resourceId: booking.resourceId, startAt: booking.startsAt, endAt: booking.endsAt, quantity: booking.guestCount, capacityImpact: booking.guestCount })).sort(sortAllocation)
+    if (JSON.stringify(currentShape) === JSON.stringify(desiredShape)) return
+    const scope = `event-allocation-replace:${sourceId}`
+    const intent = this.commandIntent(scope, { eventId: sourceId, allocations: desiredShape }, expectedEventVersion)
+    await this.client.post("/resources/allocations/replace-event", {
+      eventId: sourceId,
+      expectedEventVersion: intent.expectedVersion ?? expectedEventVersion,
+      allocations: desiredShape,
+      operationId: intent.operationId,
+      idempotencyKey: intent.idempotencyKey,
+    }, EventAllocationReplaceResultSchema)
   }
 
   async getCategory(id: string): Promise<EventCategoryEditorRecord | null> {
@@ -421,6 +655,15 @@ export class ApiEventsRepository implements EventsRepository, EventEditorReposit
     const value = await this.client.get(`/events/${encodeURIComponent(id)}`, EventDtoSchema)
     this.records.set(value.id, value)
     return value
+  }
+
+  private commandIntent(scope: string, input: unknown, expectedVersion?: number) {
+    const fingerprint = JSON.stringify(input)
+    const current = this.commandIntents.get(scope)
+    if (current?.fingerprint === fingerprint) return current
+    const next = { fingerprint, operationId: operationId(), idempotencyKey: idempotencyKey(scope), ...(expectedVersion === undefined ? {} : { expectedVersion }) }
+    this.commandIntents.set(scope, next)
+    return next
   }
 
   private async listAllCategories(path: string) {

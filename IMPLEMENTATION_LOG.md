@@ -474,3 +474,10 @@
 - CRM получил explicit draft/quote/confirm flow, stable retry identity, server-only priced totals, dirty/stale/conflict UX и immutable snapshot после reload; legacy unpriced flow сохранён.
 - Regression triage убрал fixture customer render race и API offering locator race; PostgreSQL serialization errors editorial draft теперь доходят до bounded transaction retry.
 - Gate: workspace test/typecheck/lint/build, PostgreSQL integration `38/38`, fixture Playwright `60 passed / 22 skipped`, API Playwright `4/4`. Fresh restricted-role database применила 29 migrations; repeat не имел pending work, revert→run сохранил registrations и program quote snapshots.
+
+## 2026-09-10 — Customer Event quote acceptance
+
+- Customer Event отделён от category/template/CMS draft; `event_order` принимает exact saved состав, пакет и quantity/person add-ons, сохраняя preview non-accepting.
+- Confirmation/cancellation, immutable accepted facts, fixed-resource allocations, audit/outbox и idempotency защищены общей транзакцией и PostgreSQL guards; legacy allocation replacement атомарен.
+- CRM/fixture получили saved draft → quote → confirm, stable retry, accepted snapshot и named selections; category dirty tabs/reload сохранены. Mobile Event controls больше не перекрывают range navigation.
+- Gate: workspace unit 605, typecheck/lint/build; PostgreSQL integration 58/58; fixture Playwright 62 passed / 22 skipped; API Playwright 4/4 на чистой Unicode test DB. Migration registry 32: fresh/upgrade/repeat, empty rollback и безопасный отказ rollback с данными. Evidence: `07-phase-4-cms/logs/2026-09-10-event-order-acceptance.md`.

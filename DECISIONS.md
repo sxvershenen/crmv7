@@ -427,3 +427,13 @@ Confirmation в одной транзакции блокирует occurrence, �
 Существующая `EventCategory` пока остаётся legacy taxonomy фактического customer `Event`: её API и selector совместимы, но она не становится вторым commercial registry. Legacy category ID/name никогда не интерпретируются как template identity, а связь/миграция отложена до customer Event acceptance gate.
 
 `EventServiceTemplate` владеет format, default duration, guest bounds и preparation; `CatalogOffering` — единственным видимым operational name/commercial code; PriceBook — named `flat_package` тарифами. `event_service_preview` принимает offset-bearing same-local-date interval, не ценит preparation отдельно, фиксирует exact source/binding/calendar/preparation pins и всегда имеет `acceptanceReady=false`. CMS mapping ограничен `catalog_offering(event_service) → event_detail`; locator не снимает public/acceptance guards.
+
+## D-086 — Customer Event, категория и принимаемый расчёт
+
+`/events` и `/events/:id` — клиентские заказы. Их создание не создаёт CMS nodes, revisions или source links. `/events/categories` — постоянные продаваемые типы: каждый имеет собственные template, exact primary offering binding и canonical CMS-черновик без автопубликации. `format=wedding` может повторяться; клиентские данные не становятся editorial content. Исторические `sourceKind=event` связи не удаляются и не перепривязываются автоматически; cleanup требует отдельного решения.
+
+Новый коммерческий Event использует `quote_required` и явный `commercialOfferingId`; `legacy_manual` остаётся для исторического ручного учёта без угадывания связей или автоконверсии. Серверный immutable `event_order` фиксирует Event/version, пакет, даты, гостей, назначенные допы и версии зависимостей. `event_service_preview` остаётся непринимаемым. Принятый snapshot и коммерческие поля неизменяемы; новые договорённости требуют будущей amendment-команды.
+
+Подтверждение — planning→booked с capability, CAS и идемпотентностью. Accepted link, server total, status, resource allocations, audit/outbox фиксируются общей транзакцией; TTL проверяется по времени БД после ожидания locks. Платёж — отдельная команда. Отмена освобождает allocations, сохраняет snapshot и не создаёт возврат.
+
+Event resource V1 — явные эксклюзивные fixed Resource selections; один выбранный ресурс занимает одну единицу с capacityImpact=1, независимо от числа гостей. Preparation входит в занятый интервал, стоимость ресурса отдельно не добавляется к пакету. Shared capacity и scheduled-resource add-ons заблокированы до определения соответствующего fulfillment. Категория не является ресурсом; разные категории конкурируют за один физический Resource. Отсутствие выбранного ресурса не обещает availability.

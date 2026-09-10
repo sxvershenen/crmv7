@@ -33,9 +33,21 @@ export const ProgramRegistrationQuoteOperationalContextSchema = z.object({
   programOccurrenceId: IdSchema,
   programOccurrenceVersion: VersionSchema,
 }).strict();
+export const EventOrderQuoteOperationalContextSchema = z.object({
+  kind: z.literal("event_order"),
+  eventId: IdSchema,
+  eventVersion: VersionSchema,
+  subjectVersion: VersionSchema,
+  eventServiceTemplateId: IdSchema,
+  eventServiceTemplateVersion: VersionSchema,
+  offeringBindingId: IdSchema,
+  offeringBindingVersion: VersionSchema,
+  resourcePins: z.array(z.object({ resourceId: IdSchema, version: VersionSchema }).strict()).max(100),
+}).strict();
 export const OfferingQuoteOperationalContextSchema = z.discriminatedUnion("kind", [
   HouseStayQuoteOperationalContextSchema,
   ProgramRegistrationQuoteOperationalContextSchema,
+  EventOrderQuoteOperationalContextSchema,
 ]);
 export type OfferingQuoteOperationalContext = z.infer<typeof OfferingQuoteOperationalContextSchema>;
 

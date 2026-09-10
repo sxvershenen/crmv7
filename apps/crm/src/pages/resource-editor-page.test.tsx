@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
@@ -216,7 +216,7 @@ describe("ResourceEditorPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "Сохранить" }))
     expect(gateway.createStayOffering).toHaveBeenCalledWith(resourceId, expect.objectContaining({ operationId: expect.any(String), idempotencyKey: expect.any(String) }))
-    expect(await screen.findByLabelText("Текущий URL")).toHaveTextContent(`/resources/houses/${resourceId}?tab=offering`)
+    await waitFor(() => expect(screen.getByLabelText("Текущий URL")).toHaveTextContent(`/resources/houses/${resourceId}?tab=offering`))
   })
 })
 

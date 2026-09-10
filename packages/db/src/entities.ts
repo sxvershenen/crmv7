@@ -362,6 +362,12 @@ export class EventEntity extends MutableEntity {
   @Column({ type: "text" }) code!: string
   @Column({ type: "text" }) name!: string
   @Column({ name: "category_id", type: "uuid", nullable: true }) categoryId!: string | null
+  @Column({ name: "commercial_offering_id", type: "uuid", nullable: true }) commercialOfferingId!: string | null
+  @Column({ name: "pricing_mode", type: "text", default: "legacy_manual" }) pricingMode!: string
+  @Column({ name: "rate_plan_key", type: "text", nullable: true }) ratePlanKey!: string | null
+  @Column({ name: "addon_selections", type: "jsonb", default: () => "'[]'::jsonb" }) addOnSelections!: Array<{ assignmentId: string; quantity: number }>
+  @Column({ name: "resource_selections", type: "jsonb", default: () => "'[]'::jsonb" }) resourceSelections!: Array<{ resourceId: string }>
+  @Column({ name: "accepted_quote", type: "jsonb", nullable: true }) acceptedQuote!: Record<string, unknown> | null
   @Column({ name: "customer_id", type: "uuid", nullable: true }) customerId!: string | null
   @Column({ type: "text", default: "" }) phone!: string
   @Column({ name: "starts_at", type: "timestamptz" }) startsAt!: Date

@@ -11,6 +11,8 @@ import {
   ProgramRegistrationQuoteOperationalContextSchema,
   ProgramRegistrationQuoteResultSchema,
   ProgramRegistrationQuoteBodySchema,
+  EventOrderQuoteOperationalContextSchema,
+  EventOrderQuoteResultSchema,
   type BookingItemQuoteAcceptance,
   type SessionUser,
 } from "@crm/contracts"
@@ -20,6 +22,7 @@ import {
   BookingItemEntity,
   CatalogOfferingEntity,
   ChangeLogEntity,
+  EventEntity,
   OfferingBindingEntity,
   OfferingQuoteSnapshotEntity,
   OutboxDeliveryEntity,
@@ -28,7 +31,9 @@ import {
   ProgramRegistrationEntity,
   ProgramTemplateEntity,
   ResourceEntity,
+  ResourceAllocationEntity,
 } from "@crm/db"
+import { ResourcesService } from "../resources/resources.service.js"
 
 type PreparedAcceptance = {
   item: BookingItemEntity
@@ -41,9 +46,93 @@ export type PreparedProgramRegistrationAcceptance = {
   quote: OfferingQuoteSnapshotEntity
   result: ReturnType<typeof ProgramRegistrationQuoteResultSchema.parse>
 }
+export type PreparedEventOrderAcceptance = {
+  quote: OfferingQuoteSnapshotEntity
+  result: ReturnType<typeof EventOrderQuoteResultSchema.parse>
+}
 
 @Injectable()
 export class OperationalQuoteAcceptanceService {
+  /** Caller owns the Event row lock and the transaction/idempotent lifecycle command. */
+  async prepareEventOrder(manager: EntityManager, event: EventEntity, quoteSnapshotId: string): Promise<PreparedEventOrderAcceptance> {
+    const quote = await manager.findOne(OfferingQuoteSnapshotEntity, { where: { id: quoteSnapshotId }, lock: { mode: "pessimistic_write" } })
+    if (!quote) throw new NotFoundException({ code: "QUOTE_NOT_FOUND", message: "Расчёт не найден" })
+    if (quote.quoteType !== "event_order") throw failure("QUOTE_NOT_ACCEPTANCE_READY", "Предварительный расчёт категории нельзя принять как заказ")
+    const parsed = EventOrderQuoteResultSchema.safeParse(quote.resultPayload)
+    const context = EventOrderQuoteOperationalContextSchema.safeParse(quote.operationalContext)
+    if (!parsed.success || !context.success) throw failure("QUOTE_SNAPSHOT_INVALID", "Сохранённый расчёт мероприятия имеет неверный формат")
+    const result = parsed.data
+    if (event.pricingMode !== "quote_required" || event.status !== "planning" || event.archivedAt !== null
+      || result.quoteId !== quote.id || result.offeringId !== event.commercialOfferingId
+      || result.eventId !== event.id || result.eventVersion !== event.version
+      || context.data.eventId !== event.id || context.data.eventVersion !== event.version
+      || result.inputs.startsAt !== event.startsAt.toISOString() || result.inputs.endsAt !== event.endsAt.toISOString()
+      || result.inputs.guests !== event.guestCount || result.inputs.ratePlanKey !== event.ratePlanKey || result.currency !== event.currency
+      || canonicalSelections(result.inputs.addOns, "assignmentId") !== canonicalSelections(event.addOnSelections, "assignmentId")
+      || canonicalSelections(result.inputs.resourceSelections, "resourceId") !== canonicalSelections(event.resourceSelections, "resourceId")) {
+      throw failure("QUOTE_CONTEXT_MISMATCH", "Состав мероприятия изменился. Рассчитайте стоимость заново")
+    }
+    const existing = await manager.createQueryBuilder(AcceptedOfferingQuoteLinkEntity, "link")
+      .where("link.event_id = :eventId OR link.quote_snapshot_id = :quoteId", { eventId: event.id, quoteId: quote.id }).getOne()
+    if (existing) throw failure("QUOTE_ALREADY_ACCEPTED", "Мероприятие или расчёт уже подтверждены")
+    try {
+      // SQL shares the same checks with direct-link writes and reads clock_timestamp
+      // only after waiting for catalog, assignment, calendar and resource locks.
+      await manager.query("SELECT assert_event_order_quote_current($1)", [quote.id])
+    } catch (error) {
+      const driver = (error as { driverError?: { code?: string; message?: string } }).driverError
+      if (driver?.code !== "23514") throw error
+      const expired = driver.message?.includes("expired")
+      throw failure(expired ? "QUOTE_EXPIRED" : "QUOTE_CONTEXT_MISMATCH", expired ? "Срок действия расчёта истёк" : "Условия расчёта изменились. Рассчитайте стоимость заново")
+    }
+    return { quote, result }
+  }
+
+  async recordEventOrder(manager: EntityManager, event: EventEntity, prepared: PreparedEventOrderAcceptance, actor: SessionUser, requestId: string, operationId: string) {
+    const now = await this.databaseNow(manager)
+    const link = await manager.save(manager.create(AcceptedOfferingQuoteLinkEntity, {
+      id: randomUUID(), quoteSnapshotId: prepared.quote.id, bookingItemId: null, eventId: event.id, programRegistrationId: null,
+      targetVersion: event.version, acceptedAt: now, acceptedBy: actor.id, operationId, requestId, entrySurface: "internal",
+    }))
+    // Replacement is inside the caller's transaction: any conflict rolls back
+    // cancellations, accepted link, status, audit and all new allocations together.
+    await this.releaseEventResources(manager, event, actor, requestId)
+    const resources = new ResourcesService(manager.connection)
+    for (const selection of [...event.resourceSelections].sort((a, b) => a.resourceId.localeCompare(b.resourceId))) {
+      const resource = await manager.findOneByOrFail(ResourceEntity, { id: selection.resourceId })
+      await resources.createAllocationInTransaction(manager, {
+        resourceId: resource.id, expectedVersion: resource.version, operationId: randomUUID(),
+        sourceType: "event", sourceId: event.id, startAt: prepared.result.provenance.preparationStartsAt, endAt: prepared.result.provenance.preparationEndsAt,
+        quantity: 1, capacityImpact: 1, status: "active", overrideConflict: false,
+      }, actor, requestId)
+    }
+    const notification = OperationalQuoteAcceptanceOutboxEventSchema.parse({
+      schemaVersion: 1, eventId: randomUUID(), eventType: "crm.operational_quote.accepted", occurredAt: link.acceptedAt.toISOString(), actorId: actor.id,
+      requestId, operationId, entrySurface: "internal", target: { type: "event", id: event.id, aggregateId: event.id, version: event.version },
+      quote: { quoteSnapshotId: prepared.quote.id, offeringId: prepared.quote.offeringId, offeringVersion: prepared.quote.offeringVersion,
+        pricingVersion: prepared.quote.pricingVersion, addOnsVersion: prepared.quote.addOnAssignmentsVersion, priceBookVersion: prepared.quote.priceBookVersion,
+        calendarVersion: prepared.quote.businessCalendarVersion, currency: prepared.result.currency },
+    })
+    await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event", entityId: event.id, action: "quote_accepted", actorId: actor.id, requestId, changes: { quoteSnapshotId: prepared.quote.id, acceptanceId: link.id, eventVersion: event.version }, createdAt: now }))
+    await manager.save(manager.create(OutboxEventEntity, { id: notification.eventId, topic: notification.eventType, aggregateType: "event", aggregateId: event.id, payload: notification as unknown as Record<string, unknown>, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+    await manager.save(manager.create(OutboxDeliveryEntity, { eventId: notification.eventId, consumer: "sse", status: "pending", attempts: 0, availableAt: now, processedAt: null, lastError: null, createdAt: now, updatedAt: now }))
+  }
+
+  async releaseEventResources(manager: EntityManager, event: EventEntity, actor: SessionUser, requestId: string) {
+    const allocations = await manager.createQueryBuilder(ResourceAllocationEntity, "allocation")
+      .where("allocation.source_type = 'event' AND allocation.source_id = :id AND allocation.archived_at IS NULL AND allocation.status IN ('active','tentative')", { id: event.id })
+      .orderBy("allocation.resource_id", "ASC").addOrderBy("allocation.id", "ASC").getMany()
+    if (!allocations.length) return
+    const ids = [...new Set(allocations.map((allocation) => allocation.resourceId))].sort()
+    await manager.createQueryBuilder(ResourceEntity, "resource").where("resource.id IN (:...ids)", { ids }).orderBy("resource.id", "ASC").setLock("pessimistic_write").getMany()
+    const resources = new ResourcesService(manager.connection)
+    for (const allocation of allocations) {
+      const resource = await manager.findOneByOrFail(ResourceEntity, { id: allocation.resourceId })
+      const operationId = randomUUID()
+      await resources.cancelAllocationInTransaction(manager, allocation.id, { expectedVersion: resource.version, operationId, idempotencyKey: operationId }, actor, requestId)
+    }
+  }
+
   async acceptBookingItems(manager: EntityManager, booking: BookingEntity, acceptances: readonly BookingItemQuoteAcceptance[], actor: SessionUser, requestId: string, operationId: string) {
     const byItem = new Map<string, BookingItemQuoteAcceptance>()
     for (const acceptance of acceptances) byItem.set(acceptance.bookingItemId, acceptance)
@@ -165,3 +254,4 @@ export class OperationalQuoteAcceptanceService {
 
 function localDate(value: Date, timezone: string) { const parts = new Intl.DateTimeFormat("en", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value); const get = (type: "year" | "month" | "day") => parts.find((item) => item.type === type)!.value; return `${get("year")}-${get("month")}-${get("day")}` }
 function failure(code: string, message: string, details: Record<string, unknown> = {}) { return new UnprocessableEntityException({ code, message, details }) }
+function canonicalSelections<T extends object>(values: readonly T[], key: keyof T) { return JSON.stringify([...values].sort((left, right) => String(left[key]).localeCompare(String(right[key])))) }

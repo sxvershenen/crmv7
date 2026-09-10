@@ -1,0 +1,116 @@
+import { expect, test } from "@playwright/test"
+
+test("priced customer Event can be saved, quoted, accepted, and reopened", async ({ page, isMobile }) => {
+  const eventName = `E2E priced Event ${test.info().project.name}`
+
+  await page.clock.setFixedTime(new Date("2026-09-10T10:00:00+03:00"))
+  await page.goto("/events/new?category=wedding")
+  await expect(page.locator('[data-slot="editor-frame"]')).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveValue("Новое мероприятие")
+  await expect(page.locator('[data-slot="editor-actionbar"]')).toHaveCSS("position", "fixed")
+  if (isMobile) {
+    await expect(page.locator('[data-slot="editor-mobile-actions"]')).toBeVisible()
+    await expect(page.locator('[data-slot="editor-nav-fade"]')).toBeVisible()
+  } else {
+    await expect(page.locator('[data-slot="editor-desktop-actions"]')).toBeVisible()
+  }
+
+  await page.getByRole("textbox", { name: "Название", exact: true }).fill(eventName)
+  await page.getByRole("combobox", { name: "Клиент мероприятия" }).click()
+  await page.getByRole("option", { name: /Анна Ковалёва/ }).click()
+  await page.locator("#event-guests").fill("36")
+
+  const commercialOffering = page.getByRole("combobox", { name: "Коммерческая категория мероприятия" })
+  await commercialOffering.click()
+  await page.getByRole("option").first().click()
+
+  const packageSelect = page.getByRole("combobox", { name: "Пакет мероприятия" })
+  await expect(packageSelect).toContainText("Стандарт")
+  await packageSelect.press("Enter")
+  await expect(page.getByRole("option", { name: "Стандарт", exact: true })).toBeVisible()
+  await page.keyboard.press("Enter")
+  await expect(packageSelect).toContainText("Стандарт")
+  await expect(page.getByText("Есть изменения", { exact: true })).toBeVisible()
+  const quoteButton = page.getByRole("button", { name: "Рассчитать стоимость", exact: true })
+  await expect(quoteButton).toBeDisabled()
+  await expect(page.getByText("Сначала сохраните мероприятие, затем рассчитайте стоимость по сохранённым данным.", { exact: true })).toBeVisible()
+
+  const addOnLabel = page.getByText("Поздний выезд", { exact: true })
+  await expect(addOnLabel).toBeVisible()
+  const addOnRow = addOnLabel.locator("..")
+  const addOnCheckbox = addOnRow.getByRole("checkbox")
+  await addOnCheckbox.click()
+  await expect(addOnCheckbox).toBeChecked()
+  await expect(page.getByRole("spinbutton", { name: "Количество: Поздний выезд", exact: true })).toHaveValue("1")
+
+  await page.getByRole("tab", { name: "Ресурсы", exact: true }).click()
+  const resourceSelect = page.getByRole("combobox", { name: "Ресурс мероприятия", exact: true })
+  await expect(resourceSelect).toBeVisible()
+  await resourceSelect.click()
+  await page.getByRole("option", { name: /Дом у озера с очень длинным названием/ }).click()
+  await expect(resourceSelect).toContainText("Дом у озера с очень длинным названием")
+  await page.getByRole("button", { name: "Добавить бронь", exact: true }).click()
+  const selectedResource = page.locator("article").filter({ hasText: "Дом у озера с очень длинным названием" }).first()
+  await expect(selectedResource).toBeVisible()
+  await page.getByRole("tab", { name: "Основное", exact: true }).click()
+
+  const saveButton = page.getByRole("button", { name: "Сохранить", exact: true })
+  await saveButton.focus()
+  await expect(saveButton).toBeFocused()
+  await saveButton.press("Enter")
+  await expect(page.getByText("Сохранено", { exact: true })).toBeVisible()
+  await expect(quoteButton).toBeEnabled()
+
+  await quoteButton.click()
+  await expect(page.getByText("Снимок неизменяем после подтверждения.", { exact: true })).toBeVisible()
+  await expect(page.getByText("Поздний выезд × 1", { exact: true })).toBeVisible()
+  const acceptButton = page.getByRole("button", { name: "Подтвердить и забронировать", exact: true })
+  await expect(acceptButton).toBeEnabled()
+  await acceptButton.click()
+  await expect(page.getByText("Подтверждено", { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole("button", { name: "Подтвердить и забронировать", exact: true })).toHaveCount(0)
+  await expect(page.locator("#event-guests")).toBeDisabled()
+  await expect(addOnCheckbox).toBeChecked()
+  await expect(addOnCheckbox).toBeDisabled()
+  await page.getByRole("tab", { name: "Ресурсы", exact: true }).click()
+  await expect(page.locator("article").filter({ hasText: "Дом у озера с очень длинным названием" }).first()).toBeVisible()
+  await page.getByRole("tab", { name: "Основное", exact: true }).click()
+
+  if (isMobile) {
+    await page.getByRole("button", { name: "Открыть меню" }).click()
+    await page.getByRole("button", { name: "Мероприятия", exact: true }).click()
+  } else {
+    await page.getByRole("link", { name: "Мероприятия", exact: true }).click()
+  }
+  await expect(page).toHaveURL(/\/events$/)
+
+  const shiftRange = async (date: RegExp) => {
+    const nextRange = page.getByRole("button", { name: "Следующий диапазон", exact: true })
+    await expect(nextRange).toBeVisible()
+    await nextRange.click()
+    await expect(page).toHaveURL(date)
+  }
+  await shiftRange(/date=2026-08-31/)
+  await shiftRange(/date=2026-09-07/)
+  const savedEvent = (isMobile ? page.locator('[data-testid="mobile-events"]') : page.locator('[data-testid="desktop-events"]')).getByText(eventName, { exact: true })
+  await expect(savedEvent).toBeVisible()
+  if (isMobile) await page.getByRole("button", { name: `Открыть мероприятие ${eventName}`, exact: true }).click()
+  else await savedEvent.click()
+  await expect(page).toHaveURL(/\/events\/[^/]+$/)
+  await expect(page.locator('[data-slot="editor-frame"]')).toBeVisible()
+  await expect(page.getByText("Снимок неизменяем после подтверждения.", { exact: true })).toBeVisible()
+  await expect(page.getByText("Подтверждено", { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "Коммерческая категория мероприятия" })).toBeDisabled()
+  await expect(page.getByRole("combobox", { name: "Пакет мероприятия" })).toBeDisabled()
+  await expect(page.locator("#event-guests")).toBeDisabled()
+  await expect(page.getByText("Поздний выезд × 1", { exact: true })).toBeVisible()
+  const reopenedAddOnLabel = page.getByText("Поздний выезд", { exact: true })
+  await expect(reopenedAddOnLabel).toBeVisible()
+  const reopenedAddOnCheckbox = reopenedAddOnLabel.locator("..").getByRole("checkbox")
+  await expect(reopenedAddOnCheckbox).toBeChecked()
+  await expect(reopenedAddOnCheckbox).toBeDisabled()
+  await page.getByRole("tab", { name: "Ресурсы", exact: true }).click()
+  await expect(page.locator("article").filter({ hasText: "Дом у озера с очень длинным названием" }).first()).toBeVisible()
+  await page.getByRole("tab", { name: "Основное", exact: true }).click()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})

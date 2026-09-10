@@ -1,4 +1,5 @@
 import type { Assignee, CommentThreadItem, StatusTone } from "@crm/ui"
+import type { EventOrderQuoteResult, EventPricingMode } from "@crm/contracts"
 
 export const eventStatuses = ["in_work", "booked", "completed", "cancelled", "archived"] as const
 export const eventStatusFilters = ["all", ...eventStatuses] as const
@@ -31,11 +32,18 @@ export type EventCategoryEditorRecord = EventCategory & { relatedEvents: CrmEven
 
 export type CrmEvent = {
   id: string
+  version?: number
   name: string
   categoryId: string
   categoryName: string
   categoryIcon: EventCategoryIcon
   categoryTone: EventCategoryTone
+  commercialOfferingId?: string | null
+  pricingMode?: EventPricingMode
+  ratePlanKey?: string | null
+  addOnSelections?: Array<{ assignmentId: string; quantity: number }>
+  resourceSelections?: Array<{ resourceId: string }>
+  acceptedQuote?: EventOrderQuoteResult | null
   clientName: string
   phone: string
   startsAt: string
@@ -60,6 +68,8 @@ export type EventEditorRecord = CrmEvent & {
   resourceBookings: EventResourceBooking[]
   scenarioStages: EventScenarioStage[]
 }
+
+export type EventOrderQuote = EventOrderQuoteResult
 
 export type EventQuery = {
   status: EventStatusFilter

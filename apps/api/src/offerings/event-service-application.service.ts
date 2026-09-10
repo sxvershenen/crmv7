@@ -353,7 +353,7 @@ export class EventServiceApplicationService {
   }
 
   private summary(offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, cmsReady = true, editorialNodeId: string | null = null) {
-    return { offeringId: offering.id, offeringVersion: offering.version, state: offering.state as "draft" | "active" | "paused" | "archived", subjectVersion: offering.subjectVersion, pricingVersion: offering.pricingVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, cmsReady, publicReady: false as const, editorialNodeId }
+    return { offeringId: offering.id, operationalName: offering.operationalName, offeringVersion: offering.version, state: offering.state as "draft" | "active" | "paused" | "archived", subjectVersion: offering.subjectVersion, pricingVersion: offering.pricingVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, cmsReady, publicReady: false as const, editorialNodeId }
   }
 
   private lookupItem(offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, cmsReady = true, editorialNodeId: string | null = null) {

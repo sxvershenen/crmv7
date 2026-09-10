@@ -23,6 +23,7 @@ export async function ensureCmsSourceDraft(
   manager: EntityManager,
   input: { sourceKind: LegacyCmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string },
 ) {
+  if (input.sourceKind === "event") throw new Error("Customer Event CMS drafts are not created; use catalog_offering event-service editorial drafts")
   return createCmsSourceDraft(manager, input)
 }
 

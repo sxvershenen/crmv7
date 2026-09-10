@@ -210,10 +210,25 @@ const fixtureIds = {
   calendar: "11111111-1111-4111-8111-111111111111",
   template: "22222222-2222-4222-8222-222222222222",
   offering: "33333333-3333-4333-8333-333333333333",
+  priceBook: "88888888-8888-4888-8888-888888888888",
+  ratePlan: "99999999-9999-4999-8999-999999999999",
+  addOnPerson: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  addOnPersonAssignment: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  addOnPersonPriceBook: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  addOnPersonRatePlan: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  addOnQuantity: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  addOnQuantityAssignment: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  addOnQuantityPriceBook: "11111111-2222-4333-8444-555555555555",
+  addOnQuantityRatePlan: "22222222-3333-4444-8555-666666666666",
   node: "44444444-4444-4444-8444-444444444444",
   revision: "55555555-5555-4555-8555-555555555555",
   quote: "66666666-6666-4666-8666-666666666666",
 } as const
+
+export const fixtureAddOnPricing: Record<string, { serviceType: "person_service" | "quantity_service"; label: string; unitAmount: number; offeringId: string; priceBookId: string; ratePlanId: string }> = {
+  [fixtureIds.addOnPerson]: { serviceType: "person_service", label: "Завтрак для гостей", unitAmount: 850, offeringId: fixtureIds.addOnPerson, priceBookId: fixtureIds.addOnPersonPriceBook, ratePlanId: fixtureIds.addOnPersonRatePlan },
+  [fixtureIds.addOnQuantity]: { serviceType: "quantity_service", label: "Поздний выезд", unitAmount: 2_500, offeringId: fixtureIds.addOnQuantity, priceBookId: fixtureIds.addOnQuantityPriceBook, ratePlanId: fixtureIds.addOnQuantityRatePlan },
+}
 
 function fixtureNow() { return "2026-09-01T10:00:00.000Z" }
 function fixtureTemplate(overrides: Partial<EventServiceTemplateRegistryItem["template"]> = {}) {
@@ -270,16 +285,31 @@ function fixtureEditorial(offering: ReturnType<typeof fixtureOffering>) {
   }
 }
 
+function fixtureAddOnCatalog() {
+  return [
+    { offering: { id: fixtureIds.addOnPerson, version: 1, code: "ADDON-BREAKFAST", operationalName: "Завтрак для гостей", state: "active" as const, salesMode: "selectable" as const, archived: false }, serviceType: "person_service" as const, scope: "reusable" as const, ownerOfferingId: null, categoryKey: "food" as const, standalone: true, availability: { status: "available" as const, blocker: null } },
+    { offering: { id: fixtureIds.addOnQuantity, version: 1, code: "ADDON-LATE-CHECKOUT", operationalName: "Поздний выезд", state: "active" as const, salesMode: "selectable" as const, archived: false }, serviceType: "quantity_service" as const, scope: "reusable" as const, ownerOfferingId: null, categoryKey: "comfort" as const, standalone: false, availability: { status: "available" as const, blocker: null } },
+  ]
+}
+
+function fixtureAddOnAssignments(offeringId: string) {
+  return [
+    { id: fixtureIds.addOnPersonAssignment, offeringId, version: 1, addOnOfferingId: fixtureIds.addOnPerson, enabled: true, required: false, recommended: true, groupKey: "food", ratePlanKeyOverride: null, labelOverride: null, descriptionOverride: null, minQuantityOverride: 1, maxQuantityOverride: 10, defaultQuantityOverride: 1, displayOrder: 10 },
+    { id: fixtureIds.addOnQuantityAssignment, offeringId, version: 1, addOnOfferingId: fixtureIds.addOnQuantity, enabled: true, required: false, recommended: false, groupKey: "comfort", ratePlanKeyOverride: null, labelOverride: null, descriptionOverride: null, minQuantityOverride: 1, maxQuantityOverride: 4, defaultQuantityOverride: 1, displayOrder: 20 },
+  ]
+}
+
 function fixtureEditor(template = fixtureTemplate(), offering = fixtureOffering()): InternalOfferingEditor {
+  const priceBooks = offering.activePriceBookId ? [PriceBookSchema.parse({ id: offering.activePriceBookId, offeringId: offering.id, version: 1, revision: 1, state: "active", name: "Основной пакет", currency: offering.currency, timezone: offering.timezone, validFrom: "2026-01-01", validToExclusive: null, changeReason: "fixture", scheduledActivationAt: null, activatedAt: fixtureNow(), retiredAt: null, supersedesPriceBookId: null, ratePlans: [{ id: fixtureIds.ratePlan, priceBookId: offering.activePriceBookId, version: 1, key: "standard", label: "Стандарт", pricingBasis: "flat_package", quantityMetric: "guests", baseAmount: 25000, includedQuantity: 80, baseExtraUnitAmount: null, minQuantity: 1, maxQuantity: 80, minDurationMinutes: null, maxDurationMinutes: null, isDefault: true, displayOrder: 0, rules: [] }], createdAt: fixtureNow(), updatedAt: fixtureNow() })] : [];
   return InternalOfferingEditorSchema.parse({
     offering,
     addOnTerms: null,
     addOnUsages: [],
     bindings: [{ id: "77777777-7777-4777-8777-777777777777", offeringId: offering.id, version: 1, target: { type: "event_service_template", id: template.id }, role: "primary", availabilityRequired: false, defaultQuantity: 1, defaultCapacityImpact: 0, preparationBeforeMinutes: template.preparationBeforeMinutes, preparationAfterMinutes: template.preparationAfterMinutes }],
     bindingTargets: [],
-    priceBooks: [],
-    addOnAssignments: [],
-    addOnCatalog: [],
+    priceBooks,
+    addOnAssignments: fixtureAddOnAssignments(offering.id),
+    addOnCatalog: fixtureAddOnCatalog(),
     editorial: fixtureEditorial(offering),
     ownerVersions: { catalog: offering.version, subject: { aggregateVersion: template.version, primary: { type: "event_service_template", id: template.id, version: template.version } }, pricing: 1, draftPriceBook: null, addOnAssignments: 1, editorial: { nodeId: fixtureIds.node, nodeVersion: 1, draftRevisionId: fixtureIds.revision, contentHash: "a".repeat(64) } },
     capabilities: { catalog: { canEdit: true, canChangeState: true, canArchive: true }, subject: { canEdit: true, canManageBindings: false }, pricing: { canView: true, canEditDraft: true, canActivate: true }, addOns: { canSearch: false, canCreate: false, canAssign: false }, editorial: { canEdit: false, canReview: true, canPublish: false }, canPreviewQuote: false },
@@ -287,7 +317,7 @@ function fixtureEditor(template = fixtureTemplate(), offering = fixtureOffering(
 }
 
 function fixtureSummary(template: ReturnType<typeof fixtureTemplate>, offering: ReturnType<typeof fixtureOffering>): EventServiceOfferingSummary {
-  return EventServiceOfferingSummarySchema.parse({ offeringId: offering.id, offeringVersion: offering.version, state: offering.state, subjectVersion: template.version, pricingVersion: 1, addOnAssignmentsVersion: 1, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, cmsReady: true, publicReady: false, editorialNodeId: fixtureIds.node })
+  return EventServiceOfferingSummarySchema.parse({ offeringId: offering.id, operationalName: offering.operationalName, offeringVersion: offering.version, state: offering.state, subjectVersion: template.version, pricingVersion: 1, addOnAssignmentsVersion: 1, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, cmsReady: true, publicReady: false, editorialNodeId: fixtureIds.node })
 }
 
 export class FixtureEventServiceRepository implements EventServiceRepository {
@@ -295,7 +325,7 @@ export class FixtureEventServiceRepository implements EventServiceRepository {
 
   constructor(seed?: Partial<FixtureState>) {
     const template = fixtureTemplate()
-    const offering = fixtureOffering()
+    const offering = fixtureOffering("active", { activePriceBookId: fixtureIds.priceBook })
     this.state = seed ? { items: seed.items ?? [], editors: seed.editors ?? new Map(), quotes: seed.quotes ?? new Map() } : { items: [{ template, offering: fixtureSummary(template, offering) }], editors: new Map([[offering.id, fixtureEditor(template, offering)]]), quotes: new Map() }
   }
 

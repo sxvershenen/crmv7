@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto"
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
 import { DataSource, type EntityManager, type FindOptionsWhere } from "typeorm"
 
-import { IdSchema, type SessionUser } from "@crm/contracts"
-import { ChangeLogEntity, IdempotencyKeyEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
+import { IdSchema, type EventAllocationReplace, type SessionUser } from "@crm/contracts"
+import { ChangeLogEntity, EventEntity, IdempotencyKeyEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 import { assertAvailable, checkAvailability, type AvailabilityAllocation } from "@crm/domain"
 
 import { toResourceDto } from "./resource.mapper.js"
@@ -152,65 +152,109 @@ export class ResourcesService {
 
   async createAllocation(input: ResourceAllocationCreate, actor: SessionUser, requestId: string) {
     this.assertCapability(actor, "canEdit")
-    return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
-      const idempotencyScope = `resource-allocation:${actor.id}`
-      const requestHash = JSON.stringify(input)
-      const existingOperation = await manager.getRepository(IdempotencyKeyEntity).findOneBy({ scope: idempotencyScope, operationId: input.operationId })
-      if (existingOperation) {
-        if (existingOperation.requestHash !== requestHash) {
-          throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "operationId уже использован с другими данными" })
-        }
-        if (existingOperation.responseBody) return existingOperation.responseBody
+    return this.dataSource.transaction("SERIALIZABLE", (manager) => this.createAllocationInTransaction(manager, input, actor, requestId))
+  }
+
+  async replaceEventAllocations(input: EventAllocationReplace, actor: SessionUser, requestId: string) {
+    this.assertCapability(actor, "canEdit")
+    return this.dataSource.transaction(async (manager) => {
+      const scope = `event:${input.eventId}:replace-allocations`
+      const requestHash = JSON.stringify({ target: input.eventId, action: "replace-allocations", actorId: actor.id, ...input })
+      for (const key of [`${scope}:operation:${input.operationId}`, `${scope}:key:${input.idempotencyKey}`].sort()) await manager.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [key])
+      const existing = await manager.createQueryBuilder(IdempotencyKeyEntity, "key").where("key.scope = :scope AND (key.operation_id = :operationId OR key.idempotency_key = :idempotencyKey)", { scope, operationId: input.operationId, idempotencyKey: input.idempotencyKey }).getOne()
+      if (existing) {
+        if (existing.operationId !== input.operationId || existing.idempotencyKey !== input.idempotencyKey || existing.requestHash !== requestHash) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "Команда уже использована с другими данными" })
+        return existing.responseBody
       }
-      const resource = await manager.getRepository(ResourceEntity).findOne({
-        where: { id: input.resourceId }, lock: { mode: "pessimistic_write" },
-      })
-      if (!resource) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
-      if (resource.archivedAt) throw new ConflictException({ code: "RESOURCE_ARCHIVED", message: "Архивный ресурс недоступен" })
-      if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
-      const allocations = await this.overlappingAllocations(manager, {
-        resourceId: input.resourceId, startAt: input.startAt, endAt: input.endAt,
-      })
-      const check = checkAvailability({
-        resourceId: resource.id, startAt: new Date(input.startAt), endAt: new Date(input.endAt), quantity: input.quantity,
-      }, allocations.map(this.toAvailabilityAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})
-      if (input.overrideConflict && !actor.capabilities.canOverrideConflict) {
-        throw new ForbiddenException({ code: "PERMISSION_DENIED", message: "Недостаточно прав для переопределения конфликта" })
+      const event = await manager.findOne(EventEntity, { where: { id: input.eventId }, lock: { mode: "pessimistic_write" } })
+      if (!event) throw new NotFoundException({ code: "EVENT_NOT_FOUND", message: "Мероприятие не найдено" })
+      if (event.pricingMode !== "legacy_manual") throw new ConflictException({ code: "EVENT_QUOTE_REQUIRED", message: "Ресурсы коммерческого заказа меняются только при подтверждении расчёта" })
+      if (event.archivedAt || event.status === "cancelled" || event.status === "completed") throw new ConflictException({ code: "EVENT_READONLY", message: "Мероприятие закрыто для изменения ресурсов" })
+      if (event.version !== input.expectedEventVersion) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Мероприятие было изменено другим сотрудником", details: { entityId: event.id, serverVersion: event.version } })
+      const previous = await manager.find(ResourceAllocationEntity, { where: { sourceType: "event", sourceId: event.id } })
+      const active = previous.filter((allocation) => !allocation.archivedAt && ["active", "tentative"].includes(allocation.status))
+      const ids = [...new Set([...input.allocations.map((allocation) => allocation.resourceId), ...active.map((allocation) => allocation.resourceId)])].sort()
+      if (ids.length) await manager.createQueryBuilder(ResourceEntity, "resource").where("resource.id IN (:...ids)", { ids }).orderBy("resource.id", "ASC").setLock("pessimistic_write").getMany()
+      for (const allocation of active.sort((a, b) => a.resourceId.localeCompare(b.resourceId) || a.id.localeCompare(b.id))) {
+        const resource = await manager.findOneByOrFail(ResourceEntity, { id: allocation.resourceId })
+        const operationId = randomUUID()
+        await this.cancelAllocationInTransaction(manager, allocation.id, { expectedVersion: resource.version, operationId, idempotencyKey: operationId }, actor, requestId)
       }
-      if (!check.available && !input.overrideConflict) assertAvailable(check)
-      const allocation = manager.create(ResourceAllocationEntity, {
-        id: randomUUID(), resourceId: resource.id, sourceType: input.sourceType, sourceId: input.sourceId,
-        startAt: new Date(input.startAt), endAt: new Date(input.endAt), quantity: input.quantity,
-        capacityImpact: input.capacityImpact,
-        status: input.status,
-        exclusive: resource.capacityMode === "fixed" && !input.overrideConflict,
-        createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
-      })
-      const saved = await manager.save(allocation)
-      const resourcePatch = input.reason && input.sourceType === "resource_block"
-        ? { settings: { ...(resource.settings ?? {}), blockMetadata: { ...((resource.settings ?? {}).blockMetadata as Record<string, { reason: string }> | undefined), [saved.id]: { reason: input.reason } } } }
-        : {}
-      const resourceResult = await manager.getRepository(ResourceEntity).createQueryBuilder().update(ResourceEntity).set({
-        ...resourcePatch, version: () => '"version" + 1', updatedBy: actor.id, updatedAt: () => "now()",
-      }).where("id = :id AND version = :version", { id: resource.id, version: input.expectedVersion }).execute()
-      if (resourceResult.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: resource.id }))
-      resource.version += 1
+      const allocations = []
+      for (const allocation of [...input.allocations].sort((a, b) => a.resourceId.localeCompare(b.resourceId) || a.startAt.localeCompare(b.startAt))) {
+        const resource = await manager.findOneBy(ResourceEntity, { id: allocation.resourceId })
+        if (!resource) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Выбранный ресурс не найден" })
+        allocations.push(await this.createAllocationInTransaction(manager, { ...allocation, sourceType: "event", sourceId: event.id, expectedVersion: resource.version, operationId: randomUUID(), status: "tentative", overrideConflict: false }, actor, requestId))
+      }
+      await manager.query("UPDATE events SET version=version+1,updated_at=now(),updated_by=$2 WHERE id=$1", [event.id, actor.id])
+      const responseBody = { eventVersion: event.version + 1, allocations }
       const now = new Date()
-      await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, {
-        id: randomUUID(), entityType: "resource_allocation", entityId: saved.id, action: "created", actorId: actor.id,
-        requestId, changes: { after: this.allocationSnapshot(saved), overrideConflict: !check.available && input.overrideConflict }, createdAt: now,
-      }))
-      await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, {
-        id: randomUUID(), topic: "resource.allocation.created", aggregateType: "resource", aggregateId: resource.id,
-        payload: { allocationId: saved.id, resourceId: resource.id, sourceId: saved.sourceId }, availableAt: now, processedAt: null, attempts: 0, createdAt: now,
-      }))
-      const responseBody = this.allocationSnapshot(saved)
-      await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, {
-        id: randomUUID(), scope: idempotencyScope, operationId: input.operationId, requestHash,
-        idempotencyKey: input.operationId, responseStatus: 201, responseBody, createdAt: new Date(),
-      }))
+      await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event", entityId: event.id, action: "allocations_replaced", actorId: actor.id, requestId, changes: { version: responseBody.eventVersion, allocationIds: allocations.map((allocation) => allocation.id) }, createdAt: now }))
+      await manager.save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: "event.updated", aggregateType: "event", aggregateId: event.id, payload: { eventId: event.id, version: responseBody.eventVersion }, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+      await manager.save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, idempotencyKey: input.idempotencyKey, requestHash, responseStatus: 200, responseBody, createdAt: now }))
       return responseBody
     })
+  }
+
+  async createAllocationInTransaction(manager: EntityManager, input: ResourceAllocationCreate, actor: SessionUser, requestId: string) {
+    this.assertCapability(actor, "canEdit")
+    const idempotencyScope = `resource-allocation:${actor.id}`
+    const requestHash = JSON.stringify(input)
+    const existingOperation = await manager.getRepository(IdempotencyKeyEntity).findOneBy({ scope: idempotencyScope, operationId: input.operationId })
+    if (existingOperation) {
+      if (existingOperation.requestHash !== requestHash) {
+        throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "operationId уже использован с другими данными" })
+      }
+      if (existingOperation.responseBody) return existingOperation.responseBody
+    }
+    const resource = await manager.getRepository(ResourceEntity).findOne({
+      where: { id: input.resourceId }, lock: { mode: "pessimistic_write" },
+    })
+    if (!resource) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
+    if (resource.archivedAt) throw new ConflictException({ code: "RESOURCE_ARCHIVED", message: "Архивный ресурс недоступен" })
+    if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
+    const allocations = await this.overlappingAllocations(manager, {
+      resourceId: input.resourceId, startAt: input.startAt, endAt: input.endAt,
+    })
+    const check = checkAvailability({
+      resourceId: resource.id, startAt: new Date(input.startAt), endAt: new Date(input.endAt), quantity: input.quantity,
+    }, allocations.map(this.toAvailabilityAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})
+    if (input.overrideConflict && !actor.capabilities.canOverrideConflict) {
+      throw new ForbiddenException({ code: "PERMISSION_DENIED", message: "Недостаточно прав для переопределения конфликта" })
+    }
+    if (!check.available && !input.overrideConflict) assertAvailable(check)
+    const allocation = manager.create(ResourceAllocationEntity, {
+      id: randomUUID(), resourceId: resource.id, sourceType: input.sourceType, sourceId: input.sourceId,
+      startAt: new Date(input.startAt), endAt: new Date(input.endAt), quantity: input.quantity,
+      capacityImpact: input.capacityImpact,
+      status: input.status,
+      exclusive: resource.capacityMode === "fixed" && !input.overrideConflict,
+      createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
+    })
+    const saved = await manager.save(allocation)
+    const resourcePatch = input.reason && input.sourceType === "resource_block"
+      ? { settings: { ...(resource.settings ?? {}), blockMetadata: { ...((resource.settings ?? {}).blockMetadata as Record<string, { reason: string }> | undefined), [saved.id]: { reason: input.reason } } } }
+      : {}
+    const resourceResult = await manager.getRepository(ResourceEntity).createQueryBuilder().update(ResourceEntity).set({
+      ...resourcePatch, version: () => '"version" + 1', updatedBy: actor.id, updatedAt: () => "now()",
+    }).where("id = :id AND version = :version", { id: resource.id, version: input.expectedVersion }).execute()
+    if (resourceResult.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: resource.id }))
+    resource.version += 1
+    const now = new Date()
+    await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, {
+      id: randomUUID(), entityType: "resource_allocation", entityId: saved.id, action: "created", actorId: actor.id,
+      requestId, changes: { after: this.allocationSnapshot(saved), overrideConflict: !check.available && input.overrideConflict }, createdAt: now,
+    }))
+    await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, {
+      id: randomUUID(), topic: "resource.allocation.created", aggregateType: "resource", aggregateId: resource.id,
+      payload: { allocationId: saved.id, resourceId: resource.id, sourceId: saved.sourceId }, availableAt: now, processedAt: null, attempts: 0, createdAt: now,
+    }))
+    const responseBody = this.allocationSnapshot(saved)
+    await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, {
+      id: randomUUID(), scope: idempotencyScope, operationId: input.operationId, requestHash,
+      idempotencyKey: input.operationId, responseStatus: 201, responseBody, createdAt: new Date(),
+    }))
+    return responseBody
   }
 
   async listAllocations(query: ResourceAllocationListQuery, actor: SessionUser) {
@@ -226,37 +270,40 @@ export class ResourcesService {
 
   async cancelAllocation(allocationId: string, input: ResourceAllocationCancel, actor: SessionUser, requestId: string) {
     this.assertCapability(actor, "canEdit")
-    return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
-      const scope = `resource-allocation:${actor.id}`
-      const requestHash = JSON.stringify({ allocationId, ...input })
-      const existing = await manager.getRepository(IdempotencyKeyEntity).findOneBy({ scope, operationId: input.operationId })
-      if (existing) {
-        if (existing.requestHash !== requestHash) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "operationId уже использован с другими данными" })
-        if (existing.responseBody) return existing.responseBody
-      }
-      const allocation = await manager.getRepository(ResourceAllocationEntity).findOne({ where: { id: allocationId }, lock: { mode: "pessimistic_write" } })
-      if (!allocation) throw new NotFoundException({ code: "RESOURCE_ALLOCATION_NOT_FOUND", message: "Аллокация не найдена" })
-      const resource = await manager.getRepository(ResourceEntity).findOne({ where: { id: allocation.resourceId }, lock: { mode: "pessimistic_write" } })
-      if (!resource) throw this.notFound()
-      if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
-      if (allocation.status === "cancelled" || allocation.archivedAt) {
-        const responseBody = this.allocationSnapshot(allocation)
-        await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, requestHash, idempotencyKey: input.idempotencyKey, responseStatus: 200, responseBody, createdAt: new Date() }))
-        return responseBody
-      }
-      const before = this.allocationSnapshot(allocation)
-      const now = new Date()
-      const allocationResult = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder().update(ResourceAllocationEntity).set({ status: "cancelled", archivedAt: now, updatedBy: actor.id, updatedAt: () => "now()", version: () => '"version" + 1' }).where("id = :id AND version = :version", { id: allocation.id, version: allocation.version }).execute()
-      if (allocationResult.affected !== 1) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Аллокация была изменена другим сотрудником" })
-      const resourceResult = await manager.getRepository(ResourceEntity).createQueryBuilder().update(ResourceEntity).set({ version: () => '"version" + 1', updatedBy: actor.id, updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: resource.id, version: input.expectedVersion }).execute()
-      if (resourceResult.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: resource.id }))
-      const saved = await manager.getRepository(ResourceAllocationEntity).findOneByOrFail({ id: allocation.id })
-      const responseBody = this.allocationSnapshot(saved)
-      await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "resource_allocation", entityId: saved.id, action: "cancelled", actorId: actor.id, requestId, changes: { before, after: responseBody }, createdAt: now }))
-      await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: "resource.allocation.cancelled", aggregateType: "resource", aggregateId: resource.id, payload: { allocationId: saved.id, resourceId: resource.id, sourceId: saved.sourceId }, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+    return this.dataSource.transaction("SERIALIZABLE", (manager) => this.cancelAllocationInTransaction(manager, allocationId, input, actor, requestId))
+  }
+
+  async cancelAllocationInTransaction(manager: EntityManager, allocationId: string, input: ResourceAllocationCancel, actor: SessionUser, requestId: string) {
+    this.assertCapability(actor, "canEdit")
+    const scope = `resource-allocation:${actor.id}`
+    const requestHash = JSON.stringify({ allocationId, ...input })
+    const existing = await manager.getRepository(IdempotencyKeyEntity).findOneBy({ scope, operationId: input.operationId })
+    if (existing) {
+      if (existing.requestHash !== requestHash) throw new ConflictException({ code: "IDEMPOTENCY_CONFLICT", message: "operationId уже использован с другими данными" })
+      if (existing.responseBody) return existing.responseBody
+    }
+    const allocation = await manager.getRepository(ResourceAllocationEntity).findOne({ where: { id: allocationId }, lock: { mode: "pessimistic_write" } })
+    if (!allocation) throw new NotFoundException({ code: "RESOURCE_ALLOCATION_NOT_FOUND", message: "Аллокация не найдена" })
+    const resource = await manager.getRepository(ResourceEntity).findOne({ where: { id: allocation.resourceId }, lock: { mode: "pessimistic_write" } })
+    if (!resource) throw this.notFound()
+    if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
+    if (allocation.status === "cancelled" || allocation.archivedAt) {
+      const responseBody = this.allocationSnapshot(allocation)
       await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, requestHash, idempotencyKey: input.idempotencyKey, responseStatus: 200, responseBody, createdAt: new Date() }))
       return responseBody
-    })
+    }
+    const before = this.allocationSnapshot(allocation)
+    const now = new Date()
+    const allocationResult = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder().update(ResourceAllocationEntity).set({ status: "cancelled", archivedAt: now, updatedBy: actor.id, updatedAt: () => "now()", version: () => '"version" + 1' }).where("id = :id AND version = :version", { id: allocation.id, version: allocation.version }).execute()
+    if (allocationResult.affected !== 1) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Аллокация была изменена другим сотрудником" })
+    const resourceResult = await manager.getRepository(ResourceEntity).createQueryBuilder().update(ResourceEntity).set({ version: () => '"version" + 1', updatedBy: actor.id, updatedAt: () => "now()" }).where("id = :id AND version = :version", { id: resource.id, version: input.expectedVersion }).execute()
+    if (resourceResult.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: resource.id }))
+    const saved = await manager.getRepository(ResourceAllocationEntity).findOneByOrFail({ id: allocation.id })
+    const responseBody = this.allocationSnapshot(saved)
+    await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "resource_allocation", entityId: saved.id, action: "cancelled", actorId: actor.id, requestId, changes: { before, after: responseBody }, createdAt: now }))
+    await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: "resource.allocation.cancelled", aggregateType: "resource", aggregateId: resource.id, payload: { allocationId: saved.id, resourceId: resource.id, sourceId: saved.sourceId }, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+    await manager.getRepository(IdempotencyKeyEntity).save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId: input.operationId, requestHash, idempotencyKey: input.idempotencyKey, responseStatus: 200, responseBody, createdAt: new Date() }))
+    return responseBody
   }
 
   async allocations(code: string, query: ResourceAllocationsQuery, actor: SessionUser) {

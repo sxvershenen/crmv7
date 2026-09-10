@@ -230,7 +230,9 @@ Quote formula is server-owned: selected base rule + validated extra guests + sel
 
 ### 4.5 Мероприятия под заказ
 
-Нужна новая постоянная `EventServiceTemplate`/offering. Она не равна фактическому CRM `Event`, который содержит клиента, телефон, даты, планирование и оплаты.
+Постоянная категория мероприятия — `EventServiceTemplate` с exact primary `CatalogOffering(kind=event_service)` binding. Она не равна фактическому CRM `Event`, который содержит клиента, телефон, даты, планирование и оплаты. Несколько категорий могут иметь одинаковый `format`; это классификация, не identity.
+
+`/events/categories` создаёт template, offering, binding и один canonical `catalog_offering → event_detail` CMS-черновик атомарно и идемпотентно, без публикации. `/events` создаёт клиентские заказы: создание заказа не создаёт CMS node/revision/source link и не копирует клиентские поля в CMS. Одна категория обслуживает много заказов; legacy `EventCategory` не связывается с template по имени или ID. Исторические customer Event CMS links требуют отдельного read-only inventory и решения о cleanup.
 
 Operational template:
 
@@ -243,7 +245,9 @@ Operational template:
 - reusable option groups: catering tariffs, decoration, equipment, accommodation, sauna etc.;
 - lead routing, preparation and quote requirements.
 
-Creating a customer event from the offering snapshots package/options/quote and then uses normal `Event` + `Booking` + resource allocation + payment flows. Public site exposes the offering, never arbitrary customer events.
+Customer Event uses an explicit commercial offering relation, persisted package/add-on/resource selections and an Event/version-bound `event_order` quote. The immutable `event_service_preview` remains ineligible for acceptance. A planning→booked command atomically accepts server commercial facts and allocates selected supported resources; it never creates a payment or an additional Booking charge for an included resource. Cancellation releases allocations and retains quote/payment history. Legacy manual orders keep their existing identity and pricing mode. Public site exposes the offering, never arbitrary customer events.
+
+Resource V1 accepts explicit fixed/exclusive Resource selections at quantity=1 and capacityImpact=1, with the server preparation interval. Guest count is a separate commercial limit. Shared capacity and scheduled-resource add-ons require a later fulfillment contract; CMS publication does not determine availability. Priced customer Events without selected resources do not imply resource availability.
 
 ### 4.6 Готовые программы
 
@@ -327,9 +331,9 @@ Active price is not a CMS field. Public SSR joins the published editorial releas
 ### 6.1 Create from CRM
 
 1. Create operational aggregate/offering through CRM service.
-2. In the same transaction create `CmsSourceLink` and minimal CMS draft/workspace.
+2. For an editorial source (including an event-service category), in the same transaction create `CmsSourceLink` and minimal CMS draft/workspace. Customer Event orders are not editorial sources and do not create CMS artifacts.
 3. CMS displays it in the correct direction as `Нужно заполнить`, not as a generic profile.
-4. Editor completes price/capacity/content/route/media/SEO.
+4. CRM owns price/capacity; CMS completes content/route/media/SEO.
 5. First launch atomically validates active offering, active price book where required, public profile relation and CMS release.
 
 ### 6.2 Create from CMS
@@ -339,7 +343,7 @@ For a bookable direction, «Создать» is a guided operational command, no
 1. choose kind/subtype and minimal operational identity;
 2. Admin API invokes the same CRM application service;
 3. backend creates offering + source link + CMS draft;
-4. user continues in the combined offer editor.
+4. user continues in the canonical editorial editor; operational fields are edited through the CRM dossier.
 
 Only explicit `content_only` services/landings may exist without an operational offering, and they cannot claim price/availability or appear as bookable cards.
 

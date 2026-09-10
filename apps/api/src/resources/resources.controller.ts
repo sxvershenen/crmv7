@@ -3,6 +3,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post
 import type { AuthenticatedRequest } from "../common/request-context.js"
 import { ZodValidationPipe } from "../common/zod-validation.pipe.js"
 import { ResourcesService } from "./resources.service.js"
+import { EventAllocationReplaceSchema, type EventAllocationReplace } from "@crm/contracts"
 import { ResourceAllocationCancelSchema, ResourceAllocationCreateSchema, ResourceAllocationListQuerySchema, ResourceAllocationsQuerySchema, ResourceArchiveSchema, ResourceAvailabilityByCodeQuerySchema, ResourceAvailabilityQuerySchema, ResourceBlockCancelSchema, ResourceBlockCreateSchema, ResourceCreateSchema, ResourceListQuerySchema, ResourceUpdateSchema, type ResourceAllocationCancel, type ResourceAllocationCreate, type ResourceAllocationListQuery, type ResourceAllocationsQuery, type ResourceArchive, type ResourceAvailabilityByCodeQuery, type ResourceAvailabilityQuery, type ResourceBlockCancel, type ResourceBlockCreate, type ResourceCreate, type ResourceListQuery, type ResourceUpdate } from "./resources.contracts.js"
 
 @Controller("resources")
@@ -43,6 +44,10 @@ export class ResourcesController {
 
   @Post("allocations")
   createAllocation(@Body(new ZodValidationPipe(ResourceAllocationCreateSchema)) input: ResourceAllocationCreate, @Req() request: AuthenticatedRequest) { return this.resources.createAllocation(input, request.sessionUser!, request.requestId) }
+
+  @Post("allocations/replace-event")
+  @HttpCode(HttpStatus.OK)
+  replaceEventAllocations(@Body(new ZodValidationPipe(EventAllocationReplaceSchema)) input: EventAllocationReplace, @Req() request: AuthenticatedRequest) { return this.resources.replaceEventAllocations(input, request.sessionUser!, request.requestId) }
 
   @Post("allocations/:allocationId/cancel")
   @HttpCode(HttpStatus.OK)

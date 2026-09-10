@@ -670,6 +670,7 @@ export type EventServiceTemplateReopenResult = z.infer<typeof EventServiceTempla
 
 export const EventServiceOfferingSummarySchema = z.object({
   offeringId: IdSchema,
+  operationalName: z.string().min(1).max(500),
   offeringVersion: VersionSchema,
   state: CatalogOfferingStateSchema,
   subjectVersion: VersionSchema,
@@ -2030,6 +2031,86 @@ export type EventServiceOfferingQuoteResult = z.infer<typeof EventServiceOfferin
 /** Reload returns the same immutable representation and never recalculates it. */
 export const EventServiceOfferingQuoteSnapshotSchema = EventServiceOfferingQuoteResultSchema;
 export type EventServiceOfferingQuoteSnapshot = z.infer<typeof EventServiceOfferingQuoteSnapshotSchema>;
+
+export const EventOrderQuoteTypeSchema = z.literal("event_order");
+export type EventOrderQuoteType = z.infer<typeof EventOrderQuoteTypeSchema>;
+export const EventOrderAddOnSelectionSchema = z.object({
+  assignmentId: IdSchema,
+  quantity: z.number().int().positive().max(1_000_000),
+}).strict();
+export type EventOrderAddOnSelection = z.infer<typeof EventOrderAddOnSelectionSchema>;
+export const EventOrderResourceSelectionSchema = z.object({
+  resourceId: IdSchema,
+  version: VersionSchema,
+}).strict();
+export type EventOrderResourceSelection = z.infer<typeof EventOrderResourceSelectionSchema>;
+export const EventOrderQuoteBodySchema = z.object({
+  quoteType: EventOrderQuoteTypeSchema.default("event_order"),
+  eventId: IdSchema,
+  expectedEventVersion: VersionSchema,
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120),
+  currency: CurrencySchema,
+  addOns: z.array(EventOrderAddOnSelectionSchema).max(100).default([]),
+  resourceSelections: z.array(z.object({ resourceId: IdSchema }).strict()).max(100).default([]),
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+}).strict().superRefine((value, context) => {
+  const addOnIds = new Set<string>();
+  value.addOns.forEach((selection, index) => {
+    if (addOnIds.has(selection.assignmentId)) context.addIssue({ code: "custom", path: ["addOns", index, "assignmentId"], message: "An add-on assignment may be selected once" });
+    addOnIds.add(selection.assignmentId);
+  });
+  const resourceIds = new Set<string>();
+  value.resourceSelections.forEach((selection, index) => {
+    if (resourceIds.has(selection.resourceId)) context.addIssue({ code: "custom", path: ["resourceSelections", index, "resourceId"], message: "A resource may be selected once" });
+    resourceIds.add(selection.resourceId);
+  });
+});
+export type EventOrderQuoteBody = z.infer<typeof EventOrderQuoteBodySchema>;
+
+export const EventOrderQuoteAddOnLineSchema = z.object({
+  kind: z.literal("addon"),
+  label: z.string().min(1).max(500),
+  serviceDate: DateSchema,
+  quantity: z.number().int().positive(),
+  unitAmount: NonNegativeMoneySchema,
+  amount: NonNegativeMoneySchema,
+  ratePlanId: IdSchema,
+  ratePlanVersion: VersionSchema,
+  matchedRuleId: IdSchema.nullable(),
+  matchedRuleVersion: VersionSchema.nullable(),
+  addOnAssignmentId: IdSchema,
+  addOnOfferingId: IdSchema,
+  explanation: z.string().max(1000),
+}).strict();
+
+export const EventOrderQuoteResultSchema = EventServiceOfferingQuoteResultSchema.omit({ quoteType: true, acceptanceReady: true, inputs: true, lines: true, provenance: true }).extend({
+  quoteType: EventOrderQuoteTypeSchema,
+  acceptanceReady: z.literal(true),
+  eventId: IdSchema,
+  eventVersion: VersionSchema,
+  inputs: EventServiceOfferingQuoteResultSchema.shape.inputs.extend({
+    addOns: z.array(EventOrderAddOnSelectionSchema).max(100),
+    resourceSelections: z.array(z.object({ resourceId: IdSchema }).strict()).max(100),
+  }).strict(),
+  lines: z.array(z.union([EventServiceOfferingQuoteLineSchema, EventOrderQuoteAddOnLineSchema])).min(1).max(102),
+  provenance: EventServiceOfferingQuoteResultSchema.shape.provenance.extend({
+    addOns: z.array(z.object({
+      assignmentId: IdSchema,
+      addOnOfferingId: IdSchema,
+      serviceType: z.enum(["quantity_service", "person_service"]),
+      offeringVersion: VersionSchema,
+      pricingVersion: VersionSchema,
+      assignmentVersion: VersionSchema,
+      priceBookId: IdSchema,
+      priceBookVersion: VersionSchema,
+      businessCalendarId: IdSchema,
+      businessCalendarVersion: VersionSchema,
+    }).strict()).max(100),
+    resourceSelections: z.array(EventOrderResourceSelectionSchema).max(100),
+  }).strict(),
+}).strict();
+export type EventOrderQuoteResult = z.infer<typeof EventOrderQuoteResultSchema>;
 
 const ProgramRegistrationAddOnSelectionSchema = z.object({
   assignmentId: IdSchema,

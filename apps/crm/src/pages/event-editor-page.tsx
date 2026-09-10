@@ -60,11 +60,13 @@ import {
   type EventEditorRepository,
 } from "@app/data/events-repository";
 import { useDirectoryAssignees, useDirectoryCustomers } from "@app/features/use-directory-data";
+import type { EventServiceTemplateRegistryResponse, InternalOfferingEditor } from "@crm/contracts";
 import {
   eventStatuses,
   eventStatusMeta,
   type EventCategory,
   type EventEditorRecord,
+  type EventOrderQuote,
   type EventResourceBooking,
   type EventResourceOption,
   type EventScenarioStage,
@@ -135,16 +137,22 @@ export function EventEditorPage({
   const [draft, setDraft] = useState<EventEditorRecord | null>(null);
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [resources, setResources] = useState<EventResourceOption[]>([]);
+  const [commercialOfferings, setCommercialOfferings] = useState<EventServiceTemplateRegistryResponse>({ items: [], nextCursor: null });
+  const [commercialEditor, setCommercialEditor] = useState<InternalOfferingEditor | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorSaveState>("saved");
+  const [quote, setQuote] = useState<EventOrderQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
-    Promise.all([repository.listCategories(), repository.listResources()])
-      .then(async ([nextCategories, nextResources]) => {
+    const offerings = repository.listCommercialOfferings?.() ?? Promise.resolve({ items: [], nextCursor: null });
+    Promise.all([repository.listCategories(), repository.listResources(), offerings])
+      .then(async ([nextCategories, nextResources, nextCommercialOfferings]) => {
         const requestedCategory =
           nextCategories.find(
             (category) => category.id === requestedCategoryId,
@@ -153,15 +161,19 @@ export function EventEditorPage({
           id === "new"
             ? createEmptyEvent(requestedCategory)
             : await repository.get(id);
+        const nextCommercialEditor = event?.commercialOfferingId && repository.getCommercialOffering ? await repository.getCommercialOffering(event.commercialOfferingId) : null;
         if (!active) return;
         setCategories(nextCategories);
         setResources(nextResources);
+        setCommercialOfferings(nextCommercialOfferings);
+        setCommercialEditor(nextCommercialEditor);
         if (!event) {
           setError("Мероприятие не найдено");
           setLoading(false);
           return;
         }
         setDraft(event);
+        setQuote(event.acceptedQuote ?? null);
         setLoading(false);
       })
       .catch((reason: unknown) => {
@@ -185,6 +197,10 @@ export function EventEditorPage({
       value: EventEditorRecord[K],
     ) => {
       setDraft((current) => (current ? { ...current, [key]: value } : current));
+      if (key === "commercialOfferingId" || key === "pricingMode" || key === "ratePlanKey" || key === "addOnSelections" || key === "resourceSelections" || key === "startsAt" || key === "endsAt" || key === "guestCount") {
+        setQuote(null);
+        setQuoteError(null);
+      }
       setSaveState("dirty");
     },
     [],
@@ -216,6 +232,26 @@ export function EventEditorPage({
     },
     [categories],
   );
+  const setCommercialOffering = useCallback(async (offeringId: string) => {
+    const item = commercialOfferings.items.find((candidate) => candidate.offering?.offeringId === offeringId);
+    if (!item?.offering) return;
+    const selectedOffering = item.offering;
+    const nextEditor = repository.getCommercialOffering ? await repository.getCommercialOffering(offeringId) : null;
+    const activeBook = nextEditor?.priceBooks.find((book) => book.id === nextEditor.offering.activePriceBookId) ?? nextEditor?.priceBooks.find((book) => book.state === "active");
+    const defaultPlan = activeBook?.ratePlans.find((plan) => plan.isDefault) ?? activeBook?.ratePlans[0];
+    setCommercialEditor(nextEditor);
+    setDraft((current) => {
+      if (!current) return current;
+      const defaultAddOns = nextEditor?.addOnAssignments.filter((assignment) => assignment.enabled && assignment.required).map((assignment) => ({
+        assignmentId: assignment.id,
+        quantity: nextEditor.addOnCatalog.find((candidate) => candidate.offering.id === assignment.addOnOfferingId)?.serviceType === "person_service" ? current.guestCount : assignment.defaultQuantityOverride ?? assignment.minQuantityOverride ?? 1,
+      })) ?? [];
+      return { ...current, commercialOfferingId: offeringId, pricingMode: current.id === "new" || current.pricingMode === "quote_required" ? "quote_required" : current.pricingMode ?? "legacy_manual", ratePlanKey: defaultPlan?.key ?? null, addOnSelections: defaultAddOns, resourceSelections: [], categoryIcon: item.template.icon, categoryName: selectedOffering.operationalName, categoryTone: item.template.tone };
+    });
+    setQuote(null);
+    setQuoteError(null);
+    setSaveState("dirty");
+  }, [commercialOfferings.items, repository]);
   const addBooking = useCallback(
     (booking: Omit<EventResourceBooking, "id" | "resourceName">) => {
       const resource = resources.find((item) => item.id === booking.resourceId);
@@ -232,6 +268,9 @@ export function EventEditorPage({
                   resourceName: resource.name,
                 },
               ],
+              resourceSelections: current.pricingMode === "quote_required" && !(current.resourceSelections ?? []).some((selection) => selection.resourceId === booking.resourceId)
+                ? [...(current.resourceSelections ?? []), { resourceId: booking.resourceId }]
+                : current.resourceSelections ?? [],
             }
           : current,
       );
@@ -247,11 +286,41 @@ export function EventEditorPage({
             resourceBookings: current.resourceBookings.filter(
               (item) => item.id !== bookingId,
             ),
+            resourceSelections: (current.resourceSelections ?? []).filter((selection) => current.resourceBookings.find((item) => item.id === bookingId)?.resourceId !== selection.resourceId),
           }
         : current,
     );
     setSaveState("dirty");
   }, []);
+  const requestQuote = useCallback(async () => {
+    if (saveState !== "saved" || !draft || draft.id === "new" || draft.acceptedQuote || draft.pricingMode !== "quote_required" || !draft.ratePlanKey || !repository.quote) return;
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const nextQuote = await repository.quote(draft.id, { ratePlanKey: draft.ratePlanKey, currency: "RUB", addOns: draft.addOnSelections ?? [], resourceSelections: draft.resourceSelections ?? [] });
+      setQuote(nextQuote);
+    } catch (reason) {
+      setQuoteError(reason instanceof Error ? reason.message : "Не удалось рассчитать стоимость");
+      setQuote(null);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [draft, repository, saveState]);
+  const acceptQuote = useCallback(async () => {
+    if (!draft || draft.id === "new" || !quote || !repository.acceptQuote) return;
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const accepted = await repository.acceptQuote(draft.id, quote.quoteId);
+      setDraft(accepted);
+      setQuote(accepted.acceptedQuote ?? quote);
+      setSaveState("saved");
+    } catch (reason) {
+      setQuoteError(reason instanceof Error ? reason.message : "Не удалось подтвердить мероприятие");
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [draft, quote, repository]);
   const setStages = useCallback(
     (change: (stages: EventScenarioStage[]) => EventScenarioStage[]) => {
       setDraft((current) =>
@@ -267,7 +336,9 @@ export function EventEditorPage({
     if (!draft) return;
     setSaveState("saving");
     try {
-      await repository.save(draft);
+      const saved = await repository.save(draft);
+      setDraft(saved);
+      setQuote(saved.acceptedQuote ?? null);
       setSaveState("saved");
     } catch {
       setSaveState("conflict");
@@ -394,8 +465,17 @@ export function EventEditorPage({
       {draft && tab === "main" ? (
         <EventMain
           categories={categories}
+          commercialEditor={commercialEditor}
+          commercialOfferings={commercialOfferings}
           draft={draft}
+          onAcceptQuote={() => void acceptQuote()}
           onCategoryChange={setCategory}
+          onCommercialOfferingChange={setCommercialOffering}
+          onQuote={() => void requestQuote()}
+          quote={quote}
+          quoteError={quoteError}
+          quoteLoading={quoteLoading}
+          saveState={saveState}
           update={update}
         />
       ) : null}
@@ -514,19 +594,66 @@ function EventMobileActions({
 
 function EventMain({
   categories,
+  commercialEditor,
+  commercialOfferings,
   draft,
+  onAcceptQuote,
   onCategoryChange,
+  onCommercialOfferingChange,
+  onQuote,
+  quote,
+  quoteError,
+  quoteLoading,
+  saveState,
   update,
 }: {
   categories: EventCategory[];
+  commercialEditor: InternalOfferingEditor | null;
+  commercialOfferings: EventServiceTemplateRegistryResponse;
   draft: EventEditorRecord;
+  onAcceptQuote: () => void;
   onCategoryChange: (id: string) => void;
+  onCommercialOfferingChange: (id: string) => void;
+  onQuote: () => void;
+  quote: EventOrderQuote | null;
+  quoteError: string | null;
+  quoteLoading: boolean;
+  saveState: EditorSaveState;
   update: <K extends keyof EventEditorRecord>(
     key: K,
     value: EventEditorRecord[K],
   ) => void;
 }) {
   const customers = useDirectoryCustomers();
+  const accepted = Boolean(draft.acceptedQuote);
+  const activePriceBook = commercialEditor?.priceBooks.find((book) => book.id === commercialEditor.offering.activePriceBookId)
+    ?? commercialEditor?.priceBooks.find((book) => book.state === "active");
+  const ratePlans = activePriceBook?.ratePlans ?? [];
+  const addOnAssignments = commercialEditor?.addOnAssignments.filter((assignment) => assignment.enabled) ?? [];
+  const selectedAddOns = draft.addOnSelections ?? [];
+  const addOnServiceType = (assignmentId: string) => {
+    const assignment = addOnAssignments.find((item) => item.id === assignmentId);
+    return commercialEditor?.addOnCatalog.find((item) => item.offering.id === assignment?.addOnOfferingId)?.serviceType;
+  };
+  const updateAddOn = (assignmentId: string, checked: boolean) => {
+    const assignment = addOnAssignments.find((item) => item.id === assignmentId);
+    if (!assignment) return;
+    if (!checked) {
+      update("addOnSelections", selectedAddOns.filter((item) => item.assignmentId !== assignmentId));
+      return;
+    }
+    if (selectedAddOns.some((item) => item.assignmentId === assignmentId)) return;
+    update("addOnSelections", [...selectedAddOns, { assignmentId, quantity: addOnServiceType(assignmentId) === "person_service" ? draft.guestCount : assignment.defaultQuantityOverride ?? assignment.minQuantityOverride ?? 1 }]);
+  };
+  const updateAddOnQuantity = (assignmentId: string, value: string) => {
+    const quantity = Math.max(1, inputNumber(value));
+    update("addOnSelections", selectedAddOns.map((item) => item.assignmentId === assignmentId ? { ...item, quantity } : item));
+  };
+  const updateGuestCount = (value: string) => {
+    const guestCount = inputNumber(value);
+    update("guestCount", guestCount);
+    update("addOnSelections", selectedAddOns.map((item) => addOnServiceType(item.assignmentId) === "person_service" ? { ...item, quantity: guestCount } : item));
+  };
   const selectedCustomer = customers.find(
     (customer) =>
       customer.name === draft.clientName || customer.phone === draft.phone,
@@ -564,6 +691,18 @@ function EventMain({
               value={draft.categoryId}
             />
           </FormField>
+          {commercialOfferings.items.some((item) => item.offering) ? (
+            <FormField className="sm:col-span-4" htmlFor="event-commercial-offering" label="Коммерческая категория">
+              <FormSelect
+                disabled={accepted || (draft.id !== "new" && draft.pricingMode !== "quote_required")}
+                id="event-commercial-offering"
+                label="Коммерческая категория мероприятия"
+                onValueChange={onCommercialOfferingChange}
+                options={commercialOfferings.items.flatMap((item) => item.offering ? [{ label: item.offering.operationalName, value: item.offering.offeringId }] : [])}
+                value={draft.commercialOfferingId ?? ""}
+              />
+            </FormField>
+          ) : null}
           <FormField
             className="sm:col-span-6"
             htmlFor="event-name"
@@ -620,7 +759,7 @@ function EventMain({
             />
           </FormField>
           <FormField className="sm:col-span-4" htmlFor="event-period" label="Период проведения">
-            <DateTimeRangePicker id="event-period" label="Период мероприятия" onValueChange={(value) => {
+            <DateTimeRangePicker disabled={accepted} id="event-period" label="Период мероприятия" onValueChange={(value) => {
               update("startsAt", storedDateTime(value.from, draft.startsAt));
               update("endsAt", storedDateTime(value.to, draft.endsAt));
             }} value={{ from: editorDateTime(draft.startsAt), to: editorDateTime(draft.endsAt) }} />
@@ -631,11 +770,10 @@ function EventMain({
             label="Гостей"
           >
             <Input
+              disabled={accepted}
               id="event-guests"
               min="1"
-              onChange={(event) =>
-                update("guestCount", inputNumber(event.target.value))
-              }
+              onChange={(event) => updateGuestCount(event.target.value)}
               type="number"
               value={draft.guestCount}
             />
@@ -663,6 +801,20 @@ function EventMain({
           </label>
         </div>
       </EditorSection>
+      {draft.pricingMode === "quote_required" ? (
+        <EditorSection subtitle="Стоимость рассчитывается сервером по сохранённым датам, гостям, пакету и выбранным ресурсам." title="Коммерческий расчёт">
+          <div className="grid items-end gap-4 sm:grid-cols-6">
+            <FormField className="sm:col-span-3" htmlFor="event-rate-plan" label="Пакет">
+              <FormSelect disabled={accepted || ratePlans.length === 0} id="event-rate-plan" label="Пакет мероприятия" onValueChange={(value) => update("ratePlanKey", value)} options={ratePlans.map((plan) => ({ label: plan.label, value: plan.key }))} placeholder={ratePlans.length ? "Выберите пакет" : "Нет активных пакетов"} value={draft.ratePlanKey ?? ""} />
+            </FormField>
+            <Button className="sm:col-span-3" disabled={saveState !== "saved" || accepted || quoteLoading || !draft.ratePlanKey || draft.id === "new"} onClick={onQuote}>{quoteLoading ? "Рассчитываем…" : "Рассчитать стоимость"}</Button>
+          </div>
+          {saveState !== "saved" && !accepted ? <p className="mt-2 text-xs text-muted-foreground">Сначала сохраните мероприятие, затем рассчитайте стоимость по сохранённым данным.</p> : null}
+          {addOnAssignments.length ? <div className="mt-4 space-y-2"><p className="text-xs font-medium">Дополнительные услуги</p><div className="divide-y rounded-lg border">{addOnAssignments.map((assignment) => { const item = commercialEditor?.addOnCatalog.find((candidate) => candidate.offering.id === assignment.addOnOfferingId); const selected = selectedAddOns.find((candidate) => candidate.assignmentId === assignment.id); const personService = item?.serviceType === "person_service"; const label = assignment.labelOverride ?? item?.offering.operationalName ?? "Дополнительная услуга"; const unavailable = item?.availability.status !== "available"; return <div className="flex min-w-0 flex-wrap items-center gap-3 px-3 py-2" key={assignment.id}><label className="flex min-w-0 flex-1 items-center gap-2 text-xs"><Checkbox checked={Boolean(selected)} disabled={accepted || unavailable} onCheckedChange={(checked) => updateAddOn(assignment.id, checked === true)} /><span className="truncate">{label}{assignment.required ? " · обязательно" : ""}</span></label>{selected ? <Input aria-label={`Количество: ${label}`} className="w-24" disabled={accepted || personService} max={personService ? draft.guestCount : assignment.maxQuantityOverride ?? undefined} min={personService ? draft.guestCount : assignment.minQuantityOverride ?? 1} onChange={(event) => updateAddOnQuantity(assignment.id, event.target.value)} type="number" value={personService ? draft.guestCount : selected.quantity} /> : null}{unavailable ? <span className="text-[10px] text-muted-foreground">Недоступно</span> : null}</div> })}</div></div> : <p className="mt-4 text-xs text-muted-foreground">Дополнительные услуги не подключены.</p>}
+          {quoteError ? <p className="mt-3 text-xs text-danger" role="alert">{quoteError}</p> : null}
+          {quote ? <div className="mt-4 min-w-0 overflow-hidden rounded-xl border bg-background"><div className="flex flex-wrap items-start justify-between gap-3 border-b p-4"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Итого</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(quote.total.amountMinor / 100)}</p></div><span className="text-xs text-muted-foreground">{accepted ? "Подтверждено" : `Действует до ${new Date(quote.validUntil).toLocaleString("ru-RU")}`}</span></div><div className="divide-y px-4">{quote.lines.map((line, index) => <div className="flex flex-wrap justify-between gap-3 py-3 text-xs" key={`${line.kind}-${index}`}><span>{line.label} × {line.quantity}</span><span className="font-semibold tabular-nums">{money.format(line.amount.amountMinor / 100)}</span></div>)}</div><div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/20 px-4 py-3"><span className="text-xs text-muted-foreground">Снимок неизменяем после подтверждения.</span>{accepted || draft.status === "booked" ? <span className="text-xs font-medium">Подтверждено</span> : <Button disabled={quoteLoading || saveState !== "saved"} onClick={onAcceptQuote} size="sm">Подтвердить и забронировать</Button>}</div></div> : null}
+        </EditorSection>
+      ) : null}
     </div>
   );
 }
