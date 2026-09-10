@@ -63,6 +63,8 @@
 
 Текущий опубликованный venue slice использует `/venues/{venue-slug}`. Для route delivery offering identity берётся из release dependency, а public projection отдаёт только exclusive-resource capacity и readiness; legacy redirect map остаётся отдельным миграционным gate.
 
+Текущий опубликованный program slice использует `/programs/{program-slug}`. Detail route закрепляет CatalogOffering/program template за release и показывает только template limits, duration, next open occurrence и conservative price/readiness; customer registrations и occurrence internals остаются CRM-owned.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

@@ -51,6 +51,7 @@ import {
   OutboxEventEntity,
   OfferingBindingEntity,
   PriceBookEntity,
+  ProgramTemplateEntity,
   ResourceEntity,
 } from "@crm/db"
 
@@ -58,6 +59,7 @@ import { createPublicAddOnProjectionDependency } from "../offerings/public-addon
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicVenueProjectionDependency } from "../offerings/public-venue-projection.js"
+import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
 
 type Candidate = {
   node: CmsNodeEntity
@@ -339,6 +341,7 @@ export class CmsPublicationService {
     if (offering?.kind === "house") return this.safeHouseProjectionDependency(manager, candidate, link)
     if (offering?.kind === "campground") return this.safeCampgroundProjectionDependency(manager, candidate, link)
     if (offering?.kind === "venue") return this.safeVenueProjectionDependency(manager, candidate, link)
+    if (offering?.kind === "program") return this.safeProgramProjectionDependency(manager, candidate, link)
     return this.safeAddOnProjectionDependency(manager, candidate, link)
   }
 
@@ -384,6 +387,27 @@ export class CmsPublicationService {
     const priceBook = offering.activePriceBookId ? await manager.getRepository(PriceBookEntity).findOneBy({ id: offering.activePriceBookId, offeringId: offering.id, state: "active", archivedAt: IsNull() }) : null
     if (!calendar || !priceBook) return null
     return createPublicVenueProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
+  }
+
+  private async safeProgramProjectionDependency(
+    manager: EntityManager,
+    candidate: { node: CmsNodeEntity; revision: CmsNodeRevisionEntity },
+    link: CmsSourceLinkEntity,
+  ): Promise<ReleaseDependencyRef | null> {
+    const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (!offering || offering.kind !== "program" || offering.state !== "active" || offering.archivedAt !== null) return null
+    if (candidate.node.kind !== "program_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if (!candidate.revision.path.startsWith("/programs/")) return null
+    const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
+    if (!profile || profile.archivedAt !== null) return null
+    const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
+    if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
+    const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+    if (bindings.length !== 1 || !bindings[0]!.programTemplateId) return null
+    const template = await manager.getRepository(ProgramTemplateEntity).findOneBy({ id: bindings[0]!.programTemplateId, publication: "published", archivedAt: IsNull() })
+    const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
+    if (!template || !calendar) return null
+    return createPublicProgramProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
   }
 
   private async safeCampgroundProjectionDependency(
@@ -575,9 +599,11 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
         && ((candidate.node.kind === "addon_detail" && candidate.safeProjectionDependency.version === "public.addon-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.house-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.campground-summary.v1")
-          || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1"))
+          || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1")
+          || (candidate.node.kind === "program_detail" && candidate.safeProjectionDependency.version === "public.program-summary.v1"))
         && (candidate.safeProjectionDependency.version !== "public.house-summary.v1" || candidate.revision.path.startsWith("/houses/"))
         && (candidate.safeProjectionDependency.version !== "public.campground-summary.v1" || candidate.revision.path.startsWith("/campgrounds/"))
+        && (candidate.safeProjectionDependency.version !== "public.program-summary.v1" || candidate.revision.path.startsWith("/programs/"))
         && candidate.safeProjectionDependency.contentHash
       if (!safeProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
     } else if (candidate.revision.relations.length > 0) {

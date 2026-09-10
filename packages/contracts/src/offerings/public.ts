@@ -117,6 +117,52 @@ export const PublicVenueProjectionPinSchema = z.object({
 }).strict();
 export type PublicVenueProjectionPin = z.infer<typeof PublicVenueProjectionPinSchema>;
 
+/** Public program projection: template facts and the next open occurrence only. */
+export const PublicProgramFulfillmentSchema = z.object({
+  durationMinutes: z.number().int().positive().max(525_600),
+  minimumParticipants: z.number().int().nonnegative().nullable(),
+  participantLimit: z.number().int().positive().max(1_000_000),
+  availabilityMode: z.enum(["occurrence", "request_only"]),
+  nextOccurrence: z.object({
+    startsAt: DateTimeSchema,
+    endsAt: DateTimeSchema,
+    participantLimit: z.number().int().positive().max(1_000_000),
+    registrationLimit: z.number().int().positive().max(1_000_000),
+  }).strict().nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.availabilityMode === "occurrence" && value.nextOccurrence === null) context.addIssue({ code: "custom", path: ["nextOccurrence"], message: "Occurrence availability requires a next occurrence" });
+});
+export type PublicProgramFulfillment = z.infer<typeof PublicProgramFulfillmentSchema>;
+export const PublicProgramSummarySchema = PublicOfferingSummarySchema.safeExtend({
+  kind: z.literal("program"),
+  path: CmsPathSchema,
+  releaseId: IdSchema,
+  fulfillment: PublicProgramFulfillmentSchema,
+}).strict();
+export type PublicProgramSummary = z.infer<typeof PublicProgramSummarySchema>;
+export const PublicProgramSummaryParamsSchema = z.object({ offeringId: IdSchema }).strict();
+export type PublicProgramSummaryParams = z.infer<typeof PublicProgramSummaryParamsSchema>;
+export const PublicProgramListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type PublicProgramListQuery = z.infer<typeof PublicProgramListQuerySchema>;
+export const PublicProgramListResponseSchema = z.object({
+  items: z.array(PublicProgramSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+  releaseId: IdSchema,
+  asOf: DateTimeSchema,
+}).strict();
+export type PublicProgramListResponse = z.infer<typeof PublicProgramListResponseSchema>;
+export const PublicProgramProjectionPinSchema = z.object({
+  contract: z.literal("public.program-summary.v1"),
+  offeringId: IdSchema,
+  kind: z.literal("program"),
+  nodeId: IdSchema,
+  profileRevisionId: IdSchema,
+}).strict();
+export type PublicProgramProjectionPin = z.infer<typeof PublicProgramProjectionPinSchema>;
+
 /** Public house projection: the Resource supplies capacity, while pricing and readiness remain operational facts. */
 export const PublicHouseFulfillmentSchema = z.object({
   allocationMode: z.literal("exclusive_resource"),

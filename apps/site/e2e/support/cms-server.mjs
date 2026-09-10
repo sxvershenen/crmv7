@@ -147,6 +147,45 @@ createServer(async (request, response) => {
     if (scenario === "venue-wrong-id") venue.offeringId = nextReleaseId
     return send(venue)
   }
+  if (url.pathname.endsWith(`/offerings/programs/${id}`)) {
+    if (scenario === "program-missing") return send({ code: "NOT_FOUND" }, 404)
+    if (scenario === "program-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
+    const program = {
+      offeringId: id,
+      kind: "program",
+      path: "/programs/rafting",
+      releaseId,
+      title: "Программа из CMS",
+      summary: "Операционные факты программы из safe public projection.",
+      price: { mode: "from", amount: { amountMinor: 250000, currency: "RUB" } },
+      priceBasisLabel: "за участника",
+      quoteAvailable: false,
+      requestAvailable: true,
+      capacity: null,
+      readiness: "ready",
+      timezone: "Europe/Moscow",
+      currency: "RUB",
+      sourceVersions: { offering: 3, pricing: 4, priceBook: 2, calendar: 2, contentReleaseId: releaseId, profileRevisionId: id },
+      asOf,
+      fulfillment: { durationMinutes: 180, minimumParticipants: 2, participantLimit: 20, availabilityMode: "occurrence", nextOccurrence: { startsAt: "2026-09-20T10:00:00.000Z", endsAt: "2026-09-20T13:00:00.000Z", participantLimit: 20, registrationLimit: 10 } },
+    }
+    if (scenario === "program-empty") {
+      program.price = { mode: "request" }
+      program.priceBasisLabel = null
+      program.readiness = "request_only"
+      program.fulfillment.availabilityMode = "request_only"
+      program.fulfillment.nextOccurrence = null
+    }
+    if (scenario === "program-private") program.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "program-invalid") delete program.fulfillment
+    if (scenario === "program-version") {
+      program.releaseId = nextReleaseId
+      program.sourceVersions.contentReleaseId = nextReleaseId
+    }
+    if (scenario === "program-wrong-path") program.path = "/programs/other"
+    if (scenario === "program-wrong-id") program.offeringId = nextReleaseId
+    return send(program)
+  }
   if (url.pathname.endsWith(`/offerings/addons/${id}`)) {
     if (scenario === "addon-missing") return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "addon-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
@@ -223,9 +262,9 @@ createServer(async (request, response) => {
     if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({
       nodeId: id, revisionId: id, releaseId,
-      kind: path === "/" ? "home" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "addon_detail" : (path === "/houses/forest" || path === "/campgrounds/pitches" || path === "/venues/meadow") && (scenario.startsWith("house-") || scenario.startsWith("campground-") || scenario.startsWith("venue-")) ? "resource_detail" : "resource_listing",
+      kind: path === "/" ? "home" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "addon_detail" : path === "/programs/rafting" && scenario.startsWith("program-") ? "program_detail" : (path === "/houses/forest" || path === "/campgrounds/pitches" || path === "/venues/meadow") && (scenario.startsWith("house-") || scenario.startsWith("campground-") || scenario.startsWith("venue-")) ? "resource_detail" : "resource_listing",
       path: scenario === "wrong-path" ? "/wrong-path" : path,
-      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Кемпинг из CMS" : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Площадка из CMS" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Дополнение из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Операционные факты кемпинга из safe public projection." : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Операционные факты площадки из safe public projection." : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Операционные факты услуги из safe public projection." : "Описание опубликованной страницы", hero: null,
+      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Кемпинг из CMS" : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Площадка из CMS" : path === "/programs/rafting" && scenario.startsWith("program-") ? "Программа из CMS" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Дополнение из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Операционные факты кемпинга из safe public projection." : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Операционные факты площадки из safe public projection." : path === "/programs/rafting" && scenario.startsWith("program-") ? "Операционные факты программы из safe public projection." : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Операционные факты услуги из safe public projection." : "Описание опубликованной страницы", hero: null,
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },
@@ -240,7 +279,7 @@ createServer(async (request, response) => {
         rendererVersion: scenario === "why-us-version" ? "2" : "1", schemaVersion: 1, order: 10, config: whyUsConfig,
       }] : [],
       seo: { title: "SEO опубликованной страницы", description: "Описание из CMS", indexPolicy: "index_follow", canonical: { mode: "self" } },
-      dependencies: path === "/addons/firewood" && scenario.startsWith("addon-") && scenario !== "addon-no-dependency" ? [{ type: "crm_projection", id, version: "public.addon-summary.v1", contentHash: "b".repeat(64) }] : path === "/venues/meadow" && scenario.startsWith("venue-") && scenario !== "venue-no-dependency" ? [{ type: "crm_projection", id, version: "public.venue-summary.v1", contentHash: "b".repeat(64) }] : [], generatedAt: asOf,
+      dependencies: path === "/addons/firewood" && scenario.startsWith("addon-") && scenario !== "addon-no-dependency" ? [{ type: "crm_projection", id, version: "public.addon-summary.v1", contentHash: "b".repeat(64) }] : path === "/venues/meadow" && scenario.startsWith("venue-") && scenario !== "venue-no-dependency" ? [{ type: "crm_projection", id, version: "public.venue-summary.v1", contentHash: "b".repeat(64) }] : path === "/programs/rafting" && scenario.startsWith("program-") && scenario !== "program-no-dependency" ? [{ type: "crm_projection", id, version: "public.program-summary.v1", contentHash: "b".repeat(64) }] : [], generatedAt: asOf,
       cache: { etag: "test-page", maxAgeSeconds: 60, staleWhileRevalidateSeconds: 300, tags: [] },
       freshness: { contentVersion: "a".repeat(64), crmProjectionAsOf: null, ready: scenario !== "not-ready" },
     })

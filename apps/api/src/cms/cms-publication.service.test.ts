@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { materializeRelease } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
+import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
 
 const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
@@ -218,6 +219,30 @@ describe("materializeRelease", () => {
     })
     expect(materializeRelease([campground] as never).issues).toEqual([
       expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/houses/pitches" }),
+    ])
+  })
+
+  it("pins an approved program projection for the vertical route", () => {
+    const programDependency = createPublicProgramProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const program = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "program_detail", path: "/programs/rafting", slug: "rafting",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: programDependency,
+    })
+    const result = materializeRelease([program] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.dependencies).toContainEqual(programDependency)
+  })
+
+  it("rejects a program projection attached to a non-program canonical path", () => {
+    const programDependency = createPublicProgramProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const program = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "program_detail", path: "/events/rafting", slug: "rafting",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: programDependency,
+    })
+    expect(materializeRelease([program] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/events/rafting" }),
     ])
   })
 })

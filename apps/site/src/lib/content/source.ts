@@ -4,6 +4,7 @@ import {
   PublicCampgroundSummarySchema,
   PublicAddOnSummarySchema,
   PublicVenueSummarySchema,
+  PublicProgramSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -15,6 +16,7 @@ import {
   type PublicCampgroundSummary,
   type PublicAddOnSummary,
   type PublicVenueSummary,
+  type PublicProgramSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -32,6 +34,7 @@ export interface ContentSource {
   campground(path: string): Promise<ContentResult<PublicCampgroundSummary>>
   addon(offeringId: string): Promise<ContentResult<PublicAddOnSummary>>
   venue(offeringId: string): Promise<ContentResult<PublicVenueSummary>>
+  program(offeringId: string): Promise<ContentResult<PublicProgramSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -86,6 +89,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     venue(offeringId) {
       return document(`/offerings/venues/${encodeURIComponent(offeringId)}`, (value) => PublicVenueSummarySchema.parse(value))
     },
+    program(offeringId) {
+      return document(`/offerings/programs/${encodeURIComponent(offeringId)}`, (value) => PublicProgramSummarySchema.parse(value))
+    },
   }
 }
 
@@ -97,6 +103,7 @@ export type PublishedRoute = ContentResult<{
   campground: PublicCampgroundSummary | null
   addon: PublicAddOnSummary | null
   venue: PublicVenueSummary | null
+  program: PublicProgramSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -159,7 +166,18 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     venue = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue } }
+  let program: PublicProgramSummary | null = null
+  if (page.value.kind === "program_detail" && path.startsWith("/programs/")) {
+    const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.program-summary.v1")
+    if (dependencies.length !== 1) return { status: "unavailable" }
+    const dependency = dependencies[0]!
+    const result = await source.program(dependency.id)
+    if (result.status !== "published" || result.value.offeringId !== dependency.id || result.value.sourceVersions.contentReleaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    program = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue, program } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

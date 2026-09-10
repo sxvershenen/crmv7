@@ -322,6 +322,42 @@ for (const scenario of ["venue-missing", "venue-outage", "venue-private", "venue
   })
 }
 
+test("binds a program route to CMS content and the next open occurrence", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=program-published")
+  const response = await request.get("/programs/rafting")
+  expect(response.status()).toBe(200)
+  expect(await response.text()).toContain("Программа из CMS")
+  await page.goto("/programs/rafting")
+  await expect(page.locator("h1")).toHaveText("Программа из CMS")
+  await expect(page.locator('[data-route-kind="program"]')).toContainText("от 2 до 20 участников")
+  await expect(page.locator('[data-route-kind="program"]')).toContainText(/2\s500/)
+  await expect(page.locator('[data-route-kind="program"]')).toContainText("20 сентября 2026")
+  await expect(page.locator('[data-route-kind="program"] [data-site-action="booking"]')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test("keeps a valid program route request-only without a price or open occurrence", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=program-empty")
+  const response = await page.goto("/programs/rafting")
+  expect(response?.status()).toBe(200)
+  await expect(page.locator('[data-route-kind="program"]')).toContainText("По запросу")
+  await expect(page.locator('[data-route-kind="program"]')).toContainText("Уточним ближайшую дату")
+})
+
+for (const scenario of ["program-missing", "program-outage", "program-private", "program-invalid", "program-version", "program-wrong-path", "program-wrong-id", "program-no-dependency"]) {
+  test(`fails closed for ${scenario} program delivery`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    const response = await request.get("/programs/rafting")
+    expect(response.status()).toBe(503)
+    expect(response.headers()["cache-control"]).toBe("no-store")
+    expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
+    const html = await response.text()
+    expect(html).toContain("Сайт временно недоступен")
+    expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    expect(html).not.toContain("Программа из CMS")
+  })
+}
+
 test("binds an add-on route to the existing release-pinned safe projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=addon-published")
   const response = await request.get("/addons/firewood")

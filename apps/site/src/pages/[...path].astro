@@ -19,6 +19,7 @@ import HouseDetail from "../components/sections/HouseDetail.astro"
 import CampgroundDetail from "../components/sections/CampgroundDetail.astro"
 import AddonDetail from "../components/sections/AddonDetail.astro"
 import VenueDetail from "../components/sections/VenueDetail.astro"
+import ProgramDetail from "../components/sections/ProgramDetail.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
@@ -39,6 +40,7 @@ const house = result.status === "published" ? result.value.house : null
 const campground = result.status === "published" ? result.value.campground : null
 const addon = result.status === "published" ? result.value.addon : null
 const venue = result.status === "published" ? result.value.venue : null
+const program = result.status === "published" ? result.value.program : null
 const failure = result.status !== "published" ? result.status : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -81,6 +83,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {campground && <CampgroundDetail campground={campground} />}
       {addon && <AddonDetail addon={addon} />}
       {venue && <VenueDetail venue={venue} />}
+      {program && <ProgramDetail program={program} />}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} client:visible />

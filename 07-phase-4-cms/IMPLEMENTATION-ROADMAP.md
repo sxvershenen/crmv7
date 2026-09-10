@@ -31,7 +31,9 @@ Addon vertical route gate закрыт: существующий `public.addon-s
 
 Venue vertical route gate закрыт: `public.venue-summary.v1` подключён к CMS `resource_detail` через release dependency с exact offering ID; `/venues/*` сверяет `offeringId`, `contentReleaseId`, title и не рендерит route без dependency, malformed data или outage. Exclusive-resource capacity, space type и conservative price/readiness projection остаются operational authority; interval availability и quote не выдаются в браузер, а отсутствие price даёт request fallback.
 
-1. Мигрировать оставшиеся vertical routes в порядке program → event service, учитывая готовность safe resolver каждого kind.
+Program vertical route gate закрыт: `public.program-summary.v1` подключён к CMS `program_detail` через release dependency с exact offering ID; `/programs/*` сверяет `offeringId`, `path`, `contentReleaseId`, title и не рендерит route без dependency, malformed data, no-price/no-occurrence response или outage. Generic public listing продолжает отдавать безопасные program cards, а typed detail projection показывает только template limits, duration, next open occurrence и conservative price/readiness; registrations, customer fields и quote acceptance остаются за CRM.
+
+1. Мигрировать оставшийся vertical route: event service, учитывая отдельную customer Event/order boundary и готовность safe resolver.
 2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
 3. Генерировать sitemap/robots/canonical/schema из active release.
 

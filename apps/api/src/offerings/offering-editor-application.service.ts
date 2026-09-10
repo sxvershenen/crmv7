@@ -417,7 +417,7 @@ export class OfferingEditorApplicationService {
     const relations = current?.relations.filter((relation) => relation.kind === "catalog_offering") ?? []
     if (relations.length === 0) blockers.push("revision_relation_missing")
     else if (relations.length !== 1 || relations[0]?.entityId !== offering.id) blockers.push("revision_relation_mismatch")
-    // P4.5E exposes strict typed public summaries for add-ons, venues and houses.
+    // P4.5E exposes strict typed public summaries for add-ons, venues, houses and programs.
     // Houses additionally need the exact operational join used by the public resolver.
     if (offering.kind === "house") {
       const primaryBindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
@@ -447,6 +447,12 @@ export class OfferingEditorApplicationService {
       if (!termsValid || !expectedMode || !expectedRole || !binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["camping", "campground", "campground_owned_tent", "campground_own_tent_area"].includes(resource.kind) || resource.capacityMode !== expectedMode || resource.capacityTotal <= 0 || memberships.length !== 1 || !calendar || !current?.path.startsWith("/campgrounds/")) {
         blockers.push("safe_public_projection_missing")
       }
+    } else if (offering.kind === "program") {
+      const primaryBindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+      const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
+      const template = binding?.programTemplateId ? await manager.findOne(ProgramTemplateEntity, { where: { id: binding.programTemplateId, publication: "published", archivedAt: IsNull() } }) : null
+      const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
+      if (!binding || !binding.programTemplateId || !template || !calendar || !current?.path.startsWith("/programs/")) blockers.push("safe_public_projection_missing")
     } else if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
     const revision = (row: CmsNodeRevisionEntity | null) => row ? {
       id: row.id, revision: row.revision, state: row.state, path: row.path, title: row.title, contentHash: row.contentHash,
