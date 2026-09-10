@@ -3,6 +3,7 @@ import {
   PublicHouseSummarySchema,
   PublicCampgroundSummarySchema,
   PublicAddOnSummarySchema,
+  PublicVenueSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -13,6 +14,7 @@ import {
   type PublicHouseSummary,
   type PublicCampgroundSummary,
   type PublicAddOnSummary,
+  type PublicVenueSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -29,6 +31,7 @@ export interface ContentSource {
   house(path: string): Promise<ContentResult<PublicHouseSummary>>
   campground(path: string): Promise<ContentResult<PublicCampgroundSummary>>
   addon(offeringId: string): Promise<ContentResult<PublicAddOnSummary>>
+  venue(offeringId: string): Promise<ContentResult<PublicVenueSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -80,6 +83,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     addon(offeringId) {
       return document(`/offerings/addons/${encodeURIComponent(offeringId)}`, (value) => PublicAddOnSummarySchema.parse(value))
     },
+    venue(offeringId) {
+      return document(`/offerings/venues/${encodeURIComponent(offeringId)}`, (value) => PublicVenueSummarySchema.parse(value))
+    },
   }
 }
 
@@ -90,6 +96,7 @@ export type PublishedRoute = ContentResult<{
   house: PublicHouseSummary | null
   campground: PublicCampgroundSummary | null
   addon: PublicAddOnSummary | null
+  venue: PublicVenueSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -141,7 +148,18 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     addon = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon } }
+  let venue: PublicVenueSummary | null = null
+  if (page.value.kind === "resource_detail" && path.startsWith("/venues/")) {
+    const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.venue-summary.v1")
+    if (dependencies.length !== 1) return { status: "unavailable" }
+    const dependency = dependencies[0]!
+    const result = await source.venue(dependency.id)
+    if (result.status !== "published" || result.value.offeringId !== dependency.id || result.value.sourceVersions.contentReleaseId !== page.value.releaseId || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    venue = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

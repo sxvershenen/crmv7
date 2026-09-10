@@ -29,7 +29,9 @@ Campground vertical route gate закрыт: `public.campground-summary.v1` пр
 
 Addon vertical route gate закрыт: существующий `public.addon-summary.v1` подключён к CMS `addon_detail` через release dependency с exact offering ID; `/addons/*` сверяет `offeringId`, `contentReleaseId`, title и не рендерит route без dependency, malformed data или outage. Strict add-on terms и conservative price/readiness projection остаются operational authority; route показывает request fallback, если price отсутствует.
 
-1. Мигрировать оставшиеся vertical routes в порядке venue → program → event service, учитывая готовность safe resolver каждого kind.
+Venue vertical route gate закрыт: `public.venue-summary.v1` подключён к CMS `resource_detail` через release dependency с exact offering ID; `/venues/*` сверяет `offeringId`, `contentReleaseId`, title и не рендерит route без dependency, malformed data или outage. Exclusive-resource capacity, space type и conservative price/readiness projection остаются operational authority; interval availability и quote не выдаются в браузер, а отсутствие price даёт request fallback.
+
+1. Мигрировать оставшиеся vertical routes в порядке program → event service, учитывая готовность safe resolver каждого kind.
 2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
 3. Генерировать sitemap/robots/canonical/schema из active release.
 

@@ -61,6 +61,8 @@
 
 Текущий опубликованный add-on slice использует `/addons/{addon-slug}`. Для route delivery offering identity берётся из release dependency, а не из CMS текста; целевой `/dopy/{addon-slug}` и legacy alias map остаются отдельным миграционным gate.
 
+Текущий опубликованный venue slice использует `/venues/{venue-slug}`. Для route delivery offering identity берётся из release dependency, а public projection отдаёт только exclusive-resource capacity и readiness; legacy redirect map остаётся отдельным миграционным gate.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

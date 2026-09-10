@@ -115,6 +115,38 @@ createServer(async (request, response) => {
     if (scenario === "campground-wrong-path") campground.path = "/campgrounds/other"
     return send(campground)
   }
+  if (url.pathname.endsWith(`/offerings/venues/${id}`)) {
+    if (scenario === "venue-missing") return send({ code: "NOT_FOUND" }, 404)
+    if (scenario === "venue-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
+    const venue = {
+      offeringId: id,
+      kind: "venue",
+      title: "Площадка из CMS",
+      summary: "Операционные факты площадки из safe public projection.",
+      price: { mode: "from", amount: { amountMinor: 320000, currency: "RUB" } },
+      priceBasisLabel: "за час",
+      quoteAvailable: false,
+      requestAvailable: true,
+      capacity: null,
+      readiness: "ready",
+      timezone: "Europe/Moscow",
+      currency: "RUB",
+      sourceVersions: { offering: 3, pricing: 4, priceBook: 2, calendar: 2, contentReleaseId: releaseId, profileRevisionId: id },
+      asOf,
+      fulfillment: { allocationMode: "exclusive_resource", capacityUnit: "guests", capacityTotal: 40, pricingMode: "rate_plan", spaceType: "outdoor", availabilityMode: "resource" },
+    }
+    if (scenario === "venue-empty") {
+      venue.price = { mode: "request" }
+      venue.priceBasisLabel = null
+      venue.readiness = "request_only"
+      venue.fulfillment.availabilityMode = "request_only"
+    }
+    if (scenario === "venue-private") venue.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "venue-invalid") delete venue.fulfillment
+    if (scenario === "venue-version") venue.sourceVersions.contentReleaseId = nextReleaseId
+    if (scenario === "venue-wrong-id") venue.offeringId = nextReleaseId
+    return send(venue)
+  }
   if (url.pathname.endsWith(`/offerings/addons/${id}`)) {
     if (scenario === "addon-missing") return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "addon-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
@@ -191,9 +223,9 @@ createServer(async (request, response) => {
     if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({
       nodeId: id, revisionId: id, releaseId,
-      kind: path === "/" ? "home" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "addon_detail" : (path === "/houses/forest" || path === "/campgrounds/pitches") && (scenario.startsWith("house-") || scenario.startsWith("campground-")) ? "resource_detail" : "resource_listing",
+      kind: path === "/" ? "home" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "addon_detail" : (path === "/houses/forest" || path === "/campgrounds/pitches" || path === "/venues/meadow") && (scenario.startsWith("house-") || scenario.startsWith("campground-") || scenario.startsWith("venue-")) ? "resource_detail" : "resource_listing",
       path: scenario === "wrong-path" ? "/wrong-path" : path,
-      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Кемпинг из CMS" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Дополнение из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Операционные факты кемпинга из safe public projection." : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Операционные факты услуги из safe public projection." : "Описание опубликованной страницы", hero: null,
+      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Кемпинг из CMS" : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Площадка из CMS" : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Дополнение из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : path === "/campgrounds/pitches" && scenario.startsWith("campground-") ? "Операционные факты кемпинга из safe public projection." : path === "/venues/meadow" && scenario.startsWith("venue-") ? "Операционные факты площадки из safe public projection." : path === "/addons/firewood" && scenario.startsWith("addon-") ? "Операционные факты услуги из safe public projection." : "Описание опубликованной страницы", hero: null,
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },
@@ -208,7 +240,7 @@ createServer(async (request, response) => {
         rendererVersion: scenario === "why-us-version" ? "2" : "1", schemaVersion: 1, order: 10, config: whyUsConfig,
       }] : [],
       seo: { title: "SEO опубликованной страницы", description: "Описание из CMS", indexPolicy: "index_follow", canonical: { mode: "self" } },
-      dependencies: path === "/addons/firewood" && scenario.startsWith("addon-") && scenario !== "addon-no-dependency" ? [{ type: "crm_projection", id, version: "public.addon-summary.v1", contentHash: "b".repeat(64) }] : [], generatedAt: asOf,
+      dependencies: path === "/addons/firewood" && scenario.startsWith("addon-") && scenario !== "addon-no-dependency" ? [{ type: "crm_projection", id, version: "public.addon-summary.v1", contentHash: "b".repeat(64) }] : path === "/venues/meadow" && scenario.startsWith("venue-") && scenario !== "venue-no-dependency" ? [{ type: "crm_projection", id, version: "public.venue-summary.v1", contentHash: "b".repeat(64) }] : [], generatedAt: asOf,
       cache: { etag: "test-page", maxAgeSeconds: 60, staleWhileRevalidateSeconds: 300, tags: [] },
       freshness: { contentVersion: "a".repeat(64), crmProjectionAsOf: null, ready: scenario !== "not-ready" },
     })

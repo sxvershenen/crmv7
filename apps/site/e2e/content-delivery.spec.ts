@@ -287,6 +287,41 @@ for (const scenario of ["campground-missing", "campground-outage", "campground-p
   })
 }
 
+test("binds a venue route to CMS content and an exclusive-resource operational projection", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=venue-published")
+  const response = await request.get("/venues/meadow")
+  expect(response.status()).toBe(200)
+  expect(await response.text()).toContain("Площадка из CMS")
+  await page.goto("/venues/meadow")
+  await expect(page.locator("h1")).toHaveText("Площадка из CMS")
+  await expect(page.locator('[data-route-kind="venue"]')).toContainText("до 40 гостей")
+  await expect(page.locator('[data-route-kind="venue"]')).toContainText(/3\s200/)
+  await expect(page.locator('[data-route-kind="venue"] [data-site-action="booking"]')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test("keeps a valid venue route request-only when price authority is absent", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=venue-empty")
+  const response = await page.goto("/venues/meadow")
+  expect(response?.status()).toBe(200)
+  await expect(page.locator('[data-route-kind="venue"]')).toContainText("По запросу")
+  await expect(page.locator('[data-route-kind="venue"]')).toContainText("Уточним доступность")
+})
+
+for (const scenario of ["venue-missing", "venue-outage", "venue-private", "venue-invalid", "venue-version", "venue-wrong-id", "venue-no-dependency"]) {
+  test(`fails closed for ${scenario} venue delivery`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    const response = await request.get("/venues/meadow")
+    expect(response.status()).toBe(503)
+    expect(response.headers()["cache-control"]).toBe("no-store")
+    expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
+    const html = await response.text()
+    expect(html).toContain("Сайт временно недоступен")
+    expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    expect(html).not.toContain("Площадка из CMS")
+  })
+}
+
 test("binds an add-on route to the existing release-pinned safe projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=addon-published")
   const response = await request.get("/addons/firewood")
