@@ -53,6 +53,17 @@ createServer(async (request, response) => {
     if (scenario === "partners-duplicate") partnersConfig.items[1].id = id
     if (scenario === "partners-private") partnersConfig.internalNotes = "PRIVATE_BACKEND_DETAIL"
     if (scenario === "partners-blank") partnersConfig.title = " "
+    const whyUsConfig = {
+      eyebrow: "Доказательства из CMS", title: scenario === "why-us-long" ? "Почему гости выбирают нас снова и снова для отдыха и событий" : "Почему выбирают нас из CMS",
+      description: "Опубликованное описание доверия", facts: [
+        { id: "distance", number: "9 мин", title: "От нового места", description: "Тестовый факт из опубликованной редакции." },
+        { id: "nature", number: "24 га", title: "Соснового леса", description: "Ещё один факт из CMS." },
+      ], team: { label: "Команда из CMS", title: "Редакционный заголовок команды", description: "Описание команды из опубликованной редакции." },
+    }
+    if (scenario === "why-us-empty") whyUsConfig.facts = []
+    if (scenario === "why-us-duplicate") whyUsConfig.facts[1].id = whyUsConfig.facts[0].id
+    if (scenario === "why-us-private") whyUsConfig.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "why-us-blank") whyUsConfig.title = " "
     return send({
       nodeId: id, revisionId: id, releaseId,
       kind: path === "/" ? "home" : "resource_listing",
@@ -64,6 +75,9 @@ createServer(async (request, response) => {
       }] : scenario.startsWith("partners-") ? [{
         id, key: "partners", renderer: scenario === "partners-renderer" ? "unknown" : "partners",
         rendererVersion: scenario === "partners-version" ? "2" : "1", schemaVersion: 1, order: 10, config: partnersConfig,
+      }] : scenario.startsWith("why-us-") ? [{
+        id, key: "why-us", renderer: scenario === "why-us-renderer" ? "unknown" : "why-us",
+        rendererVersion: scenario === "why-us-version" ? "2" : "1", schemaVersion: 1, order: 10, config: whyUsConfig,
       }] : [],
       seo: { title: "SEO опубликованной страницы", description: "Описание из CMS", indexPolicy: "index_follow", canonical: { mode: "self" } },
       dependencies: [], generatedAt: asOf,

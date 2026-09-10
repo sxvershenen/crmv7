@@ -28,4 +28,14 @@ describe("partners composition in the home editor", () => {
     expect(screen.queryByRole("button", { name: "Добавить секцию «Партнёры»" })).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Заголовок секции")).not.toBeInTheDocument()
   })
+
+  it("adds the typed why-us section to the home composition", async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={["/content/home?tab=composition"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
+    await user.click(await screen.findByRole("button", { name: "Добавить секцию «Why us»" }))
+    expect(screen.getByLabelText("Надзаголовок")).toHaveValue("Почему мы")
+    expect(screen.getAllByLabelText("Заголовок секции").at(-1)).toHaveValue("Почему выбирают нас")
+    await user.click(screen.getByRole("button", { name: "Добавить факт" }))
+    expect(screen.getByLabelText("Акцент факта 1")).toBeInTheDocument()
+  })
 })

@@ -4,6 +4,7 @@ import { ApiCmsRepository, FixtureCmsRepository } from "@admin/data/cms-reposito
 import { CmsConflictError } from "@admin/entities/cms"
 import { AdminApiError } from "@admin/lib/api-client"
 import { createPartnersEditorSection, partnersPolicy } from "@admin/data/partners-section"
+import { createWhyUsEditorSection, whyUsPolicy } from "@admin/data/why-us-section"
 
 describe("FixtureCmsRepository", () => {
   it("keeps fixtures behind a typed repository and increments versions", async () => {
@@ -58,6 +59,22 @@ describe("ApiCmsRepository", () => {
     expect(saved.sections[0]?.partnersConfig?.items).toEqual([])
     await repository.saveEditor({ ...saved, sections: saved.sections.map((section) => ({ ...section, mode: "disabled" as const })) }, saved.version)
     expect(client.patch.mock.calls[1]?.[1].sections[0].policy).toEqual({ mode: "disabled" })
+  })
+
+  it("round-trips why-us facts and team copy through the revision contract", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(detail)
+    client.patch.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, sections: body.sections } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "home")
+    const section = createWhyUsEditorSection()
+    section.whyUsConfig = {
+      eyebrow: "Почему нас", title: "Доверие", description: "Факты", facts: [{ id: "distance", number: "9 мин", title: "Рядом", description: "Быстро." }],
+      team: { label: "Команда", title: "Всегда рядом", description: "Помогаем." },
+    }
+    const added = await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
+    expect(added.sections[0]?.whyUsConfig).toEqual(section.whyUsConfig)
+    expect(client.patch.mock.calls[0]?.[1].sections[0]).toMatchObject({ id: section.id, key: "why-us", renderer: "why-us", rendererVersion: "1", schemaVersion: 1, policy: whyUsPolicy(section.whyUsConfig) })
   })
 
   it("reads CMS access through the same Admin API client", async () => {

@@ -11,6 +11,7 @@ import {
   CmsSiteSettingsValueSchema,
   CmsSectionSchema,
   CmsPartnersSectionSchema,
+  CmsWhyUsSectionSchema,
   PublicReleasePageContentSchema,
   PublicAddOnTermsSchema,
   ReleaseDependencyRefSchema,
@@ -546,6 +547,9 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     for (const section of parentSections.values()) {
       if ((section.key === "partners" || section.renderer === "partners") && !CmsPartnersSectionSchema.safeParse(section).success) {
         issues.push(issue("CMS_PARTNERS_SECTION_INVALID", "Проверьте заголовок, список партнёров и версию секции", candidate.revision.path))
+      }
+      if ((section.key === "why-us" || section.renderer === "why-us") && !CmsWhyUsSectionSchema.safeParse(section).success) {
+        issues.push(issue("CMS_WHY_US_SECTION_INVALID", "Проверьте заголовок, факты, командный блок и версию секции", candidate.revision.path))
       }
     }
     visiting.delete(candidate.node.id)

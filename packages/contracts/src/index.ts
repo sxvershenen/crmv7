@@ -35,3 +35,4 @@ export * from "./outbox.js";
 export * from "./cms-dashboard.js";
 export * from "./marketing.js";
 export * from "./partners-section.js";
+export * from "./why-us-section.js";

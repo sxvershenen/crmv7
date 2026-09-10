@@ -1,6 +1,18 @@
 import type { SiteHeroConfig, SiteNavigationConfig } from "@crm/site-ui"
-import type { CmsPartnersSectionConfig } from "@crm/contracts"
-import { PARTNERS_LIST, RESORT_IMAGES } from "./resortData"
+import type { CmsPartnersSectionConfig, CmsWhyUsSectionConfig } from "@crm/contracts"
+import { PARTNERS_LIST, RESORT_IMAGES, WHY_US_FACTS } from "./resortData"
+
+export const DEFAULT_WHY_US_CONFIG: CmsWhyUsSectionConfig = {
+  eyebrow: "Почему мы",
+  title: "Почему выбирают нас",
+  description: "Конкретные доказательства вместо общих эпитетов. Всё, что можно посчитать, — посчитали.",
+  facts: WHY_US_FACTS.map((fact) => ({ id: fact.id, number: fact.number, title: fact.title, description: fact.desc })),
+  team: {
+    label: "Команда «Зажигай»",
+    title: "Профессиональная команда рядом на каждом этапе",
+    description: "Проживание и событие в одном месте: гости не разъезжаются по домам, а идут спать в домики.",
+  },
+}
 
 export const DEFAULT_PARTNERS_CONFIG: CmsPartnersSectionConfig = {
   title: "Наши партнёры",

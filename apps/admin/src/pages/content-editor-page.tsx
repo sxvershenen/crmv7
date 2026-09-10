@@ -7,7 +7,9 @@ import { Alert, AlertDescription, AlertTitle, Button, DropdownMenu, DropdownMenu
 import { ContentStatusBadge, InheritanceControl, PreviewDeviceSwitch, SourceMarker } from "@admin/components/cms-ui"
 import { cmsRepository } from "@admin/data/cms-repository"
 import { createPartnersEditorSection } from "@admin/data/partners-section"
+import { createWhyUsEditorSection } from "@admin/data/why-us-section"
 import { PartnersSectionFields } from "@admin/components/partners-section-fields"
+import { WhyUsSectionFields } from "@admin/components/why-us-section-fields"
 import { CmsConflictError, type ContentNode, type EditorRecord, type InheritanceMode } from "@admin/entities/cms"
 import { useAdminAuthSession } from "@admin/features/auth-session-context"
 import { useRepository } from "@admin/features/use-repository"
@@ -150,11 +152,14 @@ function HeroEditor({ draft, editable, update, compact = false }: { draft: Edito
 
 function CompositionTab({ draft, editable, updateSection, update }: { draft: EditorRecord; editable: boolean; updateSection: (id: string, mode: InheritanceMode) => void; update: (patch: Partial<EditorRecord>) => void }) {
   return <EditorSection subtitle="site default → page type → parent/category → page/profile" title="Наследуемые секции"><div className="space-y-3">{draft.sections.map((section) => <div key={section.id}>
-    <InheritanceControl disabled={!editable || (section.key === "partners" && !section.partnersConfig)} onChange={(mode) => updateSection(section.id, mode)} section={section} />
+    <InheritanceControl disabled={!editable || ((section.key === "partners" && !section.partnersConfig) || (section.key === "why-us" && !section.whyUsConfig))} onChange={(mode) => updateSection(section.id, mode)} section={section} />
     {section.mode === "override" && section.partnersConfig && <PartnersSectionFields id={section.id} value={section.partnersConfig} editable={editable} onChange={(partnersConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, partnersConfig } : current) })} />}
+    {section.mode === "override" && section.whyUsConfig && <WhyUsSectionFields id={section.id} value={section.whyUsConfig} editable={editable} onChange={(whyUsConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, whyUsConfig } : current) })} />}
     {section.key === "partners" && !section.partnersConfig && <p className="mt-2 text-xs text-muted-foreground">Редактор этой версии или составной конфигурации пока недоступен. Сохранение остальных полей не изменяет её содержимое.</p>}
+    {section.key === "why-us" && !section.whyUsConfig && <p className="mt-2 text-xs text-muted-foreground">Редактор этой версии или составной конфигурации пока недоступен. Сохранение остальных полей не изменяет её содержимое.</p>}
   </div>)}
   {draft.kind === "home" && !draft.sections.some((section) => section.key === "partners") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createPartnersEditorSection()] })} size="sm" variant="outline">Добавить секцию «Партнёры»</Button>}
+  {draft.kind === "home" && !draft.sections.some((section) => section.key === "why-us") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createWhyUsEditorSection()] })} size="sm" variant="outline">Добавить секцию «Why us»</Button>}
   </div></EditorSection>
 }
 

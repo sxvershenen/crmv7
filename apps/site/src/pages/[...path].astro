@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro"
-import { CmsPartnersSectionSchema } from "@crm/contracts"
+import { CmsPartnersSectionSchema, CmsWhyUsSectionSchema } from "@crm/contracts"
 import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
 import SitePageShell from "@crm/site-ui/astro/SitePageShell"
 import NavigationIsland from "../components/islands/NavigationIsland"
@@ -30,6 +30,8 @@ const result = await getPublishedRoute(path, Astro.url.searchParams)
 const page = result.status === "published" ? result.value.page : null
 const partnersSection = page?.sections.find((section) => section.key === "partners")
 const partnersConfig = partnersSection ? CmsPartnersSectionSchema.parse(partnersSection).config : null
+const whyUsSection = page?.sections.find((section) => section.key === "why-us")
+const whyUsConfig = whyUsSection ? CmsWhyUsSectionSchema.parse(whyUsSection).config : null
 const publishedSiteSettings = result.status === "published" ? result.value.settings : null
 const listing = result.status === "published" ? result.value.listing : null
 const failure = result.status !== "published" ? result.status : null
@@ -77,7 +79,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {sectionEnabled("programs") && <ProgramsIsland client:visible />}
       {sectionEnabled("venues") && <VenuesIsland client:visible />}
       {sectionEnabled("blog") && <BlogSection />}
-      {sectionEnabled("why-us") && <WhyUsSection />}
+      {whyUsConfig && <WhyUsSection config={whyUsConfig} />}
       {sectionEnabled("reviews") && <ReviewsIsland client:visible />}
       {sectionEnabled("map") && <TerritoryMapIsland client:visible />}
       {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}

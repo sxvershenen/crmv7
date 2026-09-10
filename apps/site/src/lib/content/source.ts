@@ -1,6 +1,7 @@
 import {
   PublicListingResultSchema,
   CmsPartnersSectionSchema,
+  CmsWhyUsSectionSchema,
   PublicPageSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
@@ -75,7 +76,8 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     return { status: "unavailable" }
   }
   const partners = page.value.sections.filter((section) => section.key === "partners" || section.renderer === "partners")
-  if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success)) {
+  const whyUs = page.value.sections.filter((section) => section.key === "why-us" || section.renderer === "why-us")
+  if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success) || whyUs.length > 1 || whyUs.some((section) => !CmsWhyUsSectionSchema.safeParse(section).success)) {
     return { status: "unavailable" }
   }
   let listing: PublicListingResult | null = null

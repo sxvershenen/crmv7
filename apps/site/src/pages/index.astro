@@ -1,7 +1,7 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro"
-import { CmsPartnersSectionSchema } from "@crm/contracts"
-import { DEFAULT_PARTNERS_CONFIG } from "../data/publicContentDefaults"
+import { CmsPartnersSectionSchema, CmsWhyUsSectionSchema } from "@crm/contracts"
+import { DEFAULT_PARTNERS_CONFIG, DEFAULT_WHY_US_CONFIG } from "../data/publicContentDefaults"
 import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
 import SitePageShell from "@crm/site-ui/astro/SitePageShell"
 import { publicRoute, siteIdentity } from "../lib/content"
@@ -29,6 +29,8 @@ const publishedPage = result?.status === "published" ? result.value.page : null
 const publishedSiteSettings = result?.status === "published" ? result.value.settings : null
 const partnersSection = publishedPage?.sections.find((section) => section.key === "partners")
 const partnersConfig = fixtureContentEnabled ? DEFAULT_PARTNERS_CONFIG : partnersSection ? CmsPartnersSectionSchema.parse(partnersSection).config : null
+const whyUsSection = publishedPage?.sections.find((section) => section.key === "why-us")
+const whyUsConfig = fixtureContentEnabled ? DEFAULT_WHY_US_CONFIG : whyUsSection ? CmsWhyUsSectionSchema.parse(whyUsSection).config : null
 const failure = result && result.status !== "published" ? result.status : null
 const contentAvailable = !failure
 if (failure) {
@@ -72,7 +74,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {sectionEnabled("programs") && <ProgramsIsland client:visible />}
       {sectionEnabled("venues") && <VenuesIsland client:visible />}
       {sectionEnabled("blog") && <BlogSection />}
-      {sectionEnabled("why-us") && <WhyUsSection />}
+      {whyUsConfig && <WhyUsSection config={whyUsConfig} />}
       {sectionEnabled("reviews") && <ReviewsIsland client:visible />}
       {sectionEnabled("map") && <TerritoryMapIsland client:visible />}
       {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}

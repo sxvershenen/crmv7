@@ -1,7 +1,11 @@
 ---
 import { Award, MapPin, ShieldCheck, Sparkles, Trees } from "lucide-react";
+import type { CmsWhyUsSectionConfig } from "@crm/contracts";
 import SiteSectionHeader from "@crm/site-ui/astro/SiteSectionHeader";
-import { RESORT_IMAGES, WHY_US_FACTS } from "../../data/resortData";
+import { RESORT_IMAGES } from "../../data/resortData";
+
+interface Props { config: CmsWhyUsSectionConfig }
+const { config } = Astro.props;
 
 const getFactIcon = (id: string) => {
   switch (id) {
@@ -20,19 +24,19 @@ const getFactIcon = (id: string) => {
 
 ---
 
-<section data-section-key="why-us" class="w-full py-8">
+<section id="why-us" data-section-key="why-us" class="w-full py-8">
   <SiteSectionHeader
-    eyebrow="Почему мы"
+    eyebrow={config.eyebrow}
     eyebrowTone="brand"
-    title="Почему выбирают нас"
-    description="Конкретные доказательства вместо общих эпитетов. Всё, что можно посчитать, — посчитали."
+    title={config.title}
+    description={config.description}
   >
     <ShieldCheck slot="icon" className="w-3 h-3" />
   </SiteSectionHeader>
 
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4">
     <div class="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
-      {WHY_US_FACTS.map((fact) => {
+      {config.facts.map((fact) => {
         const FactIcon = getFactIcon(fact.id);
         return (
           <div class="group bg-[var(--site-color-surface)] rounded-[var(--site-radius-xl)] p-3 lg:p-5 flex lg:flex-col items-center lg:items-start gap-3 lg:gap-6 lg:min-h-[220px] hover:-translate-y-[3px] transition-transform">
@@ -44,7 +48,7 @@ const getFactIcon = (id: string) => {
                 {fact.number} {fact.title}
               </h3>
             <p class="text-[length:var(--site-text-caption)] lg:text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)] mt-1 lg:mt-2 leading-[1.5]">
-              {fact.desc}
+              {fact.description}
             </p>
             </div>
           </div>
@@ -60,14 +64,14 @@ const getFactIcon = (id: string) => {
           class="w-full h-full object-cover"
         />
         <div class="absolute inset-0 z-10 p-4 flex flex-col justify-end text-[var(--site-color-text-inverse)]">
-          <span class="chip on-img w-fit mb-2">Команда «Зажигай»</span>
-          <div class="text-[length:var(--site-text-h3)] lg:text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] leading-tight">Профессиональная команда рядом на каждом этапе</div>
+          <span class="chip on-img w-fit mb-2">{config.team.label}</span>
+          <div class="text-[length:var(--site-text-h3)] lg:text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] leading-tight">{config.team.title}</div>
         </div>
       </div>
       <div class="px-2 pt-3 pb-2">
         <div class="flex items-center justify-between gap-3">
           <div class="text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)] leading-[1.5]">
-            Проживание и событие в одном месте: гости не разъезжаются по домам, а идут спать в домики.
+            {config.team.description}
           </div>
           <div class="flex -space-x-2 shrink-0" aria-hidden="true">
             {[0, 1, 2].map((item) => <img src={RESORT_IMAGES.teamPhoto} alt="" class="w-9 h-9 rounded-[var(--site-radius-round)] object-cover border-2 border-[var(--site-color-surface)]" style={`object-position: ${30 + item * 25}% center`} />)}

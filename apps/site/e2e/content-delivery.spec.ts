@@ -143,3 +143,40 @@ test("keeps a long published partners title within the viewport", async ({ page,
   await expect(page.locator("#partners")).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+test("binds published why-us copy in SSR without fixture facts", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=why-us-published")
+  for (const path of ["/", "/cms-test"]) {
+    const response = await request.get(path)
+    expect(response.status()).toBe(200)
+    const html = await response.text()
+    expect(html).toContain("Доказательства из CMS")
+    expect(html).not.toContain("30 мин")
+    await page.goto(path)
+    await expect(page.locator("#why-us")).toContainText("Почему выбирают нас из CMS")
+    await expect(page.locator("#why-us")).toContainText("9 мин От нового места")
+    await expect(page.locator("#why-us")).toContainText("Редакционный заголовок команды")
+    await expect(page.locator("h1")).toHaveCount(1)
+  }
+})
+
+for (const scenario of ["why-us-empty", "why-us-blank", "why-us-duplicate", "why-us-private", "why-us-version", "why-us-renderer"]) {
+  test(`rejects ${scenario} before rendering the page`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    for (const path of ["/", "/cms-test"]) {
+      const response = await request.get(path)
+      expect(response.status()).toBe(503)
+      const html = await response.text()
+      expect(html).not.toContain("Доказательства из CMS")
+      expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    }
+  })
+}
+
+test("keeps a long published why-us title within the viewport", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=why-us-long")
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.goto("/")
+  await expect(page.locator("#why-us")).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
