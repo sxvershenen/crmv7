@@ -1,15 +1,13 @@
 # CRM composition and marketing delivery
 
-## Scope and sequence
+## Поддерживаемый scope
 
-Requested 2026-09-04. Deliver small independently verified increments; do not equate CRM operational reporting with completed P4.7 visitor analytics.
+CRM composition, backend-owned promotion registry/application и operational reporting реализованы. Этот документ хранит контракт, а не очередь повторной реализации; историческое evidence — `logs/2026-09-05-crm-marketing.md`.
 
-1. Repair resource + assigned add-on quote failure, stale requests and understandable error/retry states. Verify amount in minor units and persistence.
-2. Compact booking composition: sibling position sections, dividers, services before financial summary, responsive fields, existing shared UI.
-3. Backend-owned promotion registry: normalized unique code, fixed RUB amount or integer percentage, activity window, minimum eligible amount, all/selected resources and offerings, versioned writes, permissions, audit/outbox. CRM route-driven editor and sortable registry.
-4. Apply promotion to Booking with server-owned immutable calculation snapshot. Preserve gross immutable offering quote; order-level promotion reduces booking total, not quote lines. Manual item discount and promotion are mutually exclusive. Save revalidates conditions; unchanged composition/code retains historical application. Confirmed/accepted commercial terms cannot be edited silently.
-5. Operational marketing reporting: booking/promotion facts and saved Lead UTM dimensions, period selection, all data columns sortable, no client-side revenue authority. Money from payment ledger only. Distinguish order value from paid money. No inferred visitor identity or synthetic conversion rates.
-6. Separate P4.6/P4.7 increment: successful public intake, consented signed visitor/session, collector, dedupe, attribution, outbox conversion facts, retention and privacy gates. Only then enable visitors and visitor→lead conversion charts. No tracking is enabled by the CRM slice.
+- Booking composition: отдельные секции позиций, услуги перед финансовой сводкой, понятные quote/retry states; незавершённый расчёт блокирует сохранение.
+- Promotion: normalized unique code, versioned writes, permissions/audit/outbox и server-owned immutable application. Gross offering quote не меняется; скидка применяется к заказу. Unchanged composition/code сохраняет исторический application, confirmed commercial terms нельзя менять молча.
+- Reports: Booking/promotion facts, saved Lead UTM, период и сортировка; paid money только из payment ledger, отдельно от order value. Нет выдуманной visitor identity или conversion rate.
+- Следующий analytics scope находится только в P4.6/P4.7 roadmap: public intake, consented visitor/session, collector, dedupe, attribution, conversion facts и retention. До него visitor charts не включать.
 
 ## Promotion semantics
 

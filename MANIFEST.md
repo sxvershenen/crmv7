@@ -6,8 +6,8 @@ Human navigation only. ИИ-агент начинает с `AGENTS.md` и не �
 |---|---|
 | `00-core/` | product scope, stack и human summaries authority/order |
 | `04-domain-backend/` | domain, PostgreSQL, API/auth/concurrency, live updates |
-| `05-site-admin/` | compatibility pointer на Phase 4 |
 | `06-quality-process/` | testing, security и acceptance gates |
+| `packages/site-ui/SITE_UI_KIT.md` | public UI exports, boundaries и executable gates |
 | `07-phase-4-cms/README.md` | единый current status и следующий инкремент |
 | `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md` | долговременный порядок и gates; читать по разделам |
 | `07-phase-4-cms/logs/` | фактические журналы треков; не читать весь каталог |

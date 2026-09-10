@@ -16,7 +16,7 @@ Public site, CMS и CRM связаны через типизированные A
 
 ## Текущий этап
 
-CRM и основной backend реализованы. Публичный frontend почти завершён. Активная работа идёт в Phase 4: CMS/public delivery, media, intake, analytics и SEO expansion.
+CRM и основной backend реализованы. Активная работа идёт в Phase 4: route-by-route public delivery, media hardening, intake, analytics и SEO expansion.
 
 - актуальный статус: `07-phase-4-cms/README.md`;
 - roadmap и acceptance gates: `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md`;
@@ -42,6 +42,8 @@ pnpm dev:admin   # CMS: http://localhost:5174
 pnpm dev:site    # Public site: http://localhost:4321
 ```
 
+Перед browser QA сначала проверьте уже запущенный stack, фактический host/port, затронутый API read и schema/migration alignment по матрице risk → command → stop condition в `06-quality-process/testing-security.md`. Если health, route, read contract или schema не совпадают, остановитесь до длинного цикла; не исправляйте environment автоматическим reseed/migrate.
+
 OpenAPI:
 
 - Internal: `http://localhost:3000/api/internal/v1/openapi.json`;
@@ -50,7 +52,7 @@ OpenAPI:
 
 ## Проверки
 
-Полный базовый gate:
+Полный gate для release или общей границы:
 
 ```bash
 pnpm -r typecheck
@@ -59,6 +61,6 @@ pnpm -r test
 pnpm -r build
 ```
 
-Дополнительно: `pnpm test:integration`, `pnpm test:e2e`, `pnpm test:e2e:api` и `pnpm --filter @crm/site test:e2e` для затронутых runtime flows.
+Для затронутых runtime flows сначала используйте targeted команды из `06-quality-process/testing-security.md`. PostgreSQL integration и API E2E требуют `APP_ENV=test`, явный disposable `TEST_DATABASE_URL` и restricted test role.
 
 UI galleries: CRM `/dev/ui`, CMS `/dev/ui/admin`, public canonical `/dev/site-ui-v2`. Отклонённая v1-галерея удалена.

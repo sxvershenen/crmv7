@@ -11,7 +11,7 @@ CMS живёт в отдельном `apps/admin` и управляет толь
 - `Вычисляется` — public projection или системное значение;
 - `Наследуется` — effective value пришло от site/type/parent default.
 
-Frontend CMS проектируется и реализуется только Sol High, используя существующие tokens, generated shadcn primitives, `EditorFrame`, `FormField`, `DataTable`, `PageNav`, `SettingsBar`, `IconBox`, `StatusBadge`, `PageState` и Tabler Icons из `packages/ui`.
+Frontend CMS использует существующие tokens, generated shadcn primitives и shared compositions `EditorFrame`, `FormField`, `DataTable`, `PageNav`, `SettingsBar`, `IconBox`, `StatusBadge`, `PageState` и Tabler Icons из `packages/ui`. Ownership и порядок работ задают root/scoped `AGENTS.md` и current Phase 4 status.
 
 ## 2. Shell и навигация
 

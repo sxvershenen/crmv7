@@ -57,3 +57,13 @@ See `component-inventory-v2.json`, `manifest.json`, `manifest.schema.json`, `AGE
 ## Public application gate
 
 `pnpm --filter @crm/site architecture` protects the consumer boundary. It rejects CRM/internal-data imports, direct semantic color, radius, shadow, type-size and font-weight utilities, and verifies every current homepage section against its registry key. Black alpha image overlays and unique illustrative geometry remain page-local; semantic presentation must use this package.
+
+## Adding a component
+
+Use the official shadcn inventory only as an anatomy and accessibility checklist; its visual defaults are not a source of style. A new export requires a real public consumer, a matching `/dev/site-ui-v2` example and architecture/interaction coverage before it becomes part of the kit. Do not prebuild a generic inventory.
+
+Candidate slices are backlog, not commitments: calculator promo/contact/option/step states; breadcrumbs and anchor/mobile navigation; filter summary, combobox and range controls; media gallery/aspect frame; alert/progress/loading/retry/stale states; and booking alternative-date, unavailable/conflict, stale-quote and retry states. Add a slice only when its public use case and consumer are present.
+
+Controls such as attachment/input groups, OTP, command/dropdown menus, hover cards, scroll areas, toggles, tables, charts, messages, markers, keyboard hints, sidebars, resizable panels, context menus and menubars stay out of the public kit until a concrete public flow needs them. The shadcn inventory can check anatomy and accessibility coverage; it does not justify adding a component by itself.
+
+Availability, price, eligibility and booking confirmation stay server/public-projection facts. The kit renders their loading, unavailable, conflict and stale states without calculating or confirming them.

@@ -212,7 +212,7 @@ CMS не исполняет TSX/HTML из БД и не редактирует pr
 
 ## D-050 — Модель агентной работы Phase 4
 
-Сложная архитектура и весь CMS/public frontend UI/UX проектируются и реализуются Sol High. Terra/Luna допустимы для узких backend, migration, test и inventory задач с явным file ownership; изменения контрактов и интерфейса проходят Sol High review. Детальный порядок и gates зафиксированы в `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md`.
+Модель и effort main выбирает пользователь. Делегируемая роль — worker (Luna xhigh): discovery, обычная реализация и targeted checks; main принимает решения, выполняет сложные части и интеграцию. Актуальные правила ownership и маршрутизации — в `AGENTS.md` и инструкциях пользователя; roadmap не назначает модели. Заменяет первоначальное распределение Sol/Terra.
 
 ## D-051 — Public site UI kit как обязательный frontend boundary
 

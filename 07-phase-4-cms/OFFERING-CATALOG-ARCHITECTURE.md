@@ -1,6 +1,6 @@
 # Offering catalog architecture
 
-Статус: target product/domain architecture for the next P4.5 increments. Документ фиксирует модель коммерческих направлений, но не объявляет её уже реализованной.
+Статус: durable product/domain architecture. Реализация отдельных slices меняется по мере Phase 4; фактический status и следующий increment находятся в `README.md` и релевантном roadmap heading.
 
 ## 1. Цель и граница
 
@@ -17,26 +17,26 @@
 
 Этот scope включает ручные календарные цены, тарифы и детерминированные правила. Автоматическое demand-based dynamic pricing, при котором алгоритм сам меняет цену из-за спроса/загрузки, по-прежнему не входит в первый релиз.
 
-## 2. Один факт — один owner, два интерфейса
+## 2. Один факт — один owner, разные интерфейсы
 
-«Редактировать и в CRM, и в CMS» означает два UI entry point к одной authoritative записи и одному command service, а не двустороннее копирование таблиц.
+Operational facts редактируются в CRM, editorial facts — в CMS. Cross-app deep links и guided creation используют общие typed contracts, но не создают вторую authority или client-side synchronization.
 
 | Группа данных | Authoritative owner | CRM | CMS | Public site |
 |---|---|---|---|---|
-| internal identity, operational kind, ресурсы, вместимость, ограничения, availability | CRM Operations | editable | editable через тот же operational command boundary при capability; source marker `CRM` | safe projection only |
-| price books, тарифы, календарные/праздничные правила, extra guest, коммерческие опции | CRM Pricing | editable | editable через тот же pricing service; source marker `CRM` | active safe quote/summary projection |
+| internal identity, operational kind, ресурсы, вместимость, ограничения, availability | CRM Operations | editable | readonly/deep link «Открыть в CRM» | safe projection only |
+| price books, тарифы, календарные/праздничные правила, extra guest, коммерческие опции | CRM Pricing | editable | readonly/deep link «Открыть в CRM» | active safe quote/summary projection |
 | фактические Lead/Booking/Event/Occurrence/Payment | CRM Operations | editable | readonly status/deep link | только allowlisted факты без internal status/PII |
-| public title, marketing copy, media, benefits, FAQ, SEO, page composition | CMS Content | editable через shared CMS panel/deep link, если есть capability | editable | active CMS release only |
+| public title, marketing copy, media, benefits, FAQ, SEO, page composition | CMS Content | canonical draft/deep link where the workflow creates it | editable | active CMS release only |
 | route, canonical, index policy, sitemap eligibility, redirects | CMS Publication | readonly/deep link | editable | active release only |
 | effective card/detail/quote readiness | computed public projection | readonly | preview/readiness | public API only |
 
 Инварианты:
 
-- Admin API не пишет operational JSON в `cms_node_revisions`; он вызывает тот же application service, что internal CRM API.
-- CRM content panel не создаёт вторую таблицу маркетинговых полей; он редактирует ту же CMS revision.
-- Оба интерфейса передают named CAS только изменяемого owner segment (`expectedCatalogVersion | expectedSubjectVersion | expectedPricingVersion | expectedAddOnsVersion`) плюс `operationId`/`idempotencyKey`; actor, request ID и entry point инжектируются transport adapter-ом, а один ChangeLog фиксирует фактического автора и entry point.
-- SSE/outbox invalidates обе query caches; UI никогда не «синхронизирует» данные клиентским copy/paste.
-- Сохранённый CMS content draft сразу виден из CRM/CMS preview, но production меняется только публикацией.
+- Admin API не пишет operational JSON в `cms_node_revisions`; CRM application service создаёт canonical draft при guided creation, а CMS редактирует editorial revision.
+- Operational mutations проходят CRM command boundary; editorial mutations проходят CMS revision/CAS boundary. Они не копируют поля друг в друга.
+- Каждая mutation передаёт только свой expected version и idempotency key; actor, request ID и entry point фиксируются в audit/outbox.
+- SSE/outbox invalidates нужные query caches; UI никогда не «синхронизирует» данные клиентским copy/paste.
+- Сохранённый CMS content draft виден в editorial preview, но production меняется только публикацией.
 - Активированное operational изменение сразу видно в CRM и safe projection с новым `asOf`; price book можно подготовить как draft и активировать/запланировать отдельно.
 
 ## 3. Целевая предметная модель
@@ -428,14 +428,14 @@ For AI generation the agent receives field schemas and fixtures, not database cr
 
 ## 10. Delivery increments
 
-1. **P4.5A — Domain lock:** approve offering kinds, campground sales unit, business calendar and price-basis semantics; add contracts and migrations without changing current consumers.
-2. **P4.5B — Pricing core:** implement price books/rate plans/rules/options/quote snapshots and integration tests; migrate current program base price and resource settings explicitly.
-3. **P4.5C — CRM editors:** add offering direction, type-specific operational panels, calendar pricing and shared command repositories.
-4. **P4.5D — CMS offer workspaces:** replace generic primary profiles workflow with six directions and mount the same operational panels plus CMS content/publication panels.
-5. **P4.5E — Public projections:** explicit offering-kind profiles/listings, quote/availability summaries, events/outbox/cache invalidation and no-leak tests.
-6. **P4.5F — Route migration:** build one vertical slice at a time in order `house → campground → addon → venue → program → event service`, including managed-page bindings, visual/SEO regression and first-launch workflow.
+1. **P4.5A — Domain lock:** offering kinds, campground sales units, business calendar and price-basis semantics.
+2. **P4.5B — Pricing core:** price books/rules, quote snapshots and operational acceptance with DB guards.
+3. **P4.5C — CRM editors:** type-specific operational panels and shared command repositories.
+4. **P4.5D — CMS editorial workspaces:** one page tree, canonical locators and content/publication panels.
+5. **P4.5E — Public projections:** allowlisted offering-kind DTOs, release pinning and no-leak tests.
+6. **P4.5F — Route migration:** one vertical slice at a time, with meaningful SSR content and proportionate visual/SEO regression.
 
-Each increment gets a separate bounded implementation task and appends evidence to one relevant Phase 4 track log. Sol High owns domain/UI architecture and every CMS/public page layout; bounded migrations/tests may be delegated with explicit file ownership.
+These are architectural increments, not a second current-status list. Open only the relevant roadmap section, keep each implementation task bounded, and record acceptance evidence in one Phase 4 track log. Ownership follows root/scoped `AGENTS.md`.
 
 ## 11. Confirmed P4.5A product semantics
 

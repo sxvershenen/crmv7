@@ -6,8 +6,8 @@
 
 ## Delivery principles
 
-- ownership and delegation follow root `../AGENTS.md`; architecture, authority and public UI remain with the main Sol agent;
-- each accepted increment ends with working routes, migrations/contracts where applicable, proportionate tests and one coherent track-log update by the main agent;
+- ownership and delegation follow root `../AGENTS.md`; this plan does not assign models;
+- each increment ends at its acceptance criteria with proportionate checks; update one track log only when acceptance state materially changes;
 - no parallel implementation may create two authorities for one field;
 - existing dirty worktree and unrelated user changes must be preserved.
 
@@ -34,11 +34,11 @@
 
 ### Gate
 
-The implemented P4.0 foundation stays locked. Provider/legal choices remain go-live gates. Commercial product semantics required by P4.5A were confirmed on 2026-08-31; later semantic expansion requires a new explicit product decision. Existing CRM tests remain green.
+The implemented P4.0 foundation stays locked; its artifact list is not new work. Provider/legal choices remain go-live gates. Commercial product semantics required by P4.5A were confirmed on 2026-08-31; later semantic expansion requires a new explicit product decision. Existing CRM tests remain green.
 
 ## P4.1A — Public site UI kit and homepage migration
 
-Owner: Sol High only.
+Implemented foundation; use the following as regression criteria, not a rebuild backlog.
 
 - create versioned `packages/site-ui` and semantic global tokens/typography;
 - implement primitive/layout/form/overlay/navigation/content/catalog/feedback foundations;
@@ -57,9 +57,9 @@ Owner: Sol High only.
 
 ## P4.1B — Admin design system and frontend prototype
 
-Owner: Sol High only for design and page implementation.
+Implemented foundation; do not rebuild the fixture prototype or duplicate the existing admin application.
 
-Build `apps/admin` on `packages/ui` with typed fixture repository:
+`apps/admin` uses `packages/ui`; fixtures are explicit dev/test mode only. Preserve the established surfaces:
 
 - shell/app switcher/responsive navigation;
 - `/dev/ui/admin` additions;
@@ -82,6 +82,8 @@ Build `apps/admin` on `packages/ui` with typed fixture repository:
 
 ## P4.2 — API namespace and CMS core
 
+Implemented foundation. The following are maintained invariants, not pending implementation.
+
 - preserve `/api/internal/v1` compatibility;
 - add `/api/admin/v1` and `/api/public/v1` plus separate OpenAPI;
 - Zod contracts for nodes/revisions/blocks/SEO/routes/releases/capabilities;
@@ -98,6 +100,8 @@ Build `apps/admin` on `packages/ui` with typed fixture repository:
 
 ## P4.3 — Atomic publication and delivery
 
+Atomic/direct publication and provider-neutral delivery are implemented. Remaining: render-ready preview/diff and end-to-end delivery/cache visibility. Preserve these contracts:
+
 - release manifest/items and schedule jobs;
 - single CAS `active_release_id`, `baseReleaseId` and exact dependency revisions;
 - outbox per-consumer deliveries;
@@ -111,6 +115,8 @@ Build `apps/admin` on `packages/ui` with typed fixture repository:
 Atomicity/failure-injection test: content + routes + redirects + navigation/defaults + profiles + assets/code either all become live or production remains on one complete release. Scheduled/manual races serialize, duplicate delivery is harmless, cache purge failure cannot mix releases, stale preview is detected and emergency rollback restores a complete manifest.
 
 ## P4.4 — Media platform
+
+Local/provider-neutral processing is implemented. Remaining: production storage/CDN, external scanner, cleanup/DLQ/metrics and rights-reviewed migration. Preserve:
 
 - storage integration and scoped uploads;
 - MIME/magic/size/scan/decode pipeline;
@@ -129,55 +135,38 @@ Before further mass profile/page migration, complete the commercial catalog incr
 
 ### P4.5A — Offering domain lock and non-leak gate
 
-Status: completed on 2026-08-31; current consumers remain unchanged.
-
-- product semantics confirmed: individual owned tents + shared own-tent-area capacity, explicit calendar-holiday/custom-date rules, per-night resolution, searchable reusable add-ons and optional quote-time early-booking rules;
-- hard publication eligibility for Event/ProgramOccurrence and operational/customer comment stripping implemented and regression-tested;
-- lock `CatalogOffering`, `EventServiceTemplate`, typed price-book/rate/rule/options and quote snapshot contracts;
-- add forward-only foundation migrations/entities and constraints without changing current readers, writers or public behavior;
-- specify data migration from free-form `Resource.kind/settings`, `showOnSite` and `ProgramTemplate.basePrice`.
+Foundation implemented. Preserve typed CatalogOffering/EventServiceTemplate contracts, calendar/price-book semantics, forward migrations and fail-closed operational publication. Product semantics and authority: `OFFERING-CATALOG-ARCHITECTURE.md`; active decisions D-071 onward. Legacy data migration must be explicit, not inferred from free-form fields.
 
 ### P4.5B — Pricing and quote core
 
-Status: house and campground backend gates completed on 2026-09-01. They include `house + per_night`, both campground sales units, immutable quote storage, scheduling runtime, read-only legacy dry-run, shared business calendar/bindings/reusable add-ons, accepted house `BookingItem` quote links and the production-shaped `public_projection` delivery runtime. On 2026-09-03 Booking composition added assigned quantity/person services, one immutable composite quote and exact lifecycle acceptance guarded by both application and PostgreSQL checks. Campground quote snapshots intentionally have no operational acceptance context yet. ProgramRegistration acceptance is implemented with occurrence-bound quotes. Event acceptance uses a separate Event/version-bound `event_order` snapshot, assigned quantity/person add-ons, atomic fixed-resource allocation/cancellation and database guards; template/event-service previews remain ineligible. Shared-capacity Event resources and scheduled-resource add-ons remain fail closed.
+Implemented: shared calendar/bindings/add-ons, immutable pricing and quote snapshots, house/campground quotes, accepted BookingItem links, occurrence-bound ProgramRegistration acceptance and Event/version-bound `event_order` acceptance. Template previews remain non-accepting.
 
-- application services for offering bindings, business calendar, immutable active price revisions and options on top of the P4.5A schema;
-- deterministic rule precedence, ambiguity/gap validation, activation/scheduling and immutable quote snapshots; accepted house quotes attach atomically to the exact `BookingItem` on `unconfirmed → confirmed`;
-- one composite editor projection with owner-segmented versions/capabilities for CRM and CMS;
-- ChangeLog, typed Outbox and independent consumer deliveries/cache invalidation;
-- fenced delivery leases, monotonic offering projection generations, durable `database_epoch` cache effects, retry/DLQ/replay audit and Admin-only delivery observability. A production CDN/tag-purge adapter remains a deployment choice, not a second delivery state machine.
+Remaining boundaries:
+
+- campground operational acceptance context is not implemented;
+- request-only/scheduled-resource add-on acceptance and shared-capacity Event resources remain fail closed;
+- delivery already has fenced leases, monotonic generations, `database_epoch` effects, retry/DLQ/replay and Admin API observability; production CDN integration must reuse this runtime;
+- new accepted order types require exact subject/version/composition, expiry after locks, atomic lifecycle/capacity/accepted link/audit/outbox and PostgreSQL guards. No direct library-to-order pricing.
 
 ### P4.5C — CRM operational editors
 
-Status: house and campground editor slices completed on 2026-09-01; the standalone add-on operational editor completed on 2026-09-02. On 2026-09-02 the CRM stay IA was consolidated around the Resource dossier: standalone stay registries and detail URLs return to the exact Resource, and an idempotent transaction creates offering + primary binding + canonical CMS draft from an unlinked Resource. The embedded `Цена и сайт` screen hides offering/binding/PriceBook/RatePlan mechanics and exposes one resource price, included/extra guests, explicit recurring weekdays, holidays, higher-priority special periods and the canonical website-page summary. First save prepares the hidden commercial/CMS infrastructure in the same user action. New stay bookings request an authoritative resource-scoped quote and render RUB major units while persistence remains integer minor units. Venue is the next operational offering kind after the safe add-on projection gate.
+Established: Resource dossier for house/campground, add-on dossier, program commercial tab and event-service category workspace. Reuse the shared backend pricing authority and canonical CMS draft preparation; do not recreate standalone stay registries or expose PriceBook/RatePlan mechanics to operators.
 
-- Resource registry is the primary CRM entry for house/campground; shared offering panels remain the primary operational workspace for price calendar/tariffs/options and public-site status;
-- implement one complete house slice first; then campground → addon → venue → program → event service;
-- changes use the same backend commands later mounted in CMS.
+Remaining operational vertical: venue, as scoped in the current-status README. Public resolvers are separate gates; an operational editor does not grant publication eligibility.
 
 ### P4.5D — CMS offer workspaces
 
-Status: bounded house and campground workspace gates completed on 2026-09-01; add-on registry/dossier completed on 2026-09-02. Current CMS IA is editorial-only: `/content/tree` owns the registry and exact canonical nodes (`resource_detail` for stays, `addon_detail` for add-ons). Offering deep links open content/media/SEO/publication; operational editors remain in CRM dossiers. Generic `Публичные профили` is a diagnostics route, not primary CMS navigation. Media explicitly hands off to the canonical manager until page-filtered usages exist. The operational dashboard and development demo nodes/settings are authoritative PostgreSQL data. Add-on publication is enabled only through the completed release-pinned P4.5E projection; house and campground remain fenced until their own typed public resolvers exist.
+Established: editorial-only `/content/tree`, canonical typed source locators and owner-aware conflicts. Pricing/bindings/fulfillment stay in CRM; generic public profiles are diagnostics. Media uses the canonical manager until page-filtered usages exist.
 
-- primary CMS IA `/content/tree` with canonical editorial deep links;
-- CRM dossiers own operational panels; CMS owns content/media/SEO/publication panels;
-- field ownership markers, segmented conflict handling, date/guest quote simulator and first-launch readiness;
-- generic categories/public-profiles remain diagnostics, not primary CRUD.
+Remaining topology/code boundaries:
 
-### Immediate execution order after campground
-
-1. **CMS topology/read UX:** render the route forest from authoritative `parentNodeId`, support accessible collapse/search ancestry and expose orphan/cycle states without inferring ownership from URL text. Status: completed on 2026-09-02.
-2. **CMS topology/write UX:** create child/reparent now writes a route-only revision with `expectedVersion` and server leaf/parent/cycle/path validation. Mutation is limited to never-published leaves; published leaves return `CMS_REDIRECT_REQUIRED` and non-leaf moves return `CMS_SUBTREE_MOVE_REQUIRED` until their authoritative contracts exist. Status: bounded leaf-safe increment completed on 2026-09-02.
-3. **Controlled-code handoff:** keep the capability-gated Files/Code tab in canonical and offer editors, but show an explicit unavailable state until P4.8 supplies page → artifact binding, versioned file drafts and server gates. Never write the public checkout from CMS UI. Status: UI handoff restored on 2026-09-02; backend remains P4.8.
-4. **Add-on operational core:** typed service terms, quantity/person pricing and standalone/reusable/offering-specific semantics on the existing catalog, calendar and segmented pricing authority. Status: completed on 2026-09-02; quote resolution remains deliberately out of scope.
-5. **Add-on CRM/CMS dossier:** a small registry and route-driven editor reusing the shared operational panels plus the canonical `addon_detail` editorial locator/workflow; no second option or content catalog. Status: completed on 2026-09-02.
-6. **Safe public projection:** release-pinned allowlisted add-on DTO/resolver before any operational field becomes public, then resume route-by-route delivery. Status: bounded add-on listing/detail/price-readiness projection completed on 2026-09-02; quote and availability remain fail-closed.
-7. **Booking add-on composition:** assigned resource services inside the stay position, authoritative composite quote/persistence and immutable acceptance on confirmation. Status: completed on 2026-09-03; CMS publication never controls CRM eligibility.
-8. **Next order types:** implement the parent `program` offering/participant quote before ProgramRegistration add-ons, and the parent `event_service` offering/interval quote before Event add-ons. Direct library-to-order pricing is prohibited because it would bypass assignment applicability and create a second price authority.
+- never-published leaf create/reparent is implemented; published moves require redirect contracts, non-leaf moves require subtree contracts;
+- Files/Code remains capability-gated and unavailable for mutation until P4.8 implements artifact binding, versioned drafts and server gates;
+- house/campground/program/event-service publication stays fenced until each typed public resolver is accepted.
 
 ### P4.5E — Safe public offering projections
 
-User-requested CRM composition/promotion increment runs alongside the remaining offering verticals; boundaries and sequential gates are in `CRM-MARKETING-IMPLEMENTATION.md`. Operational promotion and saved-Lead UTM reports do not close P4.7 visitor collection.
+CRM composition/promotion and saved-Lead UTM reports are implemented; their maintained contract is `CRM-MARKETING-IMPLEMENTATION.md`. They do not close P4.6 intake or P4.7 visitor collection.
 
 Status: the bounded add-on gate completed on 2026-09-02 with exact public-profile/revision checks, immutable release dependency pinning, strict listing/detail DTOs, conservative live price readiness, cache tags/ETag and PostgreSQL non-leak coverage. House, campground and later offering kinds still require their own typed resolvers; add-on quote/availability are not implied by this gate.
 
@@ -198,7 +187,7 @@ Order:
 6. articles/information/legal pages;
 7. sitemap/robots/canonical/schema generated from release.
 
-Extend the already established `packages/site-ui` and section registry when new public page patterns are genuinely required; public visual work remains Sol High.
+Extend the already established `packages/site-ui` and section registry when new public page patterns are genuinely required; ownership follows root `../AGENTS.md`.
 
 ### Gate
 
@@ -207,7 +196,7 @@ Extend the already established `packages/site-ui` and section registry when new 
 - fixture fallback is explicit development mode only;
 - Playwright route/preview/publish/rollback/mobile/accessibility;
 - route-by-route visual comparison and no regression of current approved layout without recorded decision.
-- the same operational mutation through CRM or CMS produces one aggregate version/audit history and the same public projection;
+- existing Internal/Admin command adapters share one application authority, aggregate version/audit history and public projection; this does not require operational editors in CMS;
 - Event/ProgramOccurrence/customer comments cannot become release content without an explicit safe offering/profile contract;
 - quote rule provenance and historical snapshots remain reproducible after price-book changes.
 

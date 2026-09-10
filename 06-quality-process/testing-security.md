@@ -1,26 +1,43 @@
-# Testing, accessibility, security
+# Проверки, доступность и безопасность
 
-## Frontend/design-system phase
+Проверять только затронутую границу. Для runtime/UI изменений сначала выполнить короткий live preflight, затем targeted checks; для docs-only и чистого unit/contract анализа live stack не нужен. Полный gate нужен для release или изменения общей границы.
 
-- Vitest для component/presentation logic;
-- visual/dev preview `/dev/ui`;
-- Playwright для критических navigation/responsive flows по мере появления экранов;
-- проверять empty/loading/error/disabled/long content/mobile states.
+## Runtime/UI preflight
 
-## Backend phase
+Сначала проверьте уже запущенный stack и фактический host/port; не запускайте сервисы автоматически как часть первой проверки:
 
-Unit: interval overlap, capacity, prices, transitions, debt, permissions, idempotency, contract serialization, domain→API errors.
+```bash
+lsof -nP -iTCP -sTCP:LISTEN | rg ':(3000|5173|5174|4321)\b'
+```
 
-Integration против PostgreSQL: modules/controllers/Zod pipes/guards/interceptors/filters/repositories/API/CRUD/rollback/FK/version/idempotency/payments/availability/audit/outbox.
+Проверяйте health и затронутый API read endpoint по адресу из listener output (`localhost`, `[::1]` или другой фактический bind), затем откройте затронутый UI route. Shell с HTTP 200 сам по себе не подтверждает рабочий контракт.
 
-Concurrency: real PostgreSQL, row locks, overlapping booking races, optimistic concurrency, constraints/indexes, timezone, cursor pagination, outbox claiming.
+Для API/DB boundary дополнительно read-only сверяйте применённые migrations с `packages/db/src/migrations.ts`, например:
 
-E2E: реальные frontend + API + PostgreSQL.
+```bash
+psql "$DATABASE_URL" -XAtc 'SELECT timestamp,name FROM migrations ORDER BY id DESC LIMIT 1'
+```
+
+Если обязательный endpoint не отвечает, read возвращает schema/contract error или рабочая БД отстаёт от текущего migration registry, это environment blocker: остановиться и зафиксировать его. Не делать автоматический reseed/migrate или переход на fixtures, чтобы скрыть mismatch.
+
+## Матрица риска и проверки
+
+| Изменение | Targeted command | Поведение и stop condition |
+|---|---|---|
+| docs-only | `git diff --check`; `rg -n 'path|command' <changed-docs>`; `test -e <referenced-path>` | Проверить ссылки, команды и diff; unit/full/live suite не запускать без затронутого runtime. |
+| contracts/domain/API без БД | `pnpm --filter @crm/contracts exec vitest run test/<changed>.test.ts -t '<case>'`; аналогично для domain/API | Проверить error shape, permissions, idempotency и serialization; остановиться при изменении общего контракта без consumer check. Для небольшого изменения не запускать весь package suite. |
+| migration, DB guard или concurrency | `pnpm --filter @crm/db exec vitest run src/migrations/<changed>.test.ts`; `pnpm test:integration` | Integration запускается только с `APP_ENV=test`, явным `TEST_DATABASE_URL` вида `*_test_<unique>` и restricted test role. Integration и API E2E получают разные disposable DB targets; не переиспользовать рабочую БД или один target для параллельных suites. Failure миграции, rollback или race блокирует acceptance. |
+| CRM/CMS UI | `pnpm --filter @crm/app exec vitest run src/pages/<changed>.test.tsx -t '<case>'`; `pnpm --filter @crm/admin exec vitest run src/pages/<changed>.test.tsx -t '<case>'` | После live preflight проверить реальный route, dirty/conflict/error/loading/readonly states, keyboard, narrow/mobile и overflow. Неработающий mutation или потеря draft останавливает проверку. |
+| CRM fixture/API flow | Fixture: `pnpm --filter @crm/app exec playwright test e2e/<changed>.spec.ts --project=desktop --grep '<case>'`; API: `pnpm --filter @crm/app exec playwright test --config playwright.api.config.ts e2e-api/<changed>.spec.ts --grep '<case>'` | Fixture и API режимы проверяются отдельно; API E2E имеет собственный fail-closed setup и не использует DB integration fixtures. Расширять до полного suite только при общей границе или риске для других consumers. |
+| public site или `@crm/site-ui` | `pnpm --filter @crm/site architecture`; `pnpm --filter @crm/site typecheck`; `pnpm --filter @crm/site exec playwright test e2e/<changed>.spec.ts --project=desktop-chromium --grep '<case>'` | После live preflight проверить SSR HTML, desktop/mobile, keyboard, reduced motion и long content. Architecture или meaningful HTML regression блокирует acceptance. |
+| migration/public release boundary | `pnpm -r typecheck`; `pnpm -r lint`; `pnpm -r --if-present test`; `pnpm -r build` | Запускать после targeted checks; failures разбираются по затронутому пакету, а не обходятся исключением. |
+
+`<changed>`/`<case>` — подставить существующий файл/сценарий; пути считаются от выбранного package. `packages/db test` запускает только `src/test-database-safety.test.ts`; все migration tests — `pnpm --filter @crm/db exec vitest run src/migrations`. Полные runtime suites: `pnpm test:integration`, `pnpm test:e2e`, `pnpm test:e2e:api`, `pnpm --filter @crm/site test:e2e`. `apps/site`, `packages/site-ui` и `packages/ui` не имеют `test` script; для public consumers используются typecheck/lint, site architecture и site Playwright.
 
 ## Accessibility
 
-Keyboard, focus-visible, focus restoration, labels/errors, DnD alternatives, screen-reader announcements, WCAG AA, `44px` touch targets, safe area, no color-only semantics, icon-only = tooltip + accessible name.
+Проверять keyboard, focus-visible и focus restoration, labels/errors, DnD alternatives, screen-reader announcements, WCAG AA, touch targets не менее `44px`, safe area, отсутствие color-only semantics и accessible name для icon-only controls.
 
 ## Security
 
-Input validation, parameterized queries, CSRF, secure cookies, constrained CORS, public rate limit, no PII in logs, backend permission checks, sensitive data masking, brute-force protection, safe uploads, backup/restore.
+Проверять input validation, parameterized queries, CSRF, secure cookies, constrained CORS, public rate limit, отсутствие PII в логах, backend permission checks, masking, brute-force protection и safe uploads. Backup/restore и production provider checks относятся к go-live gate, а не к каждому локальному UI изменению.

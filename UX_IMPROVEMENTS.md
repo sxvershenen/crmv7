@@ -9,22 +9,10 @@
 - спроектировать безопасный undo для статусов, DnD, назначений и связей с учётом concurrency/idempotency;
 - собрать единую activity timeline клиента: заявки, брони, оплаты, звонки, задачи и изменения связей;
 - добавить массовые действия в реестрах с permissions, progress и частичным failure state.
-
-## Public site ↔ CMS ↔ CRM
-
-- завершить production public intake: anti-spam/rate limit, consent snapshot, UTM/referrer, idempotency, Lead creation, audit/outbox, CRM deep link и уведомления;
-- показать source/owner для пересекающихся данных (`CRM`, `CMS`, `computed`, `inherited`) во всех релевантных CMS flows;
-- добавить render-ready preview/diff и blast-radius перед публикацией, включая stale-preview state;
-- добавить integration health: последняя доставка, очередь, cache invalidation, ошибки/retry и correlation ID;
-- завершить publication quality gate: обязательные media/alt, SEO/canonical/schema, consent/legal и полнота public profile;
-- перенести временные public content fixtures в CMS без визуальной и SEO-регрессии;
-- провести evidence-backed keyword/competitor research до создания новых индексируемых категорий и landing pages.
-
-## Production hardening
-
-- подключить production S3-compatible storage/CDN и внешний fail-closed malware scanning worker;
-- добавить cleanup/DLQ/metrics для неуспешной media processing;
-- утвердить legal privacy/retention/consent policy и provider-specific deployment decisions;
 - проверить end-to-end notifications для заявок, публикаций, ошибок доставки и операционных изменений по ролям и каналам.
 
-При реализации пункт должен перейти в профильный roadmap/log. Не добавлять сюда локальные косметические задачи одного экрана.
+## Phase 4
+
+Public intake, preview/diff, publication quality, CMS migration, delivery UI, media hardening и SEO research ведутся только в `07-phase-4-cms/IMPLEMENTATION-ROADMAP.md`; текущий порядок — в её `README.md`.
+
+Пункты выше — кандидаты для отдельного запроса, не обязательный scope каждого CRM изменения. При выборе переносить конкретный acceptance в задачу; закрытые пункты удалять. Локальные косметические задачи здесь не накапливать.
