@@ -10,7 +10,6 @@ import {
   AddOnTermsMutationResultSchema,
   OfferingEditorialLocatorSchema,
   InternalOfferingQuoteResultSchema,
-  AddOnCatalogItemSchema,
   OfferingBindingTargetLookupResponseSchema,
   ResourcePrimaryStayOfferingLookupResponseSchema,
   ResourceStayOfferingCreateResultSchema,
@@ -20,14 +19,12 @@ import {
   OfferingPricingMutationResultSchema,
   OfferingPricingOutboxEventSchema,
   OfferingConfigurationOutboxEventSchema,
-  type CatalogOffering,
   type OfferingListQuery,
   type OfferingListResponse,
   type AddOnOfferingCreateBody,
   type AddOnOfferingCreateResult,
   type AddOnTermsMutationBody,
   type AddOnTermsMutationResult,
-  type AddOnServiceTerms,
   type HousePriceBookActivateBody,
   type HousePriceBookDraftCreateBody,
   type HousePriceBookDraftReplaceBody,
@@ -46,14 +43,11 @@ import {
   type ResourceVenueOfferingCreateBody,
   type ResourceVenueOfferingCreateResult,
   type OfferingPricingMutationResult,
-  type PriceBook,
-  type PriceWeekday,
   type RatePlanDraft,
   type SessionUser,
 } from "@crm/contracts"
 import {
   BusinessCalendarDateEntity,
-  BusinessCalendarDateOverrideEntity,
   BusinessCalendarEntity,
   CampgroundOfferingTermsEntity,
   CatalogOfferingEntity,
@@ -88,12 +82,12 @@ import {
   validateEventServicePricingForActivation,
   validateVenuePricingForActivation,
   type HousePricingSnapshot,
-  type HouseRatePlan,
-  type ProgramPricingSnapshot,
 } from "@crm/domain"
 
 import { canonicalSha256, deriveOfferingEditorCapabilities } from "./offering-mutation-support.js"
 import { ensureCatalogOfferingEditorialDraft } from "../cms/cms-source-draft.js"
+import { loadEventServicePricingSnapshot, loadHousePricingSnapshot, loadPriceBook, loadPriceBooks, loadProgramPricingSnapshot } from "./offering-editor-pricing-snapshots.js"
+import { addOnCatalogItem, addOnTermsDto, addOnTermsEntity, assignmentDto, bindingDto, offeringDto, quoteDto, resourceBindingTargetDto, resourcePrimaryOfferingSummary, type AddOnTermsRow } from "./offering-editor-projections.js"
 
 export type OfferingRequestContext = Readonly<{
   actor: SessionUser
@@ -110,11 +104,6 @@ type MutationContext = OfferingRequestContext | Readonly<{
 type StoredReplay = { responseBody: Record<string, unknown> | null; operationId: string; idempotencyKey: string; requestHash: string }
 type Cursor = { updatedAt: string; id: string }
 type BindingTargetCursor = { name: string; code: string; id: string }
-type AddOnTermsRow = {
-  offeringId: string; offeringKind: string; serviceType: string; standalone: boolean; categoryKey: string
-  applicableOfferingKinds: string[]; minimumQuantity: number | null; maximumQuantity: number | null
-  defaultQuantity: number | null; quantityStep: number | null; createdAt: Date; createdBy: string | null
-}
 
 @Injectable()
 export class OfferingEditorApplicationService {
@@ -151,7 +140,7 @@ export class OfferingEditorApplicationService {
       : []
     const termsByOfferingId = new Map(campgroundTerms.map((terms) => [terms.offeringId, terms]))
     return {
-      items: items.map((row) => this.offeringDto(row, termsByOfferingId.get(row.id))),
+      items: items.map((row) => offeringDto(row, termsByOfferingId.get(row.id))),
       nextCursor: hasMore && last ? encodeCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id }) : null,
     }
   }
@@ -178,7 +167,7 @@ export class OfferingEditorApplicationService {
         const priceReadiness = offering.salesMode === "request_only" ? "not_sellable"
           : offering.activePriceBookId !== null ? "ready"
             : ownBooks.some((book) => book.state === "draft" || book.state === "scheduled") ? "draft_only" : "missing"
-        return { offering: this.offeringDto(offering, undefined, terms), terms: this.addOnTermsDto(terms), usageCount: usageById.get(offering.id) ?? 0, priceReadiness, editorialNodeId: linkById.get(offering.id)?.nodeId ?? null }
+        return { offering: offeringDto(offering, undefined, terms), terms: addOnTermsDto(terms), usageCount: usageById.get(offering.id) ?? 0, priceReadiness, editorialNodeId: linkById.get(offering.id)?.nodeId ?? null }
       }),
       nextCursor: hasMore && last ? encodeCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id }) : null,
     })
@@ -200,7 +189,7 @@ export class OfferingEditorApplicationService {
     const items = rows.slice(0, query.limit)
     const last = items.at(-1)
     return OfferingBindingTargetLookupResponseSchema.parse({
-      items: items.map((resource) => this.resourceBindingTargetDto(resource)),
+      items: items.map((resource) => resourceBindingTargetDto(resource)),
       nextCursor: rows.length > query.limit && last ? encodeBindingTargetCursor({ name: last.name, code: last.code, id: last.id }) : null,
     })
   }
@@ -258,7 +247,7 @@ export class OfferingEditorApplicationService {
       const editorial = await ensureCatalogOfferingEditorialDraft(manager, { offeringId: offering.id, actorId: context.actor.id, requestId: context.requestId })
       if (editorial.status === "report_only") throw conflict("OFFERING_EDITORIAL_RECONCILIATION_REQUIRED", "Нельзя автоматически связать CMS-черновик; требуется сверка legacy link", editorial.report)
 
-      const response = ResourceStayOfferingCreateResultSchema.parse(this.resourcePrimaryOfferingSummary(offering, kind))
+      const response = ResourceStayOfferingCreateResultSchema.parse(resourcePrimaryOfferingSummary(offering, kind))
       await this.recordStayOfferingCreated(manager, offering, calendar.version, input.operationId, context, hash)
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -304,7 +293,7 @@ export class OfferingEditorApplicationService {
       }))
       const editorial = await ensureCatalogOfferingEditorialDraft(manager, { offeringId: offering.id, actorId: context.actor.id, requestId: context.requestId })
       if (editorial.status === "report_only") throw conflict("OFFERING_EDITORIAL_RECONCILIATION_REQUIRED", "Нельзя автоматически связать CMS-черновик; требуется сверка legacy link", editorial.report)
-      const response = ResourceVenueOfferingCreateResultSchema.parse(this.resourcePrimaryOfferingSummary(offering))
+      const response = ResourceVenueOfferingCreateResultSchema.parse(resourcePrimaryOfferingSummary(offering))
       await this.recordStayOfferingCreated(manager, offering, calendar.version, input.operationId, context, hash)
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -323,7 +312,7 @@ export class OfferingEditorApplicationService {
       .orderBy("offering.code", "ASC")
       .addOrderBy("offering.id", "ASC")
       .getMany()
-    const candidates = rows.map((offering) => this.resourcePrimaryOfferingSummary(offering, offering.kind as "house" | "campground"))
+    const candidates = rows.map((offering) => resourcePrimaryOfferingSummary(offering, offering.kind as "house" | "campground"))
     if (candidates.length === 0) return ResourcePrimaryStayOfferingLookupResponseSchema.parse({ resolution: "none" })
     if (candidates.length === 1) return ResourcePrimaryStayOfferingLookupResponseSchema.parse({ resolution: "linked", offering: candidates[0] })
     return ResourcePrimaryStayOfferingLookupResponseSchema.parse({ resolution: "ambiguous", candidates })
@@ -339,7 +328,7 @@ export class OfferingEditorApplicationService {
       .andWhere("offering.state <> 'archived'")
       .andWhere("offering.kind = 'venue'")
       .orderBy("offering.code", "ASC").addOrderBy("offering.id", "ASC").getMany()
-    const candidates = rows.map((offering) => this.resourcePrimaryOfferingSummary(offering, "venue"))
+    const candidates = rows.map((offering) => resourcePrimaryOfferingSummary(offering, "venue"))
     if (candidates.length === 0) return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "none" })
     if (candidates.length === 1) return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "linked", offering: candidates[0] })
     return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "ambiguous", candidates })
@@ -354,7 +343,7 @@ export class OfferingEditorApplicationService {
       const bindings = offering.kind === "addon" ? [] : await manager.find(OfferingBindingEntity, { where: { offeringId }, order: { createdAt: "ASC" } })
       const activeBindings = bindings.filter((item) => item.archivedAt === null)
       const bindingTargets = offering.kind === "program" || offering.kind === "event_service" ? [] : await this.boundResourceTargets(manager, activeBindings)
-      const priceBooks = await this.loadPriceBooks(manager, offeringId)
+      const priceBooks = await loadPriceBooks(manager, offeringId)
       const assignments = offering.kind === "addon" ? [] : await manager.find(OfferingAddonAssignmentEntity, { where: { offeringId }, order: { displayOrder: "ASC", id: "ASC" } })
       const activeAssignments = assignments.filter((item) => item.archivedAt === null)
       const addOnCatalog = await this.assignedAddOnCatalog(manager, activeAssignments)
@@ -363,13 +352,13 @@ export class OfferingEditorApplicationService {
       const capabilities = deriveOfferingEditorCapabilities(context.actor)
       const canMutateFromSurface = context.entrySurface !== "admin" || capabilities.editorial.canEdit
       const projection = {
-        offering: this.offeringDto(offering, campgroundTerms, addOnTerms),
-        addOnTerms: addOnTerms ? this.addOnTermsDto(addOnTerms) : null,
+        offering: offeringDto(offering, campgroundTerms, addOnTerms),
+        addOnTerms: addOnTerms ? addOnTermsDto(addOnTerms) : null,
         addOnUsages,
-        bindings: activeBindings.map((item) => this.bindingDto(item)),
+        bindings: activeBindings.map((item) => bindingDto(item)),
         bindingTargets,
         priceBooks,
-        addOnAssignments: activeAssignments.map((item) => this.assignmentDto(item)),
+        addOnAssignments: activeAssignments.map((item) => assignmentDto(item)),
         addOnCatalog,
         editorial,
         ownerVersions: {
@@ -463,11 +452,11 @@ export class OfferingEditorApplicationService {
         leadDirection: null, defaultAssigneeId: null, scope: input.scope, ownerOfferingId: input.ownerOfferingId, activePriceBookId: null,
         createdBy: context.actor.id, updatedBy: context.actor.id, archivedAt: null,
       }))
-      const terms = await manager.save(manager.create(AddonOfferingTermsEntity, this.addOnTermsEntity(offering.id, input.terms, input.standalone, context.actor.id) as never))
+      const terms = await manager.save(manager.create(AddonOfferingTermsEntity, addOnTermsEntity(offering.id, input.terms, input.standalone, context.actor.id) as never))
       await this.createAddOnEditorialDraft(manager, offering, context)
       const editorial = await this.editorialLocator(manager, offering)
       if (!editorial) throw unprocessable("OFFERING_EDITORIAL_LOCATOR_INVALID", "Не удалось создать canonical CMS locator")
-      const response = AddOnOfferingCreateResultSchema.parse({ offering: this.offeringDto(offering, undefined, terms), terms: this.addOnTermsDto(terms), subjectVersion: offering.subjectVersion, editorial })
+      const response = AddOnOfferingCreateResultSchema.parse({ offering: offeringDto(offering, undefined, terms), terms: addOnTermsDto(terms), subjectVersion: offering.subjectVersion, editorial })
       await this.recordAddOnMutation(manager, "crm.offering.addon_created", offering, input.operationId, context, { subject: offering.subjectVersion }, hash)
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -486,10 +475,10 @@ export class OfferingEditorApplicationService {
       if (offering.subjectVersion !== input.expectedSubjectVersion) throw conflict("VERSION_CONFLICT", "Условия дополнения были изменены другим пользователем", { segment: "subject", offeringId, expectedVersion: input.expectedSubjectVersion, serverVersion: offering.subjectVersion })
       const terms = await this.requireAddOnTerms(manager, offeringId)
       if (terms.serviceType !== input.terms.serviceType) throw unprocessable("ADDON_SERVICE_TYPE_IMMUTABLE", "Тип услуги дополнения нельзя изменить после создания", { serviceType: terms.serviceType })
-      Object.assign(terms as unknown as AddOnTermsRow, this.addOnTermsEntity(offeringId, input.terms, input.standalone, context.actor.id))
+      Object.assign(terms as unknown as AddOnTermsRow, addOnTermsEntity(offeringId, input.terms, input.standalone, context.actor.id))
       await manager.save(terms)
       const subjectVersion = await this.bumpSubjectVersion(manager, offering, input.expectedSubjectVersion, context.actor.id)
-      const response = AddOnTermsMutationResultSchema.parse({ offeringId, subjectVersion, standalone: input.standalone, terms: this.addOnTermsDto(terms) })
+      const response = AddOnTermsMutationResultSchema.parse({ offeringId, subjectVersion, standalone: input.standalone, terms: addOnTermsDto(terms) })
       await this.recordAddOnMutation(manager, "crm.offering.addon_terms_replaced", offering, input.operationId, context, { subject: subjectVersion }, hash)
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -520,7 +509,7 @@ export class OfferingEditorApplicationService {
       }))
       await this.replaceChildren(manager, book, input.ratePlans, context.actor.id)
       const pricingVersion = await this.bumpPricingVersion(manager, offering, input.expectedPricingVersion, context.actor.id)
-      const response = OfferingPricingMutationResultSchema.parse({ priceBook: await this.loadPriceBook(manager, book.id), pricingVersion })
+      const response = OfferingPricingMutationResultSchema.parse({ priceBook: await loadPriceBook(manager, book.id), pricingVersion })
       await this.recordMutation(manager, "draft_created", offering, book, pricingVersion, input.operationId, context, { revision: book.revision })
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -550,7 +539,7 @@ export class OfferingEditorApplicationService {
       const saved = await manager.save(book)
       await this.replaceChildren(manager, saved, input.ratePlans, context.actor.id)
       const pricingVersion = await this.bumpPricingVersion(manager, offering, input.expectedPricingVersion, context.actor.id)
-      const response = OfferingPricingMutationResultSchema.parse({ priceBook: await this.loadPriceBook(manager, saved.id), pricingVersion })
+      const response = OfferingPricingMutationResultSchema.parse({ priceBook: await loadPriceBook(manager, saved.id), pricingVersion })
       await this.recordMutation(manager, "draft_replaced", offering, saved, pricingVersion, input.operationId, context, { revision: saved.revision })
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
       return response
@@ -572,7 +561,7 @@ export class OfferingEditorApplicationService {
       this.assertActivationTime(book, now)
       await this.assertActivationReady(manager, offering, book)
       const activation = await this.activateLocked(manager, offering, book, now, context.actor.id)
-      const activated = await this.loadPriceBook(manager, book.id)
+      const activated = await loadPriceBook(manager, book.id)
       const activatedEntity = await manager.findOneByOrFail(PriceBookEntity, { id: book.id })
       const response = OfferingPricingMutationResultSchema.parse({ priceBook: activated, pricingVersion: activation.pricingVersion })
       await this.recordMutation(manager, "activated", offering, activatedEntity, activation.pricingVersion, input.operationId, context, {
@@ -606,7 +595,7 @@ export class OfferingEditorApplicationService {
       }).where("id = :id AND state = 'draft'", { id: book.id }).execute()
       if (result.affected !== 1) throw conflict("PRICE_BOOK_NOT_DRAFT", "Состояние прайс-листа изменилось параллельно")
       const pricingVersion = await this.bumpPricingVersion(manager, offering, input.expectedPricingVersion, context.actor.id)
-      const scheduled = await this.loadPriceBook(manager, book.id)
+      const scheduled = await loadPriceBook(manager, book.id)
       const response = OfferingPricingMutationResultSchema.parse({ priceBook: scheduled, pricingVersion })
       const scheduledEntity = await manager.findOneByOrFail(PriceBookEntity, { id: book.id })
       await this.recordMutation(manager, "scheduled", offering, scheduledEntity, pricingVersion, input.operationId, context, { reason: input.reason, scheduledActivationAt: scheduledAt.toISOString() })
@@ -684,7 +673,7 @@ export class OfferingEditorApplicationService {
         : null
       if (!offering.activePriceBookId) throw unprocessable("PRICE_BOOK_NOT_ACTIVE", "Для предложения нет активного прайс-листа")
       const book = await this.lockPriceBook(manager, offeringId, offering.activePriceBookId)
-      const snapshot = await this.loadHousePricingSnapshot(manager, offering, book, input.period.arrivalDate, input.period.departureDate)
+      const snapshot = await loadHousePricingSnapshot(manager, offering, book, input.period.arrivalDate, input.period.departureDate)
       const now = new Date()
       const nextScheduled = await manager.createQueryBuilder(PriceBookEntity, "book").where("book.offering_id = :offeringId", { offeringId }).andWhere("book.state = 'scheduled'").orderBy("book.scheduled_activation_at", "ASC").getOne()
       if (nextScheduled?.scheduledActivationAt && nextScheduled.scheduledActivationAt <= now) {
@@ -703,7 +692,7 @@ export class OfferingEditorApplicationService {
           units: input.quantities.units, currency: input.currency,
         }, trustedContext)
         : await this.resolveCampgroundQuote(manager, offering, snapshot, input, trustedContext)
-      const baseResult = this.quoteDto(calculation, offering.addonAssignmentsVersion)
+      const baseResult = quoteDto(calculation, offering.addonAssignmentsVersion)
       const addOns = await this.calculateAssignedAddOns(manager, offering, input, context, now)
       const validUntil = addOns.validUntil && addOns.validUntil < baseResult.validUntil ? addOns.validUntil : baseResult.validUntil
       const result = InternalOfferingQuoteResultSchema.parse({
@@ -764,7 +753,7 @@ export class OfferingEditorApplicationService {
         throw unprocessable("ADDON_QUANTITY_OUT_OF_RANGE", "Количество дополнительной услуги вне допустимого диапазона", { assignmentId: assignment.id, minimum, maximum, step })
       }
       const book = await this.lockPriceBook(manager, addOn.id, addOn.activePriceBookId)
-      const snapshot = await this.loadHousePricingSnapshot(manager, addOn, book, input.period.arrivalDate, addDays(input.period.arrivalDate, 1))
+      const snapshot = await loadHousePricingSnapshot(manager, addOn, book, input.period.arrivalDate, addDays(input.period.arrivalDate, 1))
       const calculation = resolveAddOnServiceDateQuote(snapshot, {
         offeringId: addOn.id,
         ratePlanKey: assignment.ratePlanKeyOverride,
@@ -947,11 +936,11 @@ export class OfferingEditorApplicationService {
       })
     }
     const toExclusive = book.validToExclusive && book.validToExclusive <= addDays(lastDate, 1) ? book.validToExclusive : addDays(lastDate, 1)
-    const snapshot = await this.loadHousePricingSnapshot(manager, offering, book, book.validFrom, toExclusive)
+    const snapshot = await loadHousePricingSnapshot(manager, offering, book, book.validFrom, toExclusive)
     const issues = offering.kind === "event_service"
-      ? validateEventServicePricingForActivation(await this.loadEventServicePricingSnapshot(manager, offering, book, snapshot), { from: book.validFrom, toExclusive })
+      ? validateEventServicePricingForActivation(await loadEventServicePricingSnapshot(manager, offering, book, snapshot), { from: book.validFrom, toExclusive })
       : offering.kind === "program"
-      ? validateProgramPricingForActivation(await this.loadProgramPricingSnapshot(manager, offering, snapshot), book.validFrom, toExclusive)
+      ? validateProgramPricingForActivation(await loadProgramPricingSnapshot(manager, offering, snapshot), book.validFrom, toExclusive)
       : offering.kind === "addon"
       ? validateAddOnPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireAddOnTerms(manager, offering.id)).serviceType as "quantity_service" | "person_service")
       : offering.kind === "campground"
@@ -960,136 +949,6 @@ export class OfferingEditorApplicationService {
         ? validateVenuePricingForActivation(snapshot, { from: book.validFrom, toExclusive })
       : validateHousePricingForActivation(snapshot, { from: book.validFrom, toExclusive })
     if (issues.length > 0) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Прайс-лист не готов к активации", { issues })
-  }
-
-  private async loadEventServicePricingSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, book: PriceBookEntity, snapshot: HousePricingSnapshot) {
-    const bindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary" } })
-    const live = bindings.filter((binding) => binding.archivedAt === null && binding.eventServiceTemplateId !== null)
-    if (live.length !== 1) throw unprocessable("EVENT_SERVICE_OFFERING_AMBIGUOUS", "Для event-service нужен ровно один primary EventServiceTemplate binding")
-    const template = await manager.findOne(EventServiceTemplateEntity, { where: { id: live[0]!.eventServiceTemplateId! } })
-    if (!template || template.archivedAt !== null) throw unprocessable("EVENT_SERVICE_TEMPLATE_MISMATCH", "Primary EventServiceTemplate недоступен")
-    return {
-      offering: { ...snapshot.offering, subjectVersion: offering.subjectVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion },
-      template: { id: template.id, version: template.version, defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests },
-      priceBook: snapshot.priceBook,
-      ratePlans: snapshot.ratePlans,
-      calendar: snapshot.calendar,
-    }
-  }
-
-  private async loadHousePricingSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, book: PriceBookEntity, from: string, toExclusive: string): Promise<HousePricingSnapshot> {
-    const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId } })
-    if (!calendar) throw unprocessable("BUSINESS_CALENDAR_GAP", "Бизнес-календарь не найден")
-    const officialDates = await manager.createQueryBuilder(BusinessCalendarDateEntity, "day")
-      .where("day.calendar_id = :calendarId", { calendarId: calendar.id })
-      .andWhere("day.local_date >= :from AND day.local_date < :toExclusive", { from, toExclusive })
-      .andWhere("day.archived_at IS NULL")
-      .orderBy("day.local_date", "ASC")
-      .getMany()
-    const overrides = await manager.createQueryBuilder(BusinessCalendarDateOverrideEntity, "override")
-      .where("override.calendar_id = :calendarId", { calendarId: calendar.id })
-      .andWhere("override.local_date >= :from AND override.local_date < :toExclusive", { from, toExclusive })
-      .andWhere("override.state = 'active' AND override.archived_at IS NULL")
-      .getMany()
-    const overrideByDate = new Map(overrides.map((item) => [item.localDate, item]))
-    const plans = await manager.find(RatePlanEntity, { where: { priceBookId: book.id }, order: { sortOrder: "ASC", id: "ASC" } })
-    const rules = plans.length === 0 ? [] : await manager.find(PriceRuleEntity, { where: { ratePlanId: In(plans.map((item) => item.id)) }, order: { priority: "DESC", id: "ASC" } })
-    const rulesByPlan = new Map<string, PriceRuleEntity[]>()
-    for (const item of rules) rulesByPlan.set(item.ratePlanId, [...(rulesByPlan.get(item.ratePlanId) ?? []), item])
-    return {
-      offering: {
-        id: offering.id, version: offering.version, pricingVersion: offering.pricingVersion,
-        kind: offering.kind, state: offering.state, currency: offering.currency,
-        timezone: offering.timezone, businessCalendarId: offering.businessCalendarId,
-        activePriceBookId: offering.activePriceBookId,
-      },
-      priceBook: {
-        id: book.id, version: book.version, revision: book.revision, offeringId: book.offeringId,
-        state: book.state, currency: book.currency, timezone: book.timezone,
-        validFrom: book.validFrom, validToExclusive: book.validToExclusive,
-      },
-      ratePlans: plans.filter((item) => item.archivedAt === null).map((plan) => this.domainRatePlan(plan, rulesByPlan.get(plan.id) ?? [])),
-      calendar: {
-        id: calendar.id, version: calendar.version, state: calendar.state,
-        timezone: calendar.timezone, sourceVersion: calendar.sourceVersion,
-        dates: officialDates.map((day) => {
-          const override = overrideByDate.get(day.localDate)
-          return {
-            date: day.localDate,
-            official: { id: day.id, version: day.version, dayClass: day.officialClass as "weekday" | "weekend" | "holiday", sourceVersion: day.sourceVersion },
-            activeOverride: override ? { id: override.id, version: override.version, dayClass: override.overrideClass as "weekday" | "weekend" | "holiday", reason: override.reason } : null,
-          }
-        }),
-      },
-    }
-  }
-
-  private async loadProgramPricingSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, snapshot: HousePricingSnapshot): Promise<ProgramPricingSnapshot> {
-    const bindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary" } })
-    const live = bindings.filter((binding) => binding.archivedAt === null && binding.programTemplateId !== null)
-    if (live.length !== 1) throw unprocessable("OFFERING_PRIMARY_PROGRAM_TEMPLATE_REQUIRED", "Для программы нужен ровно один primary ProgramTemplate binding")
-    const template = await manager.findOne(ProgramTemplateEntity, { where: { id: live[0]!.programTemplateId! } })
-    if (!template || template.archivedAt !== null) throw unprocessable("OFFERING_PRIMARY_PROGRAM_TEMPLATE_REQUIRED", "Primary ProgramTemplate недоступен")
-    return { ...snapshot, offering: { ...snapshot.offering, subjectVersion: offering.subjectVersion }, template: { id: template.id, version: template.version, durationMinutes: template.durationMinutes, minimumParticipants: template.minimumParticipants, participantLimit: template.participantLimit } }
-  }
-
-  private domainRatePlan(plan: RatePlanEntity, rules: readonly PriceRuleEntity[]): HouseRatePlan {
-    return {
-      id: plan.id, version: plan.version, priceBookId: plan.priceBookId, key: plan.key,
-      label: plan.label, pricingBasis: plan.pricingBasis,
-      quantityMetric: plan.quantityMetric as HouseRatePlan["quantityMetric"],
-      baseAmountMinor: plan.baseAmountMinor, includedQuantity: plan.includedQuantity,
-      baseExtraUnitAmountMinor: plan.baseExtraUnitAmountMinor,
-      minQuantity: plan.minimumQuantity, maxQuantity: plan.maximumQuantity,
-      minDurationMinutes: plan.minimumDurationMinutes, maxDurationMinutes: plan.maximumDurationMinutes,
-      isDefault: plan.isDefault, archived: plan.archivedAt !== null,
-      rules: rules.map((rule) => ({
-        id: rule.id, version: rule.version,
-        dateSelector: rule.selector === "custom_date_override"
-          ? { type: "custom_date_override", from: rule.serviceDateFrom!, toExclusive: rule.serviceDateToExclusive!, label: rule.selectorLabel! }
-          : rule.selector === "recurring_weekdays"
-            ? { type: "recurring_weekdays", days: this.parseRecurringWeekdays(rule.selectorLabel) }
-          : rule.selector === "day_class"
-            ? { type: "day_class", dayClass: rule.dayClass as "weekday" | "weekend" }
-            : { type: rule.selector as "any_date" | "calendar_holiday" },
-        quantityRange: range(rule.minimumQuantity, rule.maximumQuantity),
-        bookingLeadDays: range(rule.minimumBookingLeadDays, rule.maximumBookingLeadDays),
-        durationMinutes: range(rule.minimumDurationMinutes, rule.maximumDurationMinutes),
-        amountMinor: rule.amountMinor, extraUnitAmountMinor: rule.extraUnitAmountMinor,
-        priority: rule.priority, reason: rule.reason, enabled: rule.enabled, archived: rule.archivedAt !== null,
-      })),
-    }
-  }
-
-  private quoteDto(calculation: ReturnType<typeof resolveHousePerNightQuote>, addOnsVersion: number): InternalOfferingQuoteResult {
-    const lines = calculation.lines.map((line) => ({
-      kind: "night" as const,
-      label: `Ночь ${line.serviceDate}`,
-      serviceDate: line.serviceDate,
-      quantity: calculation.input.units,
-      amount: { amountMinor: line.totalAmountMinor, currency: calculation.currency },
-      ratePlanId: line.ratePlan.id,
-      ratePlanVersion: line.ratePlan.version,
-      matchedRuleId: line.matchedRule?.id ?? null,
-      matchedRuleVersion: line.matchedRule?.version ?? null,
-      addOnAssignmentId: null,
-      explanation: line.matchedRule?.selector.type ?? "base",
-    }))
-    return InternalOfferingQuoteResultSchema.parse({
-      quoteId: calculation.quoteId, offeringId: calculation.offeringId,
-      calculatedAt: calculation.calculatedAt, validUntil: calculation.validUntil,
-      leadDays: calculation.leadDays, currency: calculation.currency, lines,
-      total: { amountMinor: calculation.totalAmountMinor, currency: calculation.currency },
-      provenance: {
-        offeringVersion: calculation.offeringVersion, pricingVersion: calculation.pricingVersion,
-        addOnsVersion,
-        priceBookId: calculation.priceBookId, priceBookVersion: calculation.priceBookVersion,
-        businessCalendarId: calculation.calendarId, businessCalendarVersion: calculation.calendarVersion,
-        businessCalendarSourceVersion: calculation.calendarSourceVersion,
-        matchedRuleIds: [...new Set(calculation.lines.flatMap((line) => line.matchedRule ? [line.matchedRule.id] : []))],
-      },
-      immutableSnapshot: true,
-    })
   }
 
   private async replaceChildren(manager: EntityManager, book: PriceBookEntity, drafts: readonly RatePlanDraft[], actorId: string) {
@@ -1191,113 +1050,6 @@ export class OfferingEditorApplicationService {
     }
   }
 
-  private async loadPriceBooks(manager: EntityManager, offeringId: string): Promise<PriceBook[]> {
-    const books = await manager.find(PriceBookEntity, { where: { offeringId }, order: { revision: "DESC" } })
-    const result: PriceBook[] = []
-    for (const book of books.filter((item) => item.archivedAt === null)) result.push(await this.loadPriceBook(manager, book.id))
-    return result
-  }
-
-  private async loadPriceBook(manager: EntityManager, priceBookId: string): Promise<PriceBook> {
-    const book = await manager.findOneByOrFail(PriceBookEntity, { id: priceBookId })
-    const plans = await manager.find(RatePlanEntity, { where: { priceBookId }, order: { sortOrder: "ASC", id: "ASC" } })
-    const rules = plans.length === 0 ? [] : await manager.find(PriceRuleEntity, { where: { ratePlanId: In(plans.map((item) => item.id)) }, order: { priority: "DESC", id: "ASC" } })
-    const byPlan = new Map<string, PriceRuleEntity[]>()
-    for (const rule of rules) byPlan.set(rule.ratePlanId, [...(byPlan.get(rule.ratePlanId) ?? []), rule])
-    return {
-      id: book.id, offeringId: book.offeringId, version: book.version, revision: book.revision,
-      name: book.name, currency: book.currency, timezone: book.timezone,
-      state: book.state as PriceBook["state"], validFrom: book.validFrom,
-      validToExclusive: book.validToExclusive, changeReason: book.changeReason,
-      scheduledActivationAt: book.scheduledActivationAt?.toISOString() ?? null,
-      activatedAt: book.activatedAt?.toISOString() ?? null, retiredAt: book.retiredAt?.toISOString() ?? null,
-      supersedesPriceBookId: book.supersedesPriceBookId,
-      ratePlans: plans.filter((item) => item.archivedAt === null).map((plan) => ({
-        id: plan.id, priceBookId: plan.priceBookId, version: plan.version,
-        key: plan.key, label: plan.label, pricingBasis: plan.pricingBasis as PriceBook["ratePlans"][number]["pricingBasis"],
-        quantityMetric: plan.quantityMetric as PriceBook["ratePlans"][number]["quantityMetric"],
-        baseAmount: plan.baseAmountMinor, includedQuantity: plan.includedQuantity,
-        baseExtraUnitAmount: plan.baseExtraUnitAmountMinor,
-        minQuantity: plan.minimumQuantity, maxQuantity: plan.maximumQuantity,
-        minDurationMinutes: plan.minimumDurationMinutes, maxDurationMinutes: plan.maximumDurationMinutes,
-        isDefault: plan.isDefault, displayOrder: plan.sortOrder,
-        rules: (byPlan.get(plan.id) ?? []).filter((item) => item.archivedAt === null).map((rule) => ({
-          id: rule.id, ratePlanId: rule.ratePlanId, version: rule.version,
-          dateSelector: rule.selector === "custom_date_override"
-            ? { type: "custom_date_override" as const, from: rule.serviceDateFrom!, toExclusive: rule.serviceDateToExclusive!, label: rule.selectorLabel! }
-            : rule.selector === "recurring_weekdays"
-              ? { type: "recurring_weekdays" as const, days: this.parseRecurringWeekdays(rule.selectorLabel) }
-            : rule.selector === "day_class"
-              ? { type: "day_class" as const, dayClass: rule.dayClass as "weekday" | "weekend" }
-              : { type: rule.selector as "any_date" | "calendar_holiday" },
-          quantityRange: range(rule.minimumQuantity, rule.maximumQuantity),
-          bookingLeadDays: range(rule.minimumBookingLeadDays, rule.maximumBookingLeadDays),
-          durationMinutes: range(rule.minimumDurationMinutes, rule.maximumDurationMinutes),
-          amount: rule.amountMinor, extraUnitAmount: rule.extraUnitAmountMinor,
-          priority: rule.priority, reason: rule.reason, enabled: rule.enabled,
-        })),
-      })),
-      createdAt: book.createdAt.toISOString(), updatedAt: book.updatedAt.toISOString(),
-    }
-  }
-
-  private parseRecurringWeekdays(value: string | null): PriceWeekday[] {
-    const allowed = new Set<PriceWeekday>(["mon", "tue", "wed", "thu", "fri", "sat", "sun"])
-    const days = value?.split(",") ?? []
-    if (days.length === 0 || days.some((day) => !allowed.has(day as PriceWeekday)) || new Set(days).size !== days.length) {
-      throw unprocessable("PRICE_RULE_INVALID", "Повторяющиеся дни не настроены")
-    }
-    return days as PriceWeekday[]
-  }
-
-  private offeringDto(row: CatalogOfferingEntity, campgroundTerms?: CampgroundOfferingTermsEntity, addOnTerms?: AddonOfferingTermsEntity): CatalogOffering {
-    const fulfillment: CatalogOffering["fulfillment"] = row.kind === "addon"
-      ? { kind: "addon", serviceType: addOnTerms?.serviceType as AddOnServiceTerms["serviceType"], standalone: addOnTerms?.standalone ?? false, scope: row.scope as "reusable" | "offering_specific", ownerOfferingId: row.ownerOfferingId }
-      : row.kind === "campground"
-      ? {
-        kind: "campground",
-        salesUnit: campgroundTerms?.sellableUnit as "owned_tent" | "own_tent_pitch",
-        allocationMode: campgroundTerms?.inventoryMode as "discrete_inventory" | "shared_capacity",
-        capacityUnit: "tent",
-        stayPricing: "sum_each_local_night",
-      }
-      : row.kind === "venue"
-        ? { kind: "venue", allocationMode: "exclusive_resource", capacityUnit: "guests", pricingMode: "rate_plan" }
-      : row.kind === "program"
-        ? { kind: "program" }
-        : row.kind === "event_service"
-          ? { kind: "event_service" }
-        : { kind: "house", stayPricing: "sum_each_local_night" }
-    return {
-      id: row.id, code: row.code, version: row.version, kind: row.kind as CatalogOffering["kind"],
-      operationalName: row.operationalName, internalComment: row.internalComment,
-      state: row.state as CatalogOffering["state"], salesMode: row.salesMode as CatalogOffering["salesMode"],
-      priceDisplayMode: row.priceDisplayMode as CatalogOffering["priceDisplayMode"],
-      currency: row.currency, timezone: row.timezone, taxMode: row.taxMode as CatalogOffering["taxMode"],
-      businessCalendarId: row.businessCalendarId, fulfillment,
-      activePriceBookId: row.activePriceBookId, archivedAt: row.archivedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
-    }
-  }
-
-  private addOnTermsDto(terms: AddonOfferingTermsEntity): AddOnServiceTerms {
-    const row = terms as unknown as AddOnTermsRow
-    const quantity = terms.serviceType === "quantity_service"
-      ? { metric: "units" as const, min: row.minimumQuantity, max: row.maximumQuantity, default: row.defaultQuantity, step: row.quantityStep }
-      : terms.serviceType === "person_service"
-        ? { metric: "participants" as const, min: row.minimumQuantity, max: row.maximumQuantity, default: row.defaultQuantity, step: row.quantityStep }
-        : null
-    return { serviceType: terms.serviceType as AddOnServiceTerms["serviceType"], categoryKey: terms.categoryKey, applicableOfferingKinds: row.applicableOfferingKinds, quantity } as AddOnServiceTerms
-  }
-
-  private addOnTermsEntity(offeringId: string, terms: AddOnServiceTerms, standalone: boolean, actorId: string): AddOnTermsRow {
-    return {
-      offeringId, offeringKind: "addon", serviceType: terms.serviceType, standalone, categoryKey: terms.categoryKey,
-      applicableOfferingKinds: terms.applicableOfferingKinds, minimumQuantity: terms.quantity?.min ?? null, maximumQuantity: terms.quantity?.max ?? null,
-      defaultQuantity: terms.quantity?.default ?? null, quantityStep: terms.quantity?.step ?? null, createdAt: new Date(), createdBy: actorId,
-    }
-  }
-
   private async addOnUsages(manager: EntityManager, addOnOfferingId: string) {
     const assignments = await manager.find(OfferingAddonAssignmentEntity, { where: { addonOfferingId: addOnOfferingId } })
     const active = assignments.filter((assignment) => assignment.archivedAt === null)
@@ -1308,33 +1060,6 @@ export class OfferingEditorApplicationService {
       const parent = byId.get(assignment.offeringId)
       return !parent || parent.archivedAt !== null ? [] : [{ assignmentId: assignment.id, parentOffering: { id: parent.id, kind: parent.kind, code: parent.code, operationalName: parent.operationalName, state: parent.state }, enabled: assignment.enabled, required: assignment.required, recommended: assignment.recommended, groupKey: assignment.groupKey, displayOrder: assignment.displayOrder }]
     })
-  }
-
-  private bindingDto(row: OfferingBindingEntity) {
-    const target = row.resourceId ? { type: "resource" as const, id: row.resourceId }
-      : row.resourceGroupId ? { type: "resource_group" as const, id: row.resourceGroupId }
-        : row.programTemplateId ? { type: "program_template" as const, id: row.programTemplateId }
-          : { type: "event_service_template" as const, id: row.eventServiceTemplateId! }
-    return {
-      id: row.id, offeringId: row.offeringId, version: row.version, target,
-      role: row.role as "primary" | "required" | "optional" | "shared_area" | "inventory_unit",
-      availabilityRequired: row.availabilityRequired, defaultQuantity: row.quantityDefault,
-      defaultCapacityImpact: row.capacityImpactDefault,
-      preparationBeforeMinutes: row.preparationBeforeMinutes, preparationAfterMinutes: row.preparationAfterMinutes,
-    }
-  }
-
-  private resourceBindingTargetDto(resource: ResourceEntity) {
-    return {
-      type: "resource" as const,
-      id: resource.id,
-      version: resource.version,
-      code: resource.code,
-      name: resource.name,
-      kind: resource.kind,
-      capacity: { mode: resource.capacityMode, total: resource.capacityTotal },
-      archived: resource.archivedAt !== null,
-    }
   }
 
   private async boundResourceTargets(manager: EntityManager, bindings: readonly OfferingBindingEntity[]) {
@@ -1351,7 +1076,7 @@ export class OfferingEditorApplicationService {
     if (missingResourceIds.length) {
       throw unprocessable("OFFERING_BINDING_TARGET_NOT_FOUND", "Связанный ресурс не найден", { resourceIds: missingResourceIds })
     }
-    return resourceIds.map((id) => this.resourceBindingTargetDto(byId.get(id)!))
+    return resourceIds.map((id) => resourceBindingTargetDto(byId.get(id)!))
   }
 
   private async assignedAddOnCatalog(manager: EntityManager, assignments: readonly OfferingAddonAssignmentEntity[]) {
@@ -1370,47 +1095,7 @@ export class OfferingEditorApplicationService {
         throw unprocessable("ADDON_CATALOG_TARGET_INVALID", "Назначенное дополнение не найдено или повреждено", { addOnOfferingId: addOnId })
       }
     }
-    return addOnIds.map((id) => this.addOnCatalogItem(addOnById.get(id)!, termsByOfferingId.get(id)!))
-  }
-
-  private addOnCatalogItem(addOn: CatalogOfferingEntity, terms: AddonOfferingTermsEntity) {
-    const archived = addOn.archivedAt !== null || addOn.state === "archived"
-    const blocker = archived ? "archived" as const
-      : addOn.state !== "active" ? "not_active" as const
-        : addOn.salesMode !== "request_only" && addOn.activePriceBookId === null ? "active_price_book_missing" as const
-          : null
-    const item = {
-      offering: {
-        id: addOn.id,
-        version: addOn.version,
-        code: addOn.code,
-        operationalName: addOn.operationalName,
-        state: addOn.state,
-        salesMode: addOn.salesMode,
-        archived,
-      },
-      serviceType: terms.serviceType,
-      scope: addOn.scope,
-      ownerOfferingId: addOn.ownerOfferingId,
-      categoryKey: terms.categoryKey,
-      standalone: terms.standalone,
-      availability: { status: blocker === null ? "available" as const : "blocked" as const, blocker },
-    }
-    const parsed = AddOnCatalogItemSchema.safeParse(item)
-    if (!parsed.success) throw unprocessable("ADDON_CATALOG_TARGET_INVALID", "Назначенное дополнение имеет некорректные данные", { addOnOfferingId: addOn.id })
-    return parsed.data
-  }
-
-  private assignmentDto(row: OfferingAddonAssignmentEntity) {
-    return {
-      id: row.id, offeringId: row.offeringId, version: row.version,
-      addOnOfferingId: row.addonOfferingId, enabled: row.enabled, required: row.required,
-      recommended: row.recommended, groupKey: row.groupKey,
-      ratePlanKeyOverride: row.ratePlanKeyOverride, labelOverride: row.labelOverride,
-      descriptionOverride: row.descriptionOverride, minQuantityOverride: row.minimumQuantity,
-      maxQuantityOverride: row.maximumQuantity, defaultQuantityOverride: row.defaultQuantity,
-      displayOrder: row.displayOrder,
-    }
+    return addOnIds.map((id) => addOnCatalogItem(addOnById.get(id)!, termsByOfferingId.get(id)!))
   }
 
   private async primarySubjectVersion(manager: EntityManager, bindings: readonly OfferingBindingEntity[]) {
@@ -1511,16 +1196,6 @@ export class OfferingEditorApplicationService {
       eventId: event.eventId, consumer, status: "pending", attempts: 0,
       availableAt: at, processedAt: null, lastError: null, createdAt: at, updatedAt: at,
     })))
-  }
-
-  private resourcePrimaryOfferingSummary(offering: CatalogOfferingEntity, forcedKind?: "house" | "campground" | "venue") {
-    return {
-      offeringId: offering.id,
-      kind: (forcedKind ?? offering.kind) as "house" | "campground" | "venue",
-      code: offering.code,
-      operationalName: offering.operationalName,
-      state: offering.state as "draft" | "active" | "paused" | "archived",
-    }
   }
 
   private async uniqueResourceOfferingCode(manager: EntityManager, resource: ResourceEntity, kind: "house" | "campground" | "venue") {
@@ -1711,10 +1386,6 @@ export class OfferingEditorApplicationService {
       }
     }
   }
-}
-
-function range(minimum: number | null, maximum: number | null) {
-  return minimum === null && maximum === null ? null : { min: minimum ?? 0, max: maximum }
 }
 
 function returningRows<T>(result: unknown): T[] {

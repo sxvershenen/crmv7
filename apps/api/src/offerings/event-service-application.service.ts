@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common"
-import { DataSource, In, IsNull, type EntityManager } from "typeorm"
+import { DataSource, IsNull, type EntityManager } from "typeorm"
 
 import {
   EventServiceOfferingDossierSchema,
@@ -22,11 +22,8 @@ import {
   type EventServiceTemplateReopenBody,
   type EventServiceTemplateRegistryItem,
   type SessionUser,
-  type PriceWeekday,
 } from "@crm/contracts"
 import {
-  BusinessCalendarDateEntity,
-  BusinessCalendarDateOverrideEntity,
   BusinessCalendarEntity,
   CatalogOfferingEntity,
   ChangeLogEntity,
@@ -41,13 +38,12 @@ import {
   OutboxDeliveryEntity,
   OutboxEventEntity,
   PriceBookEntity,
-  PriceRuleEntity,
-  RatePlanEntity,
 } from "@crm/db"
-import { DomainError, resolveEventServiceQuote, type EventServicePricingSnapshot, type HousePriceRule } from "@crm/domain"
+import { DomainError, resolveEventServiceQuote } from "@crm/domain"
 
 import { ensureCatalogOfferingEditorialDraft } from "../cms/cms-source-draft.js"
 import { canonicalSha256 } from "./offering-mutation-support.js"
+import { eventLoadSnapshot, eventLookupItem, eventOfferingDto, eventSummary, eventTemplateDto, localDate } from "./event-service-projections.js"
 
 export type EventServiceRequestContext = Readonly<{ actor: SessionUser; requestId: string; entrySurface: "internal" | "admin" }>
 type StoredReplay = { responseBody: Record<string, unknown> | null; operationId: string; idempotencyKey: string; requestHash: string }
@@ -55,6 +51,8 @@ type StoredReplay = { responseBody: Record<string, unknown> | null; operationId:
 @Injectable()
 export class EventServiceApplicationService {
   constructor(@Inject(DataSource) private readonly dataSource: DataSource) {}
+
+  private templateDto(template: EventServiceTemplateEntity) { return eventTemplateDto(template) }
 
   async registry(query: EventServiceTemplateRegistryQuery, context: EventServiceRequestContext) {
     this.assertRead(context)
@@ -75,7 +73,7 @@ export class EventServiceApplicationService {
       if (query.state && !candidates.some((candidate) => candidate.state === query.state)) continue
       const offering = candidates.length === 1 ? candidates[0]! : null
       const link = offering ? await this.dataSource.manager.findOne(CmsSourceLinkEntity, { where: { sourceKind: "catalog_offering", sourceId: offering.id } }) : null
-      items.push({ template: this.templateDto(template), offering: offering ? this.summary(offering, template, Boolean(link), link?.nodeId ?? null) : null })
+      items.push({ template: this.templateDto(template), offering: offering ? eventSummary(offering, template, Boolean(link), link?.nodeId ?? null) : null })
     }
     const last = templates.slice(0, query.limit).at(-1)
     return EventServiceTemplateRegistryResponseSchema.parse({ items, nextCursor: templates.length > query.limit && last ? encodeEventServiceRegistryCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id }) : null })
@@ -131,7 +129,7 @@ export class EventServiceApplicationService {
       if (candidates.length === 0) return EventServiceOfferingLookupResultSchema.parse({ resolution: "unprepared", eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version })
       const items = await Promise.all(candidates.map(async (offering) => {
         const link = await manager.findOne(CmsSourceLinkEntity, { where: { sourceKind: "catalog_offering", sourceId: offering.id } })
-        return this.lookupItem(offering, template, Boolean(link), link?.nodeId ?? null)
+        return eventLookupItem(offering, template, Boolean(link), link?.nodeId ?? null)
       }))
       if (items.length !== 1) return EventServiceOfferingLookupResultSchema.parse({ resolution: "ambiguous", eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, candidates: items })
       return EventServiceOfferingLookupResultSchema.parse({ resolution: "linked", offering: items[0] })
@@ -261,7 +259,7 @@ export class EventServiceApplicationService {
       const nextScheduled = await manager.createQueryBuilder(PriceBookEntity, "book").where("book.offering_id = :offeringId AND book.state = 'scheduled' AND book.archived_at IS NULL", { offeringId }).orderBy("book.scheduled_activation_at", "ASC").getOne()
       if (nextScheduled?.scheduledActivationAt && nextScheduled.scheduledActivationAt <= now) throw conflict("PRICE_BOOK_NOT_ACTIVE", "Запланированная цена ожидает активации", { priceBookId: nextScheduled.id })
       const serviceDate = localDate(new Date(input.startsAt), offering.timezone)
-      const snapshot = await this.loadSnapshot(manager, offering, template, book, serviceDate)
+      const snapshot = await eventLoadSnapshot(manager, offering, template, book, serviceDate)
       let calculation
       try {
         calculation = resolveEventServiceQuote(snapshot, { offeringId, eventServiceTemplateId: template.id, ratePlanKey: input.ratePlanKey, startsAt: input.startsAt, endsAt: input.endsAt, guests: input.guests, currency: input.currency }, { quoteId: randomUUID(), calculatedAt: now, quoteTtlSeconds: 15 * 60, nextPricingActivationAt: nextScheduled?.scheduledActivationAt ?? null })
@@ -316,7 +314,7 @@ export class EventServiceApplicationService {
     const link = await manager.findOne(CmsSourceLinkEntity, { where: { sourceKind: "catalog_offering", sourceId: offering.id } })
     const editorial = link ? await this.editorial(manager, link, offering) : null
     return EventServiceOfferingDossierSchema.parse({
-      offering: this.offeringDto(offering), template: this.templateDto(template), subjectVersion: offering.subjectVersion,
+      offering: eventOfferingDto(offering), template: this.templateDto(template), subjectVersion: offering.subjectVersion,
       pricingVersion: offering.pricingVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion,
       cmsReady: Boolean(editorial), publicReady: false, editorial,
     })
@@ -344,22 +342,6 @@ export class EventServiceApplicationService {
     }
   }
 
-  private offeringDto(offering: CatalogOfferingEntity) {
-    return { id: offering.id, code: offering.code, version: offering.version, kind: "event_service" as const, operationalName: offering.operationalName, internalComment: offering.internalComment, state: offering.state as "draft" | "active" | "paused" | "archived", activePriceBookId: offering.activePriceBookId, archivedAt: offering.archivedAt?.toISOString() ?? null, createdAt: offering.createdAt.toISOString(), updatedAt: offering.updatedAt.toISOString(), salesMode: offering.salesMode as "request_only" | "quoted" | "selectable", priceDisplayMode: offering.priceDisplayMode as "exact" | "from" | "request", currency: offering.currency, timezone: offering.timezone, taxMode: offering.taxMode as "tax_included" | "tax_excluded" | "not_taxable", businessCalendarId: offering.businessCalendarId, fulfillment: { kind: "event_service" as const } }
-  }
-
-  private templateDto(template: EventServiceTemplateEntity) {
-    return { id: template.id, version: template.version, code: template.code, format: template.format as "wedding" | "corporate" | "birthday" | "other", icon: template.icon as "heart" | "building" | "cake" | "bus", tone: template.tone as "rose" | "violet" | "amber" | "sky", defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests, preparationBeforeMinutes: template.preparationBeforeMinutes, preparationAfterMinutes: template.preparationAfterMinutes, archivedAt: template.archivedAt?.toISOString() ?? null, createdAt: template.createdAt.toISOString(), updatedAt: template.updatedAt.toISOString() }
-  }
-
-  private summary(offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, cmsReady = true, editorialNodeId: string | null = null) {
-    return { offeringId: offering.id, operationalName: offering.operationalName, offeringVersion: offering.version, state: offering.state as "draft" | "active" | "paused" | "archived", subjectVersion: offering.subjectVersion, pricingVersion: offering.pricingVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, cmsReady, publicReady: false as const, editorialNodeId }
-  }
-
-  private lookupItem(offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, cmsReady = true, editorialNodeId: string | null = null) {
-    return { ...this.summary(offering, template, cmsReady, editorialNodeId), code: offering.code, operationalName: offering.operationalName }
-  }
-
   private async findExactOfferings(manager: EntityManager, templateId: string, lock: boolean) {
     const builder = manager.createQueryBuilder(CatalogOfferingEntity, "offering")
     if (lock) builder.setLock("pessimistic_write")
@@ -368,30 +350,6 @@ export class EventServiceApplicationService {
       .andWhere("binding.event_service_template_id = :templateId AND binding.role = 'primary' AND binding.archived_at IS NULL", { templateId })
       .orderBy("offering.id", "ASC").getMany()
   }
-
-  private async loadSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, template: EventServiceTemplateEntity, book: PriceBookEntity, serviceDate: string): Promise<EventServicePricingSnapshot> {
-    const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId } })
-    if (!calendar) throw unprocessable("CALENDAR_NOT_ACTIVE", "Календарь мероприятия не найден")
-    const days = await manager.find(BusinessCalendarDateEntity, { where: { calendarId: calendar.id, localDate: serviceDate } })
-    const overrides = await manager.find(BusinessCalendarDateOverrideEntity, { where: { calendarId: calendar.id, localDate: serviceDate, state: "active" } })
-    const plans = await manager.find(RatePlanEntity, { where: { priceBookId: book.id }, order: { sortOrder: "ASC", id: "ASC" } })
-    const rules = plans.length ? await manager.find(PriceRuleEntity, { where: { ratePlanId: In(plans.map((plan) => plan.id)) }, order: { priority: "DESC", id: "ASC" } }) : []
-    const byPlan = new Map<string, PriceRuleEntity[]>()
-    for (const rule of rules) byPlan.set(rule.ratePlanId, [...(byPlan.get(rule.ratePlanId) ?? []), rule])
-    return {
-      offering: { id: offering.id, version: offering.version, subjectVersion: offering.subjectVersion, pricingVersion: offering.pricingVersion, addOnAssignmentsVersion: offering.addonAssignmentsVersion, kind: offering.kind, state: offering.state, currency: offering.currency, timezone: offering.timezone, businessCalendarId: offering.businessCalendarId, activePriceBookId: offering.activePriceBookId },
-      template: { id: template.id, version: template.version, defaultDurationMinutes: template.defaultDurationMinutes, minimumGuests: template.minimumGuests, maximumGuests: template.maximumGuests, preparationBeforeMinutes: template.preparationBeforeMinutes, preparationAfterMinutes: template.preparationAfterMinutes },
-      priceBook: { id: book.id, version: book.version, revision: book.revision, offeringId: book.offeringId, state: book.state, currency: book.currency, timezone: book.timezone, validFrom: book.validFrom, validToExclusive: book.validToExclusive },
-      ratePlans: plans.filter((plan) => plan.archivedAt === null).map((plan) => ({ id: plan.id, version: plan.version, priceBookId: plan.priceBookId, key: plan.key, label: plan.label, pricingBasis: plan.pricingBasis, quantityMetric: plan.quantityMetric as "guests" | "participants" | "units" | null, baseAmountMinor: plan.baseAmountMinor, includedQuantity: plan.includedQuantity, baseExtraUnitAmountMinor: plan.baseExtraUnitAmountMinor, minQuantity: plan.minimumQuantity, maxQuantity: plan.maximumQuantity, minDurationMinutes: plan.minimumDurationMinutes, maxDurationMinutes: plan.maximumDurationMinutes, isDefault: plan.isDefault, archived: false, rules: (byPlan.get(plan.id) ?? []).map((rule) => this.rule(rule)) })),
-      calendar: { id: calendar.id, version: calendar.version, state: calendar.state, timezone: calendar.timezone, sourceVersion: calendar.sourceVersion, dates: days.filter((day) => day.archivedAt === null).map((day) => ({ date: day.localDate, official: { id: day.id, version: day.version, dayClass: day.officialClass as "weekday" | "weekend" | "holiday", sourceVersion: day.sourceVersion }, activeOverride: overrides.find((override) => override.archivedAt === null)?.id ? { id: overrides.find((override) => override.archivedAt === null)!.id, version: overrides.find((override) => override.archivedAt === null)!.version, dayClass: overrides.find((override) => override.archivedAt === null)!.overrideClass as "weekday" | "weekend" | "holiday", reason: overrides.find((override) => override.archivedAt === null)!.reason } : null })) },
-    }
-  }
-
-  private rule(rule: PriceRuleEntity): HousePriceRule {
-    return { id: rule.id, version: rule.version, dateSelector: rule.selector === "custom_date_override" ? { type: "custom_date_override", from: rule.serviceDateFrom!, toExclusive: rule.serviceDateToExclusive!, label: rule.selectorLabel! } : rule.selector === "recurring_weekdays" ? { type: "recurring_weekdays", days: this.weekdays(rule.selectorLabel) } : rule.selector === "day_class" ? { type: "day_class", dayClass: rule.dayClass as "weekday" | "weekend" } : { type: rule.selector as "any_date" | "calendar_holiday" }, quantityRange: range(rule.minimumQuantity, rule.maximumQuantity), bookingLeadDays: range(rule.minimumBookingLeadDays, rule.maximumBookingLeadDays), durationMinutes: range(rule.minimumDurationMinutes, rule.maximumDurationMinutes), amountMinor: rule.amountMinor, extraUnitAmountMinor: rule.extraUnitAmountMinor, priority: rule.priority, reason: rule.reason, enabled: rule.enabled, archived: rule.archivedAt !== null }
-  }
-
-  private weekdays(value: string | null): PriceWeekday[] { const allowed = new Set<PriceWeekday>(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]); const days = value?.split(",") ?? []; if (!days.length || days.some((day) => !allowed.has(day as PriceWeekday))) throw unprocessable("PRICE_RULE_INVALID", "Повторяющиеся дни не настроены"); return days as PriceWeekday[] }
 
   private async uniqueCode(manager: EntityManager, template: EventServiceTemplateEntity) { const base = `EVENT-${template.code}`.slice(0, 120); if (!await manager.findOne(CatalogOfferingEntity, { where: { code: base } })) return base; throw conflict("OFFERING_CODE_CONFLICT", "Код event-service offering уже занят", { code: base }) }
 
@@ -424,9 +382,6 @@ export class EventServiceApplicationService {
   private assertVersion(actual: number, expected: number, segment: string) { if (actual !== expected) throw conflict("VERSION_CONFLICT", "Сегмент был изменён другим пользователем", { segment, expectedVersion: expected, serverVersion: actual }) }
   private async serializable<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> { for (let attempt = 0; ; attempt += 1) { try { return await this.dataSource.transaction("SERIALIZABLE", operation) } catch (error) { const driver = (error as { driverError?: { code?: string; constraint?: string }; code?: string; constraint?: string }).driverError ?? error as { code?: string; constraint?: string }; if (driver.code === "23505" && driver.constraint === "event_service_templates_code_unique") throw conflict("EVENT_SERVICE_TEMPLATE_CODE_CONFLICT", "Технический код шаблона мероприятия уже занят"); const retryableUnique = driver.code === "23505" && ["catalog_offerings_code_unique", "offering_bindings_one_live_event_service_primary_idx", "offering_bindings_one_primary_idx"].includes(driver.constraint ?? ""); if (attempt >= 2 || driver.code !== "40001" && driver.code !== "40P01" && !retryableUnique) throw error } } }
 }
-
-function range(min: number | null, max: number | null) { return min === null && max === null ? null : { min: min ?? 0, max } }
-function localDate(value: Date, timezone: string) { try { return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(value) } catch { throw unprocessable("PRICING_TIMEZONE_MISMATCH", "Часовой пояс предложения некорректен") } }
 function escapeLike(value: string) { return value.replace(/[\\%_]/g, "\\$&") }
 export function encodeEventServiceRegistryCursor(value: { updatedAt: string; id: string }) { return Buffer.from(JSON.stringify(value), "utf8").toString("base64url") }
 export function decodeEventServiceRegistryCursor(value: string): { updatedAt: Date; id: string } {

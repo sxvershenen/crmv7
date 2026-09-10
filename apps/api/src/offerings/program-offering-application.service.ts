@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common"
-import { DataSource, In, IsNull, type EntityManager } from "typeorm"
+import { DataSource, IsNull, type EntityManager } from "typeorm"
 
 import {
   OfferingConfigurationOutboxEventSchema,
@@ -10,7 +10,6 @@ import {
   ProgramOfferingQuoteResultSchema,
   ProgramRegistrationQuoteOperationalContextSchema,
   ProgramRegistrationQuoteResultSchema,
-  type ProgramOfferingLookupItem,
   type ProgramOfferingLookupResult,
   type ProgramOfferingPrepareBody,
   type ProgramOfferingPrepareResult,
@@ -18,18 +17,13 @@ import {
   type ProgramOfferingQuoteResult,
   type ProgramRegistrationQuoteBody,
   type ProgramRegistrationQuoteResult,
-  type PriceWeekday,
   type SessionUser,
 } from "@crm/contracts"
 import {
-  BusinessCalendarDateEntity,
-  BusinessCalendarDateOverrideEntity,
   BusinessCalendarEntity,
   AddonOfferingTermsEntity,
   CatalogOfferingEntity,
   ChangeLogEntity,
-  CmsNodeEntity,
-  CmsSourceLinkEntity,
   IdempotencyKeyEntity,
   OfferingBindingEntity,
   OfferingAddonAssignmentEntity,
@@ -37,15 +31,14 @@ import {
   OutboxDeliveryEntity,
   OutboxEventEntity,
   PriceBookEntity,
-  PriceRuleEntity,
   ProgramTemplateEntity,
   ProgramOccurrenceEntity,
-  RatePlanEntity,
 } from "@crm/db"
-import { DomainError, resolveAddOnServiceDateQuote, resolveProgramTemplateQuote, type HousePriceRule, type HousePricingSnapshot, type ProgramPricingSnapshot } from "@crm/domain"
+import { DomainError, resolveAddOnServiceDateQuote, resolveProgramTemplateQuote } from "@crm/domain"
 
 import { ensureCatalogOfferingEditorialDraft } from "../cms/cms-source-draft.js"
 import { canonicalSha256 } from "./offering-mutation-support.js"
+import { programLoadAddOnSnapshot, programLoadSnapshot, programLookupItem } from "./program-offering-projections.js"
 
 export type ProgramOfferingRequestContext = Readonly<{ actor: SessionUser; requestId: string; entrySurface: "internal" | "admin" }>
 type StoredReplay = { responseBody: Record<string, unknown> | null; operationId: string; idempotencyKey: string; requestHash: string }
@@ -61,7 +54,7 @@ export class ProgramOfferingApplicationService {
       if (!template || template.archivedAt !== null) throw new NotFoundException({ code: "PROGRAM_TEMPLATE_NOT_FOUND", message: "Шаблон программы не найден" })
       const offerings = await this.findExactOfferings(manager, template.id, false)
       if (offerings.length === 0) return ProgramOfferingLookupResultSchema.parse({ resolution: "unprepared", programTemplateId: template.id, programTemplateVersion: template.version })
-      const candidates = await Promise.all(offerings.map((offering) => this.lookupItem(manager, offering, template)))
+      const candidates = await Promise.all(offerings.map((offering) => programLookupItem(manager, offering, template)))
       if (candidates.length === 1) return ProgramOfferingLookupResultSchema.parse({ resolution: "linked", offering: candidates[0] })
       return ProgramOfferingLookupResultSchema.parse({ resolution: "ambiguous", programTemplateId: template.id, programTemplateVersion: template.version, candidates })
     })
@@ -134,7 +127,7 @@ export class ProgramOfferingApplicationService {
       const now = new Date()
       const nextScheduled = await manager.createQueryBuilder(PriceBookEntity, "book").where("book.offering_id = :offeringId AND book.state = 'scheduled'", { offeringId: offering.id }).orderBy("book.scheduled_activation_at", "ASC").getOne()
       if (nextScheduled?.scheduledActivationAt && nextScheduled.scheduledActivationAt <= now) throw conflict("PRICE_BOOK_NOT_ACTIVE", "Запланированная цена ожидает активации", { priceBookId: nextScheduled.id })
-      const snapshot = await this.loadSnapshot(manager, offering, template, book, input.serviceDate)
+      const snapshot = await programLoadSnapshot(manager, offering, template, book, input.serviceDate)
       let calculation
       try {
         calculation = resolveProgramTemplateQuote(snapshot, {
@@ -200,7 +193,7 @@ export class ProgramOfferingApplicationService {
       const book = await manager.createQueryBuilder(PriceBookEntity, "book").setLock("pessimistic_write").where("book.id = :id AND book.offering_id = :offeringId", { id: offering.activePriceBookId, offeringId: offering.id }).getOne()
       if (!book || book.archivedAt !== null || book.state !== "active") throw unprocessable("PRICE_BOOK_NOT_ACTIVE", "Активная цена программы недоступна")
       const serviceDate = localDate(occurrence.startsAt, offering.timezone)
-      const snapshot = await this.loadSnapshot(manager, offering, template, book, serviceDate)
+      const snapshot = await programLoadSnapshot(manager, offering, template, book, serviceDate)
       const override = occurrence.ratePlanOverrideId === null ? null : snapshot.ratePlans.find((plan) => plan.id === occurrence.ratePlanOverrideId)
       if (occurrence.ratePlanOverrideId !== null && !override) throw unprocessable("RATE_PLAN_OVERRIDE_INVALID", "Тариф проведения больше недоступен")
       if (override && input.ratePlanKey !== null && input.ratePlanKey !== override.key) throw unprocessable("RATE_PLAN_OVERRIDE_MISMATCH", "Для проведения закреплён другой тариф")
@@ -270,7 +263,7 @@ export class ProgramOfferingApplicationService {
       if (addOn.currency !== input.currency || !addOn.activePriceBookId) throw unprocessable("ADDON_PRICE_BOOK_NOT_ACTIVE", "Для дополнительной услуги нет активной цены", { assignmentId: assignment.id })
       const book = await manager.createQueryBuilder(PriceBookEntity, "book").setLock("pessimistic_write").where("book.id = :id AND book.offering_id = :offeringId", { id: addOn.activePriceBookId, offeringId: addOn.id }).getOne()
       if (!book || book.archivedAt !== null || book.state !== "active") throw unprocessable("ADDON_PRICE_BOOK_NOT_ACTIVE", "Для дополнительной услуги нет активной цены", { assignmentId: assignment.id })
-      const snapshot = await this.loadAddOnSnapshot(manager, addOn, book, serviceDate)
+      const snapshot = await programLoadAddOnSnapshot(manager, addOn, book, serviceDate)
       let calculation
       try {
         calculation = resolveAddOnServiceDateQuote(snapshot, { offeringId: addOn.id, ratePlanKey: assignment.ratePlanKeyOverride, serviceDate, quantity: selection.quantity, serviceType: terms.serviceType, currency: input.currency }, { quoteId: randomUUID(), calculatedAt: now, quoteTtlSeconds: 15 * 60, nextPricingActivationAt: null })
@@ -288,23 +281,6 @@ export class ProgramOfferingApplicationService {
     return { lines, provenance, validUntil: validUntil && validUntil < ttl ? validUntil.toISOString() : input.addOns.length ? ttl.toISOString() : null }
   }
 
-  private async loadAddOnSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, book: PriceBookEntity, serviceDate: string): Promise<HousePricingSnapshot> {
-    const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId } })
-    if (!calendar) throw unprocessable("CALENDAR_NOT_ACTIVE", "Календарь дополнительной услуги недоступен")
-    const days = (await manager.find(BusinessCalendarDateEntity, { where: { calendarId: calendar.id, localDate: serviceDate } })).filter((day) => day.archivedAt === null)
-    const overrides = (await manager.find(BusinessCalendarDateOverrideEntity, { where: { calendarId: calendar.id, localDate: serviceDate, state: "active" } })).filter((item) => item.archivedAt === null)
-    const plans = await manager.find(RatePlanEntity, { where: { priceBookId: book.id }, order: { sortOrder: "ASC", id: "ASC" } })
-    const rules = plans.length ? await manager.find(PriceRuleEntity, { where: { ratePlanId: In(plans.map((plan) => plan.id)) }, order: { priority: "DESC", id: "ASC" } }) : []
-    const byPlan = new Map<string, PriceRuleEntity[]>()
-    for (const rule of rules) byPlan.set(rule.ratePlanId, [...(byPlan.get(rule.ratePlanId) ?? []), rule])
-    return {
-      offering: { id: offering.id, version: offering.version, pricingVersion: offering.pricingVersion, kind: offering.kind, state: offering.state, currency: offering.currency, timezone: offering.timezone, businessCalendarId: offering.businessCalendarId, activePriceBookId: offering.activePriceBookId },
-      priceBook: { id: book.id, version: book.version, revision: book.revision, offeringId: book.offeringId, state: book.state, currency: book.currency, timezone: book.timezone, validFrom: book.validFrom, validToExclusive: book.validToExclusive },
-      ratePlans: plans.filter((plan) => plan.archivedAt === null).map((plan) => ({ id: plan.id, version: plan.version, priceBookId: plan.priceBookId, key: plan.key, label: plan.label, pricingBasis: plan.pricingBasis, quantityMetric: plan.quantityMetric as "guests" | "participants" | "units" | null, baseAmountMinor: plan.baseAmountMinor, includedQuantity: plan.includedQuantity, baseExtraUnitAmountMinor: plan.baseExtraUnitAmountMinor, minQuantity: plan.minimumQuantity, maxQuantity: plan.maximumQuantity, minDurationMinutes: plan.minimumDurationMinutes, maxDurationMinutes: plan.maximumDurationMinutes, isDefault: plan.isDefault, archived: false, rules: (byPlan.get(plan.id) ?? []).map((rule) => this.rule(rule)) })),
-      calendar: { id: calendar.id, version: calendar.version, state: calendar.state, timezone: calendar.timezone, sourceVersion: calendar.sourceVersion, dates: days.map((day) => ({ date: day.localDate, official: { id: day.id, version: day.version, dayClass: day.officialClass as "weekday" | "weekend" | "holiday", sourceVersion: day.sourceVersion }, activeOverride: overrides[0] ? { id: overrides[0].id, version: overrides[0].version, dayClass: overrides[0].overrideClass as "weekday" | "weekend" | "holiday", reason: overrides[0].reason } : null })) },
-    }
-  }
-
   private async findExactOfferings(manager: EntityManager, templateId: string, lock: boolean) {
     const builder = manager.createQueryBuilder(CatalogOfferingEntity, "offering")
     if (lock) builder.setLock("pessimistic_write")
@@ -313,50 +289,6 @@ export class ProgramOfferingApplicationService {
       .andWhere("binding.program_template_id = :templateId AND binding.role = 'primary' AND binding.archived_at IS NULL", { templateId })
       .orderBy("offering.id", "ASC").getMany()
   }
-
-  private async lookupItem(manager: EntityManager, offering: CatalogOfferingEntity, template: ProgramTemplateEntity): Promise<ProgramOfferingLookupItem> {
-    const link = await manager.findOne(CmsSourceLinkEntity, { where: { sourceKind: "catalog_offering", sourceId: offering.id } })
-    const node = link ? await manager.findOne(CmsNodeEntity, { where: { id: link.nodeId } }) : null
-    return {
-      offeringId: offering.id,
-      offeringVersion: offering.version,
-      subjectVersion: offering.subjectVersion,
-      pricingVersion: offering.pricingVersion,
-      addOnAssignmentsVersion: offering.addonAssignmentsVersion,
-      programTemplateId: template.id,
-      programTemplateVersion: template.version,
-      state: offering.state as ProgramOfferingLookupItem["state"],
-      cmsReady: Boolean(link && node?.kind === "program_detail" && node.status === "active" && node.archivedAt === null),
-      publicReady: false,
-      editorialNodeId: link?.nodeId ?? null,
-    }
-  }
-
-  private async loadSnapshot(manager: EntityManager, offering: CatalogOfferingEntity, template: ProgramTemplateEntity, book: PriceBookEntity, serviceDate: string): Promise<ProgramPricingSnapshot> {
-    const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId } })
-    if (!calendar) throw unprocessable("CALENDAR_NOT_ACTIVE", "Бизнес-календарь программы не найден")
-    const days = await manager.find(BusinessCalendarDateEntity, { where: { calendarId: calendar.id, localDate: serviceDate } })
-    const liveDays = days.filter((day) => day.archivedAt === null)
-    const overrides = await manager.find(BusinessCalendarDateOverrideEntity, { where: { calendarId: calendar.id, localDate: serviceDate, state: "active" } })
-    const liveOverrides = overrides.filter((override) => override.archivedAt === null)
-    const plans = await manager.find(RatePlanEntity, { where: { priceBookId: book.id }, order: { sortOrder: "ASC", id: "ASC" } })
-    const rules = plans.length ? await manager.find(PriceRuleEntity, { where: { ratePlanId: In(plans.map((plan) => plan.id)) }, order: { priority: "DESC", id: "ASC" } }) : []
-    const byPlan = new Map<string, PriceRuleEntity[]>()
-    for (const rule of rules) byPlan.set(rule.ratePlanId, [...(byPlan.get(rule.ratePlanId) ?? []), rule])
-    return {
-      offering: { id: offering.id, version: offering.version, subjectVersion: offering.subjectVersion, pricingVersion: offering.pricingVersion, kind: offering.kind, state: offering.state, currency: offering.currency, timezone: offering.timezone, businessCalendarId: offering.businessCalendarId, activePriceBookId: offering.activePriceBookId },
-      template: { id: template.id, version: template.version, durationMinutes: template.durationMinutes, minimumParticipants: template.minimumParticipants, participantLimit: template.participantLimit },
-      priceBook: { id: book.id, version: book.version, revision: book.revision, offeringId: book.offeringId, state: book.state, currency: book.currency, timezone: book.timezone, validFrom: book.validFrom, validToExclusive: book.validToExclusive },
-      ratePlans: plans.filter((plan) => plan.archivedAt === null).map((plan) => ({ id: plan.id, version: plan.version, priceBookId: plan.priceBookId, key: plan.key, label: plan.label, pricingBasis: plan.pricingBasis, quantityMetric: plan.quantityMetric as "guests" | "participants" | "units" | null, baseAmountMinor: plan.baseAmountMinor, includedQuantity: plan.includedQuantity, baseExtraUnitAmountMinor: plan.baseExtraUnitAmountMinor, minQuantity: plan.minimumQuantity, maxQuantity: plan.maximumQuantity, minDurationMinutes: plan.minimumDurationMinutes, maxDurationMinutes: plan.maximumDurationMinutes, isDefault: plan.isDefault, archived: plan.archivedAt !== null, rules: (byPlan.get(plan.id) ?? []).map((rule) => this.rule(rule)) })),
-      calendar: { id: calendar.id, version: calendar.version, state: calendar.state, timezone: calendar.timezone, sourceVersion: calendar.sourceVersion, dates: liveDays.map((day) => ({ date: day.localDate, official: { id: day.id, version: day.version, dayClass: day.officialClass as "weekday" | "weekend" | "holiday", sourceVersion: day.sourceVersion }, activeOverride: liveOverrides[0] ? { id: liveOverrides[0].id, version: liveOverrides[0].version, dayClass: liveOverrides[0].overrideClass as "weekday" | "weekend" | "holiday", reason: liveOverrides[0].reason } : null })) },
-    }
-  }
-
-  private rule(rule: PriceRuleEntity): HousePriceRule {
-    return { id: rule.id, version: rule.version, dateSelector: rule.selector === "custom_date_override" ? { type: "custom_date_override", from: rule.serviceDateFrom!, toExclusive: rule.serviceDateToExclusive!, label: rule.selectorLabel! } : rule.selector === "recurring_weekdays" ? { type: "recurring_weekdays", days: this.weekdays(rule.selectorLabel) } : rule.selector === "day_class" ? { type: "day_class", dayClass: rule.dayClass as "weekday" | "weekend" } : { type: rule.selector as "any_date" | "calendar_holiday" }, quantityRange: range(rule.minimumQuantity, rule.maximumQuantity), bookingLeadDays: range(rule.minimumBookingLeadDays, rule.maximumBookingLeadDays), durationMinutes: range(rule.minimumDurationMinutes, rule.maximumDurationMinutes), amountMinor: rule.amountMinor, extraUnitAmountMinor: rule.extraUnitAmountMinor, priority: rule.priority, reason: rule.reason, enabled: rule.enabled, archived: rule.archivedAt !== null }
-  }
-
-  private weekdays(value: string | null): PriceWeekday[] { const allowed = new Set<PriceWeekday>(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]); const days = value?.split(",") ?? []; if (!days.length || days.some((day) => !allowed.has(day as PriceWeekday))) throw unprocessable("PRICE_RULE_INVALID", "Повторяющиеся дни не настроены"); return days as PriceWeekday[] }
   private async uniqueCode(manager: EntityManager, template: ProgramTemplateEntity) { const base = `PROGRAM-${template.code}`.slice(0, 120); if (!await manager.findOne(CatalogOfferingEntity, { where: { code: base } })) return base; throw conflict("OFFERING_CODE_CONFLICT", "Код program offering уже занят", { code: base }) }
 
   private async recordPrepared(manager: EntityManager, offering: CatalogOfferingEntity, template: ProgramTemplateEntity, calendar: BusinessCalendarEntity, operationId: string, context: ProgramOfferingRequestContext, configurationHash: string) {
@@ -376,8 +308,6 @@ export class ProgramOfferingApplicationService {
   private assertCreate(context: ProgramOfferingRequestContext) { if (!context.actor.capabilities.canCreate || !context.actor.capabilities.canEdit || context.entrySurface === "admin" && context.actor.capabilities.canEditContent !== true) throw new ForbiddenException({ code: "PERMISSION_DENIED", message: "Недостаточно прав для подготовки программы" }) }
   private async serializable<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> { for (let attempt = 0; ; attempt += 1) { try { return await this.dataSource.transaction("SERIALIZABLE", operation) } catch (error) { const driver = (error as { driverError?: { code?: string; constraint?: string }; code?: string; constraint?: string }).driverError ?? error as { code?: string; constraint?: string }; const retryableUnique = driver.code === "23505" && (driver.constraint === "catalog_offerings_code_unique" || driver.constraint === "offering_bindings_one_live_program_primary_idx"); if (attempt >= 2 || driver.code !== "40001" && driver.code !== "40P01" && !retryableUnique) throw error } } }
 }
-
-function range(min: number | null, max: number | null) { return min === null && max === null ? null : { min: min ?? 0, max } }
 function localDate(value: Date, timezone: string) { const parts = new Intl.DateTimeFormat("en", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value); const get = (type: "year" | "month" | "day") => parts.find((item) => item.type === type)!.value; return `${get("year")}-${get("month")}-${get("day")}` }
 function conflict(code: string, message: string, details: Record<string, unknown> = {}) { return new ConflictException({ code, message, details }) }
 function unprocessable(code: string, message: string, details: Record<string, unknown> = {}) { return new UnprocessableEntityException({ code, message, details }) }
