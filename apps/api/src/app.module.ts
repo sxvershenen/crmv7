@@ -38,6 +38,7 @@ import { MarketingModule } from "./marketing/marketing.module.js"
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ["../../.env", ".env"],
       validate: (environment) => parseServerEnvironment(environment as NodeJS.ProcessEnv),
     }),
     LoggerModule.forRootAsync({

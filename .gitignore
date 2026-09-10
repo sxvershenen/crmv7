@@ -8,3 +8,4 @@ test-results
 .seo-cache/
 .DS_Store
 *.local
+.env
