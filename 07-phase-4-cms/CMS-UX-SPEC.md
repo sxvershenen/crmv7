@@ -209,6 +209,8 @@ Tabs:
 
 `Why us` редактируется тем же typed flow: надзаголовок/заголовок/описание, упорядоченные факты и командный блок. Неполный черновик сохраняется; пустой заголовок, факт или поле командного блока, повторяющиеся fact IDs и неизвестные поля блокируют публикацию. Форма версии 1 пишет полный scalar override `eyebrow`, `title`, `description`, `facts`, `team`; составные patches и неизвестные версии остаются readonly. Фотография командного блока сохраняет текущий approved presentation asset до отдельного media binding.
 
+Остальные стандартные секции главной (`events`, `houses`, `sauna-chan`, `programs`, `venues`, `blog`, `reviews`, `map`, `faq/directions`, `calculator`) используют shared renderer `homepage-section` версии 1. В typed форме редактируются надзаголовок, заголовок, описание и внутренний CTA; published release сохраняет их `order` и visibility. Footer остаётся typed global navigation/settings slot. Содержимое operational карточек, цены, availability, capacity и live event facts остаётся за соответствующими safe public projections и не копируется в CMS.
+
 ## 9. Посадочная страница
 
 Поля `Содержимое`:

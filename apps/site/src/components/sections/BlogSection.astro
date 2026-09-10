@@ -1,7 +1,12 @@
 ---
 import BlogSectionIsland from "../islands/BlogSectionIsland"
+import type { CmsHomeSectionConfig } from "@crm/contracts"
+import { DEFAULT_HOMEPAGE_SECTION_CONFIGS } from "../../data/publicContentDefaults"
+
+interface Props { config?: CmsHomeSectionConfig }
+const { config = DEFAULT_HOMEPAGE_SECTION_CONFIGS.blog } = Astro.props
 ---
 
 <!-- Keep the complete React composition on one renderer boundary. Astro JSX children
      are not React nodes and otherwise abort SSR before all sections below the blog. -->
-<BlogSectionIsland client:visible />
+<BlogSectionIsland config={config} client:visible />

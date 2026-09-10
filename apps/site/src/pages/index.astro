@@ -1,7 +1,5 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro"
-import { CmsPartnersSectionSchema, CmsWhyUsSectionSchema } from "@crm/contracts"
-import { DEFAULT_PARTNERS_CONFIG, DEFAULT_WHY_US_CONFIG } from "../data/publicContentDefaults"
 import SitePageFrame from "@crm/site-ui/astro/SitePageFrame"
 import SitePageShell from "@crm/site-ui/astro/SitePageShell"
 import { publicRoute, siteIdentity } from "../lib/content"
@@ -23,14 +21,12 @@ import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
 import ContentFailure from "../components/ContentFailure.astro"
 import { fixtureContentEnabled, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import { getHomepageSections } from "../lib/content/homepage-sections"
 
 const result = fixtureContentEnabled ? null : await getPublishedRoute("/")
 const publishedPage = result?.status === "published" ? result.value.page : null
 const publishedSiteSettings = result?.status === "published" ? result.value.settings : null
-const partnersSection = publishedPage?.sections.find((section) => section.key === "partners")
-const partnersConfig = fixtureContentEnabled ? DEFAULT_PARTNERS_CONFIG : partnersSection ? CmsPartnersSectionSchema.parse(partnersSection).config : null
-const whyUsSection = publishedPage?.sections.find((section) => section.key === "why-us")
-const whyUsConfig = fixtureContentEnabled ? DEFAULT_WHY_US_CONFIG : whyUsSection ? CmsWhyUsSectionSchema.parse(whyUsSection).config : null
+const homepageSections = getHomepageSections(publishedPage, fixtureContentEnabled)
 const failure = result && result.status !== "published" ? result.status : null
 const contentAvailable = !failure
 if (failure) {
@@ -49,7 +45,6 @@ const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSit
 // Inheritance and disabled slots have already been materialized by the release.
 const effectiveHero = publishedPage?.hero
 const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
-const sectionEnabled = (key: string) => fixtureContentEnabled || Boolean(publishedPage?.sections.some((section) => section.key === key))
 const failureTitle = failure === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"
 ---
 
@@ -68,21 +63,24 @@ const failureTitle = failure === "not_found" ? "Страница не найде
     {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
       {(fixtureContentEnabled || hero) && <HeroIsland {...(hero ? { hero } : {})} client:load />}
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
-      {sectionEnabled("events") && <EventsIsland client:visible />}
-      {sectionEnabled("houses") && <HousesIsland client:visible />}
-      {sectionEnabled("sauna-chan") && <SaunaChanIsland client:visible />}
-      {sectionEnabled("programs") && <ProgramsIsland client:visible />}
-      {sectionEnabled("venues") && <VenuesIsland client:visible />}
-      {sectionEnabled("blog") && <BlogSection />}
-      {whyUsConfig && <WhyUsSection config={whyUsConfig} />}
-      {sectionEnabled("reviews") && <ReviewsIsland client:visible />}
-      {sectionEnabled("map") && <TerritoryMapIsland client:visible />}
-      {(sectionEnabled("faq") || sectionEnabled("directions")) && <FaqLocationIsland client:visible />}
-      {sectionEnabled("calculator") && <BookingQuizIsland client:visible />}
-      {partnersConfig && <PartnersMarquee config={partnersConfig} />}
+      {homepageSections.map((section) => {
+        if (section.key === "events") return <EventsIsland config={section.config} client:visible />
+        if (section.key === "houses") return <HousesIsland config={section.config} client:visible />
+        if (section.key === "sauna-chan") return <SaunaChanIsland config={section.config} client:visible />
+        if (section.key === "programs") return <ProgramsIsland config={section.config} client:visible />
+        if (section.key === "venues") return <VenuesIsland config={section.config} client:visible />
+        if (section.key === "blog") return <BlogSection config={section.config} />
+        if (section.key === "why-us") return <WhyUsSection config={section.config} />
+        if (section.key === "reviews") return <ReviewsIsland config={section.config} client:visible />
+        if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
+        if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
+        if (section.key === "calculator") return <BookingQuizIsland config={section.config} client:visible />
+        if (section.key === "partners") return <PartnersMarquee config={section.config} />
+        return null
+      })}
     </SitePageFrame>}
 
-    {contentAvailable && sectionEnabled("footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {contentAvailable && (fixtureContentEnabled || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
   </SitePageShell>
 
   {contentAvailable && <FloatingHelperIsland client:idle />}

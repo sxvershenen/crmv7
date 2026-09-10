@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Input, SiteSectionHeader, Tabs } from "@crm/site-ui";
+import type { CmsHomeSectionConfig } from "@crm/contracts";
 import {
   ArrowRight,
   Calculator,
@@ -21,6 +22,7 @@ import { fireConfetti } from "../../utils/confetti";
 import { listenForSiteEvent, SITE_EVENTS } from "../../../lib/site-events";
 
 interface BookingQuizSectionProps {
+  config: CmsHomeSectionConfig;
   onOpenPrivacyPolicy: () => void;
   onToast: (msg: string) => void;
   preselectedItem?: string;
@@ -70,7 +72,7 @@ function formatRange(start: string | null, end: string | null) {
   return `${first} — ${endDate.getDate()} ${monthGenitiveLabels[endDate.getMonth()]}`;
 }
 
-export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ onOpenPrivacyPolicy, onToast, preselectedItem }) => {
+export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, onOpenPrivacyPolicy, onToast, preselectedItem }) => {
   const [activeTab, setActiveTab] = useState<Kind>("glamping");
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedHouseId, setSelectedHouseId] = useState(HOUSES[0]!.id);
@@ -178,7 +180,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ onOpenPr
     data-date-end={rangeEnd ?? ""}
     className="w-full py-8"
   >
-    <SiteSectionHeader eyebrow="Расчёт" eyebrowIcon={<Calculator className="w-3 h-3" />} eyebrowTone="brand" title="Соберите свой выезд" description={<>Три шага — и&nbsp;у&nbsp;вас предварительная цена. Итог считается сразу, а&nbsp;мы перезвоним, чтобы всё уточнить.</>} />
+    <SiteSectionHeader eyebrow={config.eyebrow} eyebrowIcon={<Calculator className="w-3 h-3" />} eyebrowTone="brand" title={config.title} description={config.description} />
 
     <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
       <div className="lg:hidden sticky top-3 z-30 bg-surface rounded-[var(--site-radius-xl)] px-5 py-3 flex items-center justify-between gap-3">

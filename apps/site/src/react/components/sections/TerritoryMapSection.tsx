@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowRight, Compass, Flame, Home, Layers, MapPin, Sparkles } from 'lucide-react';
+import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { SiteSectionHeader } from '@crm/site-ui';
 import { MAP_SPOTS, type MapSpot } from '../../data/resortData';
 
-interface TerritoryMapSectionProps { onOpenBookingModal: (title?: string) => void; }
+interface TerritoryMapSectionProps { config: CmsHomeSectionConfig; onOpenBookingModal: (title?: string) => void; }
 
 const SpotIcon = ({ category, size = 18 }: { category: string; size?: number }) => {
   if (category === 'Глэмпинг') return <Home size={size} strokeWidth={1.9} />;
@@ -12,12 +13,12 @@ const SpotIcon = ({ category, size = 18 }: { category: string; size?: number }) 
   return <Sparkles size={size} strokeWidth={1.9} />;
 };
 
-export const TerritoryMapSection: React.FC<TerritoryMapSectionProps> = ({ onOpenBookingModal }) => {
+export const TerritoryMapSection: React.FC<TerritoryMapSectionProps> = ({ config, onOpenBookingModal }) => {
   const [activeSpotId, setActiveSpotId] = useState(MAP_SPOTS[0]!.id);
   const activeSpot: MapSpot = MAP_SPOTS.find((spot) => spot.id === activeSpotId) ?? MAP_SPOTS[0]!;
 
   return <section id="map" data-section-key="map" className="w-full py-8">
-    <SiteSectionHeader eyebrow="Схема" eyebrowIcon={<Compass className="w-3 h-3" />} eyebrowTone="brand" title="Карта базы" description={<>Нажмите на&nbsp;кругляш — покажем, что это за&nbsp;строение и&nbsp;где оно стоит.</>} />
+    <SiteSectionHeader eyebrow={config.eyebrow} eyebrowIcon={<Compass className="w-3 h-3" />} eyebrowTone="brand" title={config.title} description={config.description} />
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
       <div className="lg:col-span-8 relative rounded-[var(--site-radius-xl)] overflow-hidden bg-green-soft aspect-[4/3] lg:aspect-[16/9]">
         <svg viewBox="0 0 800 450" className="absolute inset-0 w-full h-full" preserveAspectRatio="none" aria-hidden="true">

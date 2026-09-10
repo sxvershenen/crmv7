@@ -180,3 +180,38 @@ test("keeps a long published why-us title within the viewport", async ({ page, r
   await expect(page.locator("#why-us")).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+test("renders the ordered homepage section snapshot from CMS", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-published")
+  const response = await request.get("/")
+  expect(response.status()).toBe(200)
+  const html = await response.text()
+  expect(html).toContain("События из CMS")
+  expect(html).toContain("Калькулятор из CMS")
+  await page.goto("/")
+  await expect(page.locator("#events")).toContainText("События из CMS")
+  await expect(page.locator("#map")).toContainText("Карта из CMS")
+  expect(await page.locator('[data-section-key]').evaluateAll((sections) => sections.map((section) => section.getAttribute("data-section-key")).filter(Boolean))).toEqual([
+    "events", "houses", "sauna-chan", "programs", "venues", "blog", "reviews", "map", "faq", "calculator", "footer",
+  ])
+  await expect(page.locator("footer")).toBeVisible()
+})
+
+for (const scenario of ["homepage-empty", "homepage-private", "homepage-duplicate", "homepage-version", "homepage-renderer"]) {
+  test(`rejects ${scenario} before rendering the homepage`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    const response = await request.get("/")
+    expect(response.status()).toBe(503)
+    const html = await response.text()
+    expect(html).not.toContain("События из CMS")
+    expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+  })
+}
+
+test("keeps a long homepage section title within the viewport", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-long")
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.goto("/")
+  await expect(page.locator("#events")).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})

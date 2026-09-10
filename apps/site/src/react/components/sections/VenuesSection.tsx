@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Layers, Users } from 'lucide-react';
+import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { VENUES, VenueItem } from '../../data/resortData';
 import { useSwipeHint } from '../../utils/useSwipeHint';
 import { SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
 
 interface VenuesSectionProps {
+  config: CmsHomeSectionConfig;
   onOpenBookingModal: (venueTitle?: string) => void;
 }
 
-export const VenuesSection: React.FC<VenuesSectionProps> = ({ onOpenBookingModal }) => {
+export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBookingModal }) => {
   const swiperRef = useSwipeHint();
   const [capacityFilter, setCapacityFilter] = useState<'all' | 'small' | 'medium' | 'large'>('all');
   const [formatFilter, setFormatFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
@@ -24,7 +26,9 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ onOpenBookingModal
   return (
     <section id="venues" data-section-key="venues" data-analytics-id="home.venues.view" className="w-full py-8">
       <SiteActionSectionHeader
-        title="Площадки"
+        eyebrow={config.eyebrow ?? undefined}
+        title={config.title}
+        description={config.description || undefined}
         action={<div className="flex items-center gap-2"><SiteFilterMenu
           width="md"
           label={capacityFilter === 'all' ? 'Все площадки (5)' : capacityFilter === 'small' ? 'До 30 гостей' : capacityFilter === 'medium' ? 'От 30 до 70 гостей' : 'От 70 до 300 гостей'}

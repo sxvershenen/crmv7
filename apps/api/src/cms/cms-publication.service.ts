@@ -12,6 +12,8 @@ import {
   CmsSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
+  CmsHomeSectionSchema,
+  isCmsHomeSectionKey,
   PublicReleasePageContentSchema,
   PublicAddOnTermsSchema,
   ReleaseDependencyRefSchema,
@@ -550,6 +552,9 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
       }
       if ((section.key === "why-us" || section.renderer === "why-us") && !CmsWhyUsSectionSchema.safeParse(section).success) {
         issues.push(issue("CMS_WHY_US_SECTION_INVALID", "Проверьте заголовок, факты, командный блок и версию секции", candidate.revision.path))
+      }
+      if (isCmsHomeSectionKey(section.key) && !CmsHomeSectionSchema.safeParse(section).success) {
+        issues.push(issue("CMS_HOMEPAGE_SECTION_INVALID", "Проверьте редакционные поля и версию секции главной", candidate.revision.path))
       }
     }
     visiting.delete(candidate.node.id)

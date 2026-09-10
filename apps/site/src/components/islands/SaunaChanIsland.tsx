@@ -1,9 +1,10 @@
+import type { CmsHomeSectionConfig } from "@crm/contracts"
 import { SaunaChanSection } from "../../react/components/sections/SaunaChanSection";
 import { navigateTo, openBooking, showToast } from "../../lib/site-events";
 
-export function SaunaChanIsland() {
+export function SaunaChanIsland({ config }: { config: CmsHomeSectionConfig }) {
   return (
-    <SaunaChanSection
+    <SaunaChanSection config={config}
       onAddAddon={() => navigateTo("quiz")}
       onOpenBookingModal={openBooking}
       onToast={showToast}

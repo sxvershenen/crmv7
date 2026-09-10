@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
+import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { POPULAR_PROGRAMS, PROGRAM_CATEGORIES, ProgramItem } from '../../data/resortData';
 import { Pagination, SiteActionSectionHeader, SiteFilterMenu, SiteImageCategoryCard, SiteProgramFeatureCard, SiteSecondaryAction } from '@crm/site-ui';
 
 interface ProgramsSectionProps {
+  config: CmsHomeSectionConfig;
   onOpenBookingModal: (programTitle?: string) => void;
 }
 
-export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingModal }) => {
+export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpenBookingModal }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sort, setSort] = useState<'popular' | 'name' | 'short'>('popular');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
@@ -26,7 +28,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ onOpenBookingM
 
   return (
     <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8">
-      <SiteActionSectionHeader title="Программы и направления" action={<SiteFilterMenu label={sortLabel} icon={<ArrowUpDown className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={sortDropdownOpen} onToggle={() => setSortDropdownOpen(!sortDropdownOpen)} options={[{ id: 'popular', label: 'По популярности', selected: sort === 'popular', onSelect: () => { setSort('popular'); setPage(1); setSortDropdownOpen(false); } }, { id: 'name', label: 'По названию', selected: sort === 'name', onSelect: () => { setSort('name'); setPage(1); setSortDropdownOpen(false); } }, { id: 'short', label: 'Сначала короткие', selected: sort === 'short', onSelect: () => { setSort('short'); setPage(1); setSortDropdownOpen(false); } }]} />} />
+      <SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={<SiteFilterMenu label={sortLabel} icon={<ArrowUpDown className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={sortDropdownOpen} onToggle={() => setSortDropdownOpen(!sortDropdownOpen)} options={[{ id: 'popular', label: 'По популярности', selected: sort === 'popular', onSelect: () => { setSort('popular'); setPage(1); setSortDropdownOpen(false); } }, { id: 'name', label: 'По названию', selected: sort === 'name', onSelect: () => { setSort('name'); setPage(1); setSortDropdownOpen(false); } }, { id: 'short', label: 'Сначала короткие', selected: sort === 'short', onSelect: () => { setSort('short'); setPage(1); setSortDropdownOpen(false); } }]} />} />
 
       {/* Main Grid: Left Programs Listing / Right 4 Square Categories (Top on Mobile) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

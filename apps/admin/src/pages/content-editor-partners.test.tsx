@@ -38,4 +38,12 @@ describe("partners composition in the home editor", () => {
     await user.click(screen.getByRole("button", { name: "Добавить факт" }))
     expect(screen.getByLabelText("Акцент факта 1")).toBeInTheDocument()
   })
+
+  it("adds a shared typed homepage section and exposes its editorial fields", async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={["/content/home?tab=composition"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
+    await user.click(await screen.findByRole("button", { name: "Добавить секцию «events»" }))
+    expect(screen.getAllByLabelText("Заголовок секции").at(-1)).toHaveValue("События")
+    expect(screen.getByLabelText("CTA · подпись")).toBeInTheDocument()
+  })
 })

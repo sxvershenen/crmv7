@@ -1,5 +1,5 @@
 import type { SiteHeroConfig, SiteNavigationConfig } from "@crm/site-ui"
-import type { CmsPartnersSectionConfig, CmsWhyUsSectionConfig } from "@crm/contracts"
+import type { CmsHomeSectionConfig, CmsHomeSectionKey, CmsPartnersSectionConfig, CmsWhyUsSectionConfig } from "@crm/contracts"
 import { PARTNERS_LIST, RESORT_IMAGES, WHY_US_FACTS } from "./resortData"
 
 export const DEFAULT_WHY_US_CONFIG: CmsWhyUsSectionConfig = {
@@ -19,6 +19,23 @@ export const DEFAULT_PARTNERS_CONFIG: CmsPartnersSectionConfig = {
   description: "Дружим с теми, кто делает вкусно, красиво и по-настоящему",
   items: PARTNERS_LIST.map((label, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, label })),
 }
+
+export const DEFAULT_HOMEPAGE_SECTION_CONFIGS: Record<CmsHomeSectionKey, CmsHomeSectionConfig> = {
+  events: { eyebrow: "Афиша на весну", title: "Ближайшие события", description: "Повод выбраться из города на свежий воздух уже есть — присоединяйтесь к нашим душевным встречам", action: null },
+  houses: { eyebrow: "Глэмпинг в лесу", title: "Домики для отдыха", description: "Панорамный A-frame с личным чаном на террасе или воздушный дом на дереве с видом на реку", action: null },
+  "sauna-chan": { eyebrow: "СПА и здоровье", title: "Баня и горячий чан", description: "Целебный хвойный пар, березовые веники и горячая купель с пихтой прямо под открытым небом", action: null },
+  programs: { eyebrow: null, title: "Программы и направления", description: "", action: null },
+  venues: { eyebrow: null, title: "Площадки", description: "", action: null },
+  blog: { eyebrow: null, title: "Идеи и советы", description: "", action: { label: "Перейти", href: "/blog" } },
+  reviews: { eyebrow: "Доверие", title: "Отзывы гостей", description: "Только проверенные отзывы с Яндекс Карт и живое видео с площадки — без монтажа и прикрас.", action: null },
+  map: { eyebrow: "Схема", title: "Карта базы", description: "Нажмите на кругляш — покажем, что это за строение и где оно стоит.", action: null },
+  faq: { eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
+  directions: { eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
+  calculator: { eyebrow: "Расчёт", title: "Соберите свой выезд", description: "Три шага — и у вас предварительная цена. Итог считается сразу, а мы перезвоним, чтобы всё уточнить.", action: null },
+}
+
+export type HomepageSectionKey = CmsHomeSectionKey | "why-us" | "partners"
+export const DEFAULT_HOMEPAGE_SECTION_ORDER: HomepageSectionKey[] = ["events", "houses", "sauna-chan", "programs", "venues", "blog", "why-us", "reviews", "map", "faq", "calculator", "partners"]
 
 const brandColor = "#2B9E47"
 

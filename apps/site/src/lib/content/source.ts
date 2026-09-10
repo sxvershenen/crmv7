@@ -1,7 +1,9 @@
 import {
   PublicListingResultSchema,
+  CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
+  isCmsHomeSectionKey,
   PublicPageSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
@@ -77,7 +79,9 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
   }
   const partners = page.value.sections.filter((section) => section.key === "partners" || section.renderer === "partners")
   const whyUs = page.value.sections.filter((section) => section.key === "why-us" || section.renderer === "why-us")
-  if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success) || whyUs.length > 1 || whyUs.some((section) => !CmsWhyUsSectionSchema.safeParse(section).success)) {
+  const homepage = page.value.sections.filter((section) => isCmsHomeSectionKey(section.key))
+  const uniqueHomepageKeys = new Set(homepage.map((section) => section.key))
+  if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success) || whyUs.length > 1 || whyUs.some((section) => !CmsWhyUsSectionSchema.safeParse(section).success) || homepage.length !== uniqueHomepageKeys.size || homepage.some((section) => !CmsHomeSectionSchema.safeParse(section).success)) {
     return { status: "unavailable" }
   }
   let listing: PublicListingResult | null = null

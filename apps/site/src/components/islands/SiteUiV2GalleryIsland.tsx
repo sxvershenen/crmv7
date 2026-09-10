@@ -14,7 +14,7 @@ import {
   SiteVkCommunityCard,
 } from "@crm/site-ui"
 
-import { DEFAULT_HERO_CONFIG } from "../../data/publicContentDefaults"
+import { DEFAULT_HERO_CONFIG, DEFAULT_HOMEPAGE_SECTION_CONFIGS } from "../../data/publicContentDefaults"
 import { EVENTS, HOUSES, PROMO_CODES, SAUNA_CHAN_DATA } from "../../data/resortData"
 import { navigateTo, openBooking, openCall, showToast } from "../../lib/site-events"
 import { BookingQuizSection } from "../../react/components/sections/BookingQuizSection"
@@ -56,11 +56,11 @@ export default function SiteUiV2GalleryIsland() {
       <div className="max-w-[680px]"><SiteSpaFeatureCard title={sauna.title} description={sauna.description} price={<>{saunaPrice} ₽</>} added={spaAdded} onAdd={() => setSpaAdded((added) => !added)} onSelect={() => undefined} media={<SiteSpaMedia title={sauna.title} photos={sauna.photos} />} /></div>
     </section>
 
-    <div data-gallery-component="programs"><ProgramsSection onOpenBookingModal={openBooking} /></div>
-    <div data-gallery-component="venues"><VenuesSection onOpenBookingModal={openBooking} /></div>
-    <div data-gallery-component="reviews"><ReviewsSection /></div>
-    <div data-gallery-component="map"><TerritoryMapSection onOpenBookingModal={openBooking} /></div>
-    <div data-gallery-component="faq"><FaqLocationSection onOpenCallModal={openCall} /></div>
-    <div data-gallery-component="calculator"><BookingQuizSection onOpenPrivacyPolicy={() => showToast("Политика обработки данных")} onToast={showToast} /></div>
+    <div data-gallery-component="programs"><ProgramsSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.programs} onOpenBookingModal={openBooking} /></div>
+    <div data-gallery-component="venues"><VenuesSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.venues} onOpenBookingModal={openBooking} /></div>
+    <div data-gallery-component="reviews"><ReviewsSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.reviews} /></div>
+    <div data-gallery-component="map"><TerritoryMapSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.map} onOpenBookingModal={openBooking} /></div>
+    <div data-gallery-component="faq"><FaqLocationSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.faq} onOpenCallModal={openCall} /></div>
+    <div data-gallery-component="calculator"><BookingQuizSection config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.calculator} onOpenPrivacyPolicy={() => showToast("Политика обработки данных")} onToast={showToast} /></div>
   </>
 }

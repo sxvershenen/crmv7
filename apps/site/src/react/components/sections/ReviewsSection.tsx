@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowRight, MessageSquare, Play, Star, Volume2, VolumeX } from 'lucide-react';
+import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { SiteSectionHeader } from '@crm/site-ui';
 import { REVIEWS_DATA, VIDEO_REELS } from '../../data/resortData';
 
-export const ReviewsSection: React.FC = () => {
+export const ReviewsSection: React.FC<{ config: CmsHomeSectionConfig }> = ({ config }) => {
   const [openReview, setOpenReview] = useState<string | null>(null);
   const [activeVideoIdx, setActiveVideoIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -12,7 +13,7 @@ export const ReviewsSection: React.FC = () => {
 
   return (
     <section id="reviews" data-section-key="reviews" className="w-full py-8">
-      <SiteSectionHeader eyebrow="Доверие" eyebrowIcon={<MessageSquare className="w-3 h-3" />} eyebrowTone="brand" title="Отзывы гостей" description={<>Только проверенные отзывы с&nbsp;Яндекс Карт и&nbsp;живое видео с&nbsp;площадки — без монтажа и&nbsp;прикрас.</>} />
+      <SiteSectionHeader eyebrow={config.eyebrow} eyebrowIcon={<MessageSquare className="w-3 h-3" />} eyebrowTone="brand" title={config.title} description={config.description} />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         <div className="lg:col-span-5 flex flex-col gap-3">
           <a href="https://yandex.ru/maps" target="_blank" rel="noreferrer" className="group bg-surface rounded-[var(--site-radius-xl)] p-4 flex items-center gap-4 hover:-translate-y-[3px] transition-transform">

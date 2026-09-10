@@ -10,7 +10,7 @@
 | P4.3 | Atomic/direct publication, provider-neutral delivery, Admin delivery health/detail/replay API | Render-ready preview/diff, сквозная UI/cache observability |
 | P4.4 | Local media storage, processing и immutable public variants | Production storage/CDN, scanner, cleanup/DLQ/metrics |
 | P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
-| P4.5 public | Release-pinned add-on и venue listing/detail projections; ContentSource и 404/503/release consistency; standalone SSR/asset delivery gate; typed partners и why-us CMS→publication→SSR bindings | Typed resolvers house/campground/program/event-service, остальные section bindings главной и route-by-route CMS migration |
+| P4.5 public | Release-pinned add-on и venue listing/detail projections; ContentSource и 404/503/release consistency; standalone SSR/asset delivery gate; typed editorial CMS→publication→SSR bindings всех стандартных секций главной | Typed safe public resolvers для operational card collections и house/campground/program/event-service routes; route-by-route migration |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
 | P4.6–P4.9 | Отдельные foundations описаны в профильных specs | Public intake, visitor analytics, controlled code и go-live не завершены |
 
@@ -21,10 +21,11 @@
 - CMS — editorial-only `/content/tree` и canonical drafts. Operational pricing/fulfillment остаются в CRM; CMS draft сам по себе не даёт public eligibility. Customer Event не создаёт CMS draft или payment.
 - DB tests требуют отдельную disposable test database и restricted role. Старые результаты прогонов — исторические, не текущий gate.
 - Standalone site runtime проверяется HTTP contract stub без БД; production backend/CDN/deployment gates этим не закрыты. Full-homepage visual baselines расходятся с текущими секциями why-us/partners; требуется отдельная сверка эталонов без автоматического обновления снимков.
+- Homepage editorial snapshot теперь typed и release-pinned; operational карточки секций пока сохраняют отдельную safe-projection migration boundary и не должны восприниматься как CMS-owned facts.
 
 ## Следующий инкремент
 
-1. P4.5F route-by-route migration: продолжить bindings главной после `why-us` и последовательно переводить vertical routes на typed CMS delivery только по мере готовности safe resolver.
+1. P4.5F route-by-route migration: homepage editorial binding gate закрыт; последовательно переводить vertical routes на typed CMS delivery только по мере готовности safe resolver, начиная с house.
 2. Render-ready preview/diff и сквозная delivery visibility; затем P4.6 public intake. Уже реализованный delivery API использовать повторно.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.

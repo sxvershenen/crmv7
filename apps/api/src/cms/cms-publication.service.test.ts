@@ -37,6 +37,10 @@ describe("materializeRelease", () => {
   const whyUs = { ...heroOverride, key: "why-us", renderer: "why-us", policy: { mode: "override", patch: {
     scalars: Object.fromEntries(Object.entries(whyUsConfig).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
   } } }
+  const homepageConfig = { eyebrow: "Афиша", title: "События из CMS", description: "Редакционный текст", action: null }
+  const homepage = { ...heroOverride, key: "events", renderer: "homepage-section", policy: { mode: "override", patch: {
+    scalars: Object.fromEntries(Object.entries(homepageConfig).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
+  } } }
 
   it("pins partners content through inherited revisions without mutable draft reads", () => {
     const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [partners] })
@@ -69,6 +73,22 @@ describe("materializeRelease", () => {
   ])("blocks unsupported or incomplete why-us before publication", (section) => {
     const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [section] })
     expect(materializeRelease([root] as never).issues).toEqual([expect.objectContaining({ code: "CMS_WHY_US_SECTION_INVALID" })])
+  })
+
+  it("pins the ordered homepage editorial snapshot through inherited revisions", () => {
+    const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [homepage] })
+    const child = candidate({ nodeId: childId, revisionId: childRevisionId, kind: "landing", path: "/family", slug: "family", parentNodeId: rootId, sections: [{ ...homepage, id: childId, policy: { mode: "inherit" } }] })
+    const result = materializeRelease([root, child] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[1]?.content.sections[0]?.config).toEqual(homepageConfig)
+  })
+
+  it.each([
+    { ...homepage, rendererVersion: "2" }, { ...homepage, renderer: "events" },
+    { ...homepage, policy: { mode: "override", patch: { scalars: {}, objects: {}, keyedArrays: {} } } },
+  ])("blocks unsupported or incomplete homepage sections before publication", (section) => {
+    const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [section] })
+    expect(materializeRelease([root] as never).issues).toEqual([expect.objectContaining({ code: "CMS_HOMEPAGE_SECTION_INVALID" })])
   })
 
   it("validates inherited global partners and allows an explicit disabled slot", () => {

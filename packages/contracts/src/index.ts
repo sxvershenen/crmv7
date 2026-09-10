@@ -36,3 +36,4 @@ export * from "./cms-dashboard.js";
 export * from "./marketing.js";
 export * from "./partners-section.js";
 export * from "./why-us-section.js";
+export * from "./homepage-section.js";

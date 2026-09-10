@@ -64,6 +64,24 @@ createServer(async (request, response) => {
     if (scenario === "why-us-duplicate") whyUsConfig.facts[1].id = whyUsConfig.facts[0].id
     if (scenario === "why-us-private") whyUsConfig.internalNotes = "PRIVATE_BACKEND_DETAIL"
     if (scenario === "why-us-blank") whyUsConfig.title = " "
+    const homepageConfigs = {
+      events: { eyebrow: "CMS афиша", title: "События из CMS", description: "Редакционный текст событий из опубликованной редакции.", action: null },
+      houses: { eyebrow: "CMS глэмпинг", title: "Домики из CMS", description: "Редакционный текст домиков из опубликованной редакции.", action: null },
+      "sauna-chan": { eyebrow: "CMS SPA", title: "Баня из CMS", description: "Редакционный текст бани из опубликованной редакции.", action: null },
+      programs: { eyebrow: null, title: "Программы из CMS", description: "", action: null },
+      venues: { eyebrow: null, title: "Площадки из CMS", description: "", action: null },
+      blog: { eyebrow: null, title: "Материалы из CMS", description: "", action: { label: "Все материалы", href: "/blog" } },
+      reviews: { eyebrow: "CMS доверие", title: "Отзывы из CMS", description: "Редакционный текст отзывов из опубликованной редакции.", action: null },
+      map: { eyebrow: "CMS схема", title: "Карта из CMS", description: "Редакционный текст карты из опубликованной редакции.", action: null },
+      faq: { eyebrow: "CMS полезное", title: "FAQ из CMS", description: "Редакционный текст FAQ из опубликованной редакции.", action: null },
+      calculator: { eyebrow: "CMS расчёт", title: "Калькулятор из CMS", description: "Редакционный текст калькулятора из опубликованной редакции.", action: null },
+      footer: { eyebrow: null, title: "Footer из CMS", description: "", action: null },
+    }
+    if (scenario === "homepage-long") homepageConfigs.events.title = "События из CMS с очень длинным заголовком, который должен оставаться внутри viewport на мобильном экране"
+    if (scenario === "homepage-empty") homepageConfigs.events.title = " "
+    if (scenario === "homepage-private") homepageConfigs.events.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    const homepageEntries = Object.entries(homepageConfigs)
+    if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({
       nodeId: id, revisionId: id, releaseId,
       kind: path === "/" ? "home" : "resource_listing",
@@ -72,7 +90,10 @@ createServer(async (request, response) => {
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },
-      }] : scenario.startsWith("partners-") ? [{
+      }] : scenario.startsWith("homepage-") ? homepageEntries.map(([key, config], index) => ({
+        id: `${id.slice(0, -2)}${String(index + 10).padStart(2, "0")}`, key, renderer: scenario === "homepage-renderer" ? "unknown" : "homepage-section",
+        rendererVersion: scenario === "homepage-version" ? "2" : "1", schemaVersion: 1, order: index * 10 + 10, config,
+      })) : scenario.startsWith("partners-") ? [{
         id, key: "partners", renderer: scenario === "partners-renderer" ? "unknown" : "partners",
         rendererVersion: scenario === "partners-version" ? "2" : "1", schemaVersion: 1, order: 10, config: partnersConfig,
       }] : scenario.startsWith("why-us-") ? [{

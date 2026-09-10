@@ -4,13 +4,16 @@ import {
   SiteListingRail,
   SiteSecondaryAction,
 } from "@crm/site-ui"
+import type { CmsHomeSectionConfig } from "@crm/contracts"
 import { FEATURED_BLOG_ARTICLES, MORE_BLOG_ARTICLES } from "../../data/blogData"
 
-export function BlogSectionIsland() {
+export function BlogSectionIsland({ config }: { config: CmsHomeSectionConfig }) {
   return <section id="blog" data-section-key="blog" data-analytics-id="home.blog.view" className="site-section site-section--compact">
     <SiteActionSectionHeader
-      title="Идеи и советы"
-      action={<SiteSecondaryAction href="/blog" analyticsId="home.blog.open">Перейти</SiteSecondaryAction>}
+      eyebrow={config.eyebrow ?? undefined}
+      title={config.title}
+      description={config.description || undefined}
+      action={config.action ? <SiteSecondaryAction href={config.action.href} analyticsId="home.blog.open">{config.action.label}</SiteSecondaryAction> : null}
     />
     <SiteListingRail label="Избранные материалы" columns={4}>
       {FEATURED_BLOG_ARTICLES.map((article, index) => <ArticleCard

@@ -21,10 +21,11 @@
 
 ### P4.5F — Route-by-route delivery
 
-1. Завершить CMS bindings главной по секциям, сохраняя ContentSource и global identity/navigation/default slots.
-2. Мигрировать vertical routes в порядке house → campground → addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
-3. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
-4. Генерировать sitemap/robots/canonical/schema из active release.
+Homepage editorial binding gate закрыт: стандартные секции главной используют typed `homepage-section`/`partners`/`why-us` contracts, release order и visibility, а footer — typed global navigation/settings slot; ContentSource, global identity/navigation/default slots и Astro/React consumers проверяются в desktop/mobile CMS delivery E2E. Operational card collections остаются отдельной public-projection boundary.
+
+1. Мигрировать vertical routes в порядке house → campground → addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
+2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
+3. Генерировать sitemap/robots/canonical/schema из active release.
 
 Для каждой страницы: meaningful SSR HTML, один H1, crawlable links, metadata, image dimensions, минимальная hydration и desktop/mobile/keyboard/visual checks по затронутому сценарию. Production outage/invalid response не становится fixture fallback или ложным индексируемым 404. Renderer key/version/schema и порядок/config sections валидируются. Не менять одобренный дизайн без задачи.
 

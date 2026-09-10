@@ -5,6 +5,7 @@ import { CmsConflictError } from "@admin/entities/cms"
 import { AdminApiError } from "@admin/lib/api-client"
 import { createPartnersEditorSection, partnersPolicy } from "@admin/data/partners-section"
 import { createWhyUsEditorSection, whyUsPolicy } from "@admin/data/why-us-section"
+import { createHomepageSectionEditorSection, homepageSectionPolicy } from "@admin/data/homepage-section"
 
 describe("FixtureCmsRepository", () => {
   it("keeps fixtures behind a typed repository and increments versions", async () => {
@@ -75,6 +76,19 @@ describe("ApiCmsRepository", () => {
     const added = await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
     expect(added.sections[0]?.whyUsConfig).toEqual(section.whyUsConfig)
     expect(client.patch.mock.calls[0]?.[1].sections[0]).toMatchObject({ id: section.id, key: "why-us", renderer: "why-us", rendererVersion: "1", schemaVersion: 1, policy: whyUsPolicy(section.whyUsConfig) })
+  })
+
+  it("round-trips shared homepage editorial fields through the revision contract", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(detail)
+    client.patch.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, sections: body.sections } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "home")
+    const section = createHomepageSectionEditorSection("events")
+    section.homepageConfig = { eyebrow: "CMS афиша", title: "События из CMS", description: "Редакционный текст", action: { label: "Все события", href: "/events" } }
+    const saved = await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
+    expect(saved.sections[0]?.homepageConfig).toEqual(section.homepageConfig)
+    expect(client.patch.mock.calls[0]?.[1].sections[0]).toMatchObject({ id: section.id, key: "events", renderer: "homepage-section", rendererVersion: "1", schemaVersion: 1, policy: homepageSectionPolicy(section.homepageConfig) })
   })
 
   it("reads CMS access through the same Admin API client", async () => {

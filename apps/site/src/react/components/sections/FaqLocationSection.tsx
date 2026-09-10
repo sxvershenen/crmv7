@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Car, Clock, HelpCircle, Mail, MapPin, Navigation, Phone, Send } from 'lucide-react';
+import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { Accordion, SiteSectionHeader } from '@crm/site-ui';
 import { FAQ_ITEMS } from '../../data/resortData';
 
-interface FaqLocationSectionProps { onOpenCallModal: () => void; }
+interface FaqLocationSectionProps { config: CmsHomeSectionConfig; onOpenCallModal: () => void; }
 const coords = { lat: 58.5532, lng: 49.6234 };
 const route = `https://yandex.ru/maps/?rtext=~${coords.lat}%2C${coords.lng}&rtt=auto`;
 const widget = `https://yandex.ru/map-widget/v1/?ll=${coords.lng}%2C${coords.lat}&z=12&pt=${coords.lng}%2C${coords.lat}%2Cpm2gnm`;
@@ -16,10 +17,10 @@ const ContactRow = ({ icon, label, value, href, onClick }: { icon: React.ReactNo
   return <div className={cls}>{content}</div>;
 };
 
-export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ onOpenCallModal }) => {
+export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, onOpenCallModal }) => {
   const [mapOn, setMapOn] = useState(false);
   return <section id="location" data-section-key="faq" className="w-full py-8">
-    <SiteSectionHeader eyebrow="Полезное" eyebrowIcon={<HelpCircle className="w-3 h-3" />} eyebrowTone="brand" title={<>Как доехать и&nbsp;что спросить</>} description={<>Дорога занимает полчаса, а&nbsp;ответы на&nbsp;частые вопросы — минуту.</>} />
+    <SiteSectionHeader eyebrow={config.eyebrow} eyebrowIcon={<HelpCircle className="w-3 h-3" />} eyebrowTone="brand" title={config.title} description={config.description} />
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
       <div className="lg:col-span-5 flex flex-col gap-3">
         <div className="relative rounded-[var(--site-radius-xl)] overflow-hidden aspect-[4/3] bg-green-soft group">
