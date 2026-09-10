@@ -9,6 +9,7 @@ import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
 import { cmsDataMode } from "@admin/lib/data-mode"
+import { isPartnersRenderer, partnersDraft, partnersPolicy } from "./partners-section"
 
 const clone = <T,>(value: T): T => structuredClone(value)
 const pause = () => new Promise<void>((resolve) => window.setTimeout(resolve, 120))
@@ -257,7 +258,19 @@ export class ApiCmsRepository implements CmsRepository {
       status: detail.node.status === "archived" ? "archived" : contentStatus(revision.state), revisionState: revision.state, version: detail.node.version, revision: revision.revision,
       owner: detail.source ? "Синхронизация CRM" : revision.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", source: detail.source ? "CRM" : "CMS", updatedLabel: formatUpdated(detail.node.updatedAt),
       reviewLabel: detail.latestPublished ? `Опубликована версия ${detail.latestPublished.revision}` : "Ещё не опубликовано", seoChecks: seoChecks(revision),
-      sections: revision.sections.map((section) => ({ id: section.id, label: section.key, description: `${section.renderer} · schema ${section.schemaVersion}`, mode: section.policy.mode, source: "Global defaults", sourceHref: "/globals/sections", effectiveTitle: section.key })),
+      sections: revision.sections.map((section) => {
+        const partnersConfig = partnersDraft(section)
+        const partners = section.key === "partners"
+        const own = section.policy.mode === "override"
+        return {
+          id: section.id, key: section.key, label: partners ? "Партнёры" : section.key,
+          description: `${section.renderer} · schema ${section.schemaVersion}`, mode: section.policy.mode,
+          source: partners ? own ? "Эта страница" : "Источник наследования" : "Global defaults",
+          sourceHref: partners ? own ? "?tab=composition" : "/content/tree" : "/globals/sections",
+          effectiveTitle: partners && !own ? "Содержимое источника пока недоступно в предпросмотре" : partnersConfig?.title ?? section.key,
+          ...(partnersConfig ? { partnersConfig } : {}),
+        }
+      }),
       description: revision.summary ?? "", seoTitle: revision.seo.title, seoDescription: revision.seo.description, indexPolicy: revision.seo.indexPolicy,
       hero: heroFromRevision(revision), importedFromCrm: detail.source !== null,
     }
@@ -266,8 +279,25 @@ export class ApiCmsRepository implements CmsRepository {
 
 function editableRevision(detail: CmsNodeDetail): CmsNodeRevision { if (!detail.currentRevision) throw new CmsUnavailableError("Editable revision"); return detail.currentRevision }
 function mergeSectionModes(sections: CmsSection[], local: EditorRecord["sections"]): CmsSection[] {
-  const modes = new Map(local.map((section) => [section.id, section.mode]))
-  return sections.map((section) => { const mode = modes.get(section.id) ?? section.policy.mode; if (mode === "override") return { ...section, policy: section.policy.mode === "override" ? section.policy : { mode: "override", patch: { scalars: {}, objects: {}, keyedArrays: {} } } }; return { ...section, policy: { mode } } })
+  const byId = new Map(local.map((section) => [section.id, section]))
+  const result = sections.map((section): CmsSection => {
+    const edited = byId.get(section.id)
+    const mode = edited?.mode ?? section.policy.mode
+    if (mode !== "override") return { ...section, policy: { mode } }
+    if (edited?.partnersConfig && isPartnersRenderer(section) && JSON.stringify(edited.partnersConfig) !== JSON.stringify(section.policy.mode === "override" ? partnersDraft(section) : null)) {
+      return { ...section, policy: partnersPolicy(edited.partnersConfig) }
+    }
+    return { ...section, policy: section.policy.mode === "override" ? section.policy : { mode: "override", patch: { scalars: {}, objects: {}, keyedArrays: {} } } }
+  })
+  for (const section of local) {
+    if (sections.some((existing) => existing.id === section.id) || section.key !== "partners" || !section.partnersConfig) continue
+    if (result.some((existing) => existing.key === "partners")) throw new Error("Секция партнёров уже существует")
+    result.push({ id: section.id, key: "partners", renderer: "partners", rendererVersion: "1", schemaVersion: 1,
+      order: Math.min(100000, Math.max(0, ...result.map((existing) => existing.order)) + 10),
+      policy: section.mode === "override" ? partnersPolicy(section.partnersConfig) : { mode: section.mode },
+    })
+  }
+  return result
 }
 
 function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
@@ -325,7 +355,7 @@ function mapMutationError(error: unknown) { if (error instanceof AdminApiError &
 function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", secondaryCtaLabel: "", secondaryCtaTarget: "", desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
 
 function sameEditorContent(left: EditorRecord, right: EditorRecord) {
-  return JSON.stringify({ title: left.publicTitle, summary: left.description, hero: left.hero, sections: left.sections.map(({ id, mode }) => ({ id, mode })), seoTitle: left.seoTitle, seoDescription: left.seoDescription, indexPolicy: left.indexPolicy }) === JSON.stringify({ title: right.publicTitle, summary: right.description, hero: right.hero, sections: right.sections.map(({ id, mode }) => ({ id, mode })), seoTitle: right.seoTitle, seoDescription: right.seoDescription, indexPolicy: right.indexPolicy })
+  return JSON.stringify({ title: left.publicTitle, summary: left.description, hero: left.hero, sections: left.sections.map(({ id, mode, partnersConfig }) => ({ id, mode, partnersConfig })), seoTitle: left.seoTitle, seoDescription: left.seoDescription, indexPolicy: left.indexPolicy }) === JSON.stringify({ title: right.publicTitle, summary: right.description, hero: right.hero, sections: right.sections.map(({ id, mode, partnersConfig }) => ({ id, mode, partnersConfig })), seoTitle: right.seoTitle, seoDescription: right.seoDescription, indexPolicy: right.indexPolicy })
 }
 
 type WireNavigationItem = CmsSiteSettingsValue["headerNavigation"][number]

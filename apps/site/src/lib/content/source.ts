@@ -1,5 +1,6 @@
 import {
   PublicListingResultSchema,
+  CmsPartnersSectionSchema,
   PublicPageSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
@@ -71,6 +72,10 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
   if (settings.status !== "published") return { status: "unavailable" }
   if (page.status !== "published") return page
   if (page.value.path !== path || !page.value.freshness.ready || page.value.releaseId !== settings.value.releaseId) {
+    return { status: "unavailable" }
+  }
+  const partners = page.value.sections.filter((section) => section.key === "partners" || section.renderer === "partners")
+  if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success)) {
     return { status: "unavailable" }
   }
   let listing: PublicListingResult | null = null

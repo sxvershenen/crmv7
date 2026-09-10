@@ -3,6 +3,7 @@ import type { CmsNodeDetail } from "@crm/contracts/content"
 import { ApiCmsRepository, FixtureCmsRepository } from "@admin/data/cms-repository"
 import { CmsConflictError } from "@admin/entities/cms"
 import { AdminApiError } from "@admin/lib/api-client"
+import { createPartnersEditorSection, partnersPolicy } from "@admin/data/partners-section"
 
 describe("FixtureCmsRepository", () => {
   it("keeps fixtures behind a typed repository and increments versions", async () => {
@@ -20,6 +21,45 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("round-trips new partners, edits and item order through the revision contract", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(detail)
+    client.patch.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, sections: body.sections } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "home")
+    const section = createPartnersEditorSection()
+    section.partnersConfig = { title: "С нами сотрудничают", description: "Редакционный текст", items: [{ id: ids.node, label: "Первый" }, { id: ids.node2, label: "Второй" }] }
+    const added = await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
+    expect(added.sections[0]?.partnersConfig).toEqual(section.partnersConfig)
+    expect(client.patch.mock.calls[0]?.[1].sections[0]).toMatchObject({ id: section.id, key: "partners", renderer: "partners", rendererVersion: "1", schemaVersion: 1, policy: partnersPolicy(section.partnersConfig) })
+    const changed = { ...added.sections[0]!, partnersConfig: { ...section.partnersConfig, title: "Обновлено", items: [...section.partnersConfig.items].reverse() } }
+    const saved = await repository.saveEditor({ ...added, sections: [changed] }, added.version)
+    expect(saved.sections[0]?.partnersConfig).toEqual(changed.partnersConfig)
+    expect(client.patch.mock.calls[1]?.[1]).toHaveProperty("sections")
+  })
+
+  it("preserves complex partner patches and metadata when editing unrelated content", async () => {
+    const opaque = { id: ids.node2, key: "partners", renderer: "partners", rendererVersion: "1", schemaVersion: 1, order: 85, analyticsActionId: "home.partners.view", policy: { mode: "override" as const, patch: { scalars: {}, objects: {}, keyedArrays: { items: [{ operation: "remove" as const, key: ids.actor }] } } } }
+    const server = { ...detail, currentRevision: { ...detail.currentRevision!, sections: [opaque] } }
+    const client = clientMock(); client.get.mockResolvedValueOnce(server); client.patch.mockResolvedValueOnce(server)
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "home")
+    expect(editor.sections[0]?.partnersConfig).toBeUndefined()
+    await repository.saveEditor({ ...editor, publicTitle: "Изменён заголовок страницы" }, editor.version)
+    expect(client.patch.mock.calls[0]?.[1].sections).toEqual([opaque])
+  })
+
+  it("keeps incomplete partners in a draft and serializes hide as a disabled policy", async () => {
+    const client = clientMock(); client.get.mockResolvedValueOnce(detail)
+    client.patch.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, sections: body.sections } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "home")
+    const saved = await repository.saveEditor({ ...editor, sections: [createPartnersEditorSection()] }, editor.version)
+    expect(saved.sections[0]?.partnersConfig?.items).toEqual([])
+    await repository.saveEditor({ ...saved, sections: saved.sections.map((section) => ({ ...section, mode: "disabled" as const })) }, saved.version)
+    expect(client.patch.mock.calls[1]?.[1].sections[0].policy).toEqual({ mode: "disabled" })
+  })
+
   it("reads CMS access through the same Admin API client", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce({ user: { id: ids.actor, name: "Марина", role: "admin", capabilities: {

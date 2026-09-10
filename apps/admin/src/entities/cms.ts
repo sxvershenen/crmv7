@@ -1,4 +1,5 @@
 import type { CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
+import type { CmsPartnersSectionDraft } from "@crm/contracts"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -45,6 +46,8 @@ export type CmsDashboard = {
 
 export type SectionConfig = {
   id: string
+  key?: string
+  partnersConfig?: CmsPartnersSectionDraft
   label: string
   description: string
   mode: InheritanceMode

@@ -10,7 +10,7 @@
 | P4.3 | Atomic/direct publication, provider-neutral delivery, Admin delivery health/detail/replay API | Render-ready preview/diff, сквозная UI/cache observability |
 | P4.4 | Local media storage, processing и immutable public variants | Production storage/CDN, scanner, cleanup/DLQ/metrics |
 | P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
-| P4.5 public | Release-pinned add-on и venue listing/detail projections; ContentSource и 404/503/release consistency главной и CMS routes; standalone SSR/asset delivery gate | Typed resolvers house/campground/program/event-service, section bindings главной и route-by-route CMS migration |
+| P4.5 public | Release-pinned add-on и venue listing/detail projections; ContentSource и 404/503/release consistency; standalone SSR/asset delivery gate; typed partners CMS→publication→SSR binding | Typed resolvers house/campground/program/event-service, остальные section bindings главной и route-by-route CMS migration |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
 | P4.6–P4.9 | Отдельные foundations описаны в профильных specs | Public intake, visitor analytics, controlled code и go-live не завершены |
 
@@ -24,7 +24,7 @@
 
 ## Следующий инкремент
 
-1. P4.5F route-by-route migration: завершить bindings главной и последовательно переводить vertical routes на typed CMS delivery только по мере готовности safe resolver.
+1. P4.5F route-by-route migration: продолжить bindings главной после `partners` и последовательно переводить vertical routes на typed CMS delivery только по мере готовности safe resolver.
 2. Render-ready preview/diff и сквозная delivery visibility; затем P4.6 public intake. Уже реализованный delivery API использовать повторно.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.

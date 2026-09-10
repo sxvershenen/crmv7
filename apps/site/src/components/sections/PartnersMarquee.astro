@@ -1,14 +1,16 @@
 ---
 import { Handshake, Building2 } from "lucide-react";
-import { PARTNERS_LIST } from "../../data/resortData";
+import type { CmsPartnersSectionConfig } from "@crm/contracts";
 
-const partners = [...PARTNERS_LIST, ...PARTNERS_LIST];
+interface Props { config: CmsPartnersSectionConfig }
+const { config } = Astro.props;
+const partners = [...config.items, ...config.items];
 ---
 
 <section id="partners" data-section-key="partners" class="w-full py-8 overflow-hidden select-none">
   <div class="flex items-center justify-between mb-5">
-    <span class="site-home-heading__eyebrow !mb-0"><span class="eyebrow-ico"><Handshake className="w-[11px] h-[11px]" /></span>Наши партнёры</span>
-    <span class="hidden lg:block text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)]">Дружим с теми, кто делает вкусно, красиво и по-настоящему</span>
+    <span class="site-home-heading__eyebrow !mb-0"><span class="eyebrow-ico"><Handshake className="w-[11px] h-[11px]" /></span>{config.title}</span>
+    {config.description && <span class="hidden lg:block text-[length:var(--site-text-body-sm)] text-[var(--site-color-text-muted)]">{config.description}</span>}
   </div>
 
   <div data-partners-viewport class="site-partners-marquee relative w-full overflow-hidden px-1.5">
@@ -19,7 +21,7 @@ const partners = [...PARTNERS_LIST, ...PARTNERS_LIST];
           class="group bg-[var(--site-color-surface)] rounded-[var(--site-radius-round)] h-12 pl-1.5 pr-5 inline-flex items-center gap-3 whitespace-nowrap shrink-0"
         >
           <span class="icon-tile !w-9 !h-9 !rounded-[var(--site-radius-round)] group-hover:bg-[var(--site-color-brand-500)] group-hover:text-[var(--site-color-text-inverse)] transition-colors"><Building2 className="w-4 h-4" /></span>
-          <span class="text-[length:var(--site-text-body-sm)] font-[var(--site-weight-medium)] text-[var(--site-color-text)] group-hover:text-[var(--site-color-brand-700)] transition-colors">{partner}</span>
+          <span class="text-[length:var(--site-text-body-sm)] font-[var(--site-weight-medium)] text-[var(--site-color-text)] group-hover:text-[var(--site-color-brand-700)] transition-colors">{partner.label}</span>
         </div>
       ))}
     </div>

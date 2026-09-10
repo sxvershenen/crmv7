@@ -45,6 +45,14 @@ createServer(async (request, response) => {
     if (scenario === "invalid") return send({ title: "PRIVATE_DRAFT_CONTENT" })
     if (scenario === "invalid-json") { response.writeHead(200); return response.end("<html>upstream error</html>") }
     const path = url.searchParams.get("path")
+    const partnersConfig = {
+      title: scenario === "partners-long" ? "Наши партнёры помогают сделать каждый семейный отдых особенным и запоминающимся" : "Наши опубликованные партнёры",
+      description: "Совместные проекты из CMS", items: [{ id, label: "Пекарня из CMS" }, { id: nextReleaseId, label: "Кофейня из CMS" }],
+    }
+    if (scenario === "partners-empty") partnersConfig.items = []
+    if (scenario === "partners-duplicate") partnersConfig.items[1].id = id
+    if (scenario === "partners-private") partnersConfig.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "partners-blank") partnersConfig.title = " "
     return send({
       nodeId: id, revisionId: id, releaseId,
       kind: path === "/" ? "home" : "resource_listing",
@@ -53,6 +61,9 @@ createServer(async (request, response) => {
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },
+      }] : scenario.startsWith("partners-") ? [{
+        id, key: "partners", renderer: scenario === "partners-renderer" ? "unknown" : "partners",
+        rendererVersion: scenario === "partners-version" ? "2" : "1", schemaVersion: 1, order: 10, config: partnersConfig,
       }] : [],
       seo: { title: "SEO опубликованной страницы", description: "Описание из CMS", indexPolicy: "index_follow", canonical: { mode: "self" } },
       dependencies: [], generatedAt: asOf,

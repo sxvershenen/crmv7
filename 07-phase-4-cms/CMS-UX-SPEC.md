@@ -198,11 +198,14 @@ Bottom bar: dirty/saving/saved/error/conflict, «Закрыть», «Preview», 
 Tabs:
 
 - **Секции:** hero, события, домики, баня/чан, программы, площадки, blog, why us, reviews, map, FAQ/directions, calculator, partners; reorder/visibility/source.
+- **Композиция:** section policies и доступные typed формы, включая партнёров.
 - **Карточки и подборки:** source (`CRM query`, `manual`, `computed`), фильтры, sort, limit, pinning/fallback.
 - **Навигация:** anchors/menu labels, mobile order, CTA.
 - далее общие SEO/Media/Analytics/Versions.
 
 Для каждой секции: title/eyebrow/description, source, filters/sort, card variant, item limit, empty fallback, CTA, analytics ID, desktop/mobile preview. Нельзя вручную подменять authoritative availability/price.
+
+`Партнёры` редактируются во вкладке `Композиция`: добавить секцию, задать заголовок/описание, добавить, переименовать, переставить или удалить элементы; скрытие использует общий section policy. Неполный черновик сохраняется; пустой заголовок/список/название и повторяющиеся item IDs блокируют публикацию. Форма версии 1 пишет полный scalar override `title`, `description`, `items`, сохраняя section ID/order/analytics. Составные keyed-array/object patches и неизвестные версии остаются readonly; правка других полей сохраняет их без преобразования. Унаследованные effective values до render-ready preview не имитируются.
 
 ## 9. Посадочная страница
 

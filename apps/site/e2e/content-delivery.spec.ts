@@ -106,3 +106,40 @@ test("error page stays usable with keyboard and narrow screens", async ({ page, 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath("content-unavailable.png") })
 })
+
+test("binds published partners in SSR with the authored item order and no fixture names", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=partners-published")
+  for (const path of ["/", "/cms-test"]) {
+    const response = await request.get(path)
+    expect(response.status()).toBe(200)
+    const html = await response.text()
+    expect(html).toContain("Наши опубликованные партнёры")
+    expect(html).not.toContain("Вятка Банк")
+    await page.goto(path)
+    await expect(page.locator("#partners")).toContainText("Совместные проекты из CMS")
+    expect(await page.locator("#partners [data-partner-item]").allTextContents()).toEqual(["Пекарня из CMS", "Кофейня из CMS", "Пекарня из CMS", "Кофейня из CMS"])
+    expect(await page.locator("#partners").evaluate((element) => element.closest("astro-island") === null)).toBe(true)
+    await expect(page.locator("h1")).toHaveCount(1)
+  }
+})
+
+for (const scenario of ["partners-empty", "partners-blank", "partners-duplicate", "partners-private", "partners-version", "partners-renderer"]) {
+  test(`rejects ${scenario} before rendering the page`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    for (const path of ["/", "/cms-test"]) {
+      const response = await request.get(path)
+      expect(response.status()).toBe(503)
+      const html = await response.text()
+      expect(html).not.toContain("Пекарня из CMS")
+      expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    }
+  })
+}
+
+test("keeps a long published partners title within the viewport", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=partners-long")
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.goto("/")
+  await expect(page.locator("#partners")).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})

@@ -1,5 +1,12 @@
 import type { SiteHeroConfig, SiteNavigationConfig } from "@crm/site-ui"
-import { RESORT_IMAGES } from "./resortData"
+import type { CmsPartnersSectionConfig } from "@crm/contracts"
+import { PARTNERS_LIST, RESORT_IMAGES } from "./resortData"
+
+export const DEFAULT_PARTNERS_CONFIG: CmsPartnersSectionConfig = {
+  title: "Наши партнёры",
+  description: "Дружим с теми, кто делает вкусно, красиво и по-настоящему",
+  items: PARTNERS_LIST.map((label, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, label })),
+}
 
 const brandColor = "#2B9E47"
 

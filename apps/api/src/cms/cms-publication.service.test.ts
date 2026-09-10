@@ -26,6 +26,38 @@ const heroOverride = {
 }
 
 describe("materializeRelease", () => {
+  const partnersConfig = { title: "Наши партнёры", description: "Работаем вместе", items: [{ id: childId, label: "Пекарня" }] }
+  const partners = { ...heroOverride, key: "partners", renderer: "partners", policy: { mode: "override", patch: {
+    scalars: Object.fromEntries(Object.entries(partnersConfig).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
+  } } }
+
+  it("pins partners content through inherited revisions without mutable draft reads", () => {
+    const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [partners] })
+    const child = candidate({ nodeId: childId, revisionId: childRevisionId, kind: "landing", path: "/family", slug: "family", parentNodeId: rootId, sections: [{ ...partners, policy: { mode: "inherit" } }] })
+    const result = materializeRelease([root, child] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[1]?.content.sections[0]?.config).toEqual(partnersConfig)
+    expect(result.routes[1]?.dependencies).toEqual(expect.arrayContaining([expect.objectContaining({ id: rootRevisionId })]))
+  })
+
+  it.each([
+    { ...partners, rendererVersion: "2" }, { ...partners, renderer: "unknown" },
+    { ...partners, policy: { mode: "override", patch: { scalars: {}, objects: {}, keyedArrays: {} } } },
+  ])("blocks unsupported or incomplete partners before publication", (section) => {
+    const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [section] })
+    expect(materializeRelease([root] as never).issues).toEqual([expect.objectContaining({ code: "CMS_PARTNERS_SECTION_INVALID" })])
+  })
+
+  it("validates inherited global partners and allows an explicit disabled slot", () => {
+    const defaults = { hero: null, sections: [{ id: childId, key: "partners", renderer: "partners", rendererVersion: "1", schemaVersion: 1, order: 10, config: {} }] }
+    const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [] })
+    expect(materializeRelease([root] as never, defaults).issues).toEqual([expect.objectContaining({ code: "CMS_PARTNERS_SECTION_INVALID" })])
+    root.revision.sections = [{ ...partners, policy: { mode: "disabled" } }]
+    const result = materializeRelease([root] as never, defaults)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.content.sections).toEqual([])
+  })
+
   it("pins deterministic parent inheritance into the child release snapshot", () => {
     const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [heroOverride] })
     const child = candidate({ nodeId: childId, revisionId: childRevisionId, kind: "landing", path: "/svadby", slug: "svadby", parentNodeId: rootId, sections: [{ ...heroOverride, id: "66666666-6666-4666-8666-666666666666", policy: { mode: "inherit" } }] })

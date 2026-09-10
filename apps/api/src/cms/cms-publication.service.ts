@@ -10,6 +10,7 @@ import {
   CmsNodePublishResultSchema,
   CmsSiteSettingsValueSchema,
   CmsSectionSchema,
+  CmsPartnersSectionSchema,
   PublicReleasePageContentSchema,
   PublicAddOnTermsSchema,
   ReleaseDependencyRefSchema,
@@ -541,6 +542,11 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
       }
       const config = applyPatch(inherited?.config ?? {}, section.policy.patch, candidate.revision.path, issues)
       parentSections.set(section.key, { id: section.id, key: section.key, renderer: section.renderer, rendererVersion: section.rendererVersion, schemaVersion: section.schemaVersion, order: section.order, config: config as never, ...(section.analyticsActionId ? { analyticsActionId: section.analyticsActionId } : {}) })
+    }
+    for (const section of parentSections.values()) {
+      if ((section.key === "partners" || section.renderer === "partners") && !CmsPartnersSectionSchema.safeParse(section).success) {
+        issues.push(issue("CMS_PARTNERS_SECTION_INVALID", "Проверьте заголовок, список партнёров и версию секции", candidate.revision.path))
+      }
     }
     visiting.delete(candidate.node.id)
     const content = PublicReleasePageContentSchema.parse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo: candidate.revision.seo })

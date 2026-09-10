@@ -6,6 +6,8 @@ import { Alert, AlertDescription, AlertTitle, Button, DropdownMenu, DropdownMenu
 
 import { ContentStatusBadge, InheritanceControl, PreviewDeviceSwitch, SourceMarker } from "@admin/components/cms-ui"
 import { cmsRepository } from "@admin/data/cms-repository"
+import { createPartnersEditorSection } from "@admin/data/partners-section"
+import { PartnersSectionFields } from "@admin/components/partners-section-fields"
 import { CmsConflictError, type ContentNode, type EditorRecord, type InheritanceMode } from "@admin/entities/cms"
 import { useAdminAuthSession } from "@admin/features/auth-session-context"
 import { useRepository } from "@admin/features/use-repository"
@@ -69,7 +71,7 @@ export function ContentEditorPage({ externalEditHref, kind, nodeId, publicationG
   if (repositoryState.loading || !draft || accessState.loading || topologyState.loading) return <div className="p-4"><LoadingRows count={7} /></div>
   const allowedCommonTabs = commonTabs.filter((item) => !("capability" in item) || user.capabilities[item.capability] === true)
   const allowedOfferingTabs = offeringTabs
-  const editorTabs = workspace === "offering" ? allowedOfferingTabs : kind === "home" ? [{ value: "content", label: "Секции", icon: IconLayoutBoard }, { value: "collections", label: "Карточки и подборки", compactLabel: "Подборки", icon: IconSparkles }, { value: "navigation", label: "Навигация", icon: IconLink }, ...allowedCommonTabs.slice(2)] : allowedCommonTabs
+  const editorTabs = workspace === "offering" ? allowedOfferingTabs : kind === "home" ? [{ value: "content", label: "Секции", icon: IconLayoutBoard }, ...allowedCommonTabs.filter((item) => item.value === "composition"), { value: "collections", label: "Карточки и подборки", compactLabel: "Подборки", icon: IconSparkles }, { value: "navigation", label: "Навигация", icon: IconLink }, ...allowedCommonTabs.slice(2)] : allowedCommonTabs
   const selectedTab = editorTabs.find((item) => item.value === tab) ?? editorTabs[0]!
   const effectiveTab = ("editorTab" in selectedTab ? selectedTab.editorTab : selectedTab.value) as ContentEditorTab
   const navigation = <PageNav items={editorTabs} onValueChange={(nextTab) => { const next = new URLSearchParams(searchParams); next.set("tab", nextTab); setSearchParams(next, { replace: true }) }} value={selectedTab.value} />
@@ -83,7 +85,7 @@ export function ContentEditorPage({ externalEditHref, kind, nodeId, publicationG
 }
 
 export function EditorTabContent({ device, draft, editable, kind, nodes = [], topologyAvailable = true, tab, update, updateSection, workspace = "default" }: { device: "desktop" | "tablet" | "mobile"; draft: EditorRecord; editable: boolean; kind: EditorKind; nodes?: ContentNode[]; topologyAvailable?: boolean; tab: ContentEditorTab; update: (patch: Partial<EditorRecord>) => void; updateSection: (id: string, mode: InheritanceMode) => void; workspace?: "default" | "offering" }) {
-  if (tab === "composition") return <CompositionTab draft={draft} editable={editable} updateSection={updateSection} />
+  if (tab === "composition") return <CompositionTab draft={draft} editable={editable} updateSection={updateSection} update={update} />
   if (tab === "media-seo") return <div className="space-y-3"><SeoTab draft={draft} editable={editable} update={update} /><LinkedState title="Медиа этой страницы" detail="Галерея, alt-тексты и точки фокуса остаются в canonical media manager." href="/media" label="Открыть медиатеку" icon={IconPhoto} /></div>
   if (tab === "seo") return <SeoTab draft={draft} editable={editable} update={update} />
   if (tab === "media") return <LinkedState title="Медиа этой страницы" detail="Здесь видны изображения и файлы, а также блоки, в которых они используются." href="/media" label="Открыть медиатеку" icon={IconPhoto} />
@@ -146,7 +148,15 @@ function HeroEditor({ draft, editable, update, compact = false }: { draft: Edito
   </EditorSection>
 }
 
-function CompositionTab({ draft, editable, updateSection }: { draft: EditorRecord; editable: boolean; updateSection: (id: string, mode: InheritanceMode) => void }) { return <EditorSection subtitle="site default → page type → parent/category → page/profile" title="Наследуемые секции"><div className="space-y-2">{draft.sections.map((section) => <InheritanceControl disabled={!editable} key={section.id} onChange={(mode) => updateSection(section.id, mode)} section={section} />)}</div></EditorSection> }
+function CompositionTab({ draft, editable, updateSection, update }: { draft: EditorRecord; editable: boolean; updateSection: (id: string, mode: InheritanceMode) => void; update: (patch: Partial<EditorRecord>) => void }) {
+  return <EditorSection subtitle="site default → page type → parent/category → page/profile" title="Наследуемые секции"><div className="space-y-3">{draft.sections.map((section) => <div key={section.id}>
+    <InheritanceControl disabled={!editable || (section.key === "partners" && !section.partnersConfig)} onChange={(mode) => updateSection(section.id, mode)} section={section} />
+    {section.mode === "override" && section.partnersConfig && <PartnersSectionFields id={section.id} value={section.partnersConfig} editable={editable} onChange={(partnersConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, partnersConfig } : current) })} />}
+    {section.key === "partners" && !section.partnersConfig && <p className="mt-2 text-xs text-muted-foreground">Редактор этой версии или составной конфигурации пока недоступен. Сохранение остальных полей не изменяет её содержимое.</p>}
+  </div>)}
+  {draft.kind === "home" && !draft.sections.some((section) => section.key === "partners") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createPartnersEditorSection()] })} size="sm" variant="outline">Добавить секцию «Партнёры»</Button>}
+  </div></EditorSection>
+}
 
 function SeoTab({ draft, editable, update }: { draft: EditorRecord; editable: boolean; update: (patch: Partial<EditorRecord>) => void }) { return <div className="space-y-3"><Alert className={draft.seoChecks.blockers ? "border-danger/30" : "border-success/30"}><IconSearch /><AlertTitle>{draft.seoChecks.passed} checks passed · {draft.seoChecks.warnings} warning · {draft.seoChecks.blockers} blocker</AlertTitle><AlertDescription>Оценка собрана из явных правил, а не из магического score.</AlertDescription></Alert><EditorSection title="Metadata"><div className="grid gap-4"><FormField htmlFor="seo-title" label="SEO title"><Input id="seo-title" onChange={(event) => update({ seoTitle: event.target.value })} readOnly={!editable} value={draft.seoTitle} /></FormField><FormField htmlFor="seo-description" label="SEO description"><Textarea id="seo-description" onChange={(event) => update({ seoDescription: event.target.value })} readOnly={!editable} value={draft.seoDescription} /></FormField><FormField htmlFor="canonical" label="Canonical"><Input id="canonical" readOnly value={`https://svistoplyasovo.ru${draft.url}`} /></FormField><FormField htmlFor="indexing" label="Indexing"><Input id="indexing" readOnly value={draft.indexPolicy} /></FormField></div></EditorSection><EditorSection subtitle="Как результат может выглядеть в поиске" title="Snippet preview"><div className="max-w-2xl rounded-lg border p-4"><p className="text-base text-[#1a0dab]">{draft.seoTitle}</p><p className="mt-1 text-xs text-[#006621]">svistoplyasovo.ru{draft.url}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{draft.seoDescription}</p></div></EditorSection></div> }
 
