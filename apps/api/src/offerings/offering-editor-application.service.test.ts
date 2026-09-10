@@ -5,6 +5,7 @@ vi.mock("../cms/cms-source-draft.js", () => ({
 }))
 
 import { OfferingEditorApplicationService } from "./offering-editor-application.service.js"
+import { BusinessCalendarEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity, OfferingBindingEntity, ResourceEntity } from "@crm/db"
 
 describe("OfferingEditorApplicationService binding target lookup guards", () => {
   const service = new OfferingEditorApplicationService({} as never)
@@ -82,5 +83,24 @@ describe("OfferingEditorApplicationService binding target lookup guards", () => 
     const offering = saved.flat().find((row) => row.kind === "house")
     expect(offering).toMatchObject({ salesMode: "quoted", priceDisplayMode: "from", currency: "RUB", businessCalendarId: calendar.id })
     expect(saved.flat().find((row) => row.role === "primary")).toMatchObject({ resourceId: resource.id, availabilityRequired: true })
+  })
+
+  it("marks a house editorial locator eligible once its typed public resolver is available", async () => {
+    const offeringId = "11111111-1111-4111-8111-111111111111"
+    const nodeId = "22222222-2222-4222-8222-222222222222"
+    const revisionId = "33333333-3333-4333-8333-333333333333"
+    const now = "2026-09-10T10:00:00.000Z"
+    const offering = { id: offeringId, kind: "house", state: "active", archivedAt: null }
+    const link = { sourceKind: "catalog_offering", sourceId: offeringId, sourceVersion: 3, nodeId, createdAt: new Date(now) }
+    const node = { id: nodeId, version: 2, kind: "resource_detail", status: "active", archivedAt: null }
+    const revision = { id: revisionId, revision: 2, state: "draft", path: "/houses/forest", title: "Домик", contentHash: "a".repeat(64), relations: [{ kind: "catalog_offering", entityId: offeringId }] }
+    const profile = { kind: "catalog_offering", entityId: offeringId, nodeId, archivedAt: null }
+    const manager = {
+      findOne: vi.fn(async (entity: unknown) => entity === CmsSourceLinkEntity ? link : entity === CmsNodeEntity ? node : entity === ResourceEntity ? { id: "44444444-4444-4444-8444-444444444444", kind: "houses", capacityMode: "fixed", capacityTotal: 4, archivedAt: null } : entity === BusinessCalendarEntity ? { id: "55555555-5555-4555-8555-555555555555", state: "active", archivedAt: null } : null),
+      find: vi.fn(async (entity: unknown) => entity === CmsNodeRevisionEntity ? [revision] : entity === CmsPublicProfileEntity ? [profile] : entity === OfferingBindingEntity ? [{ role: "primary", resourceId: "44444444-4444-4444-8444-444444444444", quantityDefault: 1, capacityImpactDefault: 1, availabilityRequired: true }] : []),
+    }
+
+    const locator = await (new OfferingEditorApplicationService({} as never) as unknown as { editorialLocator(manager: unknown, offering: unknown): Promise<{ publication: unknown }> }).editorialLocator(manager, offering)
+    expect(locator.publication).toEqual({ eligible: true, blockers: [] })
   })
 })

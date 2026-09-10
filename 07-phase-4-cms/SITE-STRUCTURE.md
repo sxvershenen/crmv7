@@ -55,6 +55,8 @@
 
 `/resources/:slug` из текущего прототипа не объявляется permanent URL автоматически. При миграции каждый старый published path получает mapping: keep, canonical alias или 301 to approved new path.
 
+Текущий опубликованный house slice использует `/houses/{house-slug}` — это фактический CMS path, создаваемый source locator и обслуживаемый catch-all route. Целевой `/domiki/{house-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
+
 ## 3. Catalog model
 
 Один reusable listing engine обслуживает домики, кемпинги, допы, площадки, программы и мероприятия под заказ. Конфигурация задаёт:

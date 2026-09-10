@@ -54,6 +54,7 @@ import {
 } from "@crm/db"
 
 import { createPublicAddOnProjectionDependency } from "../offerings/public-addon-projection.js"
+import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicVenueProjectionDependency } from "../offerings/public-venue-projection.js"
 
 type Candidate = {
@@ -333,8 +334,31 @@ export class CmsPublicationService {
     link: CmsSourceLinkEntity,
   ): Promise<ReleaseDependencyRef | null> {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (offering?.kind === "house") return this.safeHouseProjectionDependency(manager, candidate, link)
     if (offering?.kind === "venue") return this.safeVenueProjectionDependency(manager, candidate, link)
     return this.safeAddOnProjectionDependency(manager, candidate, link)
+  }
+
+  private async safeHouseProjectionDependency(
+    manager: EntityManager,
+    candidate: { node: CmsNodeEntity; revision: CmsNodeRevisionEntity },
+    link: CmsSourceLinkEntity,
+  ): Promise<ReleaseDependencyRef | null> {
+    const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
+    if (!offering || offering.kind !== "house" || offering.state !== "active" || offering.archivedAt !== null) return null
+    if (candidate.node.kind !== "resource_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if (!candidate.revision.path.startsWith("/houses/")) return null
+    const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
+    if (!profile || profile.archivedAt !== null) return null
+    const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
+    if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
+    const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+    if (bindings.length !== 1 || !bindings[0]!.resourceId) return null
+    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId, archivedAt: IsNull() })
+    if (!resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) return null
+    const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
+    if (!calendar) return null
+    return createPublicHouseProjectionDependency({ offeringId: offering.id, nodeId: candidate.node.id, profileRevisionId: candidate.revision.id })
   }
 
   private async safeVenueProjectionDependency(
@@ -511,7 +535,9 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     } else if (candidate.sourceKind === blockedCatalogSourceKind) {
       const safeProjection = candidate.safeProjectionDependency?.type === "crm_projection"
         && ((candidate.node.kind === "addon_detail" && candidate.safeProjectionDependency.version === "public.addon-summary.v1")
+          || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.house-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1"))
+        && (candidate.safeProjectionDependency.version !== "public.house-summary.v1" || candidate.revision.path.startsWith("/houses/"))
         && candidate.safeProjectionDependency.contentHash
       if (!safeProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
     } else if (candidate.revision.relations.length > 0) {

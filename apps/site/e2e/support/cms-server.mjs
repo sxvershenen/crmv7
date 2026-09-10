@@ -39,6 +39,44 @@ createServer(async (request, response) => {
       },
     })
   }
+  if (url.pathname.endsWith("/offerings/houses/detail")) {
+    if (scenario === "house-missing") return send({ code: "NOT_FOUND" }, 404)
+    if (scenario === "house-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
+    const path = url.searchParams.get("path")
+    const house = {
+      offeringId: id,
+      kind: "house",
+      path,
+      releaseId,
+      title: "Домик из CMS",
+      summary: "Операционные факты домика из safe public projection.",
+      price: { mode: "from", amount: { amountMinor: 650000, currency: "RUB" } },
+      priceBasisLabel: "за ночь",
+      quoteAvailable: false,
+      requestAvailable: true,
+      capacity: null,
+      readiness: "ready",
+      timezone: "Europe/Moscow",
+      currency: "RUB",
+      sourceVersions: { offering: 3, pricing: 4, priceBook: 2, calendar: 2, contentReleaseId: releaseId, profileRevisionId: id },
+      asOf,
+      fulfillment: { allocationMode: "exclusive_resource", capacityUnit: "guests", capacityTotal: 4, pricingMode: "rate_plan", spaceType: "mixed", availabilityMode: "resource" },
+    }
+    if (scenario === "house-empty") {
+      house.price = { mode: "request" }
+      house.priceBasisLabel = null
+      house.readiness = "request_only"
+      house.fulfillment.availabilityMode = "request_only"
+    }
+    if (scenario === "house-private") house.internalNotes = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "house-invalid") delete house.fulfillment
+    if (scenario === "house-version") {
+      house.releaseId = nextReleaseId
+      house.sourceVersions.contentReleaseId = nextReleaseId
+    }
+    if (scenario === "house-wrong-path") house.path = "/houses/other"
+    return send(house)
+  }
   if (url.pathname.endsWith("/pages/resolve")) {
     if (scenario === "not-found") return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "proxy-not-found") return send({ message: "proxy route missing" }, 404)
@@ -84,9 +122,9 @@ createServer(async (request, response) => {
     if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({
       nodeId: id, revisionId: id, releaseId,
-      kind: path === "/" ? "home" : "resource_listing",
+      kind: path === "/" ? "home" : path === "/houses/forest" && scenario.startsWith("house-") ? "resource_detail" : "resource_listing",
       path: scenario === "wrong-path" ? "/wrong-path" : path,
-      title: "Опубликованный заголовок", summary: "Описание опубликованной страницы", hero: null,
+      title: path === "/houses/forest" && scenario.startsWith("house-") ? "Домик из CMS" : "Опубликованный заголовок", summary: path === "/houses/forest" && scenario.startsWith("house-") ? "Операционные факты домика из safe public projection." : "Описание опубликованной страницы", hero: null,
       sections: scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },

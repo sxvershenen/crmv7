@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { materializeRelease } from "./cms-publication.service.js"
+import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 
 const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
@@ -169,5 +170,29 @@ describe("materializeRelease", () => {
       { type: "crm_projection", id: rootId, version: "public.addon-summary.v1", contentHash: "b".repeat(64) },
     ]))
     expect(JSON.stringify(result.routes[0]?.content)).not.toContain("pricing")
+  })
+
+  it("pins an approved house projection dependency for the vertical route", () => {
+    const houseDependency = createPublicHouseProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const house = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/houses/sosna", slug: "sosna",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: houseDependency,
+    })
+    const result = materializeRelease([house] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.dependencies).toContainEqual(houseDependency)
+  })
+
+  it("rejects a house projection attached to a non-house canonical path", () => {
+    const houseDependency = createPublicHouseProjectionDependency({ offeringId: rootId, nodeId: rootId, profileRevisionId: rootRevisionId })
+    const house = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/venues/sosna", slug: "sosna",
+      sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
+      safeProjectionDependency: houseDependency,
+    })
+    expect(materializeRelease([house] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/venues/sosna" }),
+    ])
   })
 })

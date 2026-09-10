@@ -215,3 +215,39 @@ test("keeps a long homepage section title within the viewport", async ({ page, r
   await expect(page.locator("#events")).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+test("binds a house route to CMS content and a same-release safe operational projection", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=house-published")
+  const response = await request.get("/houses/forest")
+  expect(response.status()).toBe(200)
+  expect(await response.text()).toContain("Домик из CMS")
+  await page.goto("/houses/forest")
+  await expect(page.locator("h1")).toHaveText("Домик из CMS")
+  await expect(page.locator('[data-route-kind="house"]')).toContainText("до 4 гостей")
+  await expect(page.locator('[data-route-kind="house"]')).toContainText(/6\s500/)
+  await expect(page.locator('[data-route-kind="house"] [data-site-action="booking"]')).toBeVisible()
+  await expect(page.locator("meta[name=robots]")).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test("keeps a valid house route request-only when price authority is absent", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=house-empty")
+  const response = await page.goto("/houses/forest")
+  expect(response?.status()).toBe(200)
+  await expect(page.locator('[data-route-kind="house"]')).toContainText("По запросу")
+  await expect(page.locator('[data-route-kind="house"]')).toContainText("Уточним доступность")
+})
+
+for (const scenario of ["house-missing", "house-outage", "house-private", "house-invalid", "house-version", "house-wrong-path"]) {
+  test(`fails closed for ${scenario} house delivery`, async ({ request }) => {
+    await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
+    const response = await request.get("/houses/forest")
+    expect(response.status()).toBe(503)
+    expect(response.headers()["cache-control"]).toBe("no-store")
+    expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
+    const html = await response.text()
+    expect(html).toContain("Сайт временно недоступен")
+    expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+    expect(html).not.toContain("Домик из CMS")
+  })
+}

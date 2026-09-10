@@ -15,6 +15,7 @@ import FaqLocationIsland from "../components/islands/FaqLocationIsland"
 import BookingQuizIsland from "../components/islands/BookingQuizIsland"
 import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
 import ListingIsland from "../components/islands/ListingIsland"
+import HouseDetail from "../components/sections/HouseDetail.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
@@ -31,6 +32,7 @@ const page = result.status === "published" ? result.value.page : null
 const homepageSections = getHomepageSections(page, false)
 const publishedSiteSettings = result.status === "published" ? result.value.settings : null
 const listing = result.status === "published" ? result.value.listing : null
+const house = result.status === "published" ? result.value.house : null
 const failure = result.status !== "published" ? result.status : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -69,6 +71,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} />}
       {!profileKind && !hero && !listing && <h1 class="site-type-h1">{page.title}</h1>}
       {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
+      {house && <HouseDetail house={house} />}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} client:visible />

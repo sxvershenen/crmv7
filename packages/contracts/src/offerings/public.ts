@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CmsPathSchema } from "../content.js";
 import { CurrencySchema, DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "../primitives.js";
 import { ResourceSpaceTypeSchema } from "../resources.js";
 import { AddOnCategoryKeySchema, CatalogOfferingKindSchema } from "./catalog.js";
@@ -115,6 +116,47 @@ export const PublicVenueProjectionPinSchema = z.object({
   profileRevisionId: IdSchema,
 }).strict();
 export type PublicVenueProjectionPin = z.infer<typeof PublicVenueProjectionPinSchema>;
+
+/** Public house projection: the Resource supplies capacity, while pricing and readiness remain operational facts. */
+export const PublicHouseFulfillmentSchema = z.object({
+  allocationMode: z.literal("exclusive_resource"),
+  capacityUnit: z.literal("guests"),
+  capacityTotal: z.number().int().positive().max(1_000_000),
+  pricingMode: z.literal("rate_plan"),
+  spaceType: ResourceSpaceTypeSchema.nullable(),
+  availabilityMode: z.enum(["resource", "request_only"]),
+}).strict();
+export type PublicHouseFulfillment = z.infer<typeof PublicHouseFulfillmentSchema>;
+
+export const PublicHouseSummarySchema = PublicOfferingSummarySchema.safeExtend({
+  kind: z.literal("house"),
+  path: CmsPathSchema,
+  releaseId: IdSchema,
+  fulfillment: PublicHouseFulfillmentSchema,
+}).strict();
+export type PublicHouseSummary = z.infer<typeof PublicHouseSummarySchema>;
+export const PublicHouseDetailQuerySchema = z.object({ path: CmsPathSchema }).strict();
+export type PublicHouseDetailQuery = z.infer<typeof PublicHouseDetailQuerySchema>;
+export const PublicHouseListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export type PublicHouseListQuery = z.infer<typeof PublicHouseListQuerySchema>;
+export const PublicHouseListResponseSchema = z.object({
+  items: z.array(PublicHouseSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(2048).nullable(),
+  releaseId: IdSchema,
+  asOf: DateTimeSchema,
+}).strict();
+export type PublicHouseListResponse = z.infer<typeof PublicHouseListResponseSchema>;
+export const PublicHouseProjectionPinSchema = z.object({
+  contract: z.literal("public.house-summary.v1"),
+  offeringId: IdSchema,
+  kind: z.literal("house"),
+  nodeId: IdSchema,
+  profileRevisionId: IdSchema,
+}).strict();
+export type PublicHouseProjectionPin = z.infer<typeof PublicHouseProjectionPinSchema>;
 
 export const PublicAddOnSummaryParamsSchema = z.object({
   offeringId: IdSchema,

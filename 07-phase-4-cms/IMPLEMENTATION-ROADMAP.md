@@ -14,7 +14,7 @@
 
 ### P4.5E — Typed public projections
 
-- После add-on и venue slices нужны resolver/contracts house, campground, program и event-service: listing/detail/price readiness и, где предусмотрено сценарием, quote/availability.
+- После add-on, venue и house slices нужны resolver/contracts campground, program и event-service: listing/detail/price readiness и, где предусмотрено сценарием, quote/availability.
 - Exact profile/revision relation, release-pinned dependencies, strict allowlist, source versions/hash/asOf и честный unavailable/request fallback обязательны.
 - Operational change инвалидирует active projection независимо от CMS release; existing fenced delivery/cache-effect port используется повторно.
 - Non-leak tests проверяют отсутствие draft/internal/customer fields. CMS source locator сам по себе не разрешает public output.
@@ -23,7 +23,9 @@
 
 Homepage editorial binding gate закрыт: стандартные секции главной используют typed `homepage-section`/`partners`/`why-us` contracts, release order и visibility, а footer — typed global navigation/settings slot; ContentSource, global identity/navigation/default slots и Astro/React consumers проверяются в desktop/mobile CMS delivery E2E. Operational card collections остаются отдельной public-projection boundary.
 
-1. Мигрировать vertical routes в порядке house → campground → addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
+House vertical route gate закрыт: `public.house-summary.v1` проверяет exact `CatalogOffering(kind=house)` → active CMS profile/revision → одну primary fixed Resource → active calendar, а public API отдаёт bounded list и detail по canonical CMS path. `/houses/*` требует совпадающие CMS page и house projection из одного release; missing/malformed/mixed operational response даёт `503` без partial HTML. Price отсутствует — честный `request_only`, availability не вычисляется в странице.
+
+1. Мигрировать оставшиеся vertical routes в порядке campground → addon → venue → program → event service, учитывая готовность safe resolver каждого kind.
 2. Завершить resource URLs/redirect map, hubs/categories/curated landings, статьи и information/legal pages.
 3. Генерировать sitemap/robots/canonical/schema из active release.
 

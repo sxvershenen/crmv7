@@ -1,5 +1,6 @@
 import {
   PublicListingResultSchema,
+  PublicHouseSummarySchema,
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -7,6 +8,7 @@ import {
   PublicPageSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
+  type PublicHouseSummary,
   type PublicPage,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -20,6 +22,7 @@ export interface ContentSource {
   page(path: string): Promise<ContentResult<PublicPage>>
   settings(): Promise<ContentResult<PublicSiteSettings>>
   listing(path: string, searchParams: URLSearchParams): Promise<ContentResult<PublicListingResult>>
+  house(path: string): Promise<ContentResult<PublicHouseSummary>>
 }
 
 export function createPublicContentSource(baseUrl: string, request: typeof fetch = fetch): ContentSource {
@@ -60,6 +63,10 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
       query.set("path", path)
       return document(`/listings/resolve?${query}`, (value) => PublicListingResultSchema.parse(value))
     },
+    house(path) {
+      const query = new URLSearchParams({ path })
+      return document(`/offerings/houses/detail?${query}`, (value) => PublicHouseSummarySchema.parse(value))
+    },
   }
 }
 
@@ -67,6 +74,7 @@ export type PublishedRoute = ContentResult<{
   page: PublicPage
   settings: PublicSiteSettings
   listing: PublicListingResult | null
+  house: PublicHouseSummary | null
 }>
 
 /** Each response reads the active pointer independently. Never render a mixed release. */
@@ -92,7 +100,15 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     listing = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing } }
+  let house: PublicHouseSummary | null = null
+  if (page.value.kind === "resource_detail" && path.startsWith("/houses/")) {
+    const result = await source.house(path)
+    if (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
+      return { status: "unavailable" }
+    }
+    house = result.value
+  }
+  return { status: "published", value: { page: page.value, settings: settings.value, listing, house } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

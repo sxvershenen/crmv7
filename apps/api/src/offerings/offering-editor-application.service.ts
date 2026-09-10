@@ -417,9 +417,17 @@ export class OfferingEditorApplicationService {
     const relations = current?.relations.filter((relation) => relation.kind === "catalog_offering") ?? []
     if (relations.length === 0) blockers.push("revision_relation_missing")
     else if (relations.length !== 1 || relations[0]?.entityId !== offering.id) blockers.push("revision_relation_mismatch")
-    // P4.5E currently exposes only the strict add-on summary contract. Other
-    // offering kinds remain fenced until their own typed resolver exists.
-    if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
+    // P4.5E exposes strict typed public summaries for add-ons, venues and houses.
+    // Houses additionally need the exact operational join used by the public resolver.
+    if (offering.kind === "house") {
+      const primaryBindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+      const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
+      const resource = binding?.resourceId ? await manager.findOne(ResourceEntity, { where: { id: binding.resourceId, archivedAt: IsNull() } }) : null
+      const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
+      if (!binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0 || !calendar || !current?.path.startsWith("/houses/")) {
+        blockers.push("safe_public_projection_missing")
+      }
+    } else if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
     const revision = (row: CmsNodeRevisionEntity | null) => row ? {
       id: row.id, revision: row.revision, state: row.state, path: row.path, title: row.title, contentHash: row.contentHash,
     } : null

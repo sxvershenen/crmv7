@@ -1,0 +1,36 @@
+---
+import type { PublicHouseSummary } from "@crm/contracts"
+import { ArrowRight, Check, Users } from "lucide-react"
+
+interface Props {
+  house: PublicHouseSummary
+}
+
+const { house } = Astro.props
+const price = house.price.mode === "request" ? null : new Intl.NumberFormat("ru-RU", { style: "currency", currency: house.price.amount.currency, maximumFractionDigits: 0 }).format(house.price.amount.amountMinor / 100)
+const priceLabel = house.price.mode === "exact" ? "стоимость" : "стоимость от"
+const readinessLabel = house.readiness === "ready" ? "Можно забронировать" : house.readiness === "temporarily_unavailable" ? "Временно недоступен" : "Уточним доступность"
+---
+
+<section class="site-section site-section--compact" data-section-key="house-detail" data-route-kind="house">
+  <div class="grid gap-3 lg:grid-cols-12 lg:gap-4">
+    <div class="lg:col-span-7 rounded-[var(--site-radius-xl)] bg-[var(--site-color-surface)] p-5 sm:p-7">
+      <div class="flex items-center gap-2 text-[length:var(--site-text-caption)] font-[var(--site-weight-medium)] text-[var(--site-color-brand-700)]">
+        <Users className="h-4 w-4" /> Вместимость до {house.fulfillment.capacityTotal} гостей
+      </div>
+      <p class="mt-5 max-w-prose text-[length:var(--site-text-body)] leading-relaxed text-[var(--site-color-text-muted)]">{house.summary ?? "Описание домика готовится редакцией."}</p>
+      <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Формат</dt><dd class="mt-1 font-[var(--site-weight-medium)]">Проживание</dd></div>
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Доступность</dt><dd class="mt-1 font-[var(--site-weight-medium)]">{readinessLabel}</dd></div>
+        <div class="rounded-[var(--site-radius-lg)] bg-[var(--site-color-bg)] p-3"><dt class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">Пространство</dt><dd class="mt-1 font-[var(--site-weight-medium)]">{house.fulfillment.spaceType === "outdoor" ? "На природе" : house.fulfillment.spaceType === "indoor" ? "В помещении" : house.fulfillment.spaceType === "mixed" ? "Дом и природа" : "Уточняется"}</dd></div>
+      </dl>
+    </div>
+    <aside class="lg:col-span-5 rounded-[var(--site-radius-xl)] bg-[var(--site-color-surface)] p-5 sm:p-7">
+      <div class="text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{price ? priceLabel : "стоимость"}</div>
+      <div class="mt-1 text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] text-[var(--site-color-brand-700)]">{price ?? "По запросу"}</div>
+      {house.priceBasisLabel && <div class="mt-1 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{house.priceBasisLabel}</div>}
+      <div class="mt-6 rounded-[var(--site-radius-lg)] border border-[var(--site-color-border)] p-3 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]"><Check className="mr-1 inline h-4 w-4 text-[var(--site-color-brand-600)]" />{readinessLabel}</div>
+      <button data-site-action="booking" data-site-item={`Дом: ${house.title}`} class="site-button site-button--primary mt-5 w-full">Забронировать <ArrowRight className="h-4 w-4" /></button>
+    </aside>
+  </div>
+</section>

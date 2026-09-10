@@ -12,7 +12,7 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
   it("documents only implemented public reads and never leaks CMS administration", () => {
     const publicDocument = JSON.stringify(publicOpenApiDocument);
     expect(Object.keys(publicOpenApiDocument.paths ?? {})).toEqual([
-      "/pages/resolve", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/media/{assetId}/{variantId}",
+      "/pages/resolve", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/media/{assetId}/{variantId}",
     ]);
     expect(publicDocument).not.toContain("CmsNodeMutation");
     expect(publicDocument).not.toContain("MediaUploadGrant");
