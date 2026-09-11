@@ -8,6 +8,8 @@ import {
   CmsSectionPolicySchema,
   CmsSourceLinkSchema,
   ListingFilterDefinitionSchema,
+  MediaAssetUsageQuerySchema,
+  MediaReplacementUploadInitSchema,
   MediaUploadInitSchema,
   PublicPageSchema,
   PublicLeadIntakeSchema,
@@ -48,6 +50,19 @@ describe("Phase 4 contracts", () => {
 
   it("rejects unsafe media sizes before an upload grant is issued", () => {
     expect(MediaUploadInitSchema.safeParse({ filename: "bomb.png", mimeType: "image/png", byteSize: 100_000_001, checksumSha256: "a".repeat(64) }).success).toBe(false);
+  });
+
+  it("keeps replacement uploads versioned and usage filters bounded and strict", () => {
+    expect(MediaReplacementUploadInitSchema.parse({
+      expectedVersion: 3, filename: "hero-v2.png", mimeType: "image/png", byteSize: 1024, checksumSha256: "a".repeat(64),
+    }).expectedVersion).toBe(3);
+    expect(MediaReplacementUploadInitSchema.safeParse({
+      filename: "hero-v2.png", mimeType: "image/png", byteSize: 1024, checksumSha256: "a".repeat(64),
+    }).success).toBe(false);
+    expect(MediaAssetUsageQuerySchema.parse({ path: "/media-test", published: "false", limit: "25" })).toEqual({ path: "/media-test", published: false, limit: 25 });
+    expect(MediaAssetUsageQuerySchema.safeParse({ path: "/media-test/", limit: 25 }).success).toBe(false);
+    expect(MediaAssetUsageQuerySchema.safeParse({ limit: 201 }).success).toBe(false);
+    expect(MediaAssetUsageQuerySchema.safeParse({ limit: 25, label: "untrusted" }).success).toBe(false);
   });
 
   it("accepts a public enquiry but has no public Booking creation surface", () => {

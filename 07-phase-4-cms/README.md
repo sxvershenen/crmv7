@@ -8,7 +8,7 @@
 |---|---|---|
 | P4.1–P4.2 | Public UI kit/homepage, CMS frontend/core, Admin/Public API | Новые страницы используют существующие boundaries |
 | P4.3 | Guarded render-ready preflight, effective diff/blast radius/dependencies, atomic direct publication, publication journal, delivery status/replay и immutable rollback | Закрыт; расширять только под новый publication consumer |
-| P4.4 | Local/test и S3-compatible media storage, CDN URL delivery, fail-closed external scanner, staged processing retry/DLQ, orphan cleanup и safe health metrics | Versioned blob replacement/page-filtered usage flows; provider/data-location/retention approval и rights/source review перед migration |
+| P4.4 | Local/test и S3-compatible media storage, CDN URL delivery, fail-closed external scanner, staged processing retry/DLQ, orphan cleanup, safe health metrics, versioned blob replacement и page-filtered usage flows | Provider/data-location/retention approval и rights/source review перед migration |
 | P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
 | P4.5 public | Release-pinned commercial projections; CMS-driven canonical `/domiki`, `/kemping`, `/dopy`, `/poshadki`, `/programmy`, `/meropriyatiya`; one-hop legacy 301; typed editorial SSR; canonical/schema и sitemap/robots из active release | Закрыт для утверждённой URL-карты; новые curated nodes требуют реального редакционного evidence |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
@@ -26,7 +26,7 @@
 
 ## Следующий инкремент
 
-1. Закрыть оставшийся P4.4 scope: versioned blob replacement/page-filtered usage flows и rights/source review для approved media migration.
+1. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
 2. Затем P4.6 public intake на готовых public projections.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.

@@ -41,8 +41,10 @@ import {
   MediaAssetIdParamsSchema,
   MediaAssetListQuerySchema,
   MediaAssetListResponseSchema,
+  MediaAssetUsageQuerySchema,
   MediaAssetMetadataMutationSchema,
   MediaHealthSchema,
+  MediaReplacementUploadInitSchema,
   MediaUploadGrantSchema,
   MediaUploadIdParamsSchema,
   MediaUploadInitSchema,
@@ -109,7 +111,9 @@ const mediaUploadToken = adminRegister("MediaUploadTokenQuery", MediaUploadToken
 const mediaListQuery = adminRegister("MediaAssetListQuery", MediaAssetListQuerySchema);
 const mediaList = adminRegister("MediaAssetListResponse", MediaAssetListResponseSchema);
 const mediaDetail = adminRegister("MediaAssetDetail", MediaAssetDetailSchema);
+const mediaUsageQuery = adminRegister("MediaAssetUsageQuery", MediaAssetUsageQuerySchema);
 const mediaUploadInit = adminRegister("MediaUploadInit", MediaUploadInitSchema);
+const mediaReplacementUploadInit = adminRegister("MediaReplacementUploadInit", MediaReplacementUploadInitSchema);
 const mediaUploadGrant = adminRegister("MediaUploadGrant", MediaUploadGrantSchema);
 const mediaMutation = adminRegister("MediaAssetMetadataMutation", MediaAssetMetadataMutationSchema);
 const mediaArchive = adminRegister("MediaAssetArchive", MediaAssetArchiveSchema);
@@ -214,8 +218,9 @@ adminRegistry.registerPath({ method: "post", path: "/releases/{id}/activate", ..
 adminRegistry.registerPath({ method: "post", path: "/releases/{id}/rollback", ...adminPrivate, tags: ["Publication"], summary: "Clone a historical published release into a new immutable release and atomically activate it", request: { params: releaseIdParams, body: { required: true, content: json(releaseActivate) } }, responses: { 200: { description: "New active rollback release", content: json(releaseDetail) }, 403: errorResponse("Publication capability denied", adminError), 409: errorResponse("Active release changed or source is not published", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/media/assets", ...adminPrivate, tags: ["Media"], summary: "List media assets and processing state", request: { query: mediaListQuery }, responses: { 200: { description: "Media assets", content: json(mediaList) }, 403: errorResponse("Content view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/media/health", ...adminPrivate, tags: ["Media"], summary: "Read safe media processing, scanner and cleanup metrics", responses: { 200: { description: "Media pipeline health", content: json(mediaHealth) }, 403: errorResponse("Media management capability denied", adminError) } });
-adminRegistry.registerPath({ method: "get", path: "/media/assets/{assetId}", ...adminPrivate, tags: ["Media"], summary: "Read variants, metadata and refreshed usage graph", request: { params: mediaAssetId }, responses: { 200: { description: "Media asset detail", content: json(mediaDetail) }, 404: errorResponse("Asset not found", adminError) } });
+adminRegistry.registerPath({ method: "get", path: "/media/assets/{assetId}", ...adminPrivate, tags: ["Media"], summary: "Read variants, metadata and a bounded, page-filterable refreshed usage graph", request: { params: mediaAssetId, query: mediaUsageQuery }, responses: { 200: { description: "Media asset detail", content: json(mediaDetail) }, 400: errorResponse("Usage query rejected", adminError), 404: errorResponse("Asset not found", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/media/uploads", ...adminPrivate, tags: ["Media"], summary: "Issue a scoped, expiring local/S3-compatible upload grant", request: { body: { required: true, content: json(mediaUploadInit) } }, responses: { 201: { description: "Scoped upload grant", content: json(mediaUploadGrant) }, 409: errorResponse("Duplicate content hash", adminError), 422: errorResponse("Media type or filename rejected", adminError) } });
+adminRegistry.registerPath({ method: "post", path: "/media/assets/{assetId}/replacements", ...adminPrivate, tags: ["Media"], summary: "Issue a version-guarded upload grant for an atomic immutable blob replacement", request: { params: mediaAssetId, body: { required: true, content: json(mediaReplacementUploadInit) } }, responses: { 201: { description: "Scoped replacement upload grant", content: json(mediaUploadGrant) }, 404: errorResponse("Asset not found", adminError), 409: errorResponse("Asset version, readiness or checksum conflict", adminError), 422: errorResponse("Media type or filename rejected", adminError) } });
 adminRegistry.registerPath({ method: "put", path: "/media/uploads/{uploadId}/content", security: [], tags: ["Media"], summary: "Consume a signed upload grant and process one image", request: { params: mediaUploadId, query: mediaUploadToken, body: { required: true, content: { "application/octet-stream": { schema: z.string() } } } }, responses: { 200: { description: "Ready processed media asset" }, 401: errorResponse("Upload grant invalid or expired", adminError), 413: errorResponse("Upload too large", adminError), 422: errorResponse("Checksum, MIME, magic or decode policy failed", adminError), 503: errorResponse("Storage or scanner unavailable; job queued for retry", adminError) } });
 adminRegistry.registerPath({ method: "patch", path: "/media/assets/{assetId}", ...adminPrivate, tags: ["Media"], summary: "Update alt, rights and focal metadata with optimistic concurrency", request: { params: mediaAssetId, body: { required: true, content: json(mediaMutation) } }, responses: { 200: { description: "Updated media asset", content: json(mediaDetail) }, 409: errorResponse("Version conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/media/assets/{assetId}/archive", ...adminPrivate, tags: ["Media"], summary: "Archive an asset only when no published usage exists", request: { params: mediaAssetId, body: { required: true, content: json(mediaArchive) } }, responses: { 200: { description: "Archived media asset", content: json(mediaDetail) }, 409: errorResponse("Published usage or version conflict", adminError) } });

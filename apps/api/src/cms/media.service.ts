@@ -15,7 +15,9 @@ import {
   type MediaAssetArchive,
   type MediaAssetDetail,
   type MediaAssetListQuery,
+  type MediaAssetUsageQuery,
   type MediaAssetMetadataMutation,
+  type MediaReplacementUploadInit,
   type MediaUploadGrant,
   type MediaUploadInit,
   type MediaUsage,
@@ -72,11 +74,22 @@ export class MediaService {
     return MediaAssetListResponseSchema.parse({ items: await Promise.all(rows.map((row) => this.asset(row))) })
   }
 
-  async get(assetId: string, actor: SessionUser): Promise<MediaAssetDetail> {
+  async get(assetId: string, query: MediaAssetUsageQuery, actor: SessionUser): Promise<MediaAssetDetail> {
     this.assert(actor, "canViewContent")
     const row = await this.findAsset(assetId)
-    const usages = await this.refreshUsages(assetId)
-    return MediaAssetDetailSchema.parse({ asset: await this.asset(row, usages), usages })
+    const allUsages = await this.refreshUsages(assetId)
+    const matchingUsages = allUsages.filter((usage) => (
+      (query.pageId === undefined || usage.pageId === query.pageId)
+      && (query.path === undefined || usage.path === query.path)
+      && (query.published === undefined || usage.published === query.published)
+    ))
+    const usages = matchingUsages.slice(0, query.limit)
+    return MediaAssetDetailSchema.parse({
+      asset: await this.asset(row, allUsages),
+      usages,
+      usageTotal: matchingUsages.length,
+      usagesTruncated: matchingUsages.length > usages.length,
+    })
   }
 
   async initUpload(input: MediaUploadInit, actor: SessionUser, requestOrigin: string): Promise<MediaUploadGrant> {
@@ -100,9 +113,50 @@ export class MediaService {
         createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
       }))
       await manager.save(manager.create(MediaUploadEntity, {
-        id: uploadId, assetId, state: "pending", filename, mimeType: input.mimeType, byteSize: input.byteSize,
+        id: uploadId, assetId, purpose: "initial", expectedAssetVersion: null, baseBlobId: null,
+        state: "pending", filename, mimeType: input.mimeType, byteSize: input.byteSize,
         checksumSha256: input.checksumSha256, tokenHash: sha256(token), expiresAt, createdBy: actor.id,
         createdAt: now, completedAt: null, errorCode: null, errorMessage: null,
+      }))
+    })
+    const origin = new URL(requestOrigin).origin
+    return MediaUploadGrantSchema.parse({
+      uploadId,
+      uploadUrl: `${origin}/api/admin/v1/media/uploads/${uploadId}/content?token=${encodeURIComponent(token)}`,
+      method: "PUT",
+      expiresAt: expiresAt.toISOString(),
+      requiredHeaders: { "content-type": input.mimeType, "x-content-sha256": input.checksumSha256 },
+      maxByteSize: input.byteSize,
+    })
+  }
+
+  async initReplacement(assetId: string, input: MediaReplacementUploadInit, actor: SessionUser, requestOrigin: string): Promise<MediaUploadGrant> {
+    this.assert(actor, "canManageMedia")
+    if (!this.signingSecret) throw new ServiceUnavailableException({ code: "MEDIA_UPLOAD_NOT_CONFIGURED", message: "Upload signing secret не настроен" })
+    if (!imageMimeTypes.has(input.mimeType)) throw new UnprocessableEntityException({ code: "MEDIA_TYPE_NOT_ALLOWED", message: "Разрешены JPEG, PNG, WebP и AVIF; SVG проходит отдельный review pipeline" })
+    const filename = normalizeFilename(input.filename)
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + 15 * 60_000)
+    const uploadId = randomUUID()
+    const token = this.uploadToken(uploadId, expiresAt)
+
+    await this.dataSource.transaction(async (manager) => {
+      const asset = await manager.getRepository(MediaAssetEntity).createQueryBuilder("asset")
+        .setLock("pessimistic_write").where("asset.id = :assetId", { assetId }).getOne()
+      if (!asset) throw new NotFoundException({ code: "MEDIA_ASSET_NOT_FOUND", message: "Asset не найден" })
+      if (asset.state !== "ready" || !asset.currentBlobId) throw new ConflictException({ code: "MEDIA_REPLACEMENT_NOT_READY", message: "Заменить можно только ready asset" })
+      if (asset.version !== input.expectedVersion) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Asset уже изменён" })
+      const duplicate = await manager.getRepository(MediaBlobEntity).findOne({ where: { checksumSha256: input.checksumSha256 } })
+      if (duplicate) throw new ConflictException({
+        code: duplicate.assetId === assetId ? "MEDIA_REPLACEMENT_DUPLICATE" : "MEDIA_DUPLICATE",
+        message: duplicate.assetId === assetId ? "Эта версия файла уже есть у asset" : "Этот файл уже загружен",
+        details: { assetId: duplicate.assetId },
+      })
+      await manager.save(manager.create(MediaUploadEntity, {
+        id: uploadId, assetId, purpose: "replacement", expectedAssetVersion: input.expectedVersion, baseBlobId: asset.currentBlobId,
+        state: "pending", filename, mimeType: input.mimeType, byteSize: input.byteSize,
+        checksumSha256: input.checksumSha256, tokenHash: sha256(token), expiresAt, createdBy: actor.id,
+        createdAt: now, completedAt: null, stagingKey: null, errorCode: null, errorMessage: null,
       }))
     })
     const origin = new URL(requestOrigin).origin
@@ -165,7 +219,17 @@ export class MediaService {
       throw new UnprocessableEntityException({ code: "MEDIA_STAGING_MISSING", message: "Upload staging object is missing" })
     }
 
-    await this.dataSource.getRepository(MediaAssetEntity).update({ id: job.assetId, state: "uploading" }, { state: "processing", updatedAt: now })
+    if (upload.purpose === "initial") {
+      const started = await this.dataSource.getRepository(MediaAssetEntity).update({ id: job.assetId, state: "uploading" }, { state: "processing", updatedAt: now })
+      if (started.affected !== 1) {
+        const asset = await this.dataSource.getRepository(MediaAssetEntity).findOneBy({ id: job.assetId })
+        if (asset?.state !== "processing" || asset.currentBlobId !== null) {
+          const error = mediaError("MEDIA_UPLOAD_STALE", "Asset state changed before initial upload processing")
+          await this.failProcessing(job, upload, error)
+          throw new ConflictException({ code: error.code, message: error.message })
+        }
+      }
+    }
     try {
       const body = await this.storage.readStaging(upload.stagingKey)
       await this.scanner.scan(body, upload.mimeType)
@@ -207,9 +271,43 @@ export class MediaService {
       }
 
       await this.dataSource.transaction(async (manager) => {
-        await manager.save(manager.create(MediaBlobEntity, { id: blobId, assetId: upload.assetId, revision: 1, checksumSha256: upload.checksumSha256, mimeType: upload.mimeType, byteSize: body.byteLength, storageKey: originalKey, createdAt: new Date() }))
+        const asset = await manager.getRepository(MediaAssetEntity).createQueryBuilder("asset")
+          .setLock("pessimistic_write").where("asset.id = :assetId", { assetId: upload.assetId }).getOne()
+        if (!asset) throw mediaError("MEDIA_UPLOAD_STALE", "Asset was removed before media processing completed")
+        if (upload.purpose === "replacement") {
+          if (asset.state !== "ready" || asset.version !== upload.expectedAssetVersion || asset.currentBlobId !== upload.baseBlobId) {
+            throw mediaError("MEDIA_REPLACEMENT_STALE", "Asset changed after the replacement upload grant was issued")
+          }
+        } else if (asset.state !== "processing" || asset.currentBlobId !== null) {
+          throw mediaError("MEDIA_UPLOAD_STALE", "Asset changed before initial upload processing completed")
+        }
+        const revisionRows = await manager.query<Array<{ revision: number }>>(
+          `SELECT COALESCE(MAX(revision), 0)::int + 1 AS revision FROM media_blobs WHERE asset_id = $1`,
+          [upload.assetId],
+        )
+        const revision = revisionRows[0]?.revision
+        if (!revision) throw mediaError("MEDIA_PROCESSING_FAILED", "Could not allocate the next media blob revision")
+        await manager.save(manager.create(MediaBlobEntity, { id: blobId, assetId: upload.assetId, revision, checksumSha256: upload.checksumSha256, mimeType: upload.mimeType, byteSize: body.byteLength, storageKey: originalKey, createdAt: new Date() }))
         await manager.save(generated)
-        await manager.getRepository(MediaAssetEntity).update({ id: upload.assetId, state: "processing" }, { state: "ready", width, height, currentBlobId: blobId, updatedAt: new Date() })
+        const replacementFields = upload.purpose === "replacement" ? {
+          originalFilename: upload.filename,
+          mimeType: upload.mimeType,
+          byteSize: upload.byteSize,
+          updatedBy: upload.createdBy,
+          version: () => '"version" + 1',
+        } : {}
+        const switched = await manager.getRepository(MediaAssetEntity).createQueryBuilder().update().set({
+          state: "ready", width, height, currentBlobId: blobId, updatedAt: new Date(), ...replacementFields,
+        }).where(
+          upload.purpose === "replacement"
+            ? "id = :assetId AND state = 'ready' AND version = :expectedVersion AND current_blob_id = :baseBlobId"
+            : "id = :assetId AND state = 'processing' AND current_blob_id IS NULL",
+          { assetId: upload.assetId, expectedVersion: upload.expectedAssetVersion, baseBlobId: upload.baseBlobId },
+        ).execute()
+        if (switched.affected !== 1) throw mediaError(
+          upload.purpose === "replacement" ? "MEDIA_REPLACEMENT_STALE" : "MEDIA_UPLOAD_STALE",
+          upload.purpose === "replacement" ? "Asset changed before replacement activation" : "Asset changed before upload activation",
+        )
         await manager.getRepository(MediaUploadEntity).update({ id: upload.id, state: "processing" }, { state: "completed", stagingKey: null, completedAt: new Date() })
         await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id, state: "processing" }, { state: "completed", blobId, finishedAt: new Date() })
       })
@@ -222,6 +320,9 @@ export class MediaService {
           ? mediaError("MEDIA_STORAGE_UNAVAILABLE", "Media storage temporarily unavailable", true)
           : mediaError("MEDIA_PROCESSING_FAILED", error instanceof Error ? error.message : "Media processing failed")
       await this.failProcessing(job, upload, pipelineError)
+      if (pipelineError.code === "MEDIA_REPLACEMENT_STALE" || pipelineError.code === "MEDIA_UPLOAD_STALE") {
+        throw new ConflictException({ code: pipelineError.code, message: pipelineError.message })
+      }
       if (pipelineError.retryable && job.attempts < this.maxProcessingAttempts) return
       if (pipelineError.retryable) throw new ServiceUnavailableException({ code: "MEDIA_PROCESSING_DEAD_LETTER", message: "Media processing temporarily unavailable" })
       throw new UnprocessableEntityException({ code: pipelineError.code, message: pipelineError.message })
@@ -324,7 +425,7 @@ export class MediaService {
       tags: [...new Set(input.tags)], focalPoint: input.focalPoint, updatedBy: actor.id, updatedAt: new Date(), version: () => '"version" + 1',
     }).where("id = :assetId AND version = :version AND state <> 'archived'", { assetId, version: input.expectedVersion }).execute()
     if (result.affected !== 1) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Asset уже изменён" })
-    return this.get(assetId, actor)
+    return this.get(assetId, { limit: 100 }, actor)
   }
 
   async archive(assetId: string, input: MediaAssetArchive, actor: SessionUser) {
@@ -333,7 +434,7 @@ export class MediaService {
     if (usages.some((usage) => usage.published)) throw new ConflictException({ code: "MEDIA_PUBLISHED_USAGE", message: "Asset используется опубликованным контентом; сначала замените или отвяжите его" })
     const result = await this.dataSource.getRepository(MediaAssetEntity).createQueryBuilder().update().set({ state: "archived", archivedAt: new Date(), updatedAt: new Date(), updatedBy: actor.id, version: () => '"version" + 1' }).where("id = :assetId AND version = :version AND state <> 'archived'", { assetId, version: input.expectedVersion }).execute()
     if (result.affected !== 1) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Asset уже изменён" })
-    return this.get(assetId, actor)
+    return this.get(assetId, { limit: 100 }, actor)
   }
 
   async publicVariant(assetId: string, variantId: string) {
@@ -360,13 +461,14 @@ export class MediaService {
   private async refreshUsages(assetId: string): Promise<MediaUsage[]> {
     await this.findAsset(assetId)
     const usages: MediaUsage[] = []
-    const revisions = await this.dataSource.query<Array<{ id: string; state: string; hero: unknown; sections: unknown }>>(`SELECT id, state, hero, sections FROM cms_node_revisions WHERE hero::text LIKE $1 OR sections::text LIKE $1`, [`%${assetId}%`])
-    for (const row of revisions) for (const [field, value] of [["hero", row.hero], ["sections", row.sections]] as const) for (const pointer of assetPointers(value, assetId, `/${field}`)) usages.push({ assetId, ownerType: "cms_revision", ownerId: row.id, pointer, published: row.state === "published" })
+    const revisions = await this.dataSource.query<Array<{ id: string; node_id: string; path: string; state: string; hero: unknown; sections: unknown }>>(`SELECT id, node_id, path, state, hero, sections FROM cms_node_revisions WHERE hero::text LIKE $1 OR sections::text LIKE $1`, [`%${assetId}%`])
+    for (const row of revisions) for (const [field, value] of [["hero", row.hero], ["sections", row.sections]] as const) for (const pointer of assetPointers(value, assetId, `/${field}`)) usages.push({ assetId, ownerType: "cms_revision", ownerId: row.id, pageId: row.node_id, path: row.path, pointer, published: row.state === "published" })
     const settings = await this.dataSource.query<Array<{ id: string; state: string; value: unknown }>>(`SELECT id, state, value FROM cms_site_settings_revisions WHERE value::text LIKE $1`, [`%${assetId}%`])
-    for (const row of settings) for (const pointer of assetPointers(row.value, assetId, "/value")) usages.push({ assetId, ownerType: "cms_site_settings_revision", ownerId: row.id, pointer, published: row.state === "published" })
-    const releases = await this.dataSource.query<Array<{ id: string; state: string; resolved_content: unknown }>>(`SELECT release.id, release.state, item.resolved_content FROM cms_release_items item JOIN cms_releases release ON release.id = item.release_id WHERE item.resolved_content::text LIKE $1`, [`%${assetId}%`])
-    for (const row of releases) for (const pointer of assetPointers(row.resolved_content, assetId, "/resolvedContent")) usages.push({ assetId, ownerType: "release", ownerId: row.id, pointer, published: row.state === "published" })
-    const deduped = [...new Map(usages.map((usage) => [`${usage.ownerType}:${usage.ownerId}:${usage.pointer}`, usage])).values()]
+    for (const row of settings) for (const pointer of assetPointers(row.value, assetId, "/value")) usages.push({ assetId, ownerType: "cms_site_settings_revision", ownerId: row.id, pageId: null, path: null, pointer, published: row.state === "published" })
+    const releases = await this.dataSource.query<Array<{ id: string; node_id: string; path: string; state: string; resolved_content: unknown }>>(`SELECT release.id, release.state, item.node_id, item.path, item.resolved_content FROM cms_release_items item JOIN cms_releases release ON release.id = item.release_id WHERE item.resolved_content::text LIKE $1`, [`%${assetId}%`])
+    for (const row of releases) for (const pointer of assetPointers(row.resolved_content, assetId, "/resolvedContent")) usages.push({ assetId, ownerType: "release", ownerId: row.id, pageId: row.node_id, path: row.path, pointer, published: row.state === "published" })
+    const deduped = [...new Map(usages.map((usage) => [`${usage.ownerType}:${usage.ownerId}:${usage.pageId ?? "global"}:${usage.path ?? "global"}:${usage.pointer}`, usage])).values()]
+      .sort((left, right) => (left.path ?? "").localeCompare(right.path ?? "") || left.ownerType.localeCompare(right.ownerType) || left.ownerId.localeCompare(right.ownerId) || left.pointer.localeCompare(right.pointer))
     await this.dataSource.transaction(async (manager) => {
       await manager.getRepository(MediaUsageEntity).delete({ assetId })
       if (deduped.length) await manager.save(deduped.map((usage) => manager.create(MediaUsageEntity, { id: randomUUID(), ...usage, detectedAt: new Date() })))
@@ -403,7 +505,7 @@ export class MediaService {
       if (upload && (state === "failed" || deadLetter)) {
         await manager.getRepository(MediaUploadEntity).update({ id: upload.id }, { state: "failed", errorCode: error.code, errorMessage: error.message, completedAt: new Date() })
       }
-      if (state === "failed" || deadLetter) await manager.getRepository(MediaAssetEntity).update({ id: job.assetId }, { state: "failed", updatedAt: new Date() })
+      if ((state === "failed" || deadLetter) && upload?.purpose === "initial") await manager.getRepository(MediaAssetEntity).update({ id: job.assetId, state: "processing" }, { state: "failed", updatedAt: new Date() })
     })
     if (error.code.startsWith("MEDIA_SCANNER")) this.metrics.increment("scannerFailures")
     if (state === "queued") this.metrics.increment("processingRetries")
@@ -415,7 +517,7 @@ export class MediaService {
   private async failUpload(upload: MediaUploadEntity, code: string, message: string, state: "failed" | "expired", jobId?: string) {
     await this.dataSource.transaction(async (manager) => {
       await manager.getRepository(MediaUploadEntity).update({ id: upload.id }, { state, errorCode: code, errorMessage: message, completedAt: new Date() })
-      await manager.getRepository(MediaAssetEntity).update({ id: upload.assetId }, { state: "failed", updatedAt: new Date() })
+      if (upload.purpose === "initial") await manager.getRepository(MediaAssetEntity).update({ id: upload.assetId }, { state: "failed", updatedAt: new Date() })
       if (jobId) await manager.getRepository(MediaProcessingJobEntity).update({ id: jobId }, { state: "failed", errorCode: code, errorMessage: message, finishedAt: new Date() })
     })
   }

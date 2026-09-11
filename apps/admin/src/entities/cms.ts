@@ -141,8 +141,10 @@ export type MediaAsset = {
   dominant: string
   previewUrl?: string
   variants?: { id: string; format: "webp" | "avif" | "original"; width: number | null; height: number | null; byteSize: number; url: string }[]
-  usages?: { ownerType: string; ownerId: string; pointer: string; published: boolean }[]
+  usages?: { ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }[]
 }
+
+export type MediaAssetUsageQuery = { pageId?: string }
 
 export type ReleaseGate = { id: string; label: string; detail: string; state: "passed" | "warning" | "blocked" | "running" }
 export type ReleaseRecord = {
@@ -205,8 +207,9 @@ export interface CmsRepository {
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>
   publishNavigation(expectedVersion: number): Promise<PublicNavigation>
   getMedia(): Promise<MediaAsset[]>
-  getAsset(id: string): Promise<MediaAsset>
+  getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   uploadMedia(file: File): Promise<MediaAsset>
+  replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>
   saveMediaMetadata(asset: MediaAsset): Promise<MediaAsset>
   archiveMedia(id: string, expectedVersion: number): Promise<MediaAsset>
   getReleases(): Promise<ReleaseRecord[]>

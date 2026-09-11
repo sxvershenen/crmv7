@@ -2956,8 +2956,71 @@ describe.sequential("internal API + PostgreSQL", () => {
 
     const detail = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
     expect(detail.body.asset).toMatchObject({ usageCount: 2, publishedUsage: true })
-    expect(detail.body.usages[0]).toMatchObject({ ownerType: "cms_revision", ownerId: revisionId, published: true })
-    await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/archive`).send({ expectedVersion: uploaded.body.version }).expect(409)
+    expect(detail.body).toMatchObject({ usageTotal: 2, usagesTruncated: false })
+    expect(detail.body.usages[0]).toMatchObject({ ownerType: "cms_revision", ownerId: revisionId, pageId: nodeId, path: "/media-test", published: true })
+    const filtered = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?path=%2Fmedia-test&published=true&limit=1`).expect(200)
+    expect(filtered.body).toMatchObject({ usageTotal: 2, usagesTruncated: true })
+    expect(filtered.body.usages).toHaveLength(1)
+    expect(filtered.body.asset).toMatchObject({ usageCount: 2, publishedUsage: true })
+    const noPageUsages = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?pageId=${randomUUID()}`).expect(200)
+    expect(noPageUsages.body).toMatchObject({ usageTotal: 0, usagesTruncated: false, usages: [] })
+    expect(noPageUsages.body.asset.usageCount).toBe(2)
+    await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?unknown=unsafe`).expect(400)
+    await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?limit=201`).expect(400)
+
+    const replacement = await sharp({ create: { width: 12, height: 8, channels: 4, background: { r: 22, g: 76, b: 145, alpha: 1 } } }).png().toBuffer()
+    const replacementChecksum = createHash("sha256").update(replacement).digest("hex")
+    const staleGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+      expectedVersion: uploaded.body.version, filename: "hero-v2.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
+    }).expect(201)
+    const metadataUpdate = await adminAgent.patch(`/api/admin/v1/media/assets/${assetId}`).send({
+      expectedVersion: uploaded.body.version, title: "Hero retained metadata", alt: "Retained alt", caption: null,
+      credit: null, license: "Own work", tags: ["hero"], focalPoint: { x: 0.25, y: 0.75 },
+    }).expect(200)
+    expect(metadataUpdate.body.asset.version).toBe(uploaded.body.version + 1)
+    const staleUrl = new URL(staleGrant.body.uploadUrl as string)
+    const staleReplacement = await request(app.getHttpServer()).put(`${staleUrl.pathname}${staleUrl.search}`)
+      .set("content-type", "image/png").set("x-content-sha256", replacementChecksum).send(replacement).expect(409)
+    expect(staleReplacement.body.code).toBe("MEDIA_REPLACEMENT_STALE")
+    const afterStale = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
+    expect(afterStale.body.asset).toMatchObject({ state: "ready", version: metadataUpdate.body.asset.version, title: "Hero retained metadata", width: 10, height: 10 })
+    expect(afterStale.body.asset.variants.map((variant: { id: string }) => variant.id).sort()).toEqual(uploaded.body.variants.map((variant: { id: string }) => variant.id).sort())
+
+    const replacementGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+      expectedVersion: metadataUpdate.body.asset.version, filename: "hero-v2.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
+    }).expect(201)
+    const replacementUrl = new URL(replacementGrant.body.uploadUrl as string)
+    const replaced = await request(app.getHttpServer()).put(`${replacementUrl.pathname}${replacementUrl.search}`)
+      .set("content-type", "image/png").set("x-content-sha256", replacementChecksum).send(replacement).expect(200)
+    expect(replaced.body).toMatchObject({
+      id: assetId, state: "ready", version: metadataUpdate.body.asset.version + 1, title: "Hero retained metadata",
+      alt: "Retained alt", license: "Own work", tags: ["hero"], focalPoint: { x: 0.25, y: 0.75 },
+      originalFilename: "hero-v2.png", mimeType: "image/png", width: 12, height: 8, usageCount: 2,
+    })
+    expect(replaced.body.variants.map((variant: { id: string }) => variant.id)).not.toEqual(expect.arrayContaining(uploaded.body.variants.map((variant: { id: string }) => variant.id)))
+    await request(app.getHttpServer()).get(webp.url).expect(404)
+    const replacementWebp = replaced.body.variants.find((variant: { format: string }) => variant.format === "webp")
+    await request(app.getHttpServer()).get(replacementWebp.url).expect(200).expect("content-type", "image/webp")
+    expect(await dataSource.query(`SELECT revision FROM media_blobs WHERE asset_id = $1 ORDER BY revision`, [assetId])).toEqual([{ revision: 1 }, { revision: 2 }])
+    expect((await dataSource.query(`SELECT COUNT(*)::int AS count FROM media_variants WHERE asset_id = $1`, [assetId]))[0]?.count).toBe(4)
+    const replacementUsage = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?pageId=${nodeId}&published=true`).expect(200)
+    expect(replacementUsage.body).toMatchObject({ usageTotal: 2, usagesTruncated: false })
+    expect(replacementUsage.body.asset).toMatchObject({ usageCount: 2, publishedUsage: true })
+    const duplicateReplacement = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+      expectedVersion: replaced.body.version, filename: "hero-v2-again.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
+    }).expect(409)
+    expect(duplicateReplacement.body.code).toBe("MEDIA_REPLACEMENT_DUPLICATE")
+
+    const brokenReplacementGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+      expectedVersion: replaced.body.version, filename: "broken.png", mimeType: "image/png", byteSize: 7, checksumSha256: createHash("sha256").update("invalid").digest("hex"),
+    }).expect(201)
+    const brokenReplacementUrl = new URL(brokenReplacementGrant.body.uploadUrl as string)
+    await request(app.getHttpServer()).put(`${brokenReplacementUrl.pathname}${brokenReplacementUrl.search}`)
+      .set("content-type", "image/png").set("x-content-sha256", createHash("sha256").update("invalid").digest("hex")).send(Buffer.from("invalid")).expect(422)
+    const afterBrokenReplacement = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
+    expect(afterBrokenReplacement.body.asset).toMatchObject({ state: "ready", version: replaced.body.version, width: 12, height: 8 })
+    expect(afterBrokenReplacement.body.asset.variants.map((variant: { id: string }) => variant.id).sort()).toEqual(replaced.body.variants.map((variant: { id: string }) => variant.id).sort())
+    await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/archive`).send({ expectedVersion: replaced.body.version }).expect(409)
 
     const spoof = Buffer.from("not-png")
     const spoofChecksum = createHash("sha256").update(spoof).digest("hex")

@@ -1061,6 +1061,9 @@ export class MediaVariantEntity {
 export class MediaUploadEntity {
   @PrimaryColumn({ type: "uuid" }) id!: string
   @Column({ name: "asset_id", type: "uuid" }) assetId!: string
+  @Column({ type: "text", default: "initial" }) purpose!: string
+  @Column({ name: "expected_asset_version", type: "integer", nullable: true }) expectedAssetVersion!: number | null
+  @Column({ name: "base_blob_id", type: "uuid", nullable: true }) baseBlobId!: string | null
   @Column({ type: "text" }) state!: string
   @Column({ type: "text" }) filename!: string
   @Column({ name: "mime_type", type: "text" }) mimeType!: string
@@ -1093,13 +1096,15 @@ export class MediaProcessingJobEntity {
 }
 
 @Entity({ name: "media_usages" })
-@Unique("media_usages_owner_pointer_unique", ["assetId", "ownerType", "ownerId", "pointer"])
 @Index("media_usages_asset_published_idx", ["assetId", "published"])
+@Index("media_usages_asset_page_idx", ["assetId", "pageId", "published"])
 export class MediaUsageEntity {
   @PrimaryColumn({ type: "uuid" }) id!: string
   @Column({ name: "asset_id", type: "uuid" }) assetId!: string
   @Column({ name: "owner_type", type: "text" }) ownerType!: string
   @Column({ name: "owner_id", type: "uuid" }) ownerId!: string
+  @Column({ name: "page_id", type: "uuid", nullable: true }) pageId!: string | null
+  @Column({ type: "text", nullable: true }) path!: string | null
   @Column({ type: "text" }) pointer!: string
   @Column({ type: "boolean" }) published!: boolean
   @Column({ name: "detected_at", type: "timestamptz" }) detectedAt!: Date

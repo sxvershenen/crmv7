@@ -42,7 +42,7 @@ CMS использует canonical CRM cookie session. Initial 401 открыв�
 
 ## D-063 — Private originals, immutable public media
 
-Versioned asset отделён от immutable blob/variants. Signed scoped upload ограничен MIME/size/hash/TTL; MIME/magic/scan/decode/pixel limits проверяются до public readiness. Originals private, публичны только ready variants без EXIF/GPS. Usage graph защищает published references от удаления. Production implementation uses a provider-neutral S3-compatible storage/CDN adapter, an external HTTP scanner that fails closed, staged retry/DLQ and namespace-scoped orphan cleanup; local storage/scanner remain development/test adapters. Provider, data location, retention and rights/source approval remain go-live decisions, while versioned replacement/page-filtered usage flows stay explicitly separate.
+Versioned asset отделён от immutable blob/variants. Signed scoped upload ограничен MIME/size/hash/TTL; MIME/magic/scan/decode/pixel limits проверяются до public readiness. Originals private, публичны только ready variants без EXIF/GPS. Usage graph защищает published references от удаления. Production implementation uses a provider-neutral S3-compatible storage/CDN adapter, an external HTTP scanner that fails closed, staged retry/DLQ, namespace-scoped orphan cleanup, versioned blob replacement and bounded server-resolved page-filtered usage flows; local storage/scanner remain development/test adapters. Provider, data location, retention and rights/source approval remain go-live decisions.
 
 ## D-064 — Публичная проекция не равна operational записи
 

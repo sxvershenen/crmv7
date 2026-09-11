@@ -7,7 +7,7 @@ import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseLi
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
-import type { CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
+import type { CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
@@ -69,8 +69,9 @@ export class FixtureCmsRepository implements CmsRepository {
     return clone(this.navigation)
   }
   async getMedia() { await pause(); return clone(mediaFixtures) }
-  async getAsset(id: string) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(asset) }
+  async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
   async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, progress: 100, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
+  async replaceMedia(id: string, file: File, expectedVersion: number) { await pause(); const asset = await this.getAsset(id); if ((asset.version ?? 1) !== expectedVersion) throw new Error("Asset уже изменён в другой сессии"); const replaced = { ...asset, version: expectedVersion + 1, filename: file.name, title: file.name.replace(/\.[^.]+$/, ""), status: "ready" as const, progress: 100, size: formatBytes(file.size) }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = replaced; return clone(replaced) }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) { const index = mediaFixtures.findIndex((item) => item.id === asset.id); if (index >= 0) mediaFixtures[index] = clone(asset); return clone(asset) }
   async archiveMedia(id: string) { const asset = await this.getAsset(id); const archived = { ...asset, status: "archived" as const, version: (asset.version ?? 1) + 1 }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = archived; return clone(archived) }
   async getReleases() { await pause(); return clone(releaseFixtures) }
@@ -204,15 +205,14 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
   async getMedia() { const response = await this.client.get("/media/assets?limit=100", MediaAssetListResponseSchema); return response.items.map((asset) => mediaView(asset)) }
-  async getAsset(id: string) { const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
+  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
   async uploadMedia(file: File) {
-    const bytes = await file.arrayBuffer()
-    const checksumSha256 = [...new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes))].map((value) => value.toString(16).padStart(2, "0")).join("")
-    const grant = await this.client.post("/media/uploads", { filename: file.name, mimeType: file.type || "application/octet-stream", byteSize: file.size, checksumSha256 }, MediaUploadGrantSchema)
-    const response = await fetch(grant.uploadUrl, { method: grant.method, headers: grant.requiredHeaders, body: file })
-    const payload = await response.json() as unknown
-    if (!response.ok) throw new Error(payload && typeof payload === "object" && "message" in payload ? String(payload.message) : "Media upload failed")
-    return mediaView(MediaAssetSchema.parse(payload))
+    const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
+    return uploadGrantedMedia(grant, file)
+  }
+  async replaceMedia(id: string, file: File, expectedVersion: number) {
+    const grant = await this.client.post(`/media/assets/${encodeURIComponent(id)}/replacements`, { expectedVersion, ...await mediaUploadInput(file) }, MediaUploadGrantSchema)
+    return uploadGrantedMedia(grant, file)
   }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) {
     const response = await this.client.patch(`/media/assets/${encodeURIComponent(asset.id)}`, { expectedVersion: asset.version ?? 1, title: asset.title, alt: asset.alt || null, caption: null, credit: null, license: asset.license || null, tags: [], focalPoint: { x: 0.5, y: 0.5 } }, MediaAssetDetailSchema)
@@ -414,7 +414,27 @@ function releaseView(item: CmsReleaseListItem, activeReleaseId: string | null, a
     changes: item.affectedPaths.map((route) => ({ route, before: item.manifest.baseReleaseId ? "Base release" : "∅", after: `Revision in release ${item.manifest.sequence}`, kind: "Published route" })), delivery: item.delivery,
   }
 }
-function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pointer: string; published: boolean }> = []): import("@admin/entities/cms").MediaAsset {
+async function mediaUploadInput(file: File) {
+  const bytes = await file.arrayBuffer()
+  const checksumSha256 = [...new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes))].map((value) => value.toString(16).padStart(2, "0")).join("")
+  return { filename: file.name, mimeType: file.type || "application/octet-stream", byteSize: file.size, checksumSha256 }
+}
+
+async function uploadGrantedMedia(grant: import("@crm/contracts").MediaUploadGrant, file: File) {
+  const response = await fetch(grant.uploadUrl, { method: grant.method, headers: grant.requiredHeaders, body: file })
+  const payload = await response.json() as unknown
+  if (!response.ok) throw new Error(payload && typeof payload === "object" && "message" in payload ? String(payload.message) : "Media upload failed")
+  return mediaView(MediaAssetSchema.parse(payload))
+}
+
+function filterMediaUsages(asset: import("@admin/entities/cms").MediaAsset, query?: MediaAssetUsageQuery) {
+  const pageId = query?.pageId
+  if (!pageId || !asset.usages) return asset
+  const usages = asset.usages.filter((usage) => usage.ownerId === pageId || usage.pointer.includes(pageId))
+  return { ...asset, usages, usageCount: usages.length, publishedUsage: usages.some((usage) => usage.published) }
+}
+
+function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }> = []): import("@admin/entities/cms").MediaAsset {
   const status = asset.state === "failed" ? "error" : asset.state === "processing" ? "converting" : asset.state
   const preview = asset.variants.filter((variant) => variant.format === "webp").sort((left, right) => (left.width ?? 0) - (right.width ?? 0))[0]
   return {

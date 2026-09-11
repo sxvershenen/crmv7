@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CmsPathSchema } from "./content.js";
 import { DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
 
 export const MediaKindSchema = z.enum(["image", "svg", "video", "document"]);
@@ -47,6 +48,10 @@ export const MediaUploadInitSchema = z.object({
   checksumSha256: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 
+export const MediaReplacementUploadInitSchema = MediaUploadInitSchema.extend({
+  expectedVersion: VersionSchema,
+}).strict();
+
 export const MediaUploadGrantSchema = z.object({
   uploadId: IdSchema,
   uploadUrl: z.string().url().max(4096),
@@ -68,6 +73,13 @@ export const MediaAssetListQuerySchema = z.object({
 
 export const MediaAssetListResponseSchema = z.object({ items: z.array(MediaAssetSchema).max(100) }).strict();
 
+export const MediaAssetUsageQuerySchema = z.object({
+  pageId: IdSchema.optional(),
+  path: CmsPathSchema.optional(),
+  published: z.preprocess((value) => value === "true" ? true : value === "false" ? false : value, z.boolean()).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+}).strict();
+
 export const MediaAssetMetadataMutationSchema = z.object({
   expectedVersion: VersionSchema,
   title: z.string().min(1).max(240),
@@ -85,13 +97,17 @@ export const MediaUsageSchema = z.object({
   assetId: IdSchema,
   ownerType: z.enum(["cms_revision", "cms_site_settings_revision", "cms_block_revision", "code_artifact", "release"]),
   ownerId: IdSchema,
+  pageId: IdSchema.nullable(),
+  path: CmsPathSchema.nullable(),
   pointer: z.string().min(1).max(1000),
   published: z.boolean(),
 }).strict();
 
 export const MediaAssetDetailSchema = z.object({
   asset: MediaAssetSchema,
-  usages: z.array(MediaUsageSchema).max(10_000),
+  usages: z.array(MediaUsageSchema).max(200),
+  usageTotal: z.number().int().nonnegative(),
+  usagesTruncated: z.boolean(),
 }).strict();
 
 export const MediaHealthSchema = z.object({
@@ -110,8 +126,10 @@ export const MediaHealthSchema = z.object({
 
 export type MediaAssetDetail = z.infer<typeof MediaAssetDetailSchema>;
 export type MediaAssetListQuery = z.infer<typeof MediaAssetListQuerySchema>;
+export type MediaAssetUsageQuery = z.infer<typeof MediaAssetUsageQuerySchema>;
 export type MediaAssetMetadataMutation = z.infer<typeof MediaAssetMetadataMutationSchema>;
 export type MediaAssetArchive = z.infer<typeof MediaAssetArchiveSchema>;
 export type MediaUploadInit = z.infer<typeof MediaUploadInitSchema>;
+export type MediaReplacementUploadInit = z.infer<typeof MediaReplacementUploadInitSchema>;
 export type MediaUploadGrant = z.infer<typeof MediaUploadGrantSchema>;
 export type MediaUsage = z.infer<typeof MediaUsageSchema>;

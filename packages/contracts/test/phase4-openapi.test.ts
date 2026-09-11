@@ -39,6 +39,7 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(paths["/content/nodes"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/content/nodes/{id}"]?.patch?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/media/uploads"]?.post?.security).toEqual([{ sessionCookie: [] }]);
+    expect(paths["/media/assets/{assetId}/replacements"]?.post?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/media/uploads/{uploadId}/content"]?.put?.security).toEqual([]);
     expect(paths["/releases/{id}/publish"]).toBeUndefined();
     expect(paths["/offerings"]?.get?.security).toEqual([{ sessionCookie: [] }]);

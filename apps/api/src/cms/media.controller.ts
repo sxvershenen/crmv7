@@ -4,13 +4,17 @@ import {
   MediaAssetArchiveSchema,
   MediaAssetIdParamsSchema,
   MediaAssetListQuerySchema,
+  MediaAssetUsageQuerySchema,
   MediaAssetMetadataMutationSchema,
+  MediaReplacementUploadInitSchema,
   MediaUploadIdParamsSchema,
   MediaUploadInitSchema,
   MediaUploadTokenQuerySchema,
   type MediaAssetArchive,
   type MediaAssetListQuery,
+  type MediaAssetUsageQuery,
   type MediaAssetMetadataMutation,
+  type MediaReplacementUploadInit,
   type MediaUploadInit,
 } from "@crm/contracts"
 
@@ -32,8 +36,12 @@ export class MediaController {
 
   @Get("assets/:assetId")
   @RequireCapabilities("canViewContent")
-  get(@Param(new ZodValidationPipe(MediaAssetIdParamsSchema)) params: { assetId: string }, @Req() request: AuthenticatedRequest) {
-    return this.media.get(params.assetId, request.sessionUser!)
+  get(
+    @Param(new ZodValidationPipe(MediaAssetIdParamsSchema)) params: { assetId: string },
+    @Query(new ZodValidationPipe(MediaAssetUsageQuerySchema)) query: MediaAssetUsageQuery,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.media.get(params.assetId, query, request.sessionUser!)
   }
 
   @Get("health")
@@ -46,6 +54,16 @@ export class MediaController {
   @RequireCapabilities("canManageMedia")
   init(@Body(new ZodValidationPipe(MediaUploadInitSchema)) input: MediaUploadInit, @Req() request: AuthenticatedRequest) {
     return this.media.initUpload(input, request.sessionUser!, `${request.protocol}://${request.get("host")}`)
+  }
+
+  @Post("assets/:assetId/replacements")
+  @RequireCapabilities("canManageMedia")
+  initReplacement(
+    @Param(new ZodValidationPipe(MediaAssetIdParamsSchema)) params: { assetId: string },
+    @Body(new ZodValidationPipe(MediaReplacementUploadInitSchema)) input: MediaReplacementUploadInit,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.media.initReplacement(params.assetId, input, request.sessionUser!, `${request.protocol}://${request.get("host")}`)
   }
 
   @Public()
