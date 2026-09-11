@@ -5,6 +5,7 @@ import {
   Entity,
   Index,
   PrimaryColumn,
+  PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
   VersionColumn,
@@ -760,6 +761,46 @@ export class AnalyticsConversionFactEntity {
 
   @Column({ name: "attribution_model", type: "text" })
   attributionModel!: string
+}
+
+@Entity({ name: "analytics_daily_aggregates" })
+@Index("analytics_daily_aggregates_period_idx", ["periodDate"])
+@Index("analytics_daily_aggregates_dimensions_idx", ["pageNodeId", "sectionKey", "periodDate"])
+@Check("analytics_daily_aggregates_counts_check", "page_views >= 0 AND unique_visitors >= 0 AND actions >= 0 AND leads >= 0 AND bookings >= 0 AND payments >= 0")
+@Check("analytics_daily_aggregates_section_key_check", "section_key IS NULL OR (length(section_key) <= 120 AND section_key ~ '^[a-z][a-z0-9._-]*$')")
+export class AnalyticsDailyAggregateEntity {
+  @PrimaryGeneratedColumn("uuid")
+  id!: string
+
+  @Column({ name: "period_date", type: "date" })
+  periodDate!: string
+
+  @Column({ name: "page_node_id", type: "uuid", nullable: true })
+  pageNodeId!: string | null
+
+  @Column({ name: "section_key", type: "text", nullable: true })
+  sectionKey!: string | null
+
+  @Column({ name: "page_views", type: "integer", default: 0 })
+  pageViews!: number
+
+  @Column({ name: "unique_visitors", type: "integer", default: 0 })
+  uniqueVisitors!: number
+
+  @Column({ type: "integer", default: 0 })
+  actions!: number
+
+  @Column({ type: "integer", default: 0 })
+  leads!: number
+
+  @Column({ type: "integer", default: 0 })
+  bookings!: number
+
+  @Column({ type: "integer", default: 0 })
+  payments!: number
+
+  @Column({ name: "computed_at", type: "timestamptz" })
+  computedAt!: Date
 }
 
 @Entity({ name: "change_log" })
@@ -1550,6 +1591,7 @@ export const databaseEntities = [
   AnalyticsIngestDedupEntity,
   AnalyticsEventEntity,
   AnalyticsConversionFactEntity,
+  AnalyticsDailyAggregateEntity,
   ChangeLogEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,

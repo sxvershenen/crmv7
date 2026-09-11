@@ -36,6 +36,7 @@ import { MediaVersionedReplacements1788204400000 } from "./migrations/1788204400
 import { PublicIntakeRateLimits1788204800000 } from "./migrations/1788204800000-public-intake-rate-limits.js"
 import { AnalyticsCollectorFoundation1788205200000 } from "./migrations/1788205200000-analytics-collector-foundation.js"
 import { AnalyticsConversionFacts1788205600000 } from "./migrations/1788205600000-analytics-conversion-facts.js"
+import { AnalyticsDailyAggregates1788206000000 } from "./migrations/1788206000000-analytics-daily-aggregates.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -77,4 +78,5 @@ export const databaseMigrations = [
   PublicIntakeRateLimits1788204800000,
   AnalyticsCollectorFoundation1788205200000,
   AnalyticsConversionFacts1788205600000,
+  AnalyticsDailyAggregates1788206000000,
 ]
