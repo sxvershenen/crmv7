@@ -164,6 +164,10 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
 
 function ResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
   if (resource.kind === "venues") return <VenueResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
+  return <StayResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
+}
+
+function StayResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
   const [lookup, setLookup] = useState<ResourcePrimaryStayOfferingLookupResponse | null>(null)
   const [editor, setEditor] = useState<InternalOfferingEditor | null>(null)
   const [error, setError] = useState<string | null>(null)

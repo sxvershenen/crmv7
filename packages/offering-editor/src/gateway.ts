@@ -32,9 +32,6 @@ import type {
   OfferingCustomAddOnCreateBody,
   OfferingCustomAddOnCreateResult,
   OfferingPricingMutationResult,
-  ResourcePrimaryVenueOfferingLookupResponse,
-  ResourceVenueOfferingCreateBody,
-  ResourceVenueOfferingCreateResult,
 } from "@crm/contracts"
 
 /**
