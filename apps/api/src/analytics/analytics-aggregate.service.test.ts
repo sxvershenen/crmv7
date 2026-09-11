@@ -24,15 +24,15 @@ describe("AnalyticsAggregateService", () => {
 
   it("zero-fills bounded periods and maps database counts through the public contract", async () => {
     const database = { query: vi.fn().mockResolvedValue([{
-      period: "2026-09-02", page_views: "7", unique_visitors: "5", actions: "3", leads: "2", bookings: "1",
+      period: "2026-09-02", page_views: "7", unique_visitors: "5", actions: "3", leads: "2", bookings: "1", payments: "1",
     }]) }
     const service = new AnalyticsAggregateService(database as never)
 
     await expect(service.get({ from: "2026-09-01", to: "2026-09-03", interval: "day" })).resolves.toEqual({
       items: [
-        { period: "2026-09-01", pageNodeId: null, sectionKey: null, pageViews: 0, uniqueVisitors: 0, actions: 0, leads: 0, bookings: 0 },
-        { period: "2026-09-02", pageNodeId: null, sectionKey: null, pageViews: 7, uniqueVisitors: 5, actions: 3, leads: 2, bookings: 1 },
-        { period: "2026-09-03", pageNodeId: null, sectionKey: null, pageViews: 0, uniqueVisitors: 0, actions: 0, leads: 0, bookings: 0 },
+        { period: "2026-09-01", pageNodeId: null, sectionKey: null, pageViews: 0, uniqueVisitors: 0, actions: 0, leads: 0, bookings: 0, payments: 0 },
+        { period: "2026-09-02", pageNodeId: null, sectionKey: null, pageViews: 7, uniqueVisitors: 5, actions: 3, leads: 2, bookings: 1, payments: 1 },
+        { period: "2026-09-03", pageNodeId: null, sectionKey: null, pageViews: 0, uniqueVisitors: 0, actions: 0, leads: 0, bookings: 0, payments: 0 },
       ],
     })
   })
@@ -56,22 +56,24 @@ describe("AnalyticsAggregateService", () => {
     expect(sql).toContain("event.context->>'sectionKey' = parameters.section_key")
     expect(sql).toContain("event.event_name = ANY($7::text[])")
     expect(sql).toContain("count(DISTINCT fact.source_event_id)")
+    expect(sql).toContain("fact.kind = 'payment_recorded'")
+    expect(sql).toContain("parameters.page_node_id IS NULL")
     expect(sql).toContain("parameters.section_key IS NULL")
     expect(sql).not.toContain(pageNodeId)
     expect(sql).not.toContain("hero.primary")
-    expect(result.items[0]).toMatchObject({ pageNodeId, sectionKey: "hero.primary", leads: 0, bookings: 0 })
+    expect(result.items[0]).toMatchObject({ pageNodeId, sectionKey: "hero.primary", leads: 0, bookings: 0, payments: 0 })
   })
 
   it("returns conversion-only month rows and fills missing months", async () => {
     const database = { query: vi.fn().mockResolvedValue([{
-      period: "2026-02", page_views: 0, unique_visitors: 0, actions: 0, leads: "4", bookings: "2",
+      period: "2026-02", page_views: 0, unique_visitors: 0, actions: 0, leads: "4", bookings: "2", payments: "1",
     }]) }
     const service = new AnalyticsAggregateService(database as never)
 
     const result = await service.get({ from: "2026-01-31", to: "2026-03-01", interval: "month", pageNodeId })
 
-    expect(result.items.map((item) => [item.period, item.leads, item.bookings])).toEqual([
-      ["2026-01", 0, 0], ["2026-02", 4, 2], ["2026-03", 0, 0],
+    expect(result.items.map((item) => [item.period, item.leads, item.bookings, item.payments])).toEqual([
+      ["2026-01", 0, 0, 0], ["2026-02", 4, 2, 1], ["2026-03", 0, 0, 0],
     ])
     expect(result.items.every((item) => item.pageNodeId === pageNodeId && item.sectionKey === null)).toBe(true)
   })

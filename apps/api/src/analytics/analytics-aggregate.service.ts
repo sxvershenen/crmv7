@@ -27,6 +27,7 @@ type AggregateRow = {
   actions: number | string
   leads: number | string
   bookings: number | string
+  payments: number | string
 }
 
 type DateParts = {
@@ -72,13 +73,14 @@ export class AnalyticsAggregateService {
         SELECT
           date_trunc(parameters.interval_name, fact.occurred_at AT TIME ZONE parameters.timezone)::date AS period_start,
           count(DISTINCT fact.source_event_id) FILTER (WHERE fact.kind = 'lead_created') AS leads,
-          count(DISTINCT fact.source_event_id) FILTER (WHERE fact.kind = 'booking_created') AS bookings
+          count(DISTINCT fact.source_event_id) FILTER (WHERE fact.kind = 'booking_created') AS bookings,
+          count(DISTINCT fact.source_event_id) FILTER (WHERE fact.kind = 'payment_recorded') AS payments
         FROM analytics_conversion_facts fact
         CROSS JOIN parameters
         WHERE fact.occurred_at >= parameters.from_date::timestamp AT TIME ZONE parameters.timezone
           AND fact.occurred_at < (parameters.to_date + 1)::timestamp AT TIME ZONE parameters.timezone
-          AND fact.kind IN ('lead_created', 'booking_created')
-          AND (parameters.page_node_id IS NULL OR fact.page_node_id = parameters.page_node_id)
+          AND fact.kind IN ('lead_created', 'booking_created', 'payment_recorded')
+          AND parameters.page_node_id IS NULL
           AND parameters.section_key IS NULL
         GROUP BY 1
       )
@@ -91,7 +93,8 @@ export class AnalyticsAggregateService {
         COALESCE(event_aggregates.unique_visitors, 0) AS unique_visitors,
         COALESCE(event_aggregates.actions, 0) AS actions,
         COALESCE(conversion_aggregates.leads, 0) AS leads,
-        COALESCE(conversion_aggregates.bookings, 0) AS bookings
+        COALESCE(conversion_aggregates.bookings, 0) AS bookings,
+        COALESCE(conversion_aggregates.payments, 0) AS payments
       FROM event_aggregates
       FULL OUTER JOIN conversion_aggregates USING (period_start)
       CROSS JOIN parameters
@@ -116,6 +119,7 @@ export class AnalyticsAggregateService {
         actions: Number(row.actions),
         leads: Number(row.leads),
         bookings: Number(row.bookings),
+        payments: Number(row.payments),
       })
       return [point.period, point] as const
     }))
@@ -129,6 +133,7 @@ export class AnalyticsAggregateService {
       actions: 0,
       leads: 0,
       bookings: 0,
+      payments: 0,
     }))
 
     return AnalyticsAggregateResponseSchema.parse({ items })

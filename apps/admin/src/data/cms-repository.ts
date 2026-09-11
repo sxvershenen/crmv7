@@ -1,13 +1,14 @@
 import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
+import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
 import { CmsSiteSettingsDetailSchema, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
-import type { CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
+import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
@@ -19,6 +20,8 @@ import { homepageSectionDraft, homepageSectionPolicy, isHomepageSectionRenderer 
 const clone = <T,>(value: T): T => structuredClone(value)
 const pause = () => new Promise<void>((resolve) => window.setTimeout(resolve, 120))
 const fixtureAccess: CmsAccess = { canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true }
+const ANALYTICS_TIME_ZONE = "Europe/Moscow"
+const ANALYTICS_RECENT_DAYS = 30
 
 export class FixtureCmsRepository implements CmsRepository {
   readonly mode = "fixtures" as const
@@ -236,7 +239,29 @@ export class ApiCmsRepository implements CmsRepository {
     await this.client.post(`/deliveries/${encodeURIComponent(delivery.consumer)}/${encodeURIComponent(delivery.eventId)}/replay`, { ...operationMeta(), expectedStatus: delivery.status, expectedDeliveryEpoch: delivery.deliveryEpoch, expectedAttempts: delivery.attempts, reason: `Retry publication ${releaseId}` }, OutboxDeliveryReplayResultSchema)
     return this.getRelease(releaseId)
   }
-  async getAnalytics(): Promise<never> { throw new CmsUnavailableError("Analytics") }
+  async getAnalytics(): Promise<AnalyticsSummary> {
+    const { from, to } = analyticsRecentDateRange()
+    const params = new URLSearchParams({ from, to, interval: "day" })
+    const response = await this.client.get(`/analytics/aggregates?${params.toString()}`, AnalyticsAggregateResponseSchema)
+    const totals = response.items.reduce((result, point) => ({
+      visitors: result.visitors + point.uniqueVisitors,
+      views: result.views + point.pageViews,
+      actions: result.actions + point.actions,
+      leads: result.leads + point.leads,
+      bookings: result.bookings + point.bookings,
+      paid: result.paid + point.payments,
+    }), { visitors: 0, views: 0, actions: 0, leads: 0, bookings: 0, paid: 0 })
+    return {
+      period: `${from} — ${to} · ${ANALYTICS_TIME_ZONE}`,
+      visitors: totals.visitors,
+      views: totals.views,
+      leads: totals.leads,
+      bookings: totals.bookings,
+      paid: totals.paid,
+      channels: [{ name: "Все источники", value: totals.visitors, percent: totals.visitors > 0 ? 100 : 0 }],
+      pages: [{ path: "Все страницы", views: totals.views, cta: totals.actions, leads: totals.leads }],
+    }
+  }
   async getCodeArtifact(): Promise<never> { throw new CmsUnavailableError("Code workspace") }
 
   private async transition(id: string, expectedVersion: number, action: "submit-review" | "return-to-draft" | "approve" | "archive") {
@@ -314,6 +339,23 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
 }
+
+export function analyticsRecentDateRange(now: Date = new Date()): { from: string; to: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ANALYTICS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now)
+  const year = Number(parts.find((part) => part.type === "year")?.value)
+  const month = Number(parts.find((part) => part.type === "month")?.value)
+  const day = Number(parts.find((part) => part.type === "day")?.value)
+  const to = formatAnalyticsDate(Date.UTC(year, month - 1, day))
+  const from = formatAnalyticsDate(Date.UTC(year, month - 1, day - (ANALYTICS_RECENT_DAYS - 1)))
+  return { from, to }
+}
+
+function formatAnalyticsDate(epoch: number): string { return new Date(epoch).toISOString().slice(0, 10) }
 
 function editableRevision(detail: CmsNodeDetail): CmsNodeRevision { if (!detail.currentRevision) throw new CmsUnavailableError("Editable revision"); return detail.currentRevision }
 function mergeSectionModes(sections: CmsSection[], local: EditorRecord["sections"]): CmsSection[] {

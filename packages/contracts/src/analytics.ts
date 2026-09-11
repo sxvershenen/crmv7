@@ -137,6 +137,7 @@ export const AnalyticsAggregatePointSchema = z.object({
   actions: z.number().int().nonnegative().safe(),
   leads: z.number().int().nonnegative().safe(),
   bookings: z.number().int().nonnegative().safe(),
+  payments: z.number().int().nonnegative().safe(),
 }).strict();
 export type AnalyticsAggregatePoint = z.infer<typeof AnalyticsAggregatePointSchema>;
 

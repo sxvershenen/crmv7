@@ -121,7 +121,7 @@ describe("Phase 4 contracts", () => {
 
     const response = AnalyticsAggregateResponseSchema.parse({ items: [{
       period: "2026-09-01", pageNodeId: null, sectionKey: null,
-      pageViews: 3, uniqueVisitors: 2, actions: 1, leads: 1, bookings: 0,
+      pageViews: 3, uniqueVisitors: 2, actions: 1, leads: 1, bookings: 0, payments: 1,
     }] });
     expect(response.items[0]).not.toHaveProperty("path");
     expect(response.items[0]).not.toHaveProperty("referrer");
