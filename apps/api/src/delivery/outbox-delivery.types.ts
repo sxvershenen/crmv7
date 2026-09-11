@@ -1,6 +1,7 @@
 export const OUTBOX_CONSUMERS = {
   sse: "sse",
   publicProjection: "public_projection",
+  analytics: "analytics",
 } as const
 
 export type OutboxConsumerName = (typeof OUTBOX_CONSUMERS)[keyof typeof OUTBOX_CONSUMERS]
@@ -12,6 +13,7 @@ export type ClaimedOutboxDelivery = Readonly<{
   topic: string
   aggregateType: string
   aggregateId: string
+  occurredAt: string
   payload: Record<string, unknown>
   deliveryEpoch: number
   attempt: number

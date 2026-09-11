@@ -18,6 +18,7 @@ type DeliveryRow = Record<string, unknown> & {
   topic: string
   aggregate_type: string
   aggregate_id: string
+  event_created_at: Date | string
   payload: Record<string, unknown>
   consumer: OutboxConsumerName
   status: string
@@ -35,8 +36,9 @@ export class OutboxDeliveryStore {
   async claim(consumer: OutboxConsumerName, leaseOwner: string, limit: number): Promise<ClaimedOutboxDelivery[]> {
     return this.dataSource.transaction(async (manager) => {
       if (consumer === OUTBOX_CONSUMERS.sse) await this.seedLegacySseDeliveries(manager)
+      if (consumer === OUTBOX_CONSUMERS.analytics) await this.seedAnalyticsDeliveries(manager)
       const rows = await manager.query(`
-        SELECT event.id, event.topic, event.aggregate_type, event.aggregate_id, event.payload,
+        SELECT event.id, event.topic, event.aggregate_type, event.aggregate_id, event.created_at AS event_created_at, event.payload,
                delivery.consumer, delivery.status, delivery.attempts, delivery.max_attempts, delivery.delivery_epoch,
                delivery.lease_token, delivery.lease_acquired_at
         FROM outbox_deliveries delivery
@@ -92,6 +94,7 @@ export class OutboxDeliveryStore {
           topic: row.topic,
           aggregateType: row.aggregate_type,
           aggregateId: row.aggregate_id,
+          occurredAt: this.iso(row.event_created_at),
           payload: row.payload,
           deliveryEpoch: row.delivery_epoch,
           attempt,
@@ -240,6 +243,23 @@ export class OutboxDeliveryStore {
     `)
   }
 
+  private async seedAnalyticsDeliveries(manager: EntityManager) {
+    await manager.query(`
+      INSERT INTO outbox_deliveries (
+        event_id, consumer, status, attempts, delivery_epoch, replay_count, max_attempts,
+        available_at, created_at, updated_at
+      )
+      SELECT event.id, 'analytics', 'pending', 0, 1, 0, 8, event.available_at, clock_timestamp(), clock_timestamp()
+      FROM outbox_events event
+      WHERE event.processed_at IS NULL
+      ON CONFLICT (event_id, consumer) DO NOTHING
+    `)
+  }
+
+  private iso(value: Date | string): string {
+    return (value instanceof Date ? value : new Date(value)).toISOString()
+  }
+
   private async isActiveLease(manager: EntityManager, claim: ClaimedOutboxDelivery): Promise<boolean> {
     const rows = await manager.query(`
       SELECT 1 FROM outbox_deliveries
@@ -282,6 +302,10 @@ export class OutboxDeliveryStore {
     `, [claim.eventId, claim.consumer, claim.deliveryEpoch, claim.attempt, claim.leaseToken]) as Array<{ affectedRows?: number }>
     const succeeded = Number(result[1] ?? result[0]?.affectedRows ?? 0) > 0
     if (!succeeded) return false
+    // Close the race with a worker that was already processing when the
+    // implicit analytics consumer was deployed or claimed elsewhere.
+    await this.seedLegacySseDeliveries(manager)
+    await this.seedAnalyticsDeliveries(manager)
     await manager.query(`
       UPDATE outbox_events event
       SET processed_at = clock_timestamp()

@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common"
 
+import { AnalyticsConversionConsumer } from "../analytics/analytics-conversion.consumer.js"
+
 import { CacheInvalidationPort } from "./cache-invalidation.port.js"
 import { DatabaseEpochCacheInvalidationAdapter } from "./database-epoch-cache-invalidation.adapter.js"
 import { OutboxDeliveryEngine } from "./outbox-delivery.engine.js"
@@ -11,9 +13,10 @@ import { PublicOfferingProjectionConsumer } from "./public-offering-projection.c
     OutboxDeliveryStore,
     OutboxDeliveryEngine,
     PublicOfferingProjectionConsumer,
+    AnalyticsConversionConsumer,
     DatabaseEpochCacheInvalidationAdapter,
     { provide: CacheInvalidationPort, useExisting: DatabaseEpochCacheInvalidationAdapter },
   ],
-  exports: [OutboxDeliveryEngine, PublicOfferingProjectionConsumer],
+  exports: [OutboxDeliveryEngine, PublicOfferingProjectionConsumer, AnalyticsConversionConsumer],
 })
 export class DeliveryModule {}

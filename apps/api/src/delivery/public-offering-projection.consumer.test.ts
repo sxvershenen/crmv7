@@ -15,6 +15,7 @@ function claim(overrides: Partial<ClaimedOutboxDelivery> = {}): ClaimedOutboxDel
     topic: "public.offering_projection.invalidated",
     aggregateType: "catalog_offering",
     aggregateId: offeringId,
+    occurredAt: "2026-09-01T12:00:00.000Z",
     deliveryEpoch: 1,
     attempt: 1,
     maxAttempts: 8,

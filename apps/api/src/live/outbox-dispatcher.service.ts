@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common"
 
+import { AnalyticsConversionConsumer } from "../analytics/analytics-conversion.consumer.js"
 import { OutboxDeliveryEngine } from "../delivery/outbox-delivery.engine.js"
 import { PublicOfferingProjectionConsumer } from "../delivery/public-offering-projection.consumer.js"
 import { LiveService } from "./live.service.js"
@@ -14,6 +15,7 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     @Inject(LiveService) private readonly live: LiveService,
     @Inject(OutboxDeliveryEngine) private readonly delivery: OutboxDeliveryEngine,
     @Inject(PublicOfferingProjectionConsumer) private readonly publicProjection: PublicOfferingProjectionConsumer,
+    @Inject(AnalyticsConversionConsumer) private readonly analytics: AnalyticsConversionConsumer,
   ) {}
 
   onModuleInit() {
@@ -47,7 +49,11 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
         "public_projection",
         (claim) => this.publicProjection.consume(claim),
       )
-      return sse + projection
+      const analytics = await this.delivery.dispatch(
+        "analytics",
+        (claim) => this.analytics.consume(claim),
+      )
+      return sse + projection + analytics
     } catch (error) {
       this.logger.error(error, "Outbox dispatch batch failed")
       return 0

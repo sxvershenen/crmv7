@@ -718,6 +718,50 @@ export class AnalyticsEventEntity {
   trafficClass!: string
 }
 
+@Entity({ name: "analytics_conversion_facts" })
+@Unique("analytics_conversion_facts_source_event_unique", ["sourceEventId"])
+@Index("analytics_conversion_facts_occurred_kind_idx", ["occurredAt", "kind"])
+@Index("analytics_conversion_facts_lead_idx", ["leadId"])
+@Index("analytics_conversion_facts_booking_idx", ["bookingId"])
+@Index("analytics_conversion_facts_visitor_idx", ["anonymousVisitorId"])
+export class AnalyticsConversionFactEntity {
+  @PrimaryColumn({ type: "uuid" })
+  id!: string
+
+  @Column({ name: "source_event_id", type: "uuid" })
+  sourceEventId!: string
+
+  @Column({ type: "text" })
+  kind!: string
+
+  @Column({ name: "occurred_at", type: "timestamptz" })
+  occurredAt!: Date
+
+  @Column({ name: "entity_id", type: "uuid" })
+  entityId!: string
+
+  @Column({ name: "lead_id", type: "uuid", nullable: true })
+  leadId!: string | null
+
+  @Column({ name: "booking_id", type: "uuid", nullable: true })
+  bookingId!: string | null
+
+  @Column({ name: "anonymous_visitor_id", type: "uuid", nullable: true })
+  anonymousVisitorId!: string | null
+
+  @Column({ name: "session_id", type: "uuid", nullable: true })
+  sessionId!: string | null
+
+  @Column({ name: "release_id", type: "uuid", nullable: true })
+  releaseId!: string | null
+
+  @Column({ name: "page_node_id", type: "uuid", nullable: true })
+  pageNodeId!: string | null
+
+  @Column({ name: "attribution_model", type: "text" })
+  attributionModel!: string
+}
+
 @Entity({ name: "change_log" })
 @Index("change_log_entity_idx", ["entityType", "entityId", "createdAt"])
 export class ChangeLogEntity {
@@ -1505,6 +1549,7 @@ export const databaseEntities = [
   PublicIntakeRateLimitEntity,
   AnalyticsIngestDedupEntity,
   AnalyticsEventEntity,
+  AnalyticsConversionFactEntity,
   ChangeLogEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,
