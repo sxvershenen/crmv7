@@ -1,13 +1,25 @@
 import React from 'react';
 import { X, ShieldCheck } from 'lucide-react';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
+import type { AnalyticsConsentState } from '../../../lib/analytics-client';
 
 interface PrivacyPolicyModalProps {
+  analyticsConsent: AnalyticsConsentState;
   isOpen: boolean;
   onClose: () => void;
+  onDenyAnalytics: () => void;
+  onGrantAnalytics: () => void;
+  onRevokeAnalytics: () => void;
 }
 
-export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose }) => {
+export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
+  analyticsConsent,
+  isOpen,
+  onClose,
+  onDenyAnalytics,
+  onGrantAnalytics,
+  onRevokeAnalytics,
+}) => {
   const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
 
@@ -65,15 +77,47 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
           <p>
             4.1. Администрация сайта гарантирует нераспространение персональных данных третьим лицам без законных оснований и принимает все необходимые организационные и технические меры для их защиты.
           </p>
+
+          <h4 className="font-semibold text-[#18191b]">5. Настройки аналитики</h4>
+          <p>
+            Аналитика помогает нам понимать, какие разделы сайта полезны. Она включается только после отдельного разрешения. Мы не используем текст форм и контактные данные в событиях аналитики.
+          </p>
+          <p className="font-medium text-[#18191b]" aria-live="polite">
+            {analyticsConsent === 'analytics'
+              ? 'Аналитика разрешена.'
+              : analyticsConsent === 'denied'
+                ? 'Используются только необходимые функции.'
+                : 'Вы ещё не выбрали настройку аналитики.'}
+          </p>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-neutral-100 flex justify-end">
-          <button
-            onClick={onClose}
-            className="h-[48px] px-6 rounded-full bg-[#18191b] text-white text-[13px] font-medium hover:bg-neutral-800 transition-colors"
-          >
-            Понятно и согласен
-          </button>
+        <div className="mt-6 pt-4 border-t border-neutral-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          {analyticsConsent === 'analytics' ? (
+            <button
+              type="button"
+              onClick={onRevokeAnalytics}
+              className="h-[48px] px-6 rounded-full border border-neutral-300 bg-white text-[#18191b] text-[13px] font-medium hover:bg-neutral-100 transition-colors"
+            >
+              Отозвать аналитику
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onDenyAnalytics}
+                className="h-[48px] px-6 rounded-full border border-neutral-300 bg-white text-[#18191b] text-[13px] font-medium hover:bg-neutral-100 transition-colors"
+              >
+                Только необходимые
+              </button>
+              <button
+                type="button"
+                onClick={onGrantAnalytics}
+                className="h-[48px] px-6 rounded-full bg-[#18191b] text-white text-[13px] font-medium hover:bg-neutral-800 transition-colors"
+              >
+                Разрешить аналитику
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

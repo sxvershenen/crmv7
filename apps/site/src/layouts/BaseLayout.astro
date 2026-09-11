@@ -1,5 +1,6 @@
 ---
 import { siteIdentity } from "../lib/content"
+import AnalyticsIsland from "../react/components/islands/AnalyticsIsland"
 import ModalHub from "../components/islands/ModalHub"
 import ScrollRevealController from "../components/ScrollRevealController.astro"
 import "../styles/global.css"
@@ -83,6 +84,7 @@ const serializeJsonLd = (value: Record<string, unknown>) => JSON.stringify(value
       <slot />
     </div>
     {contentAvailable && <ScrollRevealController />}
+    <AnalyticsIsland client:load />
     {contentAvailable && <ModalHub client:load />}
   </body>
 </html>

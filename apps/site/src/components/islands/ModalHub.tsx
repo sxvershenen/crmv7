@@ -5,6 +5,13 @@ import { CallModal } from "../../react/components/modals/CallModal";
 import { HouseDetailModal } from "../../react/components/modals/HouseDetailModal";
 import { PrivacyPolicyModal } from "../../react/components/modals/PrivacyPolicyModal";
 import type { HouseItem } from "../../react/data/resortData";
+import {
+  denyAnalyticsConsent,
+  getAnalyticsConsentState,
+  grantAnalyticsConsent,
+  revokeAnalyticsConsent,
+  type AnalyticsConsentState,
+} from "../../lib/analytics-client";
 import { SITE_EVENTS, listenForSiteEvent } from "../../lib/site-events";
 
 export function ModalHub() {
@@ -13,6 +20,7 @@ export function ModalHub() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [selectedHouse, setSelectedHouse] = useState<HouseItem | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [analyticsConsent, setAnalyticsConsent] = useState<AnalyticsConsentState>("unknown");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -53,9 +61,12 @@ export function ModalHub() {
     setSelectedHouse(house);
   }), []);
 
-  useEffect(() => listenForSiteEvent(SITE_EVENTS.privacy, () => {
+  const openPrivacy = useCallback(() => {
+    setAnalyticsConsent(getAnalyticsConsentState());
     setIsPrivacyOpen(true);
-  }), []);
+  }, []);
+
+  useEffect(() => listenForSiteEvent(SITE_EVENTS.privacy, openPrivacy), [openPrivacy]);
 
   useEffect(() => listenForSiteEvent(SITE_EVENTS.toast, ({ message }) => {
     handleToast(message);
@@ -87,7 +98,7 @@ export function ModalHub() {
           break;
         case "privacy":
           event.preventDefault();
-          setIsPrivacyOpen(true);
+          openPrivacy();
           break;
         case "toast":
           event.preventDefault();
@@ -102,7 +113,7 @@ export function ModalHub() {
 
     document.addEventListener("click", handleStaticAction);
     return () => document.removeEventListener("click", handleStaticAction);
-  }, [handleToast]);
+  }, [handleToast, openPrivacy]);
 
   const closeBooking = () => {
     setIsBookingOpen(false);
@@ -140,8 +151,27 @@ export function ModalHub() {
         }}
       />
       <PrivacyPolicyModal
+        analyticsConsent={analyticsConsent}
         isOpen={isPrivacyOpen}
         onClose={() => setIsPrivacyOpen(false)}
+        onDenyAnalytics={() => {
+          if (denyAnalyticsConsent()) {
+            setAnalyticsConsent("denied");
+            setIsPrivacyOpen(false);
+          }
+        }}
+        onGrantAnalytics={() => {
+          if (grantAnalyticsConsent()) {
+            setAnalyticsConsent("analytics");
+            setIsPrivacyOpen(false);
+          }
+        }}
+        onRevokeAnalytics={() => {
+          if (revokeAnalyticsConsent()) {
+            setAnalyticsConsent("unknown");
+            setIsPrivacyOpen(false);
+          }
+        }}
       />
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </>
