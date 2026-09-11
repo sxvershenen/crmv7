@@ -33,6 +33,7 @@ import { EventOrderAcceptance1788124400000 } from "./migrations/1788124400000-ev
 import { VenueOfferingIntegrity1788124800000 } from "./migrations/1788124800000-venue-offering-integrity.js"
 import { MediaHardening1788204000000 } from "./migrations/1788204000000-media-hardening.js"
 import { MediaVersionedReplacements1788204400000 } from "./migrations/1788204400000-media-versioned-replacements.js"
+import { PublicIntakeRateLimits1788204800000 } from "./migrations/1788204800000-public-intake-rate-limits.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -71,4 +72,5 @@ export const databaseMigrations = [
   VenueOfferingIntegrity1788124800000,
   MediaHardening1788204000000,
   MediaVersionedReplacements1788204400000,
+  PublicIntakeRateLimits1788204800000,
 ]

@@ -12,7 +12,8 @@
 | P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
 | P4.5 public | Release-pinned commercial projections; CMS-driven canonical `/domiki`, `/kemping`, `/dopy`, `/poshadki`, `/programmy`, `/meropriyatiya`; one-hop legacy 301; typed editorial SSR; canonical/schema и sitemap/robots из active release | Закрыт для утверждённой URL-карты; новые curated nodes требуют реального редакционного evidence |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
-| P4.6–P4.9 | Отдельные foundations описаны в профильных specs | Public intake, visitor analytics, controlled code и go-live не завершены |
+| P4.6 | Public intake contract и `POST /api/public/v1/intake/leads`: sanitize/consent/UTM/referrer snapshot, honeypot, fail-closed HMAC(IP) rate limit, idempotent Customer + Lead transaction, audit/outbox и internal CRM deep link; homepage calculator отправляет typed request и не раскрывает CRM IDs | Disposable PostgreSQL integration и runtime-проверка реальной формы → CRM ещё не приняты |
+| P4.7–P4.9 | Отдельные foundations описаны в профильных specs | Visitor analytics, controlled code и go-live не завершены |
 
 Текущие ограничения:
 
@@ -26,8 +27,9 @@
 
 ## Следующий инкремент
 
-1. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
-2. Затем P4.6 public intake на готовых public projections.
+1. Закрыть P4.6 integration gate: disposable PostgreSQL, migrations и реальная форма → CRM с retry/error/consent paths.
+2. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
+3. Затем перейти к P4.7 first-party analytics.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.
 

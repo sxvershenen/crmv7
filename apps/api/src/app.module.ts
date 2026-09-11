@@ -48,7 +48,10 @@ import { MarketingModule } from "./marketing/marketing.module.js"
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level: config.get<string>("LOG_LEVEL", "info"),
-          redact: ["req.headers.cookie", "req.headers.authorization", "req.query.token", "req.body.password", "res.headers.set-cookie"],
+          redact: [
+            "req.headers.cookie", "req.headers.authorization", "req.query.token", "req.body.password", "res.headers.set-cookie",
+            "req.body.name", "req.body.phone", "req.body.email", "req.body.message", "req.body.attribution", "req.body.consent",
+          ],
         },
       }),
     }),

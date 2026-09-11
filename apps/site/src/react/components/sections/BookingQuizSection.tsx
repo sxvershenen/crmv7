@@ -20,6 +20,7 @@ import {
 import { HOUSES, POPULAR_PROGRAMS, PROMO_CODES, VENUES } from "../../data/resortData";
 import { fireConfetti } from "../../utils/confetti";
 import { listenForSiteEvent, SITE_EVENTS } from "../../../lib/site-events";
+import { publicIntakeErrorMessage, submitPublicLead } from "../../../lib/public-intake";
 
 interface BookingQuizSectionProps {
   config: CmsHomeSectionConfig;
@@ -88,8 +89,11 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
   const [contactMethod, setContactMethod] = useState<"phone" | "telegram" | "max">("phone");
   const [userName, setUserName] = useState("");
   const [userPhone, setUserPhone] = useState("");
-  const [isConsentGiven, setIsConsentGiven] = useState(true);
+  const [isConsentGiven, setIsConsentGiven] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     if (!preselectedItem) return;
@@ -137,14 +141,64 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
 
   useEffect(() => listenForSiteEvent(SITE_EVENTS.promo, ({ code }) => applyPromoCode(code, false)), [applyPromoCode]);
 
-  const submit = (event: React.SyntheticEvent<HTMLFormElement>) => {
+  const submit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
     if (!rangeStart) { onToast("Пожалуйста, выберите даты поездки"); return; }
     if (!userPhone.trim()) { onToast("Пожалуйста, укажите номер телефона"); return; }
     if (!isConsentGiven) { onToast("Необходимо согласие на обработку данных"); return; }
-    setIsSubmitted(true);
-    fireConfetti();
-    onToast("Заявка успешно отправлена! Менеджер свяжется с вами в течение 10 минут.");
+    setIsSubmitting(true);
+    setSubmitError(null);
+    const params = new URLSearchParams(window.location.search);
+    const attributionValue = (name: string) => params.get(name)?.trim().slice(0, 200) || null;
+    try {
+      await submitPublicLead({
+        operationId: crypto.randomUUID(),
+        idempotencyKey,
+        name: userName.trim(),
+        phone: userPhone.trim(),
+        message: [
+          `Выбранный вариант: ${selected.title}`,
+          `Канал ответа: ${contactMethod}`,
+          selectedAddons && Object.entries(selectedAddons).filter(([, enabled]) => enabled).map(([id]) => addonOptions.find((item) => item.id === id)?.title).filter(Boolean).length
+            ? `Дополнительно: ${Object.entries(selectedAddons).filter(([, enabled]) => enabled).map(([id]) => addonOptions.find((item) => item.id === id)?.title).filter(Boolean).join(", ")}`
+            : null,
+          appliedPromo ? `Промокод: ${appliedPromo.code}` : null,
+        ].filter(Boolean).join("\n"),
+        intent: {
+          // The homepage still uses editorial fixture cards; do not turn their
+          // local ids into operational entity references before a public
+          // projection supplies a UUID.
+          kind: "general",
+          startDate: rangeStart,
+          ...(rangeEnd ? { endDate: rangeEnd } : {}),
+          guests: guestCount,
+        },
+        attribution: {
+          source: attributionValue("utm_source"),
+          medium: attributionValue("utm_medium"),
+          campaign: attributionValue("utm_campaign"),
+          content: attributionValue("utm_content"),
+          term: attributionValue("utm_term"),
+          referrer: document.referrer || null,
+          landingPath: window.location.pathname.slice(0, 2048),
+        },
+        consent: {
+          privacyAccepted: true,
+          marketingAccepted: false,
+          analyticsAccepted: false,
+          policyVersion: "public-site-2026-09-01",
+        },
+        website: "",
+      });
+      setIsSubmitted(true);
+      fireConfetti();
+      onToast("Заявка принята! Менеджер свяжется с вами после проверки условий.");
+    } catch (error) {
+      setSubmitError(publicIntakeErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const firstDayOffset = (new Date(month.year, month.index, 1).getDay() + 6) % 7;
@@ -236,8 +290,9 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
             <Input aria-label="Ваше имя" required placeholder="Ваше имя" value={userName} onChange={(event) => setUserName(event.target.value)} autoComplete="name" className="!h-11 !min-h-11 !rounded-[var(--site-radius-round)] !px-[18px] !text-[14px]" />
             <Input aria-label="Телефон" required type="tel" placeholder="+7 (___) ___-__-__" value={userPhone} onChange={(event) => setUserPhone(event.target.value)} autoComplete="tel" className="!h-11 !min-h-11 !rounded-[var(--site-radius-round)] !px-[18px] !text-[14px]" />
             <label className="flex items-start gap-2.5 cursor-pointer text-[12px] text-ink-2 leading-snug"><span aria-hidden="true" className={`mt-0.5 w-5 h-5 rounded-[var(--site-radius-xs)] inline-flex items-center justify-center shrink-0 transition-colors ${isConsentGiven ? "bg-green text-white" : "bg-bg"}`}>{isConsentGiven ? <Check size={12} strokeWidth={3} /> : null}</span><input type="checkbox" aria-label="Согласие на обработку персональных данных" checked={isConsentGiven} onChange={(event) => setIsConsentGiven(event.target.checked)} className="sr-only" /><span>Даю согласие на обработку персональных данных в соответствии с <button type="button" onClick={onOpenPrivacyPolicy} className="text-green-deep underline underline-offset-2">политикой</button>.</span></label>
-            <button type="submit" className="btn btn-primary w-full justify-between"><span>Отправить заявку</span><span className="btn-arrow"><ArrowRight size={15} /></span></button>
-          </form> : <div className="rounded-[var(--site-radius-lg)] bg-green-soft p-5 text-center animate-in zoom-in-95"><span className="w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center"><CheckCircle2 size={21} /></span><h4 className="text-[16px] font-semibold mt-3">Заявка принята!</h4><p className="text-[12px] text-ink-2 mt-2">Спасибо, {userName || "гость"}! Менеджер подтвердит условия и свяжется с вами.</p><button type="button" onClick={() => setIsSubmitted(false)} className="text-[12px] text-green-deep font-medium underline mt-3">Рассчитать заново</button></div>}
+            {submitError ? <p role="alert" className="text-[12px] leading-snug text-red-700">{submitError}</p> : null}
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary w-full justify-between disabled:cursor-wait disabled:opacity-70"><span>{isSubmitting ? "Отправляем…" : "Отправить заявку"}</span><span className="btn-arrow"><ArrowRight size={15} /></span></button>
+          </form> : <div className="rounded-[var(--site-radius-lg)] bg-green-soft p-5 text-center animate-in zoom-in-95"><span className="w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center"><CheckCircle2 size={21} /></span><h4 className="text-[16px] font-semibold mt-3">Заявка принята!</h4><p className="text-[12px] text-ink-2 mt-2">Спасибо, {userName || "гость"}! Менеджер проверит условия и свяжется с вами. Это не подтверждённая бронь.</p><button type="button" onClick={() => { setIsSubmitted(false); setIdempotencyKey(crypto.randomUUID()); setSubmitError(null); }} className="text-[12px] text-green-deep font-medium underline mt-3">Рассчитать заново</button></div>}
         </div>
       </aside>
     </div>

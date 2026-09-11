@@ -126,7 +126,7 @@ describe.sequential("internal API + PostgreSQL", () => {
 
   beforeEach(async () => {
     await dataSource.query(`
-      TRUNCATE TABLE media_usages, media_processing_jobs, media_uploads, media_variants, media_blobs, media_assets,
+      TRUNCATE TABLE public_intake_rate_limits, media_usages, media_processing_jobs, media_uploads, media_variants, media_blobs, media_assets,
         accepted_offering_quote_links, offering_quote_snapshots, offering_addon_assignments, price_rules, rate_plans, price_books, offering_bindings,
         business_calendar_date_overrides, business_calendar_dates, addon_offering_terms, campground_offering_terms,
         catalog_offerings, event_service_templates, resource_group_members, resource_groups, business_calendars,

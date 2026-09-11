@@ -9,16 +9,17 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(publicOpenApiDocument.servers?.[0]?.url).toBe("/api/public/v1");
   });
 
-  it("documents only implemented public reads and never leaks CMS administration", () => {
+  it("documents only implemented public surfaces and never leaks CMS administration", () => {
     const publicDocument = JSON.stringify(publicOpenApiDocument);
     expect(Object.keys(publicOpenApiDocument.paths ?? {})).toEqual([
-      "/pages/resolve", "/pages/manifest", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/event-services", "/offerings/event-services/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}",
+      "/pages/resolve", "/pages/manifest", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/event-services", "/offerings/event-services/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}", "/intake/leads",
     ]);
     expect(publicDocument).not.toContain("CmsNodeMutation");
     expect(publicDocument).not.toContain("MediaUploadGrant");
     expect(publicDocument).not.toContain("StoredAnalyticsEvent");
     expect(publicDocument).not.toContain("crm_session");
-    expect(publicDocument).not.toContain("/intake/leads");
+    expect(publicOpenApiDocument.paths?.["/intake/leads"]?.post?.responses).toEqual(expect.objectContaining({ 202: expect.anything(), 400: expect.anything(), 409: expect.anything(), 429: expect.anything(), 503: expect.anything() }));
+    expect(publicDocument).not.toContain('"leadId"');
     expect(publicDocument).not.toContain("/analytics/events");
     expect(publicDocument).not.toContain("OperationalQuoteAcceptance");
     expect(publicOpenApiDocument.paths?.["/offerings/addons"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 304: expect.anything(), 400: expect.anything(), 404: expect.anything(), 503: expect.anything() }));

@@ -629,6 +629,22 @@ export class IdempotencyKeyEntity {
   createdAt!: Date
 }
 
+@Entity({ name: "public_intake_rate_limits" })
+@Index("public_intake_rate_limits_expiry_idx", ["expiresAt"])
+export class PublicIntakeRateLimitEntity {
+  @PrimaryColumn({ name: "identifier_hash", type: "text" })
+  identifierHash!: string
+
+  @PrimaryColumn({ name: "window_started_at", type: "timestamptz" })
+  windowStartedAt!: Date
+
+  @Column({ name: "request_count", type: "integer" })
+  requestCount!: number
+
+  @Column({ name: "expires_at", type: "timestamptz" })
+  expiresAt!: Date
+}
+
 @Entity({ name: "change_log" })
 @Index("change_log_entity_idx", ["entityType", "entityId", "createdAt"])
 export class ChangeLogEntity {
@@ -1413,6 +1429,7 @@ export const databaseEntities = [
   PaymentEntity,
   SavedViewEntity,
   IdempotencyKeyEntity,
+  PublicIntakeRateLimitEntity,
   ChangeLogEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,

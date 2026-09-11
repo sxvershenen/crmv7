@@ -8,6 +8,8 @@ describe("parseServerEnvironment", () => {
       API_PORT: 3000,
       APP_ENV: "development",
       RUN_MIGRATIONS: false,
+      PUBLIC_INTAKE_TRUST_PROXY_HOPS: 0,
+      PUBLIC_INTAKE_RATE_LIMIT_MAX: 10,
     })
   })
 
@@ -39,5 +41,15 @@ describe("parseServerEnvironment", () => {
     expect(parseServerEnvironment({ DATABASE_URL: "postgres://crm:crm@localhost:5432/crm", MEDIA_STORAGE_BUCKET: "", MEDIA_CDN_BASE_URL: "", MEDIA_SCANNER_URL: "" })).toMatchObject({
       MEDIA_STORAGE_BUCKET: undefined, MEDIA_CDN_BASE_URL: undefined, MEDIA_SCANNER_URL: undefined,
     })
+  })
+
+  it("requires shared public-intake abuse protection in production", () => {
+    const production = {
+      APP_ENV: "production", DATABASE_URL: "postgres://crm:crm@localhost:5432/crm",
+      MEDIA_STORAGE_DRIVER: "s3", MEDIA_STORAGE_BUCKET: "media", MEDIA_CDN_BASE_URL: "https://cdn.example.com",
+      MEDIA_SCANNER_DRIVER: "http", MEDIA_SCANNER_URL: "https://scanner.example.com", MEDIA_UPLOAD_SIGNING_SECRET: "m".repeat(32),
+    }
+    expect(() => parseServerEnvironment(production)).toThrow(/rate-limit HMAC secret/i)
+    expect(parseServerEnvironment({ ...production, PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET: "r".repeat(32) })).toMatchObject({ APP_ENV: "production" })
   })
 })

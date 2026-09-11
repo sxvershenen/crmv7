@@ -213,6 +213,45 @@ test("selects an accessible contiguous date range and serializes it", async ({ p
   await expect(quiz).toHaveAttribute("data-date-end", "");
 });
 
+test("submits the calculator through the public intake contract", async ({ page }) => {
+  let requestBody: Record<string, unknown> | undefined;
+  await page.route("**/api/public/v1/intake/leads", async (route) => {
+    requestBody = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        requestId: "11111111-1111-4111-8111-111111111111",
+        accepted: true,
+        receivedAt: "2026-09-11T17:00:00.000Z",
+      }),
+    });
+  });
+
+  const quiz = page.locator("#quiz");
+  await quiz.scrollIntoViewIfNeeded();
+  await expect.poll(() => quiz.evaluate((element) => !element.closest("astro-island")?.hasAttribute("ssr"))).toBe(true);
+  await quiz.getByRole("button", { name: /^Далее/ }).click();
+  await quiz.locator('[data-calendar-day="12"]').click();
+  await quiz.locator('[data-calendar-day="16"]').click();
+  await quiz.getByLabel("Ваше имя").fill("Мария");
+  await quiz.getByLabel("Телефон").fill("+7 900 000-00-00");
+  await quiz.getByRole("checkbox", { name: "Согласие на обработку персональных данных" }).check({ force: true });
+  await quiz.getByRole("button", { name: "Отправить заявку" }).click();
+
+  await expect.poll(() => requestBody).not.toBeUndefined();
+  await expect(quiz.getByText("Заявка принята!", { exact: true })).toBeVisible();
+  expect(requestBody).toMatchObject({
+    name: "Мария",
+    phone: "+7 900 000-00-00",
+    intent: { kind: "general", startDate: "2026-09-12", endDate: "2026-09-16", guests: 2 },
+    consent: { privacyAccepted: true, marketingAccepted: false, analyticsAccepted: false },
+    attribution: { landingPath: "/" },
+  });
+  expect(requestBody).not.toHaveProperty("price");
+  expect(requestBody).not.toHaveProperty("bookingId");
+});
+
 test("reveals once, keeps partners inset and uses forgiving helper hover", async ({ page }, testInfo) => {
   const blog = page.locator("#blog");
   await blog.scrollIntoViewIfNeeded();

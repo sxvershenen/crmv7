@@ -23,6 +23,9 @@ import { PublicProgramOfferingController } from "./public-program-offering.contr
 import { PublicProgramOfferingService } from "./public-program-offering.service.js"
 import { PublicEventServiceOfferingController } from "./public-event-service-offering.controller.js"
 import { PublicEventServiceOfferingService } from "./public-event-service-offering.service.js"
+import { PublicIntakeController } from "../public-intake/public-intake.controller.js"
+import { PublicIntakeRateLimiter } from "../public-intake/public-intake-rate-limiter.service.js"
+import { PublicIntakeService } from "../public-intake/public-intake.service.js"
 
-@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaMetricsService, MediaScannerService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService] })
+@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController, PublicIntakeController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaMetricsService, MediaScannerService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService, PublicIntakeRateLimiter, PublicIntakeService] })
 export class PublicApiModule {}

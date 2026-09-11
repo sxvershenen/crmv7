@@ -162,7 +162,7 @@ Hard non-leak gate: `event` and `program_occurrence` source links/technical draf
 
 Current `Resource.settings.showOnSite`, free-form `Resource.kind`, `ProgramTemplate.basePrice` and caller-supplied `BookingItem.price` are migration sources, not the target commercial model. Manual schedules/date overrides are in scope; demand-driven algorithmic pricing is not.
 
-Public form uses a dedicated `PublicIntakeService`, not an exposed internal LeadsController. It validates/sanitizes, rate-limits, applies anti-spam and consent/UTM mapping, creates Lead/contact and never confirmed Booking.
+Public form uses `POST /api/public/v1/intake/leads` through a dedicated `PublicIntakeService`, not an exposed internal LeadsController. The request carries `operationId` + `idempotencyKey`; the server normalizes the receipt request ID, consent time and attribution snapshot. It validates/sanitizes, uses a honeypot and a fail-closed PostgreSQL-backed HMAC(IP) rate limit, creates Customer + Lead + audit/outbox atomically and never creates or confirms Booking. Public success is only `{ requestId, accepted: true, receivedAt }`; CRM IDs, PII, internal status and the `/leads/:id` deep link stay internal.
 
 ## 8. Outbox fan-out and jobs
 

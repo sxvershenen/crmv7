@@ -56,6 +56,7 @@ import { OutboxDeliveryDetailParamsSchema, OutboxDeliveryHealthSchema, OutboxDel
 import { CmsDashboardResponseSchema } from "./cms-dashboard.js";
 import { AuthUserResponseSchema, ChangePasswordInputSchema, LoginRequestSchema, OkResponseSchema } from "./auth.js";
 import { PublicCampgroundDetailQuerySchema, PublicCampgroundListQuerySchema, PublicCampgroundListResponseSchema, PublicCampgroundSummarySchema } from "./offerings.js";
+import { PublicLeadIntakeResponseSchema, PublicLeadIntakeSchema } from "./public-intake.js";
 
 extendZodWithOpenApi(z);
 
@@ -304,6 +305,8 @@ const publicEventServiceList = publicRegister("PublicEventServiceListResponse", 
 const publicEventServiceSummaryParams = publicRegister("PublicEventServiceSummaryParams", PublicEventServiceSummaryParamsSchema);
 const publicEventServiceSummary = publicRegister("PublicEventServiceSummary", PublicEventServiceSummarySchema);
 const publicRouteManifest = publicRegister("PublicRouteManifest", PublicRouteManifestSchema);
+const publicLeadIntake = publicRegister("PublicLeadIntake", PublicLeadIntakeSchema);
+const publicLeadIntakeResponse = publicRegister("PublicLeadIntakeResponse", PublicLeadIntakeResponseSchema);
 
 publicRegistry.registerPath({ method: "get", path: "/pages/resolve", tags: ["Pages"], summary: "Resolve one published page from the authoritative active release", request: { query: resolveQuery }, responses: { 200: { description: "Published page", headers: { ETag: { schema: { type: "string" } }, "Cache-Control": { schema: { type: "string" } } }, content: json(publicPage) }, 304: { description: "The ETag matches the active release content" }, 404: errorResponse("Published page not found", publicError), 503: errorResponse("Active release is invalid", publicError) } });
 publicRegistry.registerPath({ method: "get", path: "/pages/manifest", tags: ["Pages"], summary: "Read canonical routes and legacy redirects from the active release", responses: { 200: { description: "Active public route manifest", headers: { ETag: { schema: { type: "string" } }, "Cache-Control": { schema: { type: "string" } } }, content: json(publicRouteManifest) }, 304: { description: "The ETag matches the active route manifest" }, 404: errorResponse("Active release not found", publicError), 503: errorResponse("Active release route manifest is invalid", publicError) } });
@@ -323,9 +326,10 @@ publicRegistry.registerPath({ method: "get", path: "/offerings/houses/detail", t
 publicRegistry.registerPath({ method: "get", path: "/offerings/campgrounds", tags: ["Offerings"], summary: "List release-pinned public campground summaries", request: { query: publicCampgroundListQuery }, responses: { 200: { description: "Published campground summary cursor page", headers: { ETag: { schema: { type: "string" } }, "Cache-Control": { schema: { type: "string" } } }, content: json(publicCampgroundList) }, 304: { description: "The ETag matches the published campground listing" }, 404: errorResponse("Published campground listing not found", publicError), 503: errorResponse("Published campground projection is unavailable", publicError) } });
 publicRegistry.registerPath({ method: "get", path: "/offerings/campgrounds/detail", tags: ["Offerings"], summary: "Read one release-pinned public campground summary by its canonical CMS path", request: { query: publicCampgroundDetailQuery }, responses: { 200: { description: "Published campground summary", headers: { ETag: { schema: { type: "string" } }, "Cache-Control": { schema: { type: "string" } } }, content: json(publicCampgroundSummary) }, 304: { description: "The ETag matches the published campground summary" }, 404: errorResponse("Published campground not found", publicError), 503: errorResponse("Published campground projection is unavailable", publicError) } });
 publicRegistry.registerPath({ method: "get", path: "/media/{assetId}/{variantId}", tags: ["Media"], summary: "Deliver one immutable ready WebP/AVIF variant", request: { params: publicMediaParams }, responses: { 200: { description: "Immutable image variant", content: { "image/webp": { schema: { type: "string", format: "binary" } }, "image/avif": { schema: { type: "string", format: "binary" } } } }, 404: errorResponse("Variant is absent or not ready", publicError) } });
+publicRegistry.registerPath({ method: "post", path: "/intake/leads", tags: ["Intake"], summary: "Accept an idempotent public enquiry without creating a Booking", request: { body: { required: true, content: json(publicLeadIntake) } }, responses: { 202: { description: "Enquiry accepted; receipt contains no CRM identifiers or PII", content: json(publicLeadIntakeResponse) }, 400: errorResponse("Invalid enquiry or consent", publicError), 409: errorResponse("Idempotency key conflict", publicError), 429: errorResponse("Rate limited", publicError), 503: errorResponse("Abuse protection unavailable", publicError) } });
 
 export const publicOpenApiDocument = new OpenApiGeneratorV31(publicRegistry.definitions).generateDocument({
   openapi: "3.1.0",
-  info: { title: "Public Site API", version: "1.0.0", description: "Read-only published page projections and signed CMS previews that are currently implemented." },
+  info: { title: "Public Site API", version: "1.0.0", description: "Published site projections, signed CMS previews and public intake." },
   servers: [{ url: "/api/public/v1" }],
 });

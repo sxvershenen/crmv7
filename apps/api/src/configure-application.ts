@@ -10,6 +10,8 @@ import { RequestIdInterceptor } from "./common/request-id.interceptor.js"
 
 export function configureApplication(app: INestApplication) {
   const config = app.get(ConfigService)
+  const express = app.getHttpAdapter().getInstance() as { set(setting: string, value: number): void }
+  express.set("trust proxy", config.get<number>("PUBLIC_INTAKE_TRUST_PROXY_HOPS", 0))
   app.use(helmet())
   app.use(cookieParser())
   app.enableCors({

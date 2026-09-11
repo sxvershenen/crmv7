@@ -34,6 +34,11 @@ export const serverEnvironmentSchema = z.object({
   RUN_MIGRATIONS: booleanFromString,
   SESSION_COOKIE_NAME: z.string().min(1).default("sv_session"),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(24 * 7),
+  /** Number of trusted reverse-proxy hops before Express resolves req.ip. Keep 0 for direct traffic. */
+  PUBLIC_INTAKE_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(4).default(0),
+  PUBLIC_INTAKE_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1_000).default(10),
+  PUBLIC_INTAKE_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(10).max(86_400).default(60),
+  PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET: optionalText(z.string().min(32)),
   /** Optional until the preview worker/runtime secret has been provisioned. */
   CMS_PREVIEW_SIGNING_SECRET: optionalText(z.string().min(32)),
   /** Local is a development adapter; production must use the S3-compatible adapter. */
@@ -63,6 +68,7 @@ export const serverEnvironmentSchema = z.object({
   if (!environment.MEDIA_SCANNER_URL) context.addIssue({ code: "custom", path: ["MEDIA_SCANNER_URL"], message: "Production media uploads require a scanner URL" })
   if (!environment.MEDIA_CDN_BASE_URL) context.addIssue({ code: "custom", path: ["MEDIA_CDN_BASE_URL"], message: "Production media delivery requires a CDN base URL" })
   if (!environment.MEDIA_UPLOAD_SIGNING_SECRET) context.addIssue({ code: "custom", path: ["MEDIA_UPLOAD_SIGNING_SECRET"], message: "Production media uploads require a signing secret" })
+  if (!environment.PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET) context.addIssue({ code: "custom", path: ["PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET"], message: "Production public intake requires a rate-limit HMAC secret" })
 })
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>

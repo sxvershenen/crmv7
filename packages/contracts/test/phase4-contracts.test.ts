@@ -13,6 +13,7 @@ import {
   MediaUploadInitSchema,
   PublicPageSchema,
   PublicLeadIntakeSchema,
+  PublicLeadIntakeResponseSchema,
   ReleaseManifestSchema,
 } from "../src/index.js";
 
@@ -67,17 +68,22 @@ describe("Phase 4 contracts", () => {
 
   it("accepts a public enquiry but has no public Booking creation surface", () => {
     const value = PublicLeadIntakeSchema.parse({
-      requestId: id,
+      operationId: id,
       idempotencyKey: "public-lead-request-0001",
       name: "Иван",
       phone: "+79990000000",
       intent: { kind: "resource", publicEntityId: secondId, startDate: "2026-09-10", endDate: "2026-09-12", guests: 4 },
       attribution: { source: "yandex", medium: "organic", campaign: null, content: null, term: null, referrer: null, landingPath: "/domiki" },
-      consent: { privacyAccepted: true, policyVersion: "2026-08", capturedAt: timestamp },
+      consent: { privacyAccepted: true, policyVersion: "2026-08" },
     });
 
     expect(value.intent.kind).toBe("resource");
     expect("bookingId" in value).toBe(false);
+    expect("requestId" in value).toBe(false);
+    expect(PublicLeadIntakeSchema.safeParse({ ...value, requestId: id }).success).toBe(false);
+    expect(PublicLeadIntakeSchema.safeParse({ ...value, consent: { ...value.consent, capturedAt: timestamp } }).success).toBe(false);
+    expect(PublicLeadIntakeSchema.safeParse({ ...value, intent: { ...value.intent, startDate: "2026-02-30" } }).success).toBe(false);
+    expect(PublicLeadIntakeResponseSchema.parse({ requestId: id, accepted: true, receivedAt: timestamp })).not.toHaveProperty("leadId");
   });
 
   it("accepts only signed-token analytics batches with allowlisted payloads", () => {
