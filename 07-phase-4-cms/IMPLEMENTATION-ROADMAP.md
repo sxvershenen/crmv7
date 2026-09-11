@@ -47,7 +47,7 @@ Gate закрыт. Page editor сначала получает server-materializ
 
 ## P4.4 — Media hardening
 
-- Production storage/CDN и внешний fail-closed scanner; cleanup unreferenced objects, processing retry/DLQ/metrics.
+- Provider-neutral S3-compatible production storage/CDN adapter, внешний fail-closed HTTP scanner, staged processing retry/DLQ, orphan cleanup и capability-gated health metrics реализованы; local storage/scanner остаются development/test adapters.
 - Versioned blob replacement и page-filtered usages — отдельные scoped flows, если они нужны текущему редактору; существующие upload/archive не имитируют их.
 - Миграция assets только после rights/source review. Spoof/oversize/decode/pixel/EXIF/SVG failures не проходят publish; published references защищены usage graph.
 

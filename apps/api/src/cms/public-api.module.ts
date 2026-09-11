@@ -6,6 +6,8 @@ import { CmsSiteSettingsService } from "./cms-site-settings.service.js"
 import { PublicSiteSettingsController } from "./public-site-settings.controller.js"
 import { PublicMediaController } from "./public-media.controller.js"
 import { MediaService } from "./media.service.js"
+import { MediaMetricsService } from "./media-metrics.service.js"
+import { MediaScannerService } from "./media-scanner.service.js"
 import { MediaStorageService } from "./media-storage.service.js"
 import { PublicListingController } from "./public-listing.controller.js"
 import { PublicListingService } from "./public-listing.service.js"
@@ -22,5 +24,5 @@ import { PublicProgramOfferingService } from "./public-program-offering.service.
 import { PublicEventServiceOfferingController } from "./public-event-service-offering.controller.js"
 import { PublicEventServiceOfferingService } from "./public-event-service-offering.service.js"
 
-@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService] })
+@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaMetricsService, MediaScannerService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService] })
 export class PublicApiModule {}

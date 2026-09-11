@@ -36,6 +36,12 @@ export class MediaController {
     return this.media.get(params.assetId, request.sessionUser!)
   }
 
+  @Get("health")
+  @RequireCapabilities("canManageMedia")
+  health() {
+    return this.media.mediaHealth()
+  }
+
   @Post("uploads")
   @RequireCapabilities("canManageMedia")
   init(@Body(new ZodValidationPipe(MediaUploadInitSchema)) input: MediaUploadInit, @Req() request: AuthenticatedRequest) {

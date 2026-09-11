@@ -1071,6 +1071,7 @@ export class MediaUploadEntity {
   @Column({ name: "created_by", type: "uuid" }) createdBy!: string
   @Column({ name: "created_at", type: "timestamptz" }) createdAt!: Date
   @Column({ name: "completed_at", type: "timestamptz", nullable: true }) completedAt!: Date | null
+  @Column({ name: "staging_key", type: "text", nullable: true }) stagingKey!: string | null
   @Column({ name: "error_code", type: "text", nullable: true }) errorCode!: string | null
   @Column({ name: "error_message", type: "text", nullable: true }) errorMessage!: string | null
 }

@@ -94,6 +94,20 @@ export const MediaAssetDetailSchema = z.object({
   usages: z.array(MediaUsageSchema).max(10_000),
 }).strict();
 
+export const MediaHealthSchema = z.object({
+  jobs: z.record(z.string().min(1).max(40), z.number().int().nonnegative()),
+  metrics: z.object({
+    uploadsAccepted: z.number().int().nonnegative(),
+    uploadsReady: z.number().int().nonnegative(),
+    uploadsFailed: z.number().int().nonnegative(),
+    processingRetries: z.number().int().nonnegative(),
+    processingDeadLetters: z.number().int().nonnegative(),
+    scannerFailures: z.number().int().nonnegative(),
+    cleanupDeletedObjects: z.number().int().nonnegative(),
+    cleanupFailures: z.number().int().nonnegative(),
+  }).strict(),
+}).strict();
+
 export type MediaAssetDetail = z.infer<typeof MediaAssetDetailSchema>;
 export type MediaAssetListQuery = z.infer<typeof MediaAssetListQuerySchema>;
 export type MediaAssetMetadataMutation = z.infer<typeof MediaAssetMetadataMutationSchema>;

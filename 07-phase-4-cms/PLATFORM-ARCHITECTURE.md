@@ -194,7 +194,9 @@ Flow:
 
 Also enforce decoded-pixel/decompression-bomb limits, normalized filenames, per-user/site quotas, SVG active-content policy, EXIF/GPS stripping, orientation/color-profile rules and cleanup of failed staging objects. UI may show a local preview immediately, but a CMS reference becomes publishable only at server `ready`.
 
-Engineering default is an S3-compatible storage abstraction (a compatible local service is allowed in development); provider, data location and retention still require go-live approval. Original хранится private while an asset may be reprocessed; публичная доставка изображений идёт через immutable WebP variants. SVG sanitizes separately; video/documents keep their formats. Dedup uses content hash. Published usage blocks physical delete; replace creates a new blob/version, and purge is an explicit retention workflow.
+Engineering default is an S3-compatible storage abstraction (the repository also ships a local development adapter); production configuration rejects local storage, missing bucket/CDN or missing external scanner. Original хранится private while an asset may be reprocessed; публичная доставка изображений идёт через immutable WebP variants and the configured CDN base URL. SVG sanitizes separately; video/documents keep their formats. Dedup uses content hash. Published usage blocks physical delete; replace creates a new blob/version, and purge is an explicit retention workflow. Provider, data location, retention and rights/source approval still require go-live sign-off.
+
+Processing persists the upload in a scoped staging object before creating a DB-claimed job. Retryable scanner/storage failures use bounded exponential backoff and end in `dead_letter`; permanent spoof/decode/malware failures fail closed. A periodic worker claims due jobs across instances and requeues expired processing leases, while cleanup lists only the managed `private/`, `public/` and `staging/` namespaces and deletes objects absent from the DB usage graph after the configured grace period.
 
 Schema references populate usage graph directly. Custom code build must emit asset manifest; dynamic untracked media URLs block publish.
 

@@ -18,6 +18,9 @@ import { CmsSiteSettingsController } from "./cms-site-settings.controller.js"
 import { CmsSiteSettingsService } from "./cms-site-settings.service.js"
 import { MediaController } from "./media.controller.js"
 import { MediaService } from "./media.service.js"
+import { MediaMetricsService } from "./media-metrics.service.js"
+import { MediaProcessingWorker } from "./media-processing.worker.js"
+import { MediaScannerService } from "./media-scanner.service.js"
 import { MediaStorageService } from "./media-storage.service.js"
 
 @Module({
@@ -44,6 +47,9 @@ import { MediaStorageService } from "./media-storage.service.js"
     CmsSiteSettingsService,
     PublicContentService,
     MediaService,
+    MediaMetricsService,
+    MediaProcessingWorker,
+    MediaScannerService,
     MediaStorageService,
     DeliveryAdminService,
   ],

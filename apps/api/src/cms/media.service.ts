@@ -3,10 +3,11 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException, UnprocessableEntityException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import sharp from "sharp"
-import { DataSource } from "typeorm"
+import { DataSource, LessThanOrEqual } from "typeorm"
 
 import {
   MediaAssetDetailSchema,
+  MediaHealthSchema,
   MediaAssetListResponseSchema,
   MediaAssetSchema,
   MediaUploadGrantSchema,
@@ -29,6 +30,9 @@ import {
   MediaVariantEntity,
 } from "@crm/db"
 
+import { mediaError, MediaPipelineError, MediaStorageError } from "./media-processing-error.js"
+import { MediaMetricsService } from "./media-metrics.service.js"
+import { MediaScannerService } from "./media-scanner.service.js"
 import { MediaStorageService } from "./media-storage.service.js"
 
 const imageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"])
@@ -38,15 +42,25 @@ const variantWidths = [320, 640, 1280, 2400]
 export class MediaService {
   private readonly maxDecodedPixels: number
   private readonly signingSecret: string | null
+  private readonly maxProcessingAttempts: number
+  private readonly processingRetryBaseMs: number
+  private readonly processingLeaseMs: number
+  private readonly cleanupGraceMs: number
 
   constructor(
     @Inject(DataSource) private readonly dataSource: DataSource,
     @Inject(ConfigService) config: ConfigService,
     @Inject(MediaStorageService) private readonly storage: MediaStorageService,
+    @Inject(MediaScannerService) private readonly scanner: MediaScannerService,
+    @Inject(MediaMetricsService) private readonly metrics: MediaMetricsService,
   ) {
     this.maxDecodedPixels = config.get<number>("MEDIA_MAX_DECODED_PIXELS", 80_000_000)
     this.signingSecret = config.get<string>("MEDIA_UPLOAD_SIGNING_SECRET")
       ?? (config.get<string>("APP_ENV") === "production" ? null : "development-only-media-upload-secret-change-me")
+    this.maxProcessingAttempts = config.get<number>("MEDIA_PROCESSING_MAX_ATTEMPTS", 5)
+    this.processingRetryBaseMs = config.get<number>("MEDIA_PROCESSING_RETRY_BASE_MS", 30_000)
+    this.processingLeaseMs = config.get<number>("MEDIA_PROCESSING_LEASE_MS", 5 * 60_000)
+    this.cleanupGraceMs = config.get<number>("MEDIA_CLEANUP_GRACE_HOURS", 24) * 60 * 60_000
   }
 
   async list(query: MediaAssetListQuery, actor: SessionUser) {
@@ -107,61 +121,200 @@ export class MediaService {
     if (body.byteLength !== upload.byteSize) return this.reject(upload, "MEDIA_SIZE_MISMATCH", "Размер файла не совпадает с upload grant")
     if (sha256(body) !== upload.checksumSha256) return this.reject(upload, "MEDIA_CHECKSUM_MISMATCH", "Checksum файла не совпадает с upload grant")
 
-    const claimed = await this.dataSource.getRepository(MediaUploadEntity).update({ id: upload.id, state: "pending" }, { state: "processing" })
-    if (claimed.affected !== 1) throw new ConflictException({ code: "MEDIA_UPLOAD_ALREADY_USED", message: "Upload grant уже используется" })
-    const job = await this.dataSource.getRepository(MediaProcessingJobEntity).save(this.dataSource.getRepository(MediaProcessingJobEntity).create({
-      id: randomUUID(), assetId: upload.assetId, uploadId: upload.id, blobId: null, state: "processing", attempts: 1,
-      availableAt: new Date(), startedAt: new Date(), finishedAt: null, errorCode: null, errorMessage: null,
-    }))
-
+    const stagingKey = `${upload.id}/payload`
     try {
+      await this.storage.writeStaging(stagingKey, body, upload.mimeType)
+    } catch {
+      throw new ServiceUnavailableException({ code: "MEDIA_STAGING_UNAVAILABLE", message: "Не удалось сохранить upload для обработки" })
+    }
+    const job = await this.dataSource.transaction(async (manager) => {
+      const claimed = await manager.getRepository(MediaUploadEntity).update({ id: upload.id, state: "pending" }, { state: "processing" })
+      if (claimed.affected !== 1) throw new ConflictException({ code: "MEDIA_UPLOAD_ALREADY_USED", message: "Upload grant уже используется" })
+      await manager.getRepository(MediaUploadEntity).update({ id: upload.id }, { stagingKey })
+      return manager.save(manager.getRepository(MediaProcessingJobEntity).create({
+        id: randomUUID(), assetId: upload.assetId, uploadId: upload.id, blobId: null, state: "queued", attempts: 0,
+        availableAt: new Date(), startedAt: null, finishedAt: null, errorCode: null, errorMessage: null,
+      }))
+    })
+    this.metrics.increment("uploadsAccepted")
+
+    await this.processJob(job.id)
+    const currentJob = await this.dataSource.getRepository(MediaProcessingJobEntity).findOneBy({ id: job.id })
+    if (currentJob?.state === "queued") throw new ServiceUnavailableException({ code: "MEDIA_PROCESSING_QUEUED", message: "Файл принят и ожидает повторной обработки" })
+    if (currentJob?.state === "dead_letter") throw new ServiceUnavailableException({ code: "MEDIA_PROCESSING_DEAD_LETTER", message: "Файл передан в очередь ручного разбора" })
+    return this.asset(await this.findAsset(upload.assetId))
+  }
+
+  async uploadByteLimit(uploadId: string, token: string, contentType: string | undefined, checksum: string | undefined) {
+    return (await this.authorizeUpload(uploadId, token, contentType, checksum)).byteSize
+  }
+
+  /** Claim and process one queued job. The claim is CAS-safe across API instances. */
+  async processJob(jobId: string): Promise<void> {
+    const now = new Date()
+    const claimed = await this.dataSource.getRepository(MediaProcessingJobEntity).createQueryBuilder().update().set({
+      state: "processing", attempts: () => '"attempts" + 1', startedAt: now, finishedAt: null,
+    }).where("id = :jobId AND state = 'queued' AND available_at <= :now", { jobId, now }).execute()
+    if (claimed.affected !== 1) return
+
+    const job = await this.dataSource.getRepository(MediaProcessingJobEntity).findOneBy({ id: jobId })
+    if (!job) return
+    const upload = await this.dataSource.getRepository(MediaUploadEntity).findOneBy({ id: job.uploadId })
+    if (!upload || !upload.stagingKey) {
+      await this.failProcessing(job, upload, mediaError("MEDIA_STAGING_MISSING", "Upload staging object is missing"))
+      throw new UnprocessableEntityException({ code: "MEDIA_STAGING_MISSING", message: "Upload staging object is missing" })
+    }
+
+    await this.dataSource.getRepository(MediaAssetEntity).update({ id: job.assetId, state: "uploading" }, { state: "processing", updatedAt: now })
+    try {
+      const body = await this.storage.readStaging(upload.stagingKey)
+      await this.scanner.scan(body, upload.mimeType)
       assertSafeSignature(body, upload.mimeType)
       if (body.includes(Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE", "ascii"))) throw mediaError("MEDIA_MALWARE_DETECTED", "Файл заблокирован security scan")
       const source = sharp(body, { failOn: "error", limitInputPixels: this.maxDecodedPixels, pages: 1 })
-      const metadata = await source.metadata()
+      let metadata
+      try {
+        metadata = await source.metadata()
+      } catch {
+        throw mediaError("MEDIA_DECODE_FAILED", "Изображение не удалось декодировать")
+      }
       const width = metadata.width ?? 0
       const height = metadata.height ?? 0
       if (!width || !height || width > 20_000 || height > 20_000 || width * height > this.maxDecodedPixels) throw mediaError("MEDIA_DECODE_LIMIT", "Изображение превышает безопасный decoded-pixel limit")
 
       const blobId = randomUUID()
       const originalKey = `${upload.assetId}/${blobId}/original`
-      await this.storage.writePrivate(originalKey, body)
-      const generated: Array<{ row: MediaVariantEntity; value: Buffer }> = []
+      await this.storage.writePrivate(originalKey, body, upload.mimeType)
+      const generated: MediaVariantEntity[] = []
       const widths = [...new Set([...variantWidths.filter((candidate) => candidate <= width), width])].sort((a, b) => a - b)
       for (const targetWidth of widths) {
         for (const format of ["webp", "avif"] as const) {
-          const pipeline = sharp(body, { failOn: "error", limitInputPixels: this.maxDecodedPixels, pages: 1 }).rotate().resize({ width: targetWidth, withoutEnlargement: true }).toColourspace("srgb")
-          const value = format === "webp" ? await pipeline.webp({ quality: 82 }).toBuffer() : await pipeline.avif({ quality: 55, effort: 4 }).toBuffer()
+          let value: Buffer
+          try {
+            const pipeline = sharp(body, { failOn: "error", limitInputPixels: this.maxDecodedPixels, pages: 1 }).rotate().resize({ width: targetWidth, withoutEnlargement: true }).toColourspace("srgb")
+            value = format === "webp" ? await pipeline.webp({ quality: 82 }).toBuffer() : await pipeline.avif({ quality: 55, effort: 4 }).toBuffer()
+          } catch {
+            throw mediaError("MEDIA_PROCESSING_FAILED", "Не удалось создать public media variant")
+          }
           const variantMetadata = await sharp(value).metadata()
-          const id = randomUUID()
           const storageKey = `${upload.assetId}/${blobId}/${targetWidth}.${format}`
-          await this.storage.writePublic(storageKey, value)
-          generated.push({ value, row: this.dataSource.getRepository(MediaVariantEntity).create({
-            id, assetId: upload.assetId, blobId, format, width: variantMetadata.width!, height: variantMetadata.height!,
+          await this.storage.writePublic(storageKey, value, format === "avif" ? "image/avif" : "image/webp")
+          generated.push(this.dataSource.getRepository(MediaVariantEntity).create({
+            id: randomUUID(), assetId: upload.assetId, blobId, format, width: variantMetadata.width!, height: variantMetadata.height!,
             byteSize: value.byteLength, storageKey, contentHash: sha256(value), createdAt: new Date(),
-          }) })
+          }))
         }
       }
 
       await this.dataSource.transaction(async (manager) => {
         await manager.save(manager.create(MediaBlobEntity, { id: blobId, assetId: upload.assetId, revision: 1, checksumSha256: upload.checksumSha256, mimeType: upload.mimeType, byteSize: body.byteLength, storageKey: originalKey, createdAt: new Date() }))
-        await manager.save(generated.map(({ row }) => row))
-        await manager.getRepository(MediaAssetEntity).update({ id: upload.assetId, state: "uploading" }, { state: "ready", width, height, currentBlobId: blobId, updatedAt: new Date() })
-        await manager.getRepository(MediaUploadEntity).update({ id: upload.id, state: "processing" }, { state: "completed", completedAt: new Date() })
-        await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id }, { state: "completed", blobId, finishedAt: new Date() })
+        await manager.save(generated)
+        await manager.getRepository(MediaAssetEntity).update({ id: upload.assetId, state: "processing" }, { state: "ready", width, height, currentBlobId: blobId, updatedAt: new Date() })
+        await manager.getRepository(MediaUploadEntity).update({ id: upload.id, state: "processing" }, { state: "completed", stagingKey: null, completedAt: new Date() })
+        await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id, state: "processing" }, { state: "completed", blobId, finishedAt: new Date() })
       })
-      return this.asset(await this.findAsset(upload.assetId))
+      await this.storage.deleteStaging(upload.stagingKey).catch(() => undefined)
+      this.metrics.increment("uploadsReady")
     } catch (error) {
-      const code = error instanceof MediaPipelineError ? error.code : "MEDIA_PROCESSING_FAILED"
-      const message = error instanceof Error ? error.message : "Media processing failed"
-      await this.failUpload(upload, code, message, "failed", job.id)
-      if (error instanceof UnprocessableEntityException) throw error
-      throw new UnprocessableEntityException({ code, message })
+      const pipelineError = error instanceof MediaPipelineError
+        ? error
+        : error instanceof MediaStorageError
+          ? mediaError("MEDIA_STORAGE_UNAVAILABLE", "Media storage temporarily unavailable", true)
+          : mediaError("MEDIA_PROCESSING_FAILED", error instanceof Error ? error.message : "Media processing failed")
+      await this.failProcessing(job, upload, pipelineError)
+      if (pipelineError.retryable && job.attempts < this.maxProcessingAttempts) return
+      if (pipelineError.retryable) throw new ServiceUnavailableException({ code: "MEDIA_PROCESSING_DEAD_LETTER", message: "Media processing temporarily unavailable" })
+      throw new UnprocessableEntityException({ code: pipelineError.code, message: pipelineError.message })
     }
   }
 
-  async uploadByteLimit(uploadId: string, token: string, contentType: string | undefined, checksum: string | undefined) {
-    return (await this.authorizeUpload(uploadId, token, contentType, checksum)).byteSize
+  async processDueJobs(limit = 10) {
+    await this.recoverStaleJobs()
+    const jobs = await this.dataSource.getRepository(MediaProcessingJobEntity).find({
+      where: { state: "queued", availableAt: LessThanOrEqual(new Date()) }, order: { availableAt: "ASC", id: "ASC" }, take: limit,
+    })
+    for (const job of jobs) await this.processJob(job.id).catch(() => undefined)
+  }
+
+  private async recoverStaleJobs() {
+    const cutoff = new Date(Date.now() - this.processingLeaseMs)
+    const jobs = await this.dataSource.getRepository(MediaProcessingJobEntity).find({
+      where: { state: "processing", startedAt: LessThanOrEqual(cutoff) }, order: { startedAt: "ASC", id: "ASC" }, take: 100,
+    })
+    for (const job of jobs) {
+      if (job.attempts < this.maxProcessingAttempts) {
+        await this.dataSource.getRepository(MediaProcessingJobEntity).update({ id: job.id, state: "processing" }, {
+          state: "queued", availableAt: new Date(), startedAt: null, finishedAt: null,
+          errorCode: "MEDIA_PROCESSING_LEASE_EXPIRED", errorMessage: "Processing lease expired; job requeued",
+        })
+        this.metrics.increment("processingRetries")
+        continue
+      }
+      await this.dataSource.transaction(async (manager) => {
+        await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id, state: "processing" }, {
+          state: "dead_letter", finishedAt: new Date(), errorCode: "MEDIA_PROCESSING_LEASE_EXHAUSTED", errorMessage: "Processing lease expired after the attempt budget",
+        })
+        await manager.getRepository(MediaUploadEntity).update({ id: job.uploadId, state: "processing" }, { state: "failed", errorCode: "MEDIA_PROCESSING_LEASE_EXHAUSTED", errorMessage: "Processing lease expired after the attempt budget", completedAt: new Date() })
+        await manager.getRepository(MediaAssetEntity).update({ id: job.assetId, state: "processing" }, { state: "failed", updatedAt: new Date() })
+      })
+      this.metrics.increment("processingDeadLetters")
+      this.metrics.increment("uploadsFailed")
+    }
+  }
+
+  async cleanupUnreferencedObjects() {
+    const cutoff = new Date(Date.now() - this.cleanupGraceMs)
+    const referenced = new Set<string>()
+    const terminalStagingKeys = new Map<string, string>()
+    const blobs = await this.dataSource.getRepository(MediaBlobEntity).find()
+    for (const blob of blobs) referenced.add(`private/${blob.storageKey}`)
+    const variants = await this.dataSource.getRepository(MediaVariantEntity).find()
+    for (const variant of variants) referenced.add(`public/${variant.storageKey}`)
+    const uploads = await this.dataSource.getRepository(MediaUploadEntity).find()
+    for (const upload of uploads) {
+      if (!upload.stagingKey) continue
+      const terminal = ["completed", "failed", "expired"].includes(upload.state) && upload.completedAt !== null && upload.completedAt <= cutoff
+      if (terminal) terminalStagingKeys.set(`staging/${upload.stagingKey}`, upload.id)
+      else referenced.add(`staging/${upload.stagingKey}`)
+    }
+
+    let deleted = 0
+    try {
+      const seen = new Set<string>()
+      for (const object of await this.storage.listObjects()) {
+        seen.add(object.key)
+        if (!/^(private|public|staging)\//.test(object.key)) continue
+        if (referenced.has(object.key) || object.lastModified > cutoff) continue
+        try {
+          await this.storage.deleteObject(object.key)
+          deleted += 1
+          const uploadId = terminalStagingKeys.get(object.key)
+          if (uploadId) {
+            await this.dataSource.getRepository(MediaUploadEntity).update({ id: uploadId }, { stagingKey: null })
+            terminalStagingKeys.delete(object.key)
+          }
+        } catch {
+          this.metrics.increment("cleanupFailures")
+        }
+      }
+      for (const [objectKey, uploadId] of terminalStagingKeys) {
+        if (seen.has(objectKey) || !objectKey.startsWith("staging/")) continue
+        await this.dataSource.getRepository(MediaUploadEntity).update({ id: uploadId }, { stagingKey: null })
+      }
+      if (deleted) this.metrics.increment("cleanupDeletedObjects", deleted)
+    } catch {
+      this.metrics.increment("cleanupFailures")
+    }
+    return { deleted }
+  }
+
+  async mediaHealth() {
+    const jobs = await this.dataSource.getRepository(MediaProcessingJobEntity).createQueryBuilder("job")
+      .select("job.state", "state").addSelect("COUNT(*)", "count").groupBy("job.state").getRawMany<{ state: string; count: string }>()
+    return MediaHealthSchema.parse({
+      jobs: Object.fromEntries(jobs.map((row) => [row.state, Number(row.count)])),
+      metrics: this.metrics.snapshot(),
+    })
   }
 
   async updateMetadata(assetId: string, input: MediaAssetMetadataMutation, actor: SessionUser) {
@@ -198,7 +351,7 @@ export class MediaService {
       id: row.id, version: row.version, kind: row.kind, state: row.state, title: row.title, alt: row.alt,
       caption: row.caption, credit: row.credit, license: row.license, tags: row.tags, focalPoint: row.focalPoint,
       originalFilename: row.originalFilename, mimeType: row.mimeType, byteSize: row.byteSize, width: row.width, height: row.height,
-      variants: variants.map((variant) => ({ id: variant.id, format: variant.format, width: variant.width, height: variant.height, byteSize: variant.byteSize, url: `/api/public/v1/media/${row.id}/${variant.id}`, contentHash: variant.contentHash })),
+      variants: variants.map((variant) => ({ id: variant.id, format: variant.format, width: variant.width, height: variant.height, byteSize: variant.byteSize, url: this.storage.publicUrl(`public/${variant.storageKey}`, `/api/public/v1/media/${row.id}/${variant.id}`), contentHash: variant.contentHash })),
       usageCount: usages.length, publishedUsage: usages.some((usage) => usage.published), archivedAt: row.archivedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     })
@@ -239,6 +392,26 @@ export class MediaService {
   }
   private assert(actor: SessionUser, capability: "canViewContent" | "canManageMedia") { if (actor.capabilities[capability] !== true) throw new ForbiddenException({ code: "PERMISSION_DENIED", message: `Capability ${capability} is required` }) }
   private async reject(upload: MediaUploadEntity, code: string, message: string): Promise<never> { await this.failUpload(upload, code, message, "failed"); throw new UnprocessableEntityException({ code, message }) }
+  private async failProcessing(job: MediaProcessingJobEntity, upload: MediaUploadEntity | null, error: MediaPipelineError) {
+    const deadLetter = error.retryable && job.attempts >= this.maxProcessingAttempts
+    const state = deadLetter ? "dead_letter" : error.retryable ? "queued" : "failed"
+    const availableAt = state === "queued" ? new Date(Date.now() + this.processingRetryBaseMs * Math.min(32, 2 ** Math.max(0, job.attempts - 1))) : job.availableAt
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id }, {
+        state, availableAt, startedAt: state === "queued" ? null : job.startedAt, errorCode: error.code, errorMessage: error.message, finishedAt: state === "queued" ? null : new Date(),
+      })
+      if (upload && (state === "failed" || deadLetter)) {
+        await manager.getRepository(MediaUploadEntity).update({ id: upload.id }, { state: "failed", errorCode: error.code, errorMessage: error.message, completedAt: new Date() })
+      }
+      if (state === "failed" || deadLetter) await manager.getRepository(MediaAssetEntity).update({ id: job.assetId }, { state: "failed", updatedAt: new Date() })
+    })
+    if (error.code.startsWith("MEDIA_SCANNER")) this.metrics.increment("scannerFailures")
+    if (state === "queued") this.metrics.increment("processingRetries")
+    else {
+      this.metrics.increment("uploadsFailed")
+      if (deadLetter) this.metrics.increment("processingDeadLetters")
+    }
+  }
   private async failUpload(upload: MediaUploadEntity, code: string, message: string, state: "failed" | "expired", jobId?: string) {
     await this.dataSource.transaction(async (manager) => {
       await manager.getRepository(MediaUploadEntity).update({ id: upload.id }, { state, errorCode: code, errorMessage: message, completedAt: new Date() })
@@ -247,9 +420,6 @@ export class MediaService {
     })
   }
 }
-
-class MediaPipelineError extends Error { constructor(readonly code: string, message: string) { super(message) } }
-function mediaError(code: string, message: string) { return new MediaPipelineError(code, message) }
 function sha256(value: string | Buffer) { return createHash("sha256").update(value).digest("hex") }
 function normalizeFilename(value: string) { const normalized = value.normalize("NFKC").replace(/[\\/\0\r\n]/g, "-").replace(/\s+/g, " ").trim(); if (!normalized || normalized === "." || normalized === "..") throw new UnprocessableEntityException({ code: "MEDIA_FILENAME_INVALID", message: "Filename недействителен" }); return normalized.slice(0, 500) }
 function escapeLike(value: string) { return value.replace(/[\\%_]/g, "\\$&") }
