@@ -148,6 +148,16 @@ describe("materializeRelease", () => {
     expect(result.routes.map((route) => route.content.summary)).toEqual([null, null])
   })
 
+  it("rejects a source-less event_detail before it can enter a release", () => {
+    const eventService = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "event_detail", path: "/events/unlinked", slug: "unlinked",
+      sections: [heroOverride],
+    })
+    expect(materializeRelease([eventService] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_EVENT_SERVICE_PUBLIC_PROJECTION_REQUIRED", route: "/events/unlinked" }),
+    ])
+  })
+
   it("fails closed for catalog offering nodes even when the revision has a matching relation", () => {
     const house = candidate({
       nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/houses/sosna", slug: "sosna",

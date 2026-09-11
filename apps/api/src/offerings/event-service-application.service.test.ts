@@ -59,4 +59,26 @@ describe("event-service application guards", () => {
     await expect((editor as unknown as { validateDraftStructure(manager: unknown, offering: unknown, plans: unknown[]): Promise<void> }).validateDraftStructure({}, offering, [{ ...plan, pricingBasis: "per_hour" }])).rejects.toThrow(/flat_package/)
     await expect((editor as unknown as { validateDraftStructure(manager: unknown, offering: unknown, plans: unknown[]): Promise<void> }).validateDraftStructure({}, offering, [{ ...plan, includedQuantity: null }])).rejects.toThrow(/includedQuantity/)
   })
+
+  it("emits a public projection invalidation when a linked template changes", async () => {
+    const saved: unknown[] = []
+    const manager = {
+      create: (_entity: unknown, values: unknown) => values,
+      save: async (values: unknown) => { saved.push(values); return values },
+    }
+    const service = new EventServiceApplicationService({} as never)
+    await (service as unknown as { recordTemplateMutation(manager: unknown, offering: unknown, operationId: string, context: unknown, configurationHash: string, eventType: string): Promise<void> }).recordTemplateMutation(
+      manager,
+      { id: "11111111-1111-4111-8111-111111111111", state: "active", subjectVersion: 3, addonAssignmentsVersion: 4 },
+      "22222222-2222-4222-8222-222222222222",
+      { actor: { id: "33333333-3333-4333-8333-333333333333" }, requestId: "request-1", entrySurface: "admin" },
+      "a".repeat(64),
+      "crm.offering.event_service_updated",
+    )
+    const entries = saved.flatMap((entry) => Array.isArray(entry) ? entry : [entry]) as Array<Record<string, unknown>>
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ topic: "crm.offering.event_service_updated", aggregateId: "11111111-1111-4111-8111-111111111111" }),
+      expect.objectContaining({ topic: "public.offering_projection.invalidated", aggregateId: "11111111-1111-4111-8111-111111111111" }),
+    ]))
+  })
 })

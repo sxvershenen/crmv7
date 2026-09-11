@@ -292,6 +292,11 @@ export class CmsPublicationService {
     if (sourceLinks.some((link) => blockedOperationalSourceKinds.has(link.sourceKind))) {
       throw new ConflictException({ code: "CMS_RELEASE_INVALID", message: "Релиз содержит operational Event/ProgramOccurrence без разрешённой публичной проекции" })
     }
+    const nodes = await manager.getRepository(CmsNodeEntity).findBy({ id: In(items.map((item) => item.nodeId)) })
+    const nodeById = new Map(nodes.map((node) => [node.id, node]))
+    if (items.some((item) => nodeById.get(item.nodeId)?.kind === "event_detail" && sourceLinks.find((link) => link.nodeId === item.nodeId)?.sourceKind !== "catalog_offering")) {
+      throw new ConflictException({ code: "CMS_RELEASE_INVALID", message: "Релиз содержит event_detail без явной event-service CatalogOffering projection" })
+    }
     const itemByNode = new Map(items.map((item) => [item.nodeId, item]))
     for (const link of sourceLinks.filter((candidate) => candidate.sourceKind === blockedCatalogSourceKind)) {
       const item = itemByNode.get(link.nodeId)
@@ -618,6 +623,8 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     const blockedOperationalSource = candidate.sourceKind !== null && candidate.sourceKind !== undefined && blockedOperationalSourceKinds.has(candidate.sourceKind)
     if (blockedOperationalSource) {
       issues.push(issue("CMS_OPERATIONAL_SOURCE_PUBLIC_PROFILE_REQUIRED", "Operational Event/ProgramOccurrence нельзя публиковать до появления явной allowlisted public offering/profile projection", candidate.revision.path))
+    } else if (candidate.node.kind === "event_detail" && candidate.sourceKind !== blockedCatalogSourceKind) {
+      issues.push(issue("CMS_EVENT_SERVICE_PUBLIC_PROJECTION_REQUIRED", "event_detail нельзя публиковать без явной event-service CatalogOffering и safe public projection", candidate.revision.path))
     } else if (candidate.sourceKind === blockedCatalogSourceKind) {
       const safeProjection = candidate.safeProjectionDependency?.type === "crm_projection"
         && ((candidate.node.kind === "addon_detail" && candidate.safeProjectionDependency.version === "public.addon-summary.v1")

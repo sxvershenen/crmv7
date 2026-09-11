@@ -234,7 +234,7 @@ Quote formula is server-owned: selected base rule + validated extra guests + sel
 
 Постоянная категория мероприятия — `EventServiceTemplate` с exact primary `CatalogOffering(kind=event_service)` binding. Она не равна фактическому CRM `Event`, который содержит клиента, телефон, даты, планирование и оплаты. Несколько категорий могут иметь одинаковый `format`; это классификация, не identity.
 
-`/events/categories` создаёт template, offering, binding и один canonical `catalog_offering → event_detail` CMS-черновик атомарно и идемпотентно, без публикации. `/events` создаёт клиентские заказы: создание заказа не создаёт CMS node/revision/source link и не копирует клиентские поля в CMS. Одна категория обслуживает много заказов; legacy `EventCategory` не связывается с template по имени или ID. Исторические customer Event CMS links требуют отдельного read-only inventory и решения о cleanup.
+`/event-services` создаёт template, offering, binding и один canonical `catalog_offering → event_detail` CMS-черновик атомарно и идемпотентно, без публикации. `/events` создаёт клиентские заказы: создание заказа не создаёт CMS node/revision/source link и не копирует клиентские поля в CMS. Одна категория обслуживает много заказов; legacy `EventCategory` не связывается с template по имени или ID. Исторические customer Event CMS links требуют отдельного read-only inventory и решения о cleanup.
 
 Operational template:
 

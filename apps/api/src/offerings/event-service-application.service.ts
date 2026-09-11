@@ -147,11 +147,11 @@ export class EventServiceApplicationService {
       if (!template || template.archivedAt !== null) throw new NotFoundException({ code: "EVENT_SERVICE_TEMPLATE_NOT_FOUND", message: "Шаблон мероприятия не найден" })
       this.assertVersion(template.version, input.expectedSubjectVersion, "eventServiceTemplate")
       const offeringChanged = input.operationalName !== undefined || input.internalComment !== undefined
+      const linkedOfferings = await this.findExactOfferings(manager, template.id, true)
       let offering: CatalogOfferingEntity | null = null
       if (offeringChanged) {
-        const candidates = await this.findExactOfferings(manager, template.id, true)
-        if (candidates.length !== 1) throw conflict(candidates.length ? "EVENT_SERVICE_OFFERING_AMBIGUOUS" : "EVENT_SERVICE_OFFERING_NOT_FOUND", "Event-service offering не найден однозначно", { offeringIds: candidates.map((item) => item.id) })
-        offering = candidates[0]!
+        if (linkedOfferings.length !== 1) throw conflict(linkedOfferings.length ? "EVENT_SERVICE_OFFERING_AMBIGUOUS" : "EVENT_SERVICE_OFFERING_NOT_FOUND", "Event-service offering не найден однозначно", { offeringIds: linkedOfferings.map((item) => item.id) })
+        offering = linkedOfferings[0]!
         if (input.expectedOfferingVersion === undefined) throw conflict("VERSION_CONFLICT", "Для изменения коммерческих данных требуется версия offering", { segment: "offering" })
         this.assertVersion(offering.version, input.expectedOfferingVersion, "offering")
         Object.assign(offering, {
@@ -171,6 +171,7 @@ export class EventServiceApplicationService {
       const changes = { ...input, expectedSubjectVersion: undefined, expectedOfferingVersion: undefined }
       await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event_service_template", entityId: saved.id, action: "updated", actorId: context.actor.id, requestId: context.requestId, changes, createdAt: new Date() }))
       if (offering) await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "catalog_offering", entityId: offering.id, action: "updated", actorId: context.actor.id, requestId: context.requestId, changes, createdAt: new Date() }))
+      for (const linked of linkedOfferings) await this.recordTemplateMutation(manager, linked, input.operationId, context, canonicalSha256({ command: "event-service.template.updated", templateId, templateVersion: saved.version, input }), "crm.offering.event_service_updated")
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, fingerprint, response)
       return response
     })
@@ -186,10 +187,12 @@ export class EventServiceApplicationService {
       const template = await manager.createQueryBuilder(EventServiceTemplateEntity, "template").setLock("pessimistic_write").where("template.id = :templateId", { templateId }).getOne()
       if (!template) throw new NotFoundException({ code: "EVENT_SERVICE_TEMPLATE_NOT_FOUND", message: "Шаблон мероприятия не найден" })
       this.assertVersion(template.version, input.expectedSubjectVersion, "eventServiceTemplate")
+      const linkedOfferings = await this.findExactOfferings(manager, template.id, true)
       if (template.archivedAt !== null) { template.archivedAt = null; template.updatedBy = context.actor.id }
       const saved = await manager.save(template)
       const response = EventServiceTemplateMutationResultSchema.parse({ template: this.templateDto(saved), subjectVersion: saved.version })
       await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "event_service_template", entityId: saved.id, action: "reopened", actorId: context.actor.id, requestId: context.requestId, changes: { subjectVersion: saved.version }, createdAt: new Date() }))
+      for (const offering of linkedOfferings) await this.recordTemplateMutation(manager, offering, input.operationId, context, canonicalSha256({ command: "event-service.template.reopened", templateId, templateVersion: saved.version }), "crm.offering.event_service_reopened")
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, fingerprint, response)
       return response
     })
@@ -371,6 +374,17 @@ export class EventServiceApplicationService {
     await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "catalog_offering", entityId: offering.id, action: prepared.eventType, actorId: context.actor.id, requestId: context.requestId, changes: { ...prepared, eventServiceTemplateId: template.id, eventServiceTemplateVersion: template.version, publicReady: false }, createdAt: now }))
     await this.saveOutbox(manager, prepared, ["sse"])
     await this.saveOutbox(manager, invalidated, ["sse", "public_projection"])
+  }
+
+  private async recordTemplateMutation(manager: EntityManager, offering: CatalogOfferingEntity, operationId: string, context: EventServiceRequestContext, configurationHash: string, eventType: "crm.offering.event_service_updated" | "crm.offering.event_service_reopened") {
+    const now = new Date()
+    const base = { occurredAt: now.toISOString(), actorId: context.actor.id, requestId: context.requestId, operationId, entrySurface: context.entrySurface, aggregate: { type: "catalog_offering" as const, id: offering.id }, versions: { calendar: null, subject: offering.subjectVersion, addOns: offering.addonAssignmentsVersion }, configurationHash }
+    const changed = OfferingConfigurationOutboxEventSchema.parse({ ...base, eventId: randomUUID(), eventType })
+    await this.saveOutbox(manager, changed, ["sse"])
+    if (offering.state === "active") {
+      const invalidated = OfferingConfigurationOutboxEventSchema.parse({ ...base, eventId: randomUUID(), eventType: "public.offering_projection.invalidated" })
+      await this.saveOutbox(manager, invalidated, ["sse", "public_projection"])
+    }
   }
 
   private async saveOutbox(manager: EntityManager, event: ReturnType<typeof OfferingConfigurationOutboxEventSchema.parse>, consumers: readonly string[]) { const at = new Date(event.occurredAt); await manager.save(manager.create(OutboxEventEntity, { id: event.eventId, topic: event.eventType, aggregateType: event.aggregate.type, aggregateId: event.aggregate.id, payload: event as unknown as Record<string, unknown>, availableAt: at, processedAt: null, attempts: 0, createdAt: at })); await manager.save(consumers.map((consumer) => manager.create(OutboxDeliveryEntity, { eventId: event.eventId, consumer, status: "pending", attempts: 0, availableAt: at, processedAt: null, lastError: null, createdAt: at, updatedAt: at }))) }

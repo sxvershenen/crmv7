@@ -44,6 +44,8 @@ export const OfferingConfigurationOutboxEventSchema = z.object({
     "crm.offering.created_from_resource",
     "crm.offering.program_prepared",
     "crm.offering.event_service_prepared",
+    "crm.offering.event_service_updated",
+    "crm.offering.event_service_reopened",
     "public.offering_projection.invalidated",
   ]),
   occurredAt: DateTimeSchema,

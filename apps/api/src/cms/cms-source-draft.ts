@@ -112,6 +112,7 @@ export async function ensureCatalogOfferingEditorialDraft(
       sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
       title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
       pathPart: "event-services", pageKind: "event_detail",
+      relations: [{ kind: "catalog_offering", entityId: offering.id }],
     })
     return { status: "created", link }
   }
