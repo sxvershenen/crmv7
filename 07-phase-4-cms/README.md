@@ -13,7 +13,8 @@
 | P4.5 public | Release-pinned commercial projections; CMS-driven canonical `/domiki`, `/kemping`, `/dopy`, `/poshadki`, `/programmy`, `/meropriyatiya`; one-hop legacy 301; typed editorial SSR; canonical/schema и sitemap/robots из active release | Закрыт для утверждённой URL-карты; новые curated nodes требуют реального редакционного evidence |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
 | P4.6 | Public intake contract и `POST /api/public/v1/intake/leads`: sanitize/consent/UTM/referrer snapshot, honeypot, fail-closed HMAC(IP) rate limit, idempotent Customer + Lead transaction, audit/outbox и internal CRM deep link; homepage calculator отправляет typed request и не раскрывает CRM IDs | Закрыт; migration, disposable PostgreSQL integration и browser → API → CRM runtime-проверка пройдены |
-| P4.7–P4.9 | Отдельные foundations описаны в профильных specs | Visitor analytics, controlled code и go-live не завершены |
+| P4.7 collector foundation | Public analytics contract и `POST /api/public/v1/analytics/events`; server-signed visitor/session cookies, consent drop, PostgreSQL dedupe/storage, clock-skew/body validation, scoped rate limit и redaction без raw IP/full referrer/User-Agent | Site consent/client event wiring, attribution/conversion facts, aggregates, privacy workflows и Metrika не завершены |
+| P4.8–P4.9 | Отдельные foundations описаны в профильных specs | Controlled code и go-live не завершены |
 
 Текущие ограничения:
 
@@ -27,8 +28,9 @@
 
 ## Следующий инкремент
 
-1. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
-2. Затем перейти к P4.7 first-party analytics.
+1. Подключить site consent/client event wiring к P4.7 collector и пройти Playwright refuse/accept/revoke paths.
+2. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
+3. Затем добавить P4.7 attribution/conversion facts и aggregates.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.
 

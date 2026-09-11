@@ -34,6 +34,7 @@ import { VenueOfferingIntegrity1788124800000 } from "./migrations/1788124800000-
 import { MediaHardening1788204000000 } from "./migrations/1788204000000-media-hardening.js"
 import { MediaVersionedReplacements1788204400000 } from "./migrations/1788204400000-media-versioned-replacements.js"
 import { PublicIntakeRateLimits1788204800000 } from "./migrations/1788204800000-public-intake-rate-limits.js"
+import { AnalyticsCollectorFoundation1788205200000 } from "./migrations/1788205200000-analytics-collector-foundation.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -73,4 +74,5 @@ export const databaseMigrations = [
   MediaHardening1788204000000,
   MediaVersionedReplacements1788204400000,
   PublicIntakeRateLimits1788204800000,
+  AnalyticsCollectorFoundation1788205200000,
 ]

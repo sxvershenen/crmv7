@@ -3,6 +3,19 @@ import { DateTimeSchema, IdSchema } from "./primitives.js";
 
 export const AnalyticsConsentStateSchema = z.enum(["unknown", "denied", "analytics", "analytics_and_marketing"]);
 export const AnalyticsPurposeSchema = z.enum(["essential", "analytics", "marketing"]);
+export const AnalyticsEventNameSchema = z.enum([
+  "page_view", "section_impression", "navigation_click", "outbound_click", "file_download",
+  "resource_card_opened", "resource_viewed", "category_viewed", "program_viewed", "event_viewed", "faq_opened", "map_point_opened",
+  "filter_applied", "filter_cleared", "sort_changed", "pagination_changed", "zero_results_seen",
+  "cta_clicked", "phone_revealed", "phone_clicked", "messenger_clicked", "promo_copied",
+  "calculator_started", "calculator_step_viewed", "calculator_option_changed", "calculator_quote_updated", "calculator_completed",
+  "form_started", "form_step_completed", "form_validation_failed", "form_submit_attempted", "form_succeeded", "form_failed",
+  "consent_changed",
+]);
+export type AnalyticsEventName = z.infer<typeof AnalyticsEventNameSchema>;
+
+const AnalyticsPathSchema = z.string().min(1).max(2048).regex(/^\/(?!\/)[^?#]*$/, "Path must not contain query or hash");
+const AnalyticsSectionKeySchema = z.string().min(1).max(120).regex(/^[a-z][a-z0-9._-]*$/);
 
 export const AnalyticsContextSchema = z.object({
   path: z.string().min(1).max(2048),
@@ -41,36 +54,55 @@ export const AnalyticsClientPayloadSchema = z.discriminatedUnion("kind", [
   PageViewPayloadSchema, ActionPayloadSchema, FunnelPayloadSchema, ConsentPayloadSchema,
 ]);
 
-export const ClientAnalyticsEventSchema = z.object({
+export const PublicAnalyticsEventSchema = z.object({
   eventId: IdSchema,
+  schemaVersion: z.literal(1),
   occurredAt: DateTimeSchema,
-  visitorToken: z.string().min(32).max(2048),
-  sessionId: IdSchema,
+  eventName: AnalyticsEventNameSchema,
   consent: AnalyticsConsentStateSchema,
   purpose: AnalyticsPurposeSchema,
-  context: AnalyticsContextSchema,
-  payload: AnalyticsClientPayloadSchema,
+  context: AnalyticsContextSchema.extend({
+    path: AnalyticsPathSchema,
+    sectionKey: AnalyticsSectionKeySchema.optional(),
+    contentVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  }).strict(),
+  properties: AnalyticsClientPayloadSchema,
 }).strict();
-export type ClientAnalyticsEvent = z.infer<typeof ClientAnalyticsEventSchema>;
+export type PublicAnalyticsEvent = z.infer<typeof PublicAnalyticsEventSchema>;
+export const ClientAnalyticsEventSchema = PublicAnalyticsEventSchema;
+export type ClientAnalyticsEvent = PublicAnalyticsEvent;
 
 export const AnalyticsEventBatchSchema = z.object({
-  events: z.array(ClientAnalyticsEventSchema).min(1).max(50),
+  events: z.array(PublicAnalyticsEventSchema).min(1).max(50),
 }).strict();
+export type AnalyticsEventBatch = z.infer<typeof AnalyticsEventBatchSchema>;
+
+export const AnalyticsEventBatchResponseSchema = z.object({
+  requestId: IdSchema,
+  accepted: z.number().int().nonnegative().max(50),
+  duplicates: z.number().int().nonnegative().max(50),
+  dropped: z.number().int().nonnegative().max(50),
+}).strict();
+export type AnalyticsEventBatchResponse = z.infer<typeof AnalyticsEventBatchResponseSchema>;
 
 export const StoredAnalyticsEventSchema = z.object({
   id: IdSchema,
   eventId: IdSchema,
+  schemaVersion: z.literal(1),
+  eventName: AnalyticsEventNameSchema,
   receivedAt: DateTimeSchema,
   occurredAt: DateTimeSchema,
-  anonymousVisitorId: IdSchema.nullable(),
+  visitorId: IdSchema,
   sessionId: IdSchema,
   consent: AnalyticsConsentStateSchema,
   purpose: AnalyticsPurposeSchema,
   context: AnalyticsContextSchema,
-  payload: AnalyticsClientPayloadSchema,
+  properties: AnalyticsClientPayloadSchema,
   attribution: z.object({ source: z.string().max(200).nullable(), medium: z.string().max(200).nullable(), campaign: z.string().max(200).nullable() }).strict(),
   networkPseudonym: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
   userAgentFamily: z.string().max(120).nullable(),
+  deviceClass: z.enum(["mobile", "desktop", "unknown"]),
+  trafficClass: z.enum(["human", "bot", "unknown"]),
 }).strict();
 
 export const DomainConversionFactSchema = z.object({

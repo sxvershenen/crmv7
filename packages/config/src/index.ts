@@ -39,6 +39,7 @@ export const serverEnvironmentSchema = z.object({
   PUBLIC_INTAKE_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1_000).default(10),
   PUBLIC_INTAKE_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(10).max(86_400).default(60),
   PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET: optionalText(z.string().min(32)),
+  ANALYTICS_COOKIE_SIGNING_SECRET: optionalText(z.string().min(32)),
   /** Optional until the preview worker/runtime secret has been provisioned. */
   CMS_PREVIEW_SIGNING_SECRET: optionalText(z.string().min(32)),
   /** Local is a development adapter; production must use the S3-compatible adapter. */
@@ -69,6 +70,7 @@ export const serverEnvironmentSchema = z.object({
   if (!environment.MEDIA_CDN_BASE_URL) context.addIssue({ code: "custom", path: ["MEDIA_CDN_BASE_URL"], message: "Production media delivery requires a CDN base URL" })
   if (!environment.MEDIA_UPLOAD_SIGNING_SECRET) context.addIssue({ code: "custom", path: ["MEDIA_UPLOAD_SIGNING_SECRET"], message: "Production media uploads require a signing secret" })
   if (!environment.PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET) context.addIssue({ code: "custom", path: ["PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET"], message: "Production public intake requires a rate-limit HMAC secret" })
+  if (!environment.ANALYTICS_COOKIE_SIGNING_SECRET) context.addIssue({ code: "custom", path: ["ANALYTICS_COOKIE_SIGNING_SECRET"], message: "Production analytics requires a cookie signing secret" })
 })
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>

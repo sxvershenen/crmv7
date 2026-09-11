@@ -23,10 +23,10 @@ export class PublicIntakeRateLimiter {
     this.hmacSecret = config.get<string>("PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET") ?? randomBytes(32).toString("hex")
   }
 
-  async consume(rawAddress: string | undefined): Promise<void> {
+  async consume(rawAddress: string | undefined, scope = "public-intake"): Promise<void> {
     const address = this.normalizeAddress(rawAddress)
     if (!address) throw this.unavailable()
-    const identifierHash = createHmac("sha256", this.hmacSecret).update(`public-intake:${address}`).digest("hex")
+    const identifierHash = createHmac("sha256", this.hmacSecret).update(`${scope}:${address}`).digest("hex")
 
     let rows: CountRow[]
     try {

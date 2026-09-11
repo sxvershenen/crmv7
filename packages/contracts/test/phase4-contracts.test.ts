@@ -89,24 +89,24 @@ describe("Phase 4 contracts", () => {
   it("accepts only signed-token analytics batches with allowlisted payloads", () => {
     expect(AnalyticsEventBatchSchema.parse({ events: [{
       eventId: id,
+      schemaVersion: 1,
       occurredAt: timestamp,
-      visitorToken: "signed." + "a".repeat(40),
-      sessionId: secondId,
+      eventName: "cta_clicked",
       consent: "analytics",
       purpose: "analytics",
       context: { path: "/domiki", pageNodeId: null, releaseId: null, referrer: null },
-      payload: { kind: "action", actionId: "hero.book", component: "hero" },
+      properties: { kind: "action", actionId: "hero.book", component: "hero" },
     }] }).events).toHaveLength(1);
 
     expect(AnalyticsEventBatchSchema.safeParse({ events: [{
       eventId: id,
+      schemaVersion: 1,
       occurredAt: timestamp,
-      visitorToken: "signed." + "a".repeat(40),
-      sessionId: secondId,
+      eventName: "cta_clicked",
       consent: "analytics",
       purpose: "analytics",
       context: { path: "/", pageNodeId: null, releaseId: null, referrer: null },
-      payload: { kind: "action", actionId: "hero.book", component: "hero", phone: "+79990000000" },
+      properties: { kind: "action", actionId: "hero.book", component: "hero", phone: "+79990000000" },
     }] }).success).toBe(false);
   });
 

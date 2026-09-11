@@ -50,6 +50,6 @@ describe("parseServerEnvironment", () => {
       MEDIA_SCANNER_DRIVER: "http", MEDIA_SCANNER_URL: "https://scanner.example.com", MEDIA_UPLOAD_SIGNING_SECRET: "m".repeat(32),
     }
     expect(() => parseServerEnvironment(production)).toThrow(/rate-limit HMAC secret/i)
-    expect(parseServerEnvironment({ ...production, PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET: "r".repeat(32) })).toMatchObject({ APP_ENV: "production" })
+    expect(parseServerEnvironment({ ...production, PUBLIC_INTAKE_RATE_LIMIT_HMAC_SECRET: "r".repeat(32), ANALYTICS_COOKIE_SIGNING_SECRET: "a".repeat(32) })).toMatchObject({ APP_ENV: "production" })
   })
 })

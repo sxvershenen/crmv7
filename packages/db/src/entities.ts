@@ -645,6 +645,79 @@ export class PublicIntakeRateLimitEntity {
   expiresAt!: Date
 }
 
+@Entity({ name: "analytics_ingest_dedup" })
+@Index("analytics_ingest_dedup_received_idx", ["receivedAt"])
+export class AnalyticsIngestDedupEntity {
+  @PrimaryColumn({ name: "event_id", type: "uuid" })
+  eventId!: string
+
+  @Column({ name: "request_hash", type: "text" })
+  requestHash!: string
+
+  @Column({ name: "received_at", type: "timestamptz" })
+  receivedAt!: Date
+}
+
+@Entity({ name: "analytics_events" })
+@Unique("analytics_events_event_unique", ["eventId"])
+@Index("analytics_events_received_idx", ["receivedAt"])
+@Index("analytics_events_session_idx", ["sessionId", "occurredAt"])
+export class AnalyticsEventEntity {
+  @PrimaryColumn({ type: "uuid" })
+  id!: string
+
+  @Column({ name: "event_id", type: "uuid" })
+  eventId!: string
+
+  @Column({ name: "schema_version", type: "smallint" })
+  schemaVersion!: number
+
+  @Column({ name: "event_name", type: "text" })
+  eventName!: string
+
+  @Column({ name: "occurred_at", type: "timestamptz" })
+  occurredAt!: Date
+
+  @Column({ name: "received_at", type: "timestamptz" })
+  receivedAt!: Date
+
+  @Column({ name: "visitor_id", type: "uuid" })
+  visitorId!: string
+
+  @Column({ name: "session_id", type: "uuid" })
+  sessionId!: string
+
+  @Column({ type: "text" })
+  consent!: string
+
+  @Column({ type: "text" })
+  purpose!: string
+
+  @Column({ type: "jsonb" })
+  context!: Record<string, unknown>
+
+  @Column({ type: "jsonb" })
+  properties!: Record<string, unknown>
+
+  @Column({ type: "jsonb", default: () => "'{}'::jsonb" })
+  attribution!: Record<string, unknown>
+
+  @Column({ name: "normalized_referrer_host", type: "text", nullable: true })
+  normalizedReferrerHost!: string | null
+
+  @Column({ name: "network_pseudonym", type: "text", nullable: true })
+  networkPseudonym!: string | null
+
+  @Column({ name: "user_agent_family", type: "text", nullable: true })
+  userAgentFamily!: string | null
+
+  @Column({ name: "device_class", type: "text" })
+  deviceClass!: string
+
+  @Column({ name: "traffic_class", type: "text" })
+  trafficClass!: string
+}
+
 @Entity({ name: "change_log" })
 @Index("change_log_entity_idx", ["entityType", "entityId", "createdAt"])
 export class ChangeLogEntity {
@@ -1430,6 +1503,8 @@ export const databaseEntities = [
   SavedViewEntity,
   IdempotencyKeyEntity,
   PublicIntakeRateLimitEntity,
+  AnalyticsIngestDedupEntity,
+  AnalyticsEventEntity,
   ChangeLogEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,
