@@ -7,10 +7,10 @@
 | Контур | Реализовано | Осталось |
 |---|---|---|
 | P4.1–P4.2 | Public UI kit/homepage, CMS frontend/core, Admin/Public API | Новые страницы используют существующие boundaries |
-| P4.3 | Atomic/direct publication, provider-neutral delivery, Admin delivery health/detail/replay API | Render-ready preview/diff, сквозная UI/cache observability |
+| P4.3 | Guarded render-ready preflight, effective diff/blast radius/dependencies, atomic direct publication, publication journal, delivery status/replay и immutable rollback | Закрыт; расширять только под новый publication consumer |
 | P4.4 | Local media storage, processing и immutable public variants | Production storage/CDN, scanner, cleanup/DLQ/metrics |
 | P4.5 operational | House/campground pricing и Resource dossier; add-on, venue, program и event-service dossiers; canonical venue draft; Booking, ProgramRegistration и Event quote acceptance | Campground acceptance context; venue quote/acceptance; неподдержанные order/add-on types остаются fail-closed |
-| P4.5 public | Release-pinned add-on, venue, house, campground, program и event-service listing/detail projections; ContentSource и 404/503/release consistency; standalone SSR/asset delivery gate; typed editorial CMS→publication→SSR bindings всех стандартных секций главной; CMS-driven `/houses/*`, `/campgrounds/*`, `/addons/*`, `/venues/*`, `/programs/*` и `/events/*` routes | Route-by-route migration |
+| P4.5 public | Release-pinned commercial projections; CMS-driven canonical `/domiki`, `/kemping`, `/dopy`, `/poshadki`, `/programmy`, `/meropriyatiya`; one-hop legacy 301; typed editorial SSR; canonical/schema и sitemap/robots из active release | Закрыт для утверждённой URL-карты; новые curated nodes требуют реального редакционного evidence |
 | CRM integration | Booking↔Lead commands/history; promotion registry и order-level discount; отчёты по броням и UTM сохранённых Lead | Visitor analytics этими отчётами не закрыта |
 | P4.6–P4.9 | Отдельные foundations описаны в профильных specs | Public intake, visitor analytics, controlled code и go-live не завершены |
 
@@ -25,8 +25,8 @@
 
 ## Следующий инкремент
 
-1. P4.5F route-by-route migration: homepage, house, campground, addon, venue, program и event-service vertical route gates закрыты; следующим завершать resource URL/curated landing migration.
-2. Render-ready preview/diff и сквозная delivery visibility; затем P4.6 public intake. Уже реализованный delivery API использовать повторно.
+1. P4.4 media hardening: production storage/CDN, внешний scanner и cleanup/DLQ/metrics.
+2. Затем P4.6 public intake на готовых public projections.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.
 

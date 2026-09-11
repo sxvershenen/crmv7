@@ -337,11 +337,11 @@ Marketing: campaigns, UTM builder/allowlist, campaign landings/CTA, active dates
 
 ## 17. Publish workflow
 
-Обычный editor использует direct page/settings publication; internal release IDs/build/activation steps не становятся пользовательским workflow.
+Обычный editor использует двухшаговую direct publication: server-side preflight, затем guarded confirmation. Internal build/activation не нужны для page flow; `/releases` — readonly operational journal с capability-gated recovery actions.
 
 Page editor before publish shows effective before/after diff, affected routes/dependencies/cache tags, gates, reviewer, schedule/timezone and stale preview state. The primary command is `Опубликовать страницу` or `Запустить на сайте` for a coordinated first offer launch.
 
-`/publication-log` is a readonly operational journal: page/settings/code publication, status, actor, affected paths, validation/delivery/cache outcome, rollback target and audit deep links. A detail page may retry failed delivery or start capability-gated rollback, but never edits an arbitrary release manifest.
+`/releases` is a readonly operational journal: immutable manifest, affected paths, validation и public API/CDN delivery outcome. Detail использует существующий CAS replay для failed/dead-letter consumer и создаёт новый immutable release при rollback; произвольное редактирование manifest отсутствует.
 
 By default an author cannot approve own code release; emergency capability is separate and audited. Content validation and infrastructure delivery status are shown independently. Rollback creates a new immutable publication from a prior complete snapshot. Conflict screen follows the existing CRM pattern and distinguishes operational, pricing and editorial source versions.
 

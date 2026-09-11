@@ -32,7 +32,7 @@
 ├── /dopy
 │   ├── /{category-slug}
 │   └── /{service-slug}
-├── /ploshchadki
+├── /poshadki
 │   ├── /{category-slug}
 │   └── /{venue-slug}
 ├── /programmy
@@ -53,19 +53,9 @@
 └── /privacy
 ```
 
-`/resources/:slug` из текущего прототипа не объявляется permanent URL автоматически. При миграции каждый старый published path получает mapping: keep, canonical alias или 301 to approved new path.
+Canonical public map утверждена: `/domiki`, `/kemping`, `/dopy`, `/poshadki`, `/programmy`, `/meropriyatiya`. Новые CRM→CMS drafts используют эти prefixes. Active release adapter сохраняет совместимость со старыми release items и выдаёт прямые 301 с `/houses`, `/campgrounds`, `/addons`, `/venues`, `/programs`, `/events` и `/event-services`; цепочки и дубли canonical блокируют release. Прототип `/resources/sauna-chan` перенаправляется на `/dopy/sauna-chan`, остальные неизвестные `/resources/*` отвечают 404.
 
-Текущий опубликованный house slice использует `/houses/{house-slug}` — это фактический CMS path, создаваемый source locator и обслуживаемый catch-all route. Целевой `/domiki/{house-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
-
-Текущий опубликованный campground slice использует `/campgrounds/{campground-slug}` — фактический CMS path для отдельного sellable Resource (`owned_tent` или `own_tent_pitch`). Целевой `/kemping/{campground-slug}` пока не включён; его alias/redirect map остаётся отдельным миграционным gate.
-
-Текущий опубликованный add-on slice использует `/addons/{addon-slug}`. Для route delivery offering identity берётся из release dependency, а не из CMS текста; целевой `/dopy/{addon-slug}` и legacy alias map остаются отдельным миграционным gate.
-
-Текущий опубликованный venue slice использует `/venues/{venue-slug}`. Для route delivery offering identity берётся из release dependency, а public projection отдаёт только exclusive-resource capacity и readiness; legacy redirect map остаётся отдельным миграционным gate.
-
-Текущий опубликованный program slice использует `/programs/{program-slug}`. Detail route закрепляет CatalogOffering/program template за release и показывает только template limits, duration, next open occurrence и conservative price/readiness; customer registrations и occurrence internals остаются CRM-owned.
-
-Текущий опубликованный event-service slice использует `/events/{event-slug}`. Detail route закрепляет CatalogOffering/EventServiceTemplate за release и показывает только редакционный summary, формат, длительность и диапазон гостей; customer Event, PII, resource selections и event-order quote остаются CRM-owned, а public price/availability остаются request-only.
+Commercial detail сохраняет exact release dependency и safe projection: identity берётся из CRM `CatalogOffering`, а CMS владеет только редакционным path/content. Program и event-service не раскрывают registrations, customer Event, PII или resource selections; отсутствие допустимой price/availability projection остаётся request-only или fail-closed по контракту страницы.
 
 ## 3. Catalog model
 
