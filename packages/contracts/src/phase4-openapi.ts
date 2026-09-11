@@ -57,7 +57,7 @@ import { CmsDashboardResponseSchema } from "./cms-dashboard.js";
 import { AuthUserResponseSchema, ChangePasswordInputSchema, LoginRequestSchema, OkResponseSchema } from "./auth.js";
 import { PublicCampgroundDetailQuerySchema, PublicCampgroundListQuerySchema, PublicCampgroundListResponseSchema, PublicCampgroundSummarySchema } from "./offerings.js";
 import { PublicLeadIntakeResponseSchema, PublicLeadIntakeSchema } from "./public-intake.js";
-import { AnalyticsEventBatchResponseSchema, AnalyticsEventBatchSchema } from "./analytics.js";
+import { AnalyticsAggregateQuerySchema, AnalyticsAggregateResponseSchema, AnalyticsEventBatchResponseSchema, AnalyticsEventBatchSchema } from "./analytics.js";
 
 extendZodWithOpenApi(z);
 
@@ -187,6 +187,8 @@ const deliveryHealth = adminRegister("OutboxDeliveryHealth", OutboxDeliveryHealt
 const deliveryReplay = adminRegister("OutboxDeliveryReplayInput", OutboxDeliveryReplayInputSchema);
 const deliveryReplayResult = adminRegister("OutboxDeliveryReplayResult", OutboxDeliveryReplayResultSchema);
 const cmsDashboard = adminRegister("CmsDashboardResponse", CmsDashboardResponseSchema);
+const analyticsAggregateQuery = adminRegister("AnalyticsAggregateQuery", AnalyticsAggregateQuerySchema);
+const analyticsAggregateResponse = adminRegister("AnalyticsAggregateResponse", AnalyticsAggregateResponseSchema);
 const authUserResponse = adminRegister("AuthUserResponse", AuthUserResponseSchema);
 const loginRequest = adminRegister("LoginRequest", LoginRequestSchema);
 const changePassword = adminRegister("ChangePasswordInput", ChangePasswordInputSchema);
@@ -199,6 +201,7 @@ adminRegistry.registerPath({ method: "post", path: "/auth/logout", ...adminPriva
 adminRegistry.registerPath({ method: "get", path: "/auth/session", ...adminPrivate, tags: ["Auth"], summary: "Get the current shared session user from the CMS surface", responses: { 200: { description: "Current session user", content: json(authUserResponse) }, 401: errorResponse("Session required", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/auth/change-password", ...adminPrivate, tags: ["Auth"], summary: "Change the current password and revoke all shared sessions", request: { body: { required: true, content: json(changePassword) } }, responses: { 200: { description: "Password changed and sessions revoked", content: json(okResponse) }, 400: errorResponse("Invalid password payload", adminError), 401: errorResponse("Current password is incorrect", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/dashboard", ...adminPrivate, tags: ["Dashboard"], summary: "Read authoritative CMS overview and CRM conversion facts", responses: { 200: { description: "CMS dashboard", content: json(cmsDashboard) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError) } });
+adminRegistry.registerPath({ method: "get", path: "/analytics/aggregates", ...adminPrivate, tags: ["Analytics"], summary: "Read bounded consent-aware analytics and authoritative conversion aggregates", request: { query: analyticsAggregateQuery }, responses: { 200: { description: "Zero-filled day or month aggregate series without raw analytics data", content: json(analyticsAggregateResponse) }, 400: errorResponse("Invalid or oversized analytics date range", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Analytics view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/content/nodes", ...adminPrivate, tags: ["Content"], summary: "List and search CMS nodes", request: { query: cmsListQuery }, responses: { 200: { description: "Cursor page of CMS nodes", content: json(cmsList) }, 400: errorResponse("Invalid cursor or filter", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes", ...adminPrivate, tags: ["Content"], summary: "Create a CMS node and its first draft", request: { body: { required: true, content: json(cmsCreate) } }, responses: { 201: { description: "Created CMS node", content: json(cmsDetail) }, 400: errorResponse("Invalid content", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Route placement or idempotency conflict", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}", ...adminPrivate, tags: ["Content"], summary: "Read a CMS node, working revision and latest published metadata", request: { params: idParams }, responses: { 200: { description: "CMS node", content: json(cmsDetail) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Node not found", adminError) } });

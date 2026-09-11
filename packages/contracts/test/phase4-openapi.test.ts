@@ -48,6 +48,8 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(paths["/offerings/{offeringId}/addon-terms"]?.put).toBeDefined();
     expect(paths["/offerings/binding-targets"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/offerings/{offeringId}/quotes/preview"]?.post).toBeDefined();
+    expect(paths["/analytics/aggregates"]?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(paths["/analytics/aggregates"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 400: expect.anything(), 401: expect.anything(), 403: expect.anything() }));
     expect(paths["/deliveries"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/deliveries/{consumer}/{eventId}/replay"]?.post).toBeDefined();
     expect(publicOpenApiDocument.paths?.["/deliveries"]).toBeUndefined();

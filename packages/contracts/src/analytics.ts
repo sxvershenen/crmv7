@@ -120,12 +120,13 @@ export const DomainConversionFactSchema = z.object({
 }).strict();
 
 export const AnalyticsAggregateQuerySchema = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  from: z.string().date(),
+  to: z.string().date(),
   interval: z.enum(["day", "month"]),
   pageNodeId: IdSchema.optional(),
-  sectionKey: z.string().min(1).max(120).optional(),
+  sectionKey: AnalyticsSectionKeySchema.optional(),
 }).strict();
+export type AnalyticsAggregateQuery = z.infer<typeof AnalyticsAggregateQuerySchema>;
 
 export const AnalyticsAggregatePointSchema = z.object({
   period: z.string().min(7).max(10),
@@ -137,3 +138,9 @@ export const AnalyticsAggregatePointSchema = z.object({
   leads: z.number().int().nonnegative().safe(),
   bookings: z.number().int().nonnegative().safe(),
 }).strict();
+export type AnalyticsAggregatePoint = z.infer<typeof AnalyticsAggregatePointSchema>;
+
+export const AnalyticsAggregateResponseSchema = z.object({
+  items: z.array(AnalyticsAggregatePointSchema).max(366),
+}).strict();
+export type AnalyticsAggregateResponse = z.infer<typeof AnalyticsAggregateResponseSchema>;

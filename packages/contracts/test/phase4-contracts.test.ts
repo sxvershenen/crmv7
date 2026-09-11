@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AnalyticsAggregateQuerySchema,
+  AnalyticsAggregateResponseSchema,
   AnalyticsEventBatchSchema,
   CmsContentOutboxEventSchema,
   CmsEntityRelationSchema,
@@ -108,6 +110,22 @@ describe("Phase 4 contracts", () => {
       context: { path: "/", pageNodeId: null, releaseId: null, referrer: null },
       properties: { kind: "action", actionId: "hero.book", component: "hero", phone: "+79990000000" },
     }] }).success).toBe(false);
+  });
+
+  it("keeps aggregate reads date-shaped, dimension-safe and free of raw analytics fields", () => {
+    expect(AnalyticsAggregateQuerySchema.parse({
+      from: "2026-09-01", to: "2026-09-30", interval: "day", pageNodeId: id, sectionKey: "hero.primary",
+    })).toMatchObject({ pageNodeId: id, sectionKey: "hero.primary" });
+    expect(AnalyticsAggregateQuerySchema.safeParse({ from: "2026-02-30", to: "2026-03-01", interval: "day" }).success).toBe(false);
+    expect(AnalyticsAggregateQuerySchema.safeParse({ from: "2026-09-01", to: "2026-09-30", interval: "day", sectionKey: "Hero Primary" }).success).toBe(false);
+
+    const response = AnalyticsAggregateResponseSchema.parse({ items: [{
+      period: "2026-09-01", pageNodeId: null, sectionKey: null,
+      pageViews: 3, uniqueVisitors: 2, actions: 1, leads: 1, bookings: 0,
+    }] });
+    expect(response.items[0]).not.toHaveProperty("path");
+    expect(response.items[0]).not.toHaveProperty("referrer");
+    expect(AnalyticsAggregateResponseSchema.safeParse({ items: [{ ...response.items[0], path: "/private" }] }).success).toBe(false);
   });
 
   it("requires immutable exact release dependencies and compare-and-swap lineage", () => {

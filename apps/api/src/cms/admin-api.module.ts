@@ -5,6 +5,8 @@ import { AuthModule } from "../auth/auth.module.js"
 import { DeliveryAdminController } from "../delivery/delivery-admin.controller.js"
 import { DeliveryAdminService } from "../delivery/delivery-admin.service.js"
 import { OfferingsAdminModule } from "../offerings/offerings-admin.module.js"
+import { AnalyticsAggregateController } from "../analytics/analytics-aggregate.controller.js"
+import { AnalyticsAggregateService } from "../analytics/analytics-aggregate.service.js"
 
 import { CmsContentController } from "./cms-content.controller.js"
 import { CmsContentService } from "./cms-content.service.js"
@@ -39,6 +41,7 @@ import { MediaStorageService } from "./media-storage.service.js"
     CmsSiteSettingsController,
     MediaController,
     DeliveryAdminController,
+    AnalyticsAggregateController,
   ],
   providers: [
     CmsContentService,
@@ -52,6 +55,7 @@ import { MediaStorageService } from "./media-storage.service.js"
     MediaScannerService,
     MediaStorageService,
     DeliveryAdminService,
+    AnalyticsAggregateService,
   ],
   exports: [PublicContentService],
 })
