@@ -34,6 +34,11 @@ export class AnalyticsIdentityService {
     return { visitorId: visitor.id, sessionId: currentSession.id }
   }
 
+  clear(response: Response) {
+    response.clearCookie(ANALYTICS_VISITOR_COOKIE, this.cookieOptions())
+    response.clearCookie(ANALYTICS_SESSION_COOKIE, this.cookieOptions())
+  }
+
   private create(now: number, ttlSeconds: number, withLastSeen = false): IdentityPayload {
     return { id: randomUUID(), issuedAt: now, expiresAt: now + ttlSeconds * 1000, ...(withLastSeen ? { lastSeenAt: now } : {}) }
   }
@@ -58,11 +63,17 @@ export class AnalyticsIdentityService {
     const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")
     const signature = createHmac("sha256", this.secret).update(encoded).digest("base64url")
     response.cookie(name, `${encoded}.${signature}`, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: this.secure,
-      path: "/",
+      ...this.cookieOptions(),
       maxAge: maxAgeSeconds * 1000,
     })
+  }
+
+  private cookieOptions() {
+    return {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: this.secure,
+      path: "/",
+    }
   }
 }

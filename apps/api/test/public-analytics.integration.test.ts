@@ -83,6 +83,16 @@ describe.sequential("public analytics collector + PostgreSQL", () => {
     expect(await dataSource.getRepository(AnalyticsEventEntity).count()).toBe(0)
   })
 
+  it("expires identity and stores no event when analytics consent is revoked", async () => {
+    const response = await request(app.getHttpServer()).post(endpoint).send({ events: [{
+      eventId: randomUUID(), schemaVersion: 1, occurredAt: new Date().toISOString(), eventName: "consent_changed", consent: "denied", purpose: "essential",
+      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null }, properties: { kind: "consent", state: "denied", policyVersion: "v1" },
+    }] }).expect(202)
+    expect(response.body).toMatchObject({ accepted: 0, duplicates: 0, dropped: 1 })
+    expect(response.headers["set-cookie"]).toEqual(expect.arrayContaining([expect.stringContaining("sv_analytics_visitor=;"), expect.stringContaining("sv_analytics_session=;")]))
+    expect(await dataSource.getRepository(AnalyticsEventEntity).count()).toBe(0)
+  })
+
   it("rejects payloads that attempt to carry contact data or query strings", async () => {
     await request(app.getHttpServer()).post(endpoint).send(input({ events: [{ ...input().events[0], context: { ...input().events[0]!.context, path: "/domiki?phone=secret" }, properties: { kind: "action", actionId: "cta.open", component: "hero", phone: "+79990000000" } }] })).expect(400)
   })

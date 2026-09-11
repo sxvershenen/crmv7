@@ -7,7 +7,7 @@ function config() {
 }
 
 function response() {
-  return { cookie: vi.fn() }
+  return { cookie: vi.fn(), clearCookie: vi.fn() }
 }
 
 describe("AnalyticsIdentityService", () => {
@@ -31,5 +31,13 @@ describe("AnalyticsIdentityService", () => {
     const result = service.issue({ cookies: { [ANALYTICS_VISITOR_COOKIE]: "tampered", [ANALYTICS_SESSION_COOKIE]: "tampered" } } as never, response() as never, 1_000)
     expect(result.visitorId).toMatch(/^[0-9a-f-]{36}$/)
     expect(result.sessionId).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it("expires both identity cookies when analytics consent is revoked", () => {
+    const service = new AnalyticsIdentityService(config() as never)
+    const result = response()
+    service.clear(result as never)
+    expect(result.clearCookie).toHaveBeenNthCalledWith(1, ANALYTICS_VISITOR_COOKIE, expect.objectContaining({ path: "/", httpOnly: true }))
+    expect(result.clearCookie).toHaveBeenNthCalledWith(2, ANALYTICS_SESSION_COOKIE, expect.objectContaining({ path: "/", httpOnly: true }))
   })
 })

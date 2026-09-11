@@ -28,7 +28,12 @@ export class PublicAnalyticsService {
 
   async collect(input: AnalyticsEventBatch, request: Request, response: Response): Promise<AnalyticsEventBatchResponse> {
     const now = new Date()
-    const eligible = input.events.filter((event) => event.purpose === "essential" && event.properties.kind === "consent" || allowedConsents.has(event.consent) && event.purpose === "analytics")
+    const revoked = input.events.some((event) => event.eventName === "consent_changed" && event.purpose === "essential" && event.properties.kind === "consent" && event.properties.state === "denied")
+    const eligible = input.events.filter((event) => allowedConsents.has(event.consent) && event.purpose === "analytics")
+    if (revoked) {
+      this.identity.clear(response)
+      return this.response(request, 0, 0, input.events.length)
+    }
     const dropped = input.events.length - eligible.length
     if (eligible.length === 0) return this.response(request, 0, 0, dropped)
     for (const [index, event] of eligible.entries()) this.assertClock(event, index, now)
