@@ -85,4 +85,10 @@ export class CmsContentController {
   publish(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Body(new ZodValidationPipe(CmsNodePublishSchema)) input: CmsNodePublish, @Req() request: AuthenticatedRequest) {
     return this.publication!.publishNode(params.id, input, request.sessionUser!, request.requestId)
   }
+
+  @Get(":id/publication-preview")
+  @RequireCapabilities("canViewContent")
+  publicationPreview(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Req() request: AuthenticatedRequest) {
+    return this.publication!.previewNodePublication(params.id, request.sessionUser!)
+  }
 }

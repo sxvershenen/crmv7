@@ -24,14 +24,18 @@ import EventServiceDetail from "../components/sections/EventServiceDetail.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
+import EditorialContent from "../components/sections/EditorialContent.astro"
 import Footer from "../components/sections/Footer.astro"
 import { siteIdentity } from "../lib/content"
+import { PublicEditorialContentConfigSchema } from "@crm/contracts"
 import { PublicProfileIntro } from "@crm/site-ui"
 import ContentFailure from "../components/ContentFailure.astro"
-import { getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import { getPublishedRedirect, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
 import { getHomepageSections } from "../lib/content/homepage-sections"
 
 const path = `/${Astro.params.path ?? ""}`.replace(/\/$/, "") || "/"
+const redirect = await getPublishedRedirect(path)
+if (redirect.status === "published") return Astro.redirect(redirect.value.destinationPath, redirect.value.statusCode)
 const result = await getPublishedRoute(path, Astro.url.searchParams)
 const page = result.status === "published" ? result.value.page : null
 const homepageSections = getHomepageSections(page, false)
@@ -43,6 +47,11 @@ const addon = result.status === "published" ? result.value.addon : null
 const venue = result.status === "published" ? result.value.venue : null
 const program = result.status === "published" ? result.value.program : null
 const eventService = result.status === "published" ? result.value.eventService : null
+const editorialSections = page?.sections.flatMap((section) => {
+  if (section.renderer !== "editorial-content") return []
+  const parsed = PublicEditorialContentConfigSchema.safeParse(section.config)
+  return parsed.success ? [{ section, config: parsed.data }] : []
+}) ?? []
 const failure = result.status !== "published" ? result.status : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -79,7 +88,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
     {page ? <SitePageFrame>
       {hero && <HeroIsland {hero} client:load />}
       {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} />}
-      {!profileKind && !hero && !listing && <h1 class="site-type-h1">{page.title}</h1>}
+      {!profileKind && !hero && !listing && <header class="site-section"><h1 class="site-type-h1">{page.title}</h1>{page.summary && <p class="site-type-body mt-3 max-w-3xl text-[var(--site-color-text-muted)]">{page.summary}</p>}</header>}
       {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
       {house && <HouseDetail house={house} />}
       {campground && <CampgroundDetail campground={campground} />}
@@ -87,6 +96,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {venue && <VenueDetail venue={venue} />}
       {program && <ProgramDetail program={program} />}
       {eventService && <EventServiceDetail eventService={eventService} />}
+      {editorialSections.map(({ section, config }) => <EditorialContent config={config} sectionKey={section.key} {...(section.analyticsActionId ? { analyticsId: section.analyticsActionId } : {})} />)}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} client:visible />

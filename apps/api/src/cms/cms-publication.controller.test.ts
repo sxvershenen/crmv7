@@ -8,6 +8,7 @@ import { CmsDashboardController } from "./cms-dashboard.controller.js"
 
 describe("CmsPublicationController", () => {
   it("keeps release reads separate from the granular publication mutation capability", () => {
+    expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsPublicationController.prototype.list)).toEqual(["canViewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsPublicationController.prototype.get)).toEqual(["canViewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsPublicationController.prototype.build)).toEqual(["canPublishContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsPublicationController.prototype.activate)).toEqual(["canPublishContent"])

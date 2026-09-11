@@ -4,6 +4,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnav
 import { DataSource, In, IsNull } from "typeorm"
 
 import {
+  canonicalPublicPath,
   PublicProgramListResponseSchema,
   PublicProgramProjectionPinSchema,
   PublicProgramSummaryParamsSchema,
@@ -146,7 +147,7 @@ export class PublicProgramOfferingService {
 
   private summary(row: ProjectionRow, plans: RatePlanEntity[], rulesByPlan: Map<string, PriceRuleEntity[]>): PublicProgramSummary {
     const content = PublicReleasePageContentSchema.safeParse(row.resolvedContent)
-    if (!content.success || content.data.kind !== "program_detail" || !content.data.path.startsWith("/programs/") || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
+    if (!content.success || content.data.kind !== "program_detail" || !canonicalPublicPath(content.data.path).startsWith("/programmy/") || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
     const pin = PublicProgramProjectionPinSchema.parse({ contract: PUBLIC_PROGRAM_PROJECTION_CONTRACT, offeringId: row.offeringId, kind: "program", nodeId: row.nodeId, profileRevisionId: row.revisionId })
     const dependencies = ReleaseDependencyRefSchema.array().safeParse(row.dependencies)
     const dependency = dependencies.success ? dependencies.data.find((candidate) => candidate.type === "crm_projection" && candidate.id === row.offeringId) : undefined
@@ -162,7 +163,7 @@ export class PublicProgramOfferingService {
     const availabilityMode = nextOccurrence && price.mode !== "request" && row.salesMode !== "request_only" ? "occurrence" as const : "request_only" as const
     const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.templateUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt, row.nextOccurrenceStartsAt).toISOString()
     return PublicProgramSummarySchema.parse({
-      offeringId: row.offeringId, kind: "program", path: content.data.path, releaseId: row.releaseId, title: content.data.title, summary: content.data.summary, price,
+      offeringId: row.offeringId, kind: "program", path: canonicalPublicPath(content.data.path), releaseId: row.releaseId, title: content.data.title, summary: content.data.summary, price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_person" ? "за участника" : plans[0]?.pricingBasis === "flat_package" ? "за группу" : null,
       quoteAvailable: false, requestAvailable: true, capacity: null, readiness: availabilityMode === "occurrence" ? "ready" : "request_only",
       timezone: row.timezone, currency: row.currency,

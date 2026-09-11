@@ -8,13 +8,17 @@ import {
   CmsPreviewTokenResponseSchema,
   CmsPreviewDocumentSchema,
   CmsSectionSchema,
+  canonicalPublicPath,
+  publicReleasePathCandidates,
   PublicPageSchema,
+  PublicRouteManifestSchema,
   PublicReleasePageContentSchema,
   ReleaseDependencyRefSchema,
   type CmsPreviewDocument,
   type CmsPreviewTokenIssue,
   type CmsPreviewTokenResponse,
   type PublicPage,
+  type PublicRouteManifest,
   type PublicPagePreviewQuery,
   type PublicPageResolveQuery,
 } from "@crm/contracts"
@@ -42,6 +46,7 @@ type PublishedPageRow = {
   resolvedContentHash: string
   resolvedContent: unknown
   dependencies: unknown
+  itemPath?: string
 }
 
 /**
@@ -57,23 +62,26 @@ export class PublicContentService {
   ) {}
 
   async resolve(query: PublicPageResolveQuery): Promise<PublicPage> {
+    if (canonicalPublicPath(query.path) !== query.path) throw this.notFound()
+    const pathCandidates = publicReleasePathCandidates(query.path)
     const rows = await this.dataSource.query(`
       SELECT release.id AS "releaseId", release.created_at AS "releaseCreatedAt",
         release.published_at AS "releasePublishedAt", item.node_id AS "nodeId",
         item.revision_id AS "revisionId", item.resolved_content_hash AS "resolvedContentHash",
-        item.resolved_content AS "resolvedContent", item.dependencies AS "dependencies"
+        item.resolved_content AS "resolvedContent", item.dependencies AS "dependencies", item.path AS "itemPath"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
-      JOIN cms_release_items item ON item.release_id = release.id AND item.path = $1
+      JOIN cms_release_items item ON item.release_id = release.id AND item.path = ANY($1::text[])
       JOIN cms_node_revisions revision ON revision.id = item.revision_id
         AND revision.node_id = item.node_id
       WHERE active.singleton_key = 'public'
+      ORDER BY array_position($1::text[], item.path)
       LIMIT 1
-    `, [query.path]) as PublishedPageRow[]
+    `, [pathCandidates]) as PublishedPageRow[]
     const row = rows[0]
     if (!row) throw this.notFound()
     const content = PublicReleasePageContentSchema.safeParse(row.resolvedContent)
-    if (!content.success || content.data.path !== query.path || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) {
+    if (!content.success || content.data.path !== row.itemPath || canonicalPublicPath(content.data.path) !== query.path || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) {
       throw new ServiceUnavailableException({ code: "CMS_RELEASE_INVALID", message: "Опубликованная версия требует повторной публикации" })
     }
     const dependencies = ReleaseDependencyRefSchema.array().max(1000).safeParse(row.dependencies)
@@ -87,6 +95,7 @@ export class PublicContentService {
       revisionId: row.revisionId,
       releaseId: row.releaseId,
       ...content.data,
+      path: query.path,
       sections: [...content.data.sections].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)),
       dependencies: dependencies.data,
       generatedAt: generatedAt.toISOString(),
@@ -97,6 +106,54 @@ export class PublicContentService {
         tags: [`cms-release:${row.releaseId}`, `cms-node:${row.nodeId}`, `cms-revision:${row.revisionId}`],
       },
       freshness: { contentVersion: row.resolvedContentHash, crmProjectionAsOf: null, ready: true },
+    })
+  }
+
+  async manifest(): Promise<PublicRouteManifest> {
+    const rows = await this.dataSource.query(`
+      SELECT release.id AS "releaseId", release.created_at AS "releaseCreatedAt",
+        release.published_at AS "releasePublishedAt", item.path AS "itemPath",
+        item.resolved_content AS "resolvedContent", item.resolved_content_hash AS "resolvedContentHash"
+      FROM cms_active_release active
+      JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
+      JOIN cms_release_items item ON item.release_id = release.id
+      WHERE active.singleton_key = 'public'
+      ORDER BY item.path
+    `) as Array<PublishedPageRow & { itemPath: string }>
+    const first = rows[0]
+    if (!first) throw this.notFound()
+    const canonicalPaths = new Set<string>()
+    const routes: Array<{ path: string; lastModified: string; schemaTypes: string[] }> = []
+    const redirects = new Map<string, { sourcePath: string; destinationPath: string; statusCode: 301 }>()
+    for (const row of rows) {
+      const content = PublicReleasePageContentSchema.safeParse(row.resolvedContent)
+      if (!content.success || content.data.path !== row.itemPath || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidRelease()
+      const path = canonicalPublicPath(row.itemPath)
+      if (canonicalPaths.has(path)) throw this.invalidRelease("Опубликованная версия содержит конфликт canonical URL")
+      canonicalPaths.add(path)
+      for (const sourcePath of publicReleasePathCandidates(path).slice(1)) {
+        redirects.set(sourcePath, { sourcePath, destinationPath: path, statusCode: 301 })
+      }
+      if (content.data.seo.indexPolicy === "index_follow" && content.data.seo.canonical.mode === "self") {
+        routes.push({
+          path,
+          lastModified: (row.releasePublishedAt ?? row.releaseCreatedAt).toISOString(),
+          schemaTypes: content.data.seo.structuredData.filter((item) => item.enabled).map((item) => item.schemaType),
+        })
+      }
+    }
+    const generatedAt = first.releasePublishedAt ?? first.releaseCreatedAt
+    return PublicRouteManifestSchema.parse({
+      releaseId: first.releaseId,
+      generatedAt: generatedAt.toISOString(),
+      routes: routes.sort((left, right) => left.path.localeCompare(right.path)),
+      redirects: [...redirects.values()].sort((left, right) => left.sourcePath.localeCompare(right.sourcePath)),
+      cache: {
+        etag: `"${first.releaseId}-routes"`,
+        maxAgeSeconds: 60,
+        staleWhileRevalidateSeconds: 300,
+        tags: [`cms-release:${first.releaseId}`, "cms-route-manifest"],
+      },
     })
   }
 
@@ -152,6 +209,10 @@ export class PublicContentService {
 
   private notFound() {
     return new NotFoundException({ code: "NOT_FOUND", message: "Опубликованная страница не найдена" })
+  }
+
+  private invalidRelease(message = "Опубликованная версия требует повторной публикации") {
+    return new ServiceUnavailableException({ code: "CMS_RELEASE_INVALID", message })
   }
 }
 

@@ -19,6 +19,7 @@ import { AssetPage, MediaLibraryPage } from "@admin/pages/media-pages"
 import { MobileMenuPage } from "@admin/pages/mobile-menu-page"
 import { NavigationPage } from "@admin/pages/navigation-page"
 import { NotFoundPage } from "@admin/pages/not-found-page"
+import { ReleaseDetailPage, ReleasesPage } from "@admin/pages/release-pages"
 
 export function AdminRouter() {
   return <BrowserRouter><Routes><Route element={<AdminShell />}>
@@ -60,7 +61,8 @@ export function AdminRouter() {
     <Route path="marketing/campaigns" element={<ManagementPage />} />
     <Route path="redirects" element={<CapabilityRoute capability="canManageRedirects"><ManagementPage /></CapabilityRoute>} />
     <Route path="analytics/*" element={<CapabilityRoute capability="canViewAnalytics"><AnalyticsPage /></CapabilityRoute>} />
-    <Route path="releases/*" element={<Navigate replace to="/content/tree" />} />
+    <Route path="releases" element={<ReleasesPage />} />
+    <Route path="releases/:releaseId" element={<ReleaseDetailPage />} />
     <Route path="settings/site" element={<CapabilityRoute capability="canManageSiteSettings"><ManagementPage /></CapabilityRoute>} />
     <Route path="settings/integrations" element={<CapabilityRoute capability="canManageIntegrations"><ManagementPage /></CapabilityRoute>} />
     <Route path="settings/access" element={<CapabilityRoute capability="canManageUsers"><ManagementPage /></CapabilityRoute>} />

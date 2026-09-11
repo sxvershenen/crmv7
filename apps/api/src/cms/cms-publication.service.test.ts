@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { materializeRelease } from "./cms-publication.service.js"
+import { materializeRelease, publicationPreview } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
@@ -172,7 +172,7 @@ describe("materializeRelease", () => {
 
   it("pins an approved add-on projection dependency without copying operational fields into content", () => {
     const addon = candidate({
-      nodeId: rootId, revisionId: rootRevisionId, kind: "addon_detail", path: "/services/firewood", slug: "firewood",
+      nodeId: rootId, revisionId: rootRevisionId, kind: "addon_detail", path: "/dopy/firewood", slug: "firewood",
       sections: [heroOverride], sourceKind: "catalog_offering", relations: [{ kind: "catalog_offering", entityId: rootId }],
       safeProjectionDependency: { type: "crm_projection", id: rootId, version: "public.addon-summary.v1", contentHash: "b".repeat(64) },
     })
@@ -279,5 +279,16 @@ describe("materializeRelease", () => {
     expect(materializeRelease([eventService] as never).issues).toEqual([
       expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", route: "/programs/corporate" }),
     ])
+  })
+})
+
+describe("publicationPreview", () => {
+  it("reports a canonical move, dependencies and a stable guard hash before publish", () => {
+    const next = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "landing", path: "/domiki", slug: "domiki", sections: [heroOverride] })
+    const result = materializeRelease([next] as never)
+    const preview = publicationPreview({ releaseId: childId, version: 7 }, rootId, rootRevisionId, [{ nodeId: rootId, path: "/houses", revisionId: childRevisionId, resolvedContentHash: "b".repeat(64), dependencies: [] }] as never, result)
+    expect(preview).toMatchObject({ baseReleaseId: childId, activeReleaseVersion: 7, canPublish: true, changes: [{ change: "updated", beforePath: "/domiki", afterPath: "/domiki" }] })
+    expect(preview.previewHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(preview.dependencies).toEqual([expect.objectContaining({ id: rootRevisionId })])
   })
 })

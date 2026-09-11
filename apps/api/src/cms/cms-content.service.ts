@@ -4,6 +4,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { DataSource, In, type EntityManager } from "typeorm"
 
 import {
+  canonicalPublicPath,
   CmsContentOutboxEventSchema,
   CmsNodeRevisionSchema,
   IdSchema,
@@ -393,7 +394,8 @@ export class CmsContentService {
     if (!routeChanged) return
 
     const latestPublished = await this.findLatestPublished(manager, nodeId)
-    if (latestPublished) {
+    const approvedCanonicalMove = latestPublished && canonicalPublicPath(current.path) === next.path && current.path !== next.path
+    if (latestPublished && !approvedCanonicalMove) {
       throw new ConflictException({
         code: "CMS_REDIRECT_REQUIRED",
         message: "URL опубликованного материала нельзя изменить до настройки перенаправления",

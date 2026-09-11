@@ -1,4 +1,5 @@
 import {
+  canonicalPublicPath,
   type CmsHeroConfig,
   type CmsSiteSettingsValue,
   type PublicPage,
@@ -27,6 +28,29 @@ export const fixtureContentEnabled = usesFixtureContent(import.meta.env)
 
 export function getPublishedRoute(pathname: string, searchParams = new URLSearchParams()) {
   return resolvePublishedRoute(createPublicContentSource(publicApiBaseUrl()), pathname, searchParams)
+}
+
+export function getPublishedRouteManifest() {
+  if (fixtureContentEnabled) return Promise.resolve({
+    status: "published" as const,
+    value: {
+      releaseId: "00000000-0000-4000-8000-000000000001",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      routes: [{ path: "/" as const, lastModified: "2026-01-01T00:00:00.000Z", schemaTypes: ["WebSite"] }],
+      redirects: [],
+      cache: { etag: '"fixture-routes"', maxAgeSeconds: 0, staleWhileRevalidateSeconds: 0, tags: ["fixture"] },
+    },
+  })
+  return createPublicContentSource(publicApiBaseUrl()).manifest()
+}
+
+export async function getPublishedRedirect(pathname: string) {
+  const destinationPath = canonicalPublicPath(pathname)
+  if (destinationPath === pathname) return { status: "not_redirect" as const }
+  const manifest = await getPublishedRouteManifest()
+  if (manifest.status !== "published") return manifest
+  const redirect = manifest.value.redirects.find((candidate) => candidate.sourcePath === pathname && candidate.destinationPath === destinationPath)
+  return redirect ? { status: "published" as const, value: redirect } : { status: "not_found" as const }
 }
 
 /** Legacy static blog/resource routes migrate separately from the CMS route adapter. */

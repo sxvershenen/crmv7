@@ -4,6 +4,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnav
 import { DataSource } from "typeorm"
 
 import {
+  canonicalPublicPath,
   PublicEventServiceListResponseSchema,
   PublicEventServiceProjectionPinSchema,
   PublicEventServiceSummaryParamsSchema,
@@ -110,7 +111,7 @@ export class PublicEventServiceOfferingService {
 
   private summary(row: ProjectionRow): PublicEventServiceSummary {
     const content = PublicReleasePageContentSchema.safeParse(row.resolvedContent)
-    if (!content.success || content.data.kind !== "event_detail" || !content.data.path.startsWith("/events/") || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
+    if (!content.success || content.data.kind !== "event_detail" || !canonicalPublicPath(content.data.path).startsWith("/meropriyatiya/") || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
     const pin = PublicEventServiceProjectionPinSchema.parse({ contract: PUBLIC_EVENT_SERVICE_PROJECTION_CONTRACT, offeringId: row.offeringId, kind: "event_service", nodeId: row.nodeId, profileRevisionId: row.revisionId })
     const dependencies = ReleaseDependencyRefSchema.array().safeParse(row.dependencies)
     const matches = dependencies.success ? dependencies.data.filter((candidate) => candidate.type === "crm_projection" && candidate.id === row.offeringId) : []
@@ -119,7 +120,7 @@ export class PublicEventServiceOfferingService {
     return PublicEventServiceSummarySchema.parse({
       offeringId: row.offeringId,
       kind: "event_service",
-      path: content.data.path,
+      path: canonicalPublicPath(content.data.path),
       releaseId: row.releaseId,
       title: content.data.title,
       summary: content.data.summary,

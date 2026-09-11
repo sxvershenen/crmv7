@@ -8,6 +8,14 @@ import { editorFixtures } from "@admin/fixtures/cms"
 vi.mock("@admin/features/auth-session-context", () => ({ useAdminAuthSession: () => ({ user: { capabilities: {} } }) }))
 
 describe("partners composition in the home editor", () => {
+  it("requires a visible guarded preflight before publication", async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={["/content/home"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
+    await user.click(await screen.findByRole("button", { name: "Проверить публикацию" }))
+    expect(await screen.findByText("Что изменится после публикации")).toBeInTheDocument()
+    expect(screen.getByText("CRM dependencies", { exact: false })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Подтвердить публикацию" })).toBeEnabled()
+  })
   it("opens the real home composition tab and adds editable partner fields", async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={["/content/home?tab=composition"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)

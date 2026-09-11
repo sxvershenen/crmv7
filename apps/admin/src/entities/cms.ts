@@ -1,5 +1,6 @@
 import type { CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
 import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft } from "@crm/contracts"
+import type { CmsPublicationPreview } from "@crm/contracts/publication"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -157,6 +158,10 @@ export type ReleaseRecord = {
   createdLabel: string
   gates: ReleaseGate[]
   changes: { route: string; before: string; after: string; kind: string }[]
+  active?: boolean
+  activeReleaseId?: string | null
+  activeReleaseVersion?: number
+  delivery?: { eventId: string; consumer: string; status: "pending" | "processing" | "succeeded" | "failed" | "dead_letter"; attempts: number; deliveryEpoch: number; lastErrorCode: string | null; updatedAt: string }[]
 }
 
 export type AnalyticsSummary = {
@@ -194,7 +199,8 @@ export interface CmsRepository {
   returnToDraft(id: string, expectedVersion: number): Promise<EditorRecord>
   approve(id: string, expectedVersion: number): Promise<EditorRecord>
   archive(id: string, expectedVersion: number): Promise<EditorRecord>
-  publish(id: string, expectedVersion: number): Promise<EditorRecord>
+  getPublicationPreview(id: string): Promise<CmsPublicationPreview>
+  publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord>
   getNavigation(): Promise<PublicNavigation>
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>
   publishNavigation(expectedVersion: number): Promise<PublicNavigation>
@@ -205,6 +211,9 @@ export interface CmsRepository {
   archiveMedia(id: string, expectedVersion: number): Promise<MediaAsset>
   getReleases(): Promise<ReleaseRecord[]>
   getRelease(id: string): Promise<ReleaseRecord>
+  activateRelease(id: string, baseReleaseId: string | null, activeReleaseVersion: number): Promise<ReleaseRecord>
+  rollbackRelease(id: string, activeReleaseId: string | null, activeReleaseVersion: number): Promise<ReleaseRecord>
+  replayReleaseDelivery(releaseId: string, delivery: NonNullable<ReleaseRecord["delivery"]>[number]): Promise<ReleaseRecord>
   getAnalytics(): Promise<AnalyticsSummary>
   getCodeArtifact(id?: string): Promise<CodeArtifact>
 }

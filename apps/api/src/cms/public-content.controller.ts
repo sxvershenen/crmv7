@@ -29,6 +29,14 @@ export class PublicContentController {
     return response.status(200).json(page)
   }
 
+  @Get("manifest")
+  async manifest(@Headers("if-none-match") ifNoneMatch: string | undefined, @Res() response: Response) {
+    const manifest = await this.content.manifest()
+    this.publicCacheHeaders(response, manifest.cache.etag, manifest.cache.maxAgeSeconds, manifest.cache.staleWhileRevalidateSeconds, manifest.cache.tags)
+    if (ifNoneMatch === manifest.cache.etag) return response.status(304).send()
+    return response.status(200).json(manifest)
+  }
+
   @Get("preview")
   async preview(
     @Query(new ZodValidationPipe(PublicPagePreviewQuerySchema)) query: PublicPagePreviewQuery,

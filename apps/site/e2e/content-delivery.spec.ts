@@ -12,6 +12,35 @@ test("fixture content requires an explicit development flag", () => {
   expect(usesFixtureContent({ DEV: true, SITE_CONTENT_SOURCE: "fixture" })).toBe(true)
 })
 
+test("serves one-hop legacy redirects and release-derived crawl controls", async ({ request }) => {
+  const redirect = await request.get("/houses/forest", { maxRedirects: 0 })
+  expect(redirect.status()).toBe(301)
+  expect(redirect.headers().location).toBe("/domiki/forest")
+  const sitemap = await request.get("/sitemap-index.xml")
+  const xml = await sitemap.text()
+  expect(sitemap.status()).toBe(200)
+  expect(xml).toContain("/domiki/forest")
+  expect(xml).not.toContain("/houses/forest")
+  expect(xml).toContain("<lastmod>2026-09-10</lastmod>")
+  const robots = await request.get("/robots.txt")
+  expect(await robots.text()).toContain("Sitemap: https://svistoplyasovo.ru/sitemap-index.xml")
+})
+
+test("renders article and legal bodies as meaningful SSR from the active release", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=editorial")
+  await page.goto("/blog/guide")
+  await expect(page.locator("h1")).toHaveText("Гид по отдыху")
+  await expect(page.locator("h2")).toHaveText("Важно знать")
+  expect(await page.locator('script[type="application/ld+json"]').evaluateAll((nodes) => nodes.map((node) => node.textContent).join("\n"))).toContain('"@type":"Article"')
+  const relatedLink = page.getByRole("link", { name: "На главную" })
+  for (let index = 0; index < 50 && !await relatedLink.evaluate((element) => element === document.activeElement); index += 1) await page.keyboard.press("Tab")
+  await expect(relatedLink).toBeFocused()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.goto("/privacy")
+  await expect(page.locator("h1")).toHaveText("Политика конфиденциальности")
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow")
+})
+
 test("renders release content in SSR and respects disabled hero and absent blog", async ({ page, request }) => {
   const errors: Error[] = []
   page.on("pageerror", (error) => errors.push(error))
@@ -218,10 +247,10 @@ test("keeps a long homepage section title within the viewport", async ({ page, r
 
 test("binds a house route to CMS content and a same-release safe operational projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=house-published")
-  const response = await request.get("/houses/forest")
+  const response = await request.get("/domiki/forest")
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain("Домик из CMS")
-  await page.goto("/houses/forest")
+  await page.goto("/domiki/forest")
   await expect(page.locator("h1")).toHaveText("Домик из CMS")
   await expect(page.locator('[data-route-kind="house"]')).toContainText("до 4 гостей")
   await expect(page.locator('[data-route-kind="house"]')).toContainText(/6\s500/)
@@ -232,7 +261,7 @@ test("binds a house route to CMS content and a same-release safe operational pro
 
 test("keeps a valid house route request-only when price authority is absent", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=house-empty")
-  const response = await page.goto("/houses/forest")
+  const response = await page.goto("/domiki/forest")
   expect(response?.status()).toBe(200)
   await expect(page.locator('[data-route-kind="house"]')).toContainText("По запросу")
   await expect(page.locator('[data-route-kind="house"]')).toContainText("Уточним доступность")
@@ -241,7 +270,7 @@ test("keeps a valid house route request-only when price authority is absent", as
 for (const scenario of ["house-missing", "house-outage", "house-private", "house-invalid", "house-version", "house-wrong-path"]) {
   test(`fails closed for ${scenario} house delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/houses/forest")
+    const response = await request.get("/domiki/forest")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
@@ -254,10 +283,10 @@ for (const scenario of ["house-missing", "house-outage", "house-private", "house
 
 test("binds a campground route to CMS content and shared-capacity operational facts", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=campground-published")
-  const response = await request.get("/campgrounds/pitches")
+  const response = await request.get("/kemping/pitches")
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain("Кемпинг из CMS")
-  await page.goto("/campgrounds/pitches")
+  await page.goto("/kemping/pitches")
   await expect(page.locator("h1")).toHaveText("Кемпинг из CMS")
   await expect(page.locator('[data-route-kind="campground"]')).toContainText("до 15 палаточных мест")
   await expect(page.locator('[data-route-kind="campground"]')).toContainText(/1\s800/)
@@ -267,7 +296,7 @@ test("binds a campground route to CMS content and shared-capacity operational fa
 
 test("keeps a valid campground route request-only when price authority is absent", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=campground-empty")
-  const response = await page.goto("/campgrounds/pitches")
+  const response = await page.goto("/kemping/pitches")
   expect(response?.status()).toBe(200)
   await expect(page.locator('[data-route-kind="campground"]')).toContainText("По запросу")
   await expect(page.locator('[data-route-kind="campground"]')).toContainText("Уточним доступность")
@@ -276,7 +305,7 @@ test("keeps a valid campground route request-only when price authority is absent
 for (const scenario of ["campground-missing", "campground-outage", "campground-private", "campground-invalid", "campground-version", "campground-wrong-path"]) {
   test(`fails closed for ${scenario} campground delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/campgrounds/pitches")
+    const response = await request.get("/kemping/pitches")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
@@ -289,10 +318,10 @@ for (const scenario of ["campground-missing", "campground-outage", "campground-p
 
 test("binds a venue route to CMS content and an exclusive-resource operational projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=venue-published")
-  const response = await request.get("/venues/meadow")
+  const response = await request.get("/poshadki/meadow")
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain("Площадка из CMS")
-  await page.goto("/venues/meadow")
+  await page.goto("/poshadki/meadow")
   await expect(page.locator("h1")).toHaveText("Площадка из CMS")
   await expect(page.locator('[data-route-kind="venue"]')).toContainText("до 40 гостей")
   await expect(page.locator('[data-route-kind="venue"]')).toContainText(/3\s200/)
@@ -302,7 +331,7 @@ test("binds a venue route to CMS content and an exclusive-resource operational p
 
 test("keeps a valid venue route request-only when price authority is absent", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=venue-empty")
-  const response = await page.goto("/venues/meadow")
+  const response = await page.goto("/poshadki/meadow")
   expect(response?.status()).toBe(200)
   await expect(page.locator('[data-route-kind="venue"]')).toContainText("По запросу")
   await expect(page.locator('[data-route-kind="venue"]')).toContainText("Уточним доступность")
@@ -311,7 +340,7 @@ test("keeps a valid venue route request-only when price authority is absent", as
 for (const scenario of ["venue-missing", "venue-outage", "venue-private", "venue-invalid", "venue-version", "venue-wrong-id", "venue-no-dependency"]) {
   test(`fails closed for ${scenario} venue delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/venues/meadow")
+    const response = await request.get("/poshadki/meadow")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
@@ -324,10 +353,10 @@ for (const scenario of ["venue-missing", "venue-outage", "venue-private", "venue
 
 test("binds a program route to CMS content and the next open occurrence", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=program-published")
-  const response = await request.get("/programs/rafting")
+  const response = await request.get("/programmy/rafting")
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain("Программа из CMS")
-  await page.goto("/programs/rafting")
+  await page.goto("/programmy/rafting")
   await expect(page.locator("h1")).toHaveText("Программа из CMS")
   await expect(page.locator('[data-route-kind="program"]')).toContainText("от 2 до 20 участников")
   await expect(page.locator('[data-route-kind="program"]')).toContainText(/2\s500/)
@@ -338,7 +367,7 @@ test("binds a program route to CMS content and the next open occurrence", async 
 
 test("keeps a valid program route request-only without a price or open occurrence", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=program-empty")
-  const response = await page.goto("/programs/rafting")
+  const response = await page.goto("/programmy/rafting")
   expect(response?.status()).toBe(200)
   await expect(page.locator('[data-route-kind="program"]')).toContainText("По запросу")
   await expect(page.locator('[data-route-kind="program"]')).toContainText("Уточним ближайшую дату")
@@ -347,7 +376,7 @@ test("keeps a valid program route request-only without a price or open occurrenc
 for (const scenario of ["program-missing", "program-outage", "program-private", "program-invalid", "program-version", "program-wrong-path", "program-wrong-id", "program-no-dependency"]) {
   test(`fails closed for ${scenario} program delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/programs/rafting")
+    const response = await request.get("/programmy/rafting")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
@@ -360,13 +389,13 @@ for (const scenario of ["program-missing", "program-outage", "program-private", 
 
 test("binds an event-service route to a reusable public category without customer order data", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=event-service-published")
-  const response = await request.get("/events/corporate")
+  const response = await request.get("/meropriyatiya/corporate")
   expect(response.status()).toBe(200)
   const html = await response.text()
   expect(html).toContain("Мероприятие из CMS")
   expect(html).not.toContain("resourceSelections")
   expect(html).not.toContain("customerPhone")
-  await page.goto("/events/corporate")
+  await page.goto("/meropriyatiya/corporate")
   await expect(page.locator("h1")).toHaveText("Мероприятие из CMS")
   await expect(page.locator('[data-route-kind="event-service"]')).toContainText("от 10 до 80 гостей")
   await expect(page.locator('[data-route-kind="event-service"]')).toContainText("По запросу")
@@ -377,7 +406,7 @@ test("binds an event-service route to a reusable public category without custome
 for (const scenario of ["event-service-missing", "event-service-outage", "event-service-private", "event-service-invalid", "event-service-version", "event-service-wrong-path", "event-service-wrong-id", "event-service-no-dependency"]) {
   test(`fails closed for ${scenario} event-service delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/events/corporate")
+    const response = await request.get("/meropriyatiya/corporate")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")
@@ -390,10 +419,10 @@ for (const scenario of ["event-service-missing", "event-service-outage", "event-
 
 test("binds an add-on route to the existing release-pinned safe projection", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=addon-published")
-  const response = await request.get("/addons/firewood")
+  const response = await request.get("/dopy/firewood")
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain("Дополнение из CMS")
-  await page.goto("/addons/firewood")
+  await page.goto("/dopy/firewood")
   await expect(page.locator("h1")).toHaveText("Дополнение из CMS")
   await expect(page.locator('[data-route-kind="addon"]')).toContainText("от 1 до 10 единицы")
   await expect(page.locator('[data-route-kind="addon"]')).toContainText(/1\s200/)
@@ -403,7 +432,7 @@ test("binds an add-on route to the existing release-pinned safe projection", asy
 
 test("keeps a valid add-on route request-only when price authority is absent", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=addon-empty")
-  const response = await page.goto("/addons/firewood")
+  const response = await page.goto("/dopy/firewood")
   expect(response?.status()).toBe(200)
   await expect(page.locator('[data-route-kind="addon"]')).toContainText("По запросу")
 })
@@ -411,7 +440,7 @@ test("keeps a valid add-on route request-only when price authority is absent", a
 for (const scenario of ["addon-missing", "addon-outage", "addon-private", "addon-invalid", "addon-version", "addon-wrong-id", "addon-no-dependency"]) {
   test(`fails closed for ${scenario} add-on delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)
-    const response = await request.get("/addons/firewood")
+    const response = await request.get("/dopy/firewood")
     expect(response.status()).toBe(503)
     expect(response.headers()["cache-control"]).toBe("no-store")
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow")

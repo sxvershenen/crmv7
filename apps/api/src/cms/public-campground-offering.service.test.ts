@@ -78,7 +78,7 @@ describe("PublicCampgroundOfferingService", () => {
 
     expect(result.data).toMatchObject({
       kind: "campground",
-      path: "/campgrounds/pitches",
+      path: "/kemping/pitches",
       capacity: { unit: "tent", available: 15 },
       fulfillment: { salesUnit: "own_tent_pitch", allocationMode: "shared_capacity", capacityTotal: 15, guestCapacityTotal: null },
       price: { mode: "from", amount: { amountMinor: 180000, currency: "RUB" } },

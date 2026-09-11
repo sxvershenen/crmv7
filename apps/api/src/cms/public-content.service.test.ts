@@ -49,6 +49,7 @@ function service(overrides: Partial<Record<string, unknown>> = {}) {
       resolvedContentHash: resolvedContentHash(resolvedContent),
       resolvedContent,
       dependencies: [],
+      itemPath: resolvedContent.path,
     }]),
     getRepository: vi.fn((entity) => repositories.get(entity)),
   }
@@ -77,6 +78,25 @@ describe("PublicContentService", () => {
     const subject = service()
     subject.dataSource.query.mockResolvedValue([])
     await expect(subject.service.resolve({ path: "/svadby", locale: "ru-RU" })).rejects.toMatchObject({ response: { code: "NOT_FOUND" } })
+  })
+
+  it("serves an existing English release item at its canonical Russian URL", async () => {
+    const subject = service()
+    const legacy = { ...resolvedContent, path: "/houses/forest" }
+    subject.dataSource.query.mockResolvedValue([{ releaseId, releaseCreatedAt: new Date("2026-09-01T10:00:00.000Z"), releasePublishedAt: new Date("2026-09-01T10:01:00.000Z"), nodeId, revisionId, resolvedContentHash: resolvedContentHash(legacy), resolvedContent: legacy, dependencies: [], itemPath: legacy.path }])
+    await expect(subject.service.resolve({ path: "/domiki/forest", locale: "ru-RU" })).resolves.toMatchObject({ path: "/domiki/forest", releaseId })
+    expect(subject.dataSource.query.mock.calls[0]?.[1]).toEqual([["/domiki/forest", "/houses/forest"]])
+  })
+
+  it("builds sitemap routes and direct redirects only from the active release", async () => {
+    const subject = service()
+    const legacy = { ...resolvedContent, path: "/venues/meadow", seo: { ...resolvedContent.seo, structuredData: [{ id: nodeId, schemaType: "Service", enabled: true, payload: { name: "Поляна" } }] } }
+    subject.dataSource.query.mockResolvedValue([{ releaseId, releaseCreatedAt: new Date("2026-09-01T10:00:00.000Z"), releasePublishedAt: new Date("2026-09-01T10:01:00.000Z"), resolvedContentHash: resolvedContentHash(legacy), resolvedContent: legacy, itemPath: legacy.path }])
+    await expect(subject.service.manifest()).resolves.toMatchObject({
+      releaseId,
+      routes: [{ path: "/poshadki/meadow", schemaTypes: ["Service"] }],
+      redirects: [{ sourcePath: "/venues/meadow", destinationPath: "/poshadki/meadow", statusCode: 301 }],
+    })
   })
 
   it("allows a valid signed draft preview but marks it private and noindex", async () => {

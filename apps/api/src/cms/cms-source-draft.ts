@@ -8,12 +8,12 @@ type LegacyCmsSourceKind = Exclude<CmsSourceKind, "catalog_offering">
 
 const kinds: Record<CmsSourceKind, { pageKind: CmsPageKind; pathPart: string }> = {
   resource: { pageKind: "resource_detail", pathPart: "resources" },
-  program_template: { pageKind: "program_detail", pathPart: "programs" },
+  program_template: { pageKind: "program_detail", pathPart: "programmy" },
   program_occurrence: { pageKind: "program_occurrence", pathPart: "program-runs" },
   event: { pageKind: "event_detail", pathPart: "events" },
   program_category: { pageKind: "category", pathPart: "program-categories" },
   event_category: { pageKind: "category", pathPart: "event-categories" },
-  catalog_offering: { pageKind: "resource_detail", pathPart: "houses" },
+  catalog_offering: { pageKind: "resource_detail", pathPart: "domiki" },
 }
 
 const internalOperationalSources = new Set<CmsSourceKind>(["program_occurrence", "event"])
@@ -111,7 +111,7 @@ export async function ensureCatalogOfferingEditorialDraft(
     const link = await createCmsSourceDraft(manager, {
       sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
       title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-      pathPart: "event-services", pageKind: "event_detail",
+      pathPart: "meropriyatiya", pageKind: "event_detail",
       relations: [{ kind: "catalog_offering", entityId: offering.id }],
     })
     return { status: "created", link }
@@ -174,7 +174,7 @@ export async function ensureCatalogOfferingEditorialDraft(
   const link = await createCmsSourceDraft(manager, {
     sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
     title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-    pathPart: offering.kind === "program" ? "programs" : offering.kind === "campground" ? "campgrounds" : offering.kind === "venue" ? "venues" : "houses",
+    pathPart: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : "domiki",
     pageKind: offering.kind === "program" ? "program_detail" : "resource_detail",
     relations: [{ kind: "catalog_offering", entityId: offering.id }],
   })

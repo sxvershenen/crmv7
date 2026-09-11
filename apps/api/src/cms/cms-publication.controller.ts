@@ -18,6 +18,12 @@ import { CmsPublicationService } from "./cms-publication.service.js"
 export class CmsPublicationController {
   constructor(@Inject(CmsPublicationService) private readonly publication: CmsPublicationService) {}
 
+  @Get()
+  @RequireCapabilities("canViewContent")
+  list(@Req() request: AuthenticatedRequest) {
+    return this.publication.list(request.sessionUser!)
+  }
+
   @Get(":id")
   @RequireCapabilities("canViewContent")
   get(@Param(new ZodValidationPipe(CmsReleaseIdParamsSchema)) params: CmsReleaseIdParams, @Req() request: AuthenticatedRequest) {

@@ -2,6 +2,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnav
 import { DataSource } from "typeorm"
 
 import {
+  canonicalPublicPath,
+  publicReleasePathCandidates,
   ListingDefinitionSchema,
   PublicCardProjectionSchema,
   PublicListingResultSchema,
@@ -49,9 +51,10 @@ export class PublicListingService {
   constructor(@Inject(DataSource) private readonly dataSource: DataSource) {}
 
   async resolve(query: PublicListingQuery): Promise<PublicListingResult> {
+    if (canonicalPublicPath(query.path) !== query.path) throw new NotFoundException({ code: "NOT_FOUND", message: "Опубликованный каталог не найден" })
     const page = await this.listingPage(query.path)
     const content = PublicReleasePageContentSchema.safeParse(page.resolvedContent)
-    if (!content.success || content.data.path !== query.path || resolvedContentHash(page.resolvedContent) !== page.resolvedContentHash) throw this.invalidRelease()
+    if (!content.success || canonicalPublicPath(content.data.path) !== query.path || resolvedContentHash(page.resolvedContent) !== page.resolvedContentHash) throw this.invalidRelease()
     const listingSection = content.data.sections.find((section) => section.renderer === "listing")
     const rawDefinition = listingSection?.config.definition ?? listingSection?.config
     const parsedDefinition = ListingDefinitionSchema.safeParse(rawDefinition)
@@ -88,16 +91,18 @@ export class PublicListingService {
   }
 
   private async listingPage(path: string): Promise<ListingPageRow> {
+    const candidates = publicReleasePathCandidates(path)
     const rows = await this.dataSource.query(`
       SELECT release.id AS "releaseId", release.created_at AS "releaseCreatedAt",
         release.published_at AS "releasePublishedAt", item.resolved_content AS "resolvedContent",
         item.resolved_content_hash AS "resolvedContentHash"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
-      JOIN cms_release_items item ON item.release_id = release.id AND item.path = $1
+      JOIN cms_release_items item ON item.release_id = release.id AND item.path = ANY($1::text[])
       WHERE active.singleton_key = 'public'
+      ORDER BY array_position($1::text[], item.path)
       LIMIT 1
-    `, [path]) as ListingPageRow[]
+    `, [candidates]) as ListingPageRow[]
     if (!rows[0]) throw new NotFoundException({ code: "NOT_FOUND", message: "Опубликованный каталог не найден" })
     return rows[0]
   }
@@ -145,7 +150,7 @@ export class PublicListingService {
       title: content.data.title,
       summary: content.data.summary,
       hero,
-      href: row.path,
+      href: canonicalPublicPath(row.path),
       image,
       priceFrom: kind === "program" && row.programPrice !== null
         ? { amountMinor: row.programPrice, currency: row.programCurrency ?? "RUB" }

@@ -270,7 +270,12 @@ export const CmsNodeArchiveSchema = CmsNodeTransitionSchema.extend({}).strict();
 export type CmsNodeArchive = z.infer<typeof CmsNodeArchiveSchema>;
 
 /** One-click publication command; immutable releases remain an internal journal. */
-export const CmsNodePublishSchema = CmsNodeTransitionSchema.extend({}).strict();
+export const CmsPublicationPreviewTokenSchema = z.object({
+  baseReleaseId: IdSchema.nullable(),
+  activeReleaseVersion: VersionSchema,
+  previewHash: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+export const CmsNodePublishSchema = CmsNodeTransitionSchema.extend({ preview: CmsPublicationPreviewTokenSchema.optional() }).strict();
 export type CmsNodePublish = z.infer<typeof CmsNodePublishSchema>;
 
 export const CmsNodePublishResultSchema = z.object({

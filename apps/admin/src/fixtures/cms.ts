@@ -26,13 +26,13 @@ export const dashboardFixture: CmsDashboard = {
 
 export const nodeFixtures: ContentNode[] = [
   { id: "home", title: "Главная", path: "/", pageKind: "home", sortOrder: 0, type: "home", status: "published", quality: "ok", parentId: null, children: ["houses", "programs", "landing-family"], owner: "Марина К.", updatedLabel: "12 мин назад", inboundLinks: 32, mediaCount: 24 },
-  { id: "houses", title: "Домики", path: "/houses", pageKind: "category", sortOrder: 10, type: "category", status: "published", quality: "ok", parentId: "home", children: ["house-lesnoy"], owner: "Олег М.", updatedLabel: "Вчера, 18:20", inboundLinks: 18, mediaCount: 16 },
-  { id: "house-lesnoy", title: "Домик «Лесной»", path: "/houses/lesnoy", pageKind: "resource_detail", sortOrder: 10, type: "profile", status: "published", quality: "warning", parentId: "houses", children: [], owner: "Марина К.", updatedLabel: "06 июл, 11:00", inboundLinks: 7, mediaCount: 8 },
-  { id: "programs", title: "Программы", path: "/programs", pageKind: "category", sortOrder: 20, type: "category", status: "review", quality: "warning", parentId: "home", children: [], owner: "Анна Р.", updatedLabel: "Сегодня, 09:14", inboundLinks: 12, mediaCount: 11 },
+  { id: "houses", title: "Домики", path: "/domiki", pageKind: "category", sortOrder: 10, type: "category", status: "published", quality: "ok", parentId: "home", children: ["house-lesnoy"], owner: "Олег М.", updatedLabel: "Вчера, 18:20", inboundLinks: 18, mediaCount: 16 },
+  { id: "house-lesnoy", title: "Домик «Лесной»", path: "/domiki/lesnoy", pageKind: "resource_detail", sortOrder: 10, type: "profile", status: "published", quality: "warning", parentId: "houses", children: [], owner: "Марина К.", updatedLabel: "06 июл, 11:00", inboundLinks: 7, mediaCount: 8 },
+  { id: "programs", title: "Программы", path: "/programmy", pageKind: "category", sortOrder: 20, type: "category", status: "review", quality: "warning", parentId: "home", children: [], owner: "Анна Р.", updatedLabel: "Сегодня, 09:14", inboundLinks: 12, mediaCount: 11 },
   { id: "landing-family", title: "Отдых с детьми", path: "/family", pageKind: "landing", sortOrder: 30, type: "landing", status: "draft", quality: "blocker", parentId: "home", children: [], owner: "Олег М.", updatedLabel: "34 мин назад", inboundLinks: 0, mediaCount: 5 },
-  { id: "crm-house-new", title: "Новый домик", path: "/houses/new-house", pageKind: "resource_detail", sortOrder: 20, type: "profile", status: "draft", quality: "warning", parentId: "houses", children: [], owner: "Синхронизация CRM", updatedLabel: "только что", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "resource", importedDraft: true },
-  { id: "crm-program-new", title: "Новая программа", path: "/programs/new-program", pageKind: "program_detail", sortOrder: 10, type: "profile", status: "draft", quality: "warning", parentId: "programs", children: [], owner: "Синхронизация CRM", updatedLabel: "2 мин назад", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "program_template", importedDraft: true },
-  { id: "crm-event-new", title: "Новое мероприятие", path: "/events/new-event", pageKind: "event_detail", sortOrder: 40, type: "profile", status: "draft", quality: "warning", parentId: "home", children: [], owner: "Синхронизация CRM", updatedLabel: "5 мин назад", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "event", importedDraft: true },
+  { id: "crm-house-new", title: "Новый домик", path: "/domiki/new-house", pageKind: "resource_detail", sortOrder: 20, type: "profile", status: "draft", quality: "warning", parentId: "houses", children: [], owner: "Синхронизация CRM", updatedLabel: "только что", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "resource", importedDraft: true },
+  { id: "crm-program-new", title: "Новая программа", path: "/programmy/new-program", pageKind: "program_detail", sortOrder: 10, type: "profile", status: "draft", quality: "warning", parentId: "programs", children: [], owner: "Синхронизация CRM", updatedLabel: "2 мин назад", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "program_template", importedDraft: true },
+  { id: "crm-event-new", title: "Новое мероприятие", path: "/meropriyatiya/new-event", pageKind: "event_detail", sortOrder: 40, type: "profile", status: "draft", quality: "warning", parentId: "home", children: [], owner: "Синхронизация CRM", updatedLabel: "5 мин назад", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "event", importedDraft: true },
   { id: "crm-category-new", title: "Новая категория", path: "/new-category", pageKind: "category", sortOrder: 50, type: "category", status: "draft", quality: "warning", parentId: "home", children: [], owner: "Синхронизация CRM", updatedLabel: "8 мин назад", inboundLinks: 0, mediaCount: 0, source: "CRM", sourceKind: "program_category", importedDraft: true },
 ]
 
@@ -48,7 +48,7 @@ const defaultHero: EditorRecord["hero"] = {
   mode: "override", eyebrow: "Свистоплясово", title: "База отдыха «Свистоплясово»",
   description: "Загородный отдых, домики и программы в Нижегородской области.",
   primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking",
-  secondaryCtaLabel: "Посмотреть домики", secondaryCtaTarget: "/houses",
+  secondaryCtaLabel: "Посмотреть домики", secondaryCtaTarget: "/domiki",
   desktopImage: "/images/hero.webp", mobileImage: "/images/hero-mobile.webp",
   overlay: 46, focalPosition: "center", alignment: "left",
 }
@@ -56,20 +56,20 @@ const defaultHero: EditorRecord["hero"] = {
 export const editorFixtures: Record<string, EditorRecord> = {
   home: { id: "home", kind: "home", internalName: "Главная", publicTitle: "База отдыха «Свистоплясово»", slug: "", parent: "Корень сайта", url: "/", status: "published", version: 18, owner: "Марина К.", source: "CMS", updatedLabel: "12 мин назад", reviewLabel: "Проверено 28 авг", seoChecks: { passed: 18, warnings: 1, blockers: 0 }, sections: inheritedSections, hero: defaultHero, description: "Специальный редактор главной страницы.", seoTitle: "База отдыха «Свистоплясово»", seoDescription: "Загородный отдых, домики и программы в Нижегородской области.", indexPolicy: "index_follow" },
   "landing-family": { id: "landing-family", kind: "landing", internalName: "Отдых с детьми", publicTitle: "Семейный отдых на природе", slug: "family", parent: "Главная", url: "/family", status: "draft", version: 4, owner: "Олег М.", source: "CMS", updatedLabel: "34 мин назад", reviewLabel: "Проверить до 15 сен", seoChecks: { passed: 11, warnings: 2, blockers: 1 }, sections: inheritedSections.map((item) => ({ ...item, mode: item.id === "hero" ? "override" : item.mode, source: item.id === "hero" ? "Эта страница · собственные настройки" : item.source })), hero: { ...defaultHero, title: "Семейный отдых на природе", description: "Домики и программы для семейного отдыха с детьми." }, description: "Посадочная для семейного поискового интента.", seoTitle: "Семейный отдых на природе", seoDescription: "Домики и программы для семейного отдыха с детьми.", indexPolicy: "index_follow" },
-  houses: { id: "houses", kind: "category", internalName: "Каталог домиков", publicTitle: "Домики для отдыха", slug: "houses", parent: "Главная", url: "/houses", status: "published", version: 9, owner: "Олег М.", source: "CMS", updatedLabel: "Вчера, 18:20", reviewLabel: "Проверено 29 авг", seoChecks: { passed: 16, warnings: 1, blockers: 0 }, sections: inheritedSections, hero: { ...defaultHero, mode: "inherit", title: "Домики для отдыха" }, description: "Каталог с configurable filters и stable sorting.", seoTitle: "Домики для отдыха", seoDescription: "Каталог домиков базы отдыха с фильтрами по вместимости.", indexPolicy: "index_follow" },
-  "house-lesnoy": { id: "house-lesnoy", kind: "profile", internalName: "Профиль · Лесной", publicTitle: "Домик «Лесной»", slug: "lesnoy", parent: "Домики", url: "/houses/lesnoy", status: "published", version: 12, owner: "Марина К.", source: "CMS", updatedLabel: "06 июл, 11:00", reviewLabel: "Проверить до 01 окт", seoChecks: { passed: 14, warnings: 1, blockers: 0 }, sections: inheritedSections, hero: { ...defaultHero, mode: "inherit", title: "Домик «Лесной»" }, description: "Маркетинговый профиль, операционные данные из CRM только для чтения.", seoTitle: "Домик «Лесной»", seoDescription: "Домик для отдыха до шести гостей.", indexPolicy: "index_follow", readonlyCrm: { entity: "Домик «Лесной»", code: "HOUSE-04", status: "Активен", capacity: "6 гостей", price: "От 12 500 ₽", availability: "Public projection ready" } },
+  houses: { id: "houses", kind: "category", internalName: "Каталог домиков", publicTitle: "Домики для отдыха", slug: "houses", parent: "Главная", url: "/domiki", status: "published", version: 9, owner: "Олег М.", source: "CMS", updatedLabel: "Вчера, 18:20", reviewLabel: "Проверено 29 авг", seoChecks: { passed: 16, warnings: 1, blockers: 0 }, sections: inheritedSections, hero: { ...defaultHero, mode: "inherit", title: "Домики для отдыха" }, description: "Каталог с configurable filters и stable sorting.", seoTitle: "Домики для отдыха", seoDescription: "Каталог домиков базы отдыха с фильтрами по вместимости.", indexPolicy: "index_follow" },
+  "house-lesnoy": { id: "house-lesnoy", kind: "profile", internalName: "Профиль · Лесной", publicTitle: "Домик «Лесной»", slug: "lesnoy", parent: "Домики", url: "/domiki/lesnoy", status: "published", version: 12, owner: "Марина К.", source: "CMS", updatedLabel: "06 июл, 11:00", reviewLabel: "Проверить до 01 окт", seoChecks: { passed: 14, warnings: 1, blockers: 0 }, sections: inheritedSections, hero: { ...defaultHero, mode: "inherit", title: "Домик «Лесной»" }, description: "Маркетинговый профиль, операционные данные из CRM только для чтения.", seoTitle: "Домик «Лесной»", seoDescription: "Домик для отдыха до шести гостей.", indexPolicy: "index_follow", readonlyCrm: { entity: "Домик «Лесной»", code: "HOUSE-04", status: "Активен", capacity: "6 гостей", price: "От 12 500 ₽", availability: "Public projection ready" } },
 }
 
 export const navigationFixture: PublicNavigation = {
   version: 3, status: "published", updatedLabel: "Сегодня, 10:42",
   header: [
-    { id: "stay", label: "Проживание", href: "/houses", icon: "home", color: "#2f6b4f", visible: true, children: [{ id: "houses", label: "Домики", href: "/houses", icon: "building-cottage", color: "#2f6b4f", visible: true, children: [] }] },
-    { id: "programs", label: "Программы", href: "/programs", icon: "sparkles", color: "#8a5b2d", visible: true, children: [] },
+    { id: "stay", label: "Проживание", href: "/domiki", icon: "home", color: "#2f6b4f", visible: true, children: [{ id: "houses", label: "Домики", href: "/domiki", icon: "building-cottage", color: "#2f6b4f", visible: true, children: [] }] },
+    { id: "programs", label: "Программы", href: "/programmy", icon: "sparkles", color: "#8a5b2d", visible: true, children: [] },
     { id: "contacts", label: "Контакты", href: "/contacts", icon: "map-pin", color: "#43658b", visible: true, children: [] },
   ],
   mobile: [
-    { id: "mobile-stay", label: "Проживание", href: "/houses", icon: "home", color: "#2f6b4f", visible: true, children: [] },
-    { id: "mobile-programs", label: "Программы", href: "/programs", icon: "sparkles", color: "#8a5b2d", visible: true, children: [] },
+    { id: "mobile-stay", label: "Проживание", href: "/domiki", icon: "home", color: "#2f6b4f", visible: true, children: [] },
+    { id: "mobile-programs", label: "Программы", href: "/programmy", icon: "sparkles", color: "#8a5b2d", visible: true, children: [] },
   ],
   footer: [{ id: "privacy", label: "Политика конфиденциальности", href: "/privacy", icon: "shield", color: "#5f6368", visible: true, children: [] }],
 }
@@ -90,8 +90,8 @@ export const releaseFixtures: ReleaseRecord[] = [
   ], changes: [
     { route: "/", before: "Hero v17", after: "Hero v18", kind: "Глобальная секция" },
     { route: "/family", before: "Нет в production", after: "Revision 4", kind: "Новая страница" },
-    { route: "/houses", before: "Наследует Hero v17", after: "Наследует Hero v18", kind: "Effective diff" },
-    { route: "/programs", before: "Наследует Hero v17", after: "Наследует Hero v18", kind: "Effective diff" },
+    { route: "/domiki", before: "Наследует Hero v17", after: "Наследует Hero v18", kind: "Effective diff" },
+    { route: "/programmy", before: "Наследует Hero v17", after: "Наследует Hero v18", kind: "Effective diff" },
   ] },
   { id: "REL-2026-084", title: "Карта и навигация", state: "published", baseReleaseId: "REL-2026-083", author: "Марина К.", reviewer: "Анна Р.", changedRoutes: 18, assets: 1, codeArtifacts: 0, createdLabel: "Сегодня, 10:42", gates: [{ id: "all", label: "Все gates", detail: "Production delivery completed", state: "passed" }], changes: [{ route: "18 routes", before: "Map v2", after: "Map v3", kind: "Reusable block" }] },
 ]
@@ -107,7 +107,7 @@ export const analyticsFixture: AnalyticsSummary = {
     { name: "Organic", value: 5320, percent: 41 }, { name: "Direct", value: 3310, percent: 26 }, { name: "Referral", value: 2060, percent: 16 }, { name: "Campaign", value: 1400, percent: 11 }, { name: "Other", value: 750, percent: 6 },
   ],
   pages: [
-    { path: "/", views: 12640, cta: 1820, leads: 214 }, { path: "/houses", views: 6340, cta: 910, leads: 88 }, { path: "/programs", views: 4120, cta: 482, leads: 54 }, { path: "/family", views: 2840, cta: 430, leads: 49 },
+    { path: "/", views: 12640, cta: 1820, leads: 214 }, { path: "/domiki", views: 6340, cta: 910, leads: 88 }, { path: "/programmy", views: 4120, cta: 482, leads: 54 }, { path: "/family", views: 2840, cta: 430, leads: 49 },
   ],
 }
 

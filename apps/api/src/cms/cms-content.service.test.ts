@@ -134,6 +134,14 @@ describe("CmsContentService", () => {
     expect(harness.bumpQuery.execute).not.toHaveBeenCalled()
   })
 
+  it("allows the approved canonical URL migration because the active manifest emits its 301", async () => {
+    const published = { ...revision, state: "published", path: "/houses", slug: "houses" }
+    const harness = updateHarness({ current: published, published })
+    const result = await harness.service.update(node.id, mutation({ route: { path: "/domiki", slug: "domiki", parentNodeId: null, sortOrder: 10 } }), actor, "request-route-canonical")
+    expect(result.currentRevision?.route.path).toBe("/domiki")
+    expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
+  })
+
   it("keeps content-only editing available for a published path", async () => {
     const published = { ...revision, state: "published" }
     const harness = updateHarness({ current: published, published })

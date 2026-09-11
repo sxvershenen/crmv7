@@ -2,6 +2,9 @@ import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublishResultSch
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { CmsSiteSettingsDetailSchema, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
+import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
+import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
+import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
 import type { CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
@@ -46,6 +49,11 @@ export class FixtureCmsRepository implements CmsRepository {
   async returnToDraft(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "draft") }
   async approve(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "approved") }
   async archive(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "archived") }
+  async getPublicationPreview(id: string): Promise<CmsPublicationPreview> {
+    const editor = this.editors[id]
+    if (!editor) throw new Error("Запись не найдена")
+    return CmsPublicationPreviewSchema.parse({ nodeId: "00000000-0000-4000-8000-000000000030", revisionId: "00000000-0000-4000-8000-000000000010", baseReleaseId: "00000000-0000-4000-8000-000000000020", activeReleaseVersion: 1, previewHash: "a".repeat(64), generatedAt: new Date().toISOString(), renderReadyPage: { path: editor.url, title: editor.publicTitle }, changes: [{ nodeId: "00000000-0000-4000-8000-000000000030", change: "updated", beforePath: editor.url, afterPath: editor.url, beforeHash: "b".repeat(64), afterHash: "c".repeat(64) }], affectedPaths: [editor.url], cacheTags: [`cms-path:${editor.url}`], dependencies: [], issues: [], canPublish: true })
+  }
   async publish(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "published") }
   async getNavigation() { await pause(); return clone(this.navigation) }
   async saveNavigation(value: PublicNavigation, expectedVersion: number) {
@@ -67,6 +75,9 @@ export class FixtureCmsRepository implements CmsRepository {
   async archiveMedia(id: string) { const asset = await this.getAsset(id); const archived = { ...asset, status: "archived" as const, version: (asset.version ?? 1) + 1 }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = archived; return clone(archived) }
   async getReleases() { await pause(); return clone(releaseFixtures) }
   async getRelease(id: string) { await pause(); const release = releaseFixtures.find((item) => item.id === id) ?? releaseFixtures[0]; if (!release) throw new Error("Релиз не найден"); return clone(release) }
+  async activateRelease(id: string) { const release = await this.getRelease(id); return { ...release, state: "published" as const, active: true } }
+  async rollbackRelease(id: string) { const release = await this.getRelease(id); return { ...release, id: `ROLLBACK-${Date.now()}`, state: "published" as const, active: true } }
+  async replayReleaseDelivery(releaseId: string, delivery: NonNullable<import("@admin/entities/cms").ReleaseRecord["delivery"]>[number]) { const release = await this.getRelease(releaseId); return { ...release, delivery: (release.delivery ?? []).map((item) => item.eventId === delivery.eventId && item.consumer === delivery.consumer ? { ...item, status: "pending" as const, attempts: 0, deliveryEpoch: item.deliveryEpoch + 1 } : item) } }
   async getAnalytics() { await pause(); return clone(analyticsFixture) }
   async getCodeArtifact() { await pause(); return clone(codeArtifactFixture) }
 
@@ -150,10 +161,14 @@ export class ApiCmsRepository implements CmsRepository {
   approve(id: string, expectedVersion: number) { return this.transition(id, expectedVersion, "approve") }
   archive(id: string, expectedVersion: number) { return this.transition(id, expectedVersion, "archive") }
 
-  async publish(id: string, expectedVersion: number): Promise<EditorRecord> {
+  async getPublicationPreview(id: string): Promise<CmsPublicationPreview> {
+    return this.client.get(`/content/nodes/${encodeURIComponent(id)}/publication-preview`, CmsPublicationPreviewSchema)
+  }
+
+  async publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord> {
     try {
       const current = this.details.get(id) ?? await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
-      await this.client.post(`/content/nodes/${encodeURIComponent(id)}/publish`, { ...operationMeta(), expectedVersion }, CmsNodePublishResultSchema)
+      await this.client.post(`/content/nodes/${encodeURIComponent(id)}/publish`, { ...operationMeta(), expectedVersion, ...(preview ? { preview: { baseReleaseId: preview.baseReleaseId, activeReleaseVersion: preview.activeReleaseVersion, previewHash: preview.previewHash } } : {}) }, CmsNodePublishResultSchema)
       const detail = await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
       this.details.set(id, detail)
       return this.editor(detail, localKind(current.node.kind))
@@ -204,8 +219,23 @@ export class ApiCmsRepository implements CmsRepository {
     return mediaView(response.asset, response.usages)
   }
   async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
-  async getReleases(): Promise<never> { throw new CmsUnavailableError("Releases") }
-  async getRelease(): Promise<never> { throw new CmsUnavailableError("Release detail") }
+  async getReleases(): Promise<import("@admin/entities/cms").ReleaseRecord[]> {
+    const response = await this.client.get("/releases", CmsReleaseListResponseSchema)
+    return response.items.map((item) => releaseView(item, response.activeReleaseId, response.activeReleaseVersion))
+  }
+  async getRelease(id: string) { const release = (await this.getReleases()).find((item) => item.id === id); if (!release) throw new Error("Релиз не найден"); return release }
+  async activateRelease(id: string, baseReleaseId: string | null, activeReleaseVersion: number) {
+    const detail = await this.client.post(`/releases/${encodeURIComponent(id)}/activate`, { ...operationMeta(), baseReleaseId, expectedActiveReleaseVersion: activeReleaseVersion }, CmsReleaseDetailSchema)
+    return this.getRelease(detail.manifest.id)
+  }
+  async rollbackRelease(id: string, activeReleaseId: string | null, activeReleaseVersion: number) {
+    const detail = await this.client.post(`/releases/${encodeURIComponent(id)}/rollback`, { ...operationMeta(), baseReleaseId: activeReleaseId, expectedActiveReleaseVersion: activeReleaseVersion }, CmsReleaseDetailSchema)
+    return (await this.getRelease(detail.manifest.id))
+  }
+  async replayReleaseDelivery(releaseId: string, delivery: NonNullable<import("@admin/entities/cms").ReleaseRecord["delivery"]>[number]) {
+    await this.client.post(`/deliveries/${encodeURIComponent(delivery.consumer)}/${encodeURIComponent(delivery.eventId)}/replay`, { ...operationMeta(), expectedStatus: delivery.status, expectedDeliveryEpoch: delivery.deliveryEpoch, expectedAttempts: delivery.attempts, reason: `Retry publication ${releaseId}` }, OutboxDeliveryReplayResultSchema)
+    return this.getRelease(releaseId)
+  }
   async getAnalytics(): Promise<never> { throw new CmsUnavailableError("Analytics") }
   async getCodeArtifact(): Promise<never> { throw new CmsUnavailableError("Code workspace") }
 
@@ -370,6 +400,20 @@ function fallbackUuid() { return `00000000-0000-4000-8000-${Date.now().toString(
 function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) }
 function formatUpdated(value: string) { return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "short" }).format(new Date(value)) }
 function formatBytes(value: number) { if (value < 1024) return `${value} B`; if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`; return `${(value / 1024 / 1024).toFixed(1)} MB` }
+function releaseView(item: CmsReleaseListItem, activeReleaseId: string | null, activeReleaseVersion: number): import("@admin/entities/cms").ReleaseRecord {
+  const failed = item.delivery.filter((delivery) => delivery.status === "failed" || delivery.status === "dead_letter")
+  const running = item.delivery.filter((delivery) => delivery.status === "pending" || delivery.status === "processing")
+  const state = item.manifest.state === "failed" ? "failed" as const : item.manifest.state === "published" || item.manifest.state === "superseded" ? "published" as const : item.manifest.state === "ready" ? "approved" as const : "review" as const
+  return {
+    id: item.manifest.id, title: `Release ${item.manifest.sequence}`, state, baseReleaseId: item.manifest.baseReleaseId ?? "—",
+    author: `ID ${item.manifest.createdBy.slice(0, 8)}`, reviewer: "Проверено гейтами", changedRoutes: item.affectedPaths.length,
+    assets: item.manifest.routes.flatMap((route) => route.dependencyRefs).filter((dependency) => dependency.type === "media_asset").length,
+    codeArtifacts: item.manifest.routes.flatMap((route) => route.dependencyRefs).filter((dependency) => dependency.type === "code_artifact").length,
+    createdLabel: formatUpdated(item.manifest.publishedAt ?? item.manifest.createdAt), active: item.active, activeReleaseId, activeReleaseVersion,
+    gates: [{ id: "validation", label: "Release validation", detail: "Immutable manifest validated", state: "passed" }, { id: "delivery", label: "Public API / CDN delivery", detail: failed.length ? `${failed.length} failed` : running.length ? `${running.length} in progress` : item.delivery.length ? "Delivery completed" : "Delivery event not observed", state: failed.length ? "blocked" : running.length ? "running" : item.delivery.length ? "passed" : "warning" }],
+    changes: item.affectedPaths.map((route) => ({ route, before: item.manifest.baseReleaseId ? "Base release" : "∅", after: `Revision in release ${item.manifest.sequence}`, kind: "Published route" })), delivery: item.delivery,
+  }
+}
 function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pointer: string; published: boolean }> = []): import("@admin/entities/cms").MediaAsset {
   const status = asset.state === "failed" ? "error" : asset.state === "processing" ? "converting" : asset.state
   const preview = asset.variants.filter((variant) => variant.format === "webp").sort((left, right) => (left.width ?? 0) - (right.width ?? 0))[0]

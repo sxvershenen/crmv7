@@ -5,6 +5,8 @@ import { DataSource, In, IsNull, type EntityManager } from "typeorm"
 
 import {
   CmsReleaseDetailSchema,
+  CmsPublicationPreviewSchema,
+  CmsReleaseListResponseSchema,
   CmsReleaseOutboxEventSchema,
   CmsHeroPolicySchema,
   CmsNodePublishResultSchema,
@@ -13,14 +15,18 @@ import {
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
   CmsHomeSectionSchema,
+  canonicalPublicPath,
   isCmsHomeSectionKey,
   PublicReleasePageContentSchema,
+  PublicEditorialContentConfigSchema,
+  SeoMetadataSchema,
   PublicAddOnTermsSchema,
   ReleaseDependencyRefSchema,
   ReleaseManifestSchema,
   type CmsReleaseActivateInput,
   type CmsReleaseBuildInput,
   type CmsReleaseDetail,
+  type CmsPublicationPreview,
   type CmsReleaseOutboxEvent,
   type CmsNodePublish,
   type CmsNodePublishResult,
@@ -32,6 +38,7 @@ import {
   type ReleaseManifest,
   type ReleaseValidationIssue,
   type SessionUser,
+  type SeoMetadata,
 } from "@crm/contracts"
 import {
   ChangeLogEntity,
@@ -86,6 +93,53 @@ export class CmsPublicationService {
     return this.detail(this.dataSource.manager, release)
   }
 
+  async list(actor: SessionUser) {
+    this.assertView(actor)
+    const releases = await this.dataSource.getRepository(CmsReleaseEntity).find({ order: { sequence: "DESC" }, take: 100 })
+    const active = await this.active(this.dataSource.manager)
+    const items = []
+    for (const release of releases) {
+      const detail = await this.detail(this.dataSource.manager, release, active)
+      const deliveryRows = await this.dataSource.query(`
+        SELECT event.id AS "eventId", delivery.consumer, delivery.status, delivery.attempts,
+          delivery.delivery_epoch AS "deliveryEpoch", delivery.last_error_code AS "lastErrorCode",
+          delivery.updated_at AS "updatedAt"
+        FROM outbox_events event
+        JOIN outbox_deliveries delivery ON delivery.event_id = event.id
+        WHERE event.aggregate_type = 'cms_release' AND event.aggregate_id = $1::uuid
+        ORDER BY delivery.consumer, event.created_at DESC
+      `, [release.id]) as Array<{ eventId: string; consumer: string; status: string; attempts: number | string; deliveryEpoch: number | string; lastErrorCode: string | null; updatedAt: Date }>
+      items.push({
+        manifest: detail.manifest,
+        active: active.releaseId === release.id,
+        affectedPaths: detail.manifest.routes.map((route) => canonicalPublicPath(route.path)),
+        delivery: deliveryRows.map((row) => ({ ...row, attempts: Number(row.attempts), deliveryEpoch: Number(row.deliveryEpoch), updatedAt: row.updatedAt.toISOString() })),
+      })
+    }
+    return CmsReleaseListResponseSchema.parse({ items, activeReleaseId: active.releaseId, activeReleaseVersion: active.version })
+  }
+
+  async previewNodePublication(nodeId: string, actor: SessionUser): Promise<CmsPublicationPreview> {
+    this.assertView(actor)
+    const manager = this.dataSource.manager
+    const active = await this.active(manager)
+    const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: nodeId })
+    if (!node || node.status !== "active") throw new NotFoundException({ code: "CMS_NODE_NOT_FOUND", message: "Материал не найден" })
+    const revision = await manager.getRepository(CmsNodeRevisionEntity).findOne({ where: { nodeId, state: In(["draft", "review", "approved"]) }, order: { revision: "DESC" } })
+    if (!revision) throw new ConflictException({ code: "CMS_PUBLISHABLE_DRAFT_REQUIRED", message: "Нет изменений для публикации" })
+    const baseItems = active.releaseId ? await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId }) : []
+    const revisionIds = [...new Set([...baseItems.map((item) => item.revisionId), revision.id])]
+    const revisions = await manager.getRepository(CmsNodeRevisionEntity).findBy({ id: In(revisionIds) })
+    const byNode = new Map(revisions.map((item) => [item.nodeId, item]))
+    byNode.set(nodeId, revision)
+    const nodes = await manager.getRepository(CmsNodeEntity).findBy({ id: In([...byNode.keys()]) })
+    if (nodes.length !== byNode.size) throw new ConflictException({ code: "CMS_BASE_RELEASE_INVALID", message: "Опубликованная версия повреждена" })
+    const previousRelease = active.releaseId ? await manager.getRepository(CmsReleaseEntity).findOneBy({ id: active.releaseId }) : null
+    const candidates = await this.withSourceKinds(manager, nodes.map((item) => ({ node: item, revision: byNode.get(item.id)! })))
+    const result = materializeRelease(candidates, await this.siteDefaults(manager, previousRelease?.siteSettingsRevisionId ?? null))
+    return CmsPublicationPreviewSchema.parse(publicationPreview(active, nodeId, revision.id, baseItems, result))
+  }
+
   async publishNode(nodeId: string, input: CmsNodePublish, actor: SessionUser, requestId: string): Promise<CmsNodePublishResult> {
     this.assert(actor)
     return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
@@ -111,6 +165,10 @@ export class CmsPublicationService {
       const previousRelease = active.releaseId ? await manager.getRepository(CmsReleaseEntity).findOneBy({ id: active.releaseId }) : null
       const candidates = await this.withSourceKinds(manager, nodes.map((item) => ({ node: item, revision: byNode.get(item.id)! })))
       const result = materializeRelease(candidates, await this.siteDefaults(manager, previousRelease?.siteSettingsRevisionId ?? null))
+      if (input.preview) {
+        const preview = publicationPreview(active, nodeId, revision.id, baseItems, result)
+        if (input.preview.baseReleaseId !== active.releaseId || input.preview.activeReleaseVersion !== active.version || input.preview.previewHash !== preview.previewHash) throw this.staleRelease()
+      }
       if (result.issues.some((issue) => issue.severity === "error")) throw new UnprocessableEntityException({ code: "CMS_PUBLICATION_VALIDATION_FAILED", message: "Страница не готова к публикации", details: { issues: result.issues } })
       const now = new Date()
       const releaseId = randomUUID()
@@ -361,7 +419,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "house" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "resource_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
-    if (!candidate.revision.path.startsWith("/houses/")) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/domiki/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
     if (!profile || profile.archivedAt !== null) return null
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
@@ -383,6 +441,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "venue" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "resource_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/poshadki/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
     if (!profile || profile.archivedAt !== null) return null
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
@@ -405,7 +464,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "program" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "program_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
-    if (!candidate.revision.path.startsWith("/programs/")) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/programmy/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
     if (!profile || profile.archivedAt !== null) return null
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
@@ -426,7 +485,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "event_service" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "event_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
-    if (!candidate.revision.path.startsWith("/events/")) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/meropriyatiya/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
     if (!profile || profile.archivedAt !== null) return null
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
@@ -447,7 +506,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "campground" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "resource_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
-    if (!candidate.revision.path.startsWith("/campgrounds/")) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/kemping/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id })
     if (!profile || profile.archivedAt !== null) return null
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
@@ -482,6 +541,7 @@ export class CmsPublicationService {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "addon" || offering.state !== "active" || offering.archivedAt !== null) return null
     if (candidate.node.kind !== "addon_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if (!canonicalPublicPath(candidate.revision.path).startsWith("/dopy/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({
       kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id,
     })
@@ -600,6 +660,43 @@ export class CmsPublicationService {
   private notFound() { return new NotFoundException({ code: "CMS_RELEASE_NOT_FOUND", message: "Релиз не найден" }) }
 }
 
+export function publicationPreview(
+  active: { releaseId: string | null; version: number },
+  nodeId: string,
+  revisionId: string,
+  baseItems: CmsReleaseItemEntity[],
+  result: MaterializationResult,
+) {
+  const beforeByNode = new Map(baseItems.map((item) => [item.nodeId, item]))
+  const afterByNode = new Map(result.routes.map((route) => [route.candidate.node.id, route]))
+  type PreviewChange = { nodeId: string; change: "added" | "updated" | "moved" | "removed"; beforePath: string | null; afterPath: string | null; beforeHash: string | null; afterHash: string | null }
+  const changes: PreviewChange[] = []
+  for (const id of new Set([...beforeByNode.keys(), ...afterByNode.keys()])) {
+    const before = beforeByNode.get(id)
+    const after = afterByNode.get(id)
+    if (!before && after) { changes.push({ nodeId: id, change: "added", beforePath: null, afterPath: canonicalPublicPath(after.content.path), beforeHash: null, afterHash: after.resolvedContentHash }); continue }
+    if (before && !after) { changes.push({ nodeId: id, change: "removed", beforePath: canonicalPublicPath(before.path), afterPath: null, beforeHash: before.resolvedContentHash, afterHash: null }); continue }
+    if (!before || !after) continue
+    const moved = canonicalPublicPath(before.path) !== canonicalPublicPath(after.content.path)
+    const dependencyChanged = stableStringify(before.dependencies) !== stableStringify(after.dependencies)
+    if (!moved && before.resolvedContentHash === after.resolvedContentHash && !dependencyChanged) continue
+    changes.push({ nodeId: id, change: moved ? "moved" : "updated", beforePath: canonicalPublicPath(before.path), afterPath: canonicalPublicPath(after.content.path), beforeHash: before.resolvedContentHash, afterHash: after.resolvedContentHash })
+  }
+  changes.sort((left, right) => `${left.afterPath ?? left.beforePath}:${left.nodeId}`.localeCompare(`${right.afterPath ?? right.beforePath}:${right.nodeId}`))
+  const affectedPaths = [...new Set(changes.flatMap((change) => [change.beforePath, change.afterPath].filter((path): path is string => path !== null)))].sort()
+  const changedNodes = new Set(changes.map((change) => change.nodeId))
+  const dependencies = normalizeDependencies(result.routes.filter((route) => changedNodes.has(route.candidate.node.id)).flatMap((route) => route.dependencies))
+  const renderReadyPage = result.routes.find((route) => route.candidate.node.id === nodeId)?.content ?? null
+  const hashInput = { nodeId, revisionId, baseReleaseId: active.releaseId, activeReleaseVersion: active.version, changes, affectedPaths, dependencies, issues: result.issues, renderReadyPage }
+  return {
+    ...hashInput,
+    previewHash: stableHash(hashInput),
+    generatedAt: new Date().toISOString(),
+    cacheTags: [`cms-release:${active.releaseId ?? "empty"}`, ...affectedPaths.map((path) => `cms-path:${path}`)].slice(0, 500),
+    canPublish: renderReadyPage !== null && !result.issues.some((item) => item.severity === "error"),
+  }
+}
+
 export function materializeRelease(candidates: Candidate[], siteDefaults?: { hero: CmsHeroConfig | null; sections: PublicReleasePageContent["sections"] }): MaterializationResult {
   const issues: ReleaseValidationIssue[] = []
   const byNode = new Map(candidates.map((candidate) => [candidate.node.id, candidate]))
@@ -633,10 +730,10 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1")
           || (candidate.node.kind === "program_detail" && candidate.safeProjectionDependency.version === "public.program-summary.v1")
           || (candidate.node.kind === "event_detail" && candidate.safeProjectionDependency.version === "public.event-service-summary.v1"))
-        && (candidate.safeProjectionDependency.version !== "public.house-summary.v1" || candidate.revision.path.startsWith("/houses/"))
-        && (candidate.safeProjectionDependency.version !== "public.campground-summary.v1" || candidate.revision.path.startsWith("/campgrounds/"))
-        && (candidate.safeProjectionDependency.version !== "public.program-summary.v1" || candidate.revision.path.startsWith("/programs/"))
-        && (candidate.safeProjectionDependency.version !== "public.event-service-summary.v1" || candidate.revision.path.startsWith("/events/"))
+        && (candidate.safeProjectionDependency.version !== "public.house-summary.v1" || canonicalPublicPath(candidate.revision.path).startsWith("/domiki/"))
+        && (candidate.safeProjectionDependency.version !== "public.campground-summary.v1" || canonicalPublicPath(candidate.revision.path).startsWith("/kemping/"))
+        && (candidate.safeProjectionDependency.version !== "public.program-summary.v1" || canonicalPublicPath(candidate.revision.path).startsWith("/programmy/"))
+        && (candidate.safeProjectionDependency.version !== "public.event-service-summary.v1" || canonicalPublicPath(candidate.revision.path).startsWith("/meropriyatiya/"))
         && candidate.safeProjectionDependency.contentHash
       if (!safeProjection) issues.push(issue("CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "Предложение нельзя публиковать до появления exact public profile/relation и закреплённой safe public projection", candidate.revision.path))
     } else if (candidate.revision.relations.length > 0) {
@@ -672,6 +769,9 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
       parentSections.set(section.key, { id: section.id, key: section.key, renderer: section.renderer, rendererVersion: section.rendererVersion, schemaVersion: section.schemaVersion, order: section.order, config: config as never, ...(section.analyticsActionId ? { analyticsActionId: section.analyticsActionId } : {}) })
     }
     for (const section of parentSections.values()) {
+      if (section.renderer === "editorial-content" && (section.rendererVersion !== "1" || section.schemaVersion !== 1 || !PublicEditorialContentConfigSchema.safeParse(section.config).success)) {
+        issues.push(issue("CMS_EDITORIAL_SECTION_INVALID", "Текстовая секция не соответствует опубликованному контракту", candidate.revision.path))
+      }
       if ((section.key === "partners" || section.renderer === "partners") && !CmsPartnersSectionSchema.safeParse(section).success) {
         issues.push(issue("CMS_PARTNERS_SECTION_INVALID", "Проверьте заголовок, список партнёров и версию секции", candidate.revision.path))
       }
@@ -682,8 +782,12 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
         issues.push(issue("CMS_HOMEPAGE_SECTION_INVALID", "Проверьте редакционные поля и версию секции главной", candidate.revision.path))
       }
     }
+    const parsedSeo = SeoMetadataSchema.safeParse(candidate.revision.seo)
+    if (!parsedSeo.success) issues.push(issue("CMS_SEO_INVALID", "SEO metadata не соответствует опубликованному контракту", candidate.revision.path))
+    const seo = parsedSeo.success ? parsedSeo.data : { title: candidate.revision.title.slice(0, 70), description: "Страница временно не готова к публикации.", indexPolicy: "noindex_nofollow" as const, canonical: { mode: "self" as const }, structuredData: [] }
+    validateSeo(candidate.node.kind, candidate.revision.path, seo, [...parentSections.values()], issues)
     visiting.delete(candidate.node.id)
-    const content = PublicReleasePageContentSchema.parse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo: candidate.revision.seo })
+    const content = PublicReleasePageContentSchema.parse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo })
     const ownDependency: ReleaseDependencyRef = { type: "node_revision", id: candidate.revision.id, version: String(candidate.revision.revision), contentHash: candidate.revision.contentHash }
     const dependencies = normalizeDependencies([
       ...(parentRoute?.dependencies ?? []),
@@ -697,8 +801,15 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
   const routes = candidates.map(resolve).filter((route): route is MaterializedRoute => route !== null)
   const paths = new Map<string, MaterializedRoute>()
   for (const route of routes) {
-    if (paths.has(route.content.path)) issues.push(issue("CMS_RELEASE_PATH_CONFLICT", "В релизе два материала используют один URL", route.content.path))
-    paths.set(route.content.path, route)
+    const canonicalPath = canonicalPublicPath(route.content.path)
+    if (paths.has(canonicalPath)) issues.push(issue("CMS_RELEASE_PATH_CONFLICT", "В релизе два материала используют один canonical URL", route.content.path))
+    paths.set(canonicalPath, route)
+  }
+  for (const route of routes) for (const section of route.content.sections) {
+    if (section.renderer !== "editorial-content") continue
+    const parsed = PublicEditorialContentConfigSchema.safeParse(section.config)
+    if (!parsed.success) continue
+    for (const link of parsed.data.links) if (!paths.has(canonicalPublicPath(link.href))) issues.push(issue("CMS_INTERNAL_LINK_BROKEN", `Ссылка ${link.href} не ведёт на страницу этого релиза`, route.content.path))
   }
   if (routes.filter((route) => route.content.kind === "home").length > 1) issues.push(issue("CMS_HOME_DUPLICATE", "В релизе может быть только одна главная страница"))
   return { routes, issues }
@@ -748,6 +859,51 @@ function insertAfter(order: string[], key: string, afterKey: string | null, rout
 }
 
 function issue(code: string, message: string, route?: string): ReleaseValidationIssue { return { severity: "error", code, message, ...(route ? { route } : {}) } }
+function validateSeo(kind: string, route: string, seo: SeoMetadata, sections: PublicReleasePageContent["sections"], issues: ReleaseValidationIssue[]) {
+  if (seo.canonical.mode === "custom") {
+    const canonical = new URL(seo.canonical.url)
+    if (canonical.protocol !== "https:" || canonical.username || canonical.password || canonical.search || canonical.hash || /^(?:localhost|127\.|0\.|\[::1\])/.test(canonical.hostname)) {
+      issues.push(issue("CMS_CANONICAL_INVALID", "Custom canonical должен быть публичным HTTPS URL без query/hash/credentials", route))
+    }
+  }
+  const editorial = sections.some((section) => section.renderer === "editorial-content")
+  if (seo.indexPolicy === "index_follow" && ["article", "information", "legal"].includes(kind) && !editorial) {
+    issues.push(issue("CMS_EDITORIAL_CONTENT_REQUIRED", "Статье, информационной или legal-странице нужна typed текстовая секция", route))
+  }
+  const allowedByKind: Record<string, Set<string>> = {
+    home: new Set(["Organization", "LocalBusiness", "WebSite", "WebPage"]),
+    landing: new Set(["WebPage", "BreadcrumbList", "Service"]),
+    category: new Set(["CollectionPage", "ItemList", "BreadcrumbList", "WebPage"]),
+    resource_listing: new Set(["CollectionPage", "ItemList", "BreadcrumbList"]),
+    program_listing: new Set(["CollectionPage", "ItemList", "BreadcrumbList"]),
+    event_listing: new Set(["CollectionPage", "ItemList", "BreadcrumbList"]),
+    article_listing: new Set(["CollectionPage", "ItemList", "BreadcrumbList"]),
+    resource_detail: new Set(["Product", "Service", "WebPage", "BreadcrumbList"]),
+    addon_detail: new Set(["Service", "WebPage", "BreadcrumbList"]),
+    program_detail: new Set(["Service", "WebPage", "BreadcrumbList"]),
+    event_detail: new Set(["Service", "WebPage", "BreadcrumbList"]),
+    program_occurrence: new Set(["Event", "WebPage", "BreadcrumbList"]),
+    article: new Set(["Article", "BlogPosting", "WebPage", "BreadcrumbList"]),
+    information: new Set(["WebPage", "ContactPage", "BreadcrumbList"]),
+    legal: new Set(["WebPage", "BreadcrumbList"]),
+  }
+  for (const binding of seo.structuredData.filter((item) => item.enabled)) {
+    if (!allowedByKind[kind]?.has(binding.schemaType)) issues.push(issue("CMS_STRUCTURED_DATA_TYPE_INVALID", `Schema ${binding.schemaType} не разрешена для типа ${kind}`, route))
+    if ("@context" in binding.payload || "@type" in binding.payload || hasSchemaPlaceholder(binding.payload)) issues.push(issue("CMS_STRUCTURED_DATA_PAYLOAD_INVALID", `Schema ${binding.schemaType} содержит служебные поля или placeholder`, route))
+    const required: Record<string, string[]> = {
+      Organization: ["name", "url"], LocalBusiness: ["name", "address"], WebSite: ["name", "url"], WebPage: ["name", "description"], ContactPage: ["name", "url"],
+      Product: ["name", "description"], Service: ["name", "description"], Article: ["headline", "author", "datePublished"], BlogPosting: ["headline", "author", "datePublished"],
+      CollectionPage: ["name"], ItemList: ["itemListElement"], BreadcrumbList: ["itemListElement"], Event: ["name", "startDate", "location"],
+    }
+    const missing = (required[binding.schemaType] ?? []).filter((field) => binding.payload[field] === undefined || binding.payload[field] === null || binding.payload[field] === "")
+    if (missing.length) issues.push(issue("CMS_STRUCTURED_DATA_REQUIRED_FIELDS", `Schema ${binding.schemaType}: заполните ${missing.join(", ")}`, route))
+  }
+}
+function hasSchemaPlaceholder(value: unknown): boolean {
+  if (typeof value === "string") return /^\s*\[[^\]]+\]\s*$/.test(value)
+  if (Array.isArray(value)) return value.some(hasSchemaPlaceholder)
+  return Boolean(value && typeof value === "object" && Object.values(value as Record<string, unknown>).some(hasSchemaPlaceholder))
+}
 function validateHeroMedia(hero: CmsHeroConfig, route: string, issues: ReleaseValidationIssue[]) {
   const unresolved = (assetId: string | null, media: { assetId: string } | null, field: string) => {
     if (assetId && media?.assetId !== assetId) issues.push(issue("CMS_MEDIA_NOT_RESOLVED", `Hero: для ${field} нет готового public WebP/AVIF варианта`, route))

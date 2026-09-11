@@ -69,6 +69,18 @@ export const PublicResolvedSectionSchema = z.object({
   analyticsActionId: z.string().min(1).max(120).optional(),
 }).strict();
 
+export const PublicEditorialContentConfigSchema = z.object({
+  heading: z.string().min(1).max(240).nullable().default(null),
+  lead: z.string().min(1).max(1000).nullable().default(null),
+  blocks: z.array(z.discriminatedUnion("type", [
+    z.object({ type: z.literal("paragraph"), text: z.string().min(1).max(5000) }).strict(),
+    z.object({ type: z.literal("heading"), level: z.enum(["h2", "h3"]), text: z.string().min(1).max(240) }).strict(),
+    z.object({ type: z.literal("list"), items: z.array(z.string().min(1).max(1000)).min(1).max(50) }).strict(),
+  ])).min(1).max(200),
+  links: z.array(z.object({ label: z.string().min(1).max(160), href: CmsPathSchema }).strict()).max(30).default([]),
+}).strict();
+export type PublicEditorialContentConfig = z.infer<typeof PublicEditorialContentConfigSchema>;
+
 export const PublicReleasePageContentSchema = z.object({
   kind: CmsPageKindSchema,
   path: CmsPathSchema,

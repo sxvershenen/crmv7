@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
+import { BoundedJsonValueSchema, DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
 
 export const ReleaseStateSchema = z.enum(["draft", "validating", "ready", "publishing", "published", "failed", "superseded"]);
 
@@ -80,6 +80,51 @@ export const CmsReleaseDetailSchema = z.object({
   activeReleaseVersion: VersionSchema,
 }).strict();
 export type CmsReleaseDetail = z.infer<typeof CmsReleaseDetailSchema>;
+
+export const CmsPublicationPreviewSchema = z.object({
+  nodeId: IdSchema,
+  revisionId: IdSchema,
+  baseReleaseId: IdSchema.nullable(),
+  activeReleaseVersion: VersionSchema,
+  previewHash: z.string().regex(/^[a-f0-9]{64}$/),
+  generatedAt: DateTimeSchema,
+  renderReadyPage: z.record(z.string().min(1).max(120), BoundedJsonValueSchema).nullable(),
+  changes: z.array(z.object({
+    nodeId: IdSchema,
+    change: z.enum(["added", "updated", "moved", "removed"]),
+    beforePath: z.string().min(1).max(2048).nullable(),
+    afterPath: z.string().min(1).max(2048).nullable(),
+    beforeHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+    afterHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+  }).strict()).max(20_000),
+  affectedPaths: z.array(z.string().min(1).max(2048)).max(40_000),
+  cacheTags: z.array(z.string().min(1).max(200)).max(500),
+  dependencies: z.array(ReleaseDependencyRefSchema).max(20_000),
+  issues: z.array(ReleaseValidationIssueSchema).max(10_000),
+  canPublish: z.boolean(),
+}).strict();
+export type CmsPublicationPreview = z.infer<typeof CmsPublicationPreviewSchema>;
+
+export const CmsReleaseListItemSchema = z.object({
+  manifest: ReleaseManifestSchema,
+  active: z.boolean(),
+  affectedPaths: z.array(z.string().min(1).max(2048)).max(20_000),
+  delivery: z.array(z.object({
+    eventId: IdSchema,
+    consumer: z.string().min(1).max(120),
+    status: z.enum(["pending", "processing", "succeeded", "failed", "dead_letter"]),
+    attempts: z.number().int().nonnegative(),
+    deliveryEpoch: z.number().int().positive(),
+    lastErrorCode: z.string().max(120).nullable(),
+    updatedAt: DateTimeSchema,
+  }).strict()).max(100),
+}).strict();
+export type CmsReleaseListItem = z.infer<typeof CmsReleaseListItemSchema>;
+export const CmsReleaseListResponseSchema = z.object({
+  items: z.array(CmsReleaseListItemSchema).max(100),
+  activeReleaseId: IdSchema.nullable(),
+  activeReleaseVersion: VersionSchema,
+}).strict();
 
 export const CmsReleaseOutboxEventSchema = z.object({
   eventId: IdSchema,

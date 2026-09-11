@@ -24,6 +24,7 @@ export * from "./content.js";
 export * from "./media.js";
 export * from "./publication.js";
 export * from "./public-site.js";
+export * from "./public-routes.js";
 export * from "./public-intake.js";
 export * from "./analytics.js";
 export * from "./admin-capabilities.js";

@@ -1,7 +1,7 @@
 import {
   IconArticle, IconDashboard, IconFileAnalytics, IconFiles, IconLink,
   IconMap, IconPhoto, IconReportSearch, IconRoute, IconSettings, IconSitemap, IconSparkles,
-  IconTemplate,
+  IconTemplate, IconRocket,
 } from "@tabler/icons-react"
 import type { Capabilities } from "@crm/contracts/capabilities"
 
@@ -11,6 +11,7 @@ export const navGroups: { label: string; items: AdminNavItem[] }[] = [
     { label: "Обзор", href: "/", icon: IconDashboard },
     { label: "Страницы сайта", href: "/content/tree", icon: IconSitemap, match: "/content" },
     { label: "Блог и материалы", href: "/content/articles", icon: IconArticle, match: "/content/articles" },
+    { label: "Публикации", href: "/releases", icon: IconRocket, match: "/releases" },
   ] },
   { label: "Оформление", items: [
     { label: "Глобальные секции", href: "/globals/sections", icon: IconTemplate },

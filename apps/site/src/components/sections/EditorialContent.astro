@@ -1,0 +1,29 @@
+---
+import SectionShell from "@crm/site-ui/astro/SectionShell"
+import type { PublicEditorialContentConfig } from "@crm/contracts"
+
+interface Props {
+  config: PublicEditorialContentConfig
+  sectionKey: string
+  analyticsId?: string
+}
+
+const { config, sectionKey, analyticsId } = Astro.props
+---
+
+<SectionShell key={sectionKey} {...(analyticsId ? { analyticsId } : {})} class="site-editorial-content">
+  <article class="site-container site-container--md site-surface site-surface--bordered site-surface--raised p-6 sm:p-10">
+    {config.heading && <h2 class="site-type-h2">{config.heading}</h2>}
+    {config.lead && <p class="site-type-lead mt-3 text-[var(--site-color-text-muted)]">{config.lead}</p>}
+    <div class="site-type-body mt-6 space-y-5 text-[var(--site-color-text)]">
+      {config.blocks.map((block) => {
+        if (block.type === "paragraph") return <p>{block.text}</p>
+        if (block.type === "heading") return block.level === "h2" ? <h2 class="site-type-h2 pt-3">{block.text}</h2> : <h3 class="site-type-h3 pt-2">{block.text}</h3>
+        return <ul class="list-disc space-y-2 pl-6">{block.items.map((item) => <li>{item}</li>)}</ul>
+      })}
+    </div>
+    {config.links.length > 0 && <nav aria-label="Связанные страницы" class="mt-8 flex flex-wrap gap-3">
+      {config.links.map((link) => <a class="site-button site-button--outline" href={link.href}>{link.label}</a>)}
+    </nav>}
+  </article>
+</SectionShell>

@@ -11,6 +11,7 @@ import {
   CmsWhyUsSectionSchema,
   isCmsHomeSectionKey,
   PublicPageSchema,
+  PublicRouteManifestSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
   type PublicHouseSummary,
@@ -20,6 +21,7 @@ import {
   type PublicProgramSummary,
   type PublicEventServiceSummary,
   type PublicPage,
+  type PublicRouteManifest,
   type PublicSiteSettings,
 } from "@crm/contracts"
 
@@ -30,6 +32,7 @@ export type ContentResult<T> =
 
 export interface ContentSource {
   page(path: string): Promise<ContentResult<PublicPage>>
+  manifest(): Promise<ContentResult<PublicRouteManifest>>
   settings(): Promise<ContentResult<PublicSiteSettings>>
   listing(path: string, searchParams: URLSearchParams): Promise<ContentResult<PublicListingResult>>
   house(path: string): Promise<ContentResult<PublicHouseSummary>>
@@ -69,6 +72,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     page(path) {
       const query = new URLSearchParams({ path, locale: "ru-RU" })
       return document(`/pages/resolve?${query}`, (value) => PublicPageSchema.parse(value))
+    },
+    manifest() {
+      return document("/pages/manifest", (value) => PublicRouteManifestSchema.parse(value))
     },
     settings() {
       return document("/site-settings", (value) => PublicSiteSettingsSchema.parse(value))
@@ -137,7 +143,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     listing = result.value
   }
   let house: PublicHouseSummary | null = null
-  if (page.value.kind === "resource_detail" && path.startsWith("/houses/")) {
+  if (page.value.kind === "resource_detail" && path.startsWith("/domiki/")) {
     const result = await source.house(path)
     if (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
       return { status: "unavailable" }
@@ -145,7 +151,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     house = result.value
   }
   let campground: PublicCampgroundSummary | null = null
-  if (page.value.kind === "resource_detail" && path.startsWith("/campgrounds/")) {
+  if (page.value.kind === "resource_detail" && path.startsWith("/kemping/")) {
     const result = await source.campground(path)
     if (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.path !== path || result.value.title !== page.value.title) {
       return { status: "unavailable" }
@@ -153,7 +159,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     campground = result.value
   }
   let addon: PublicAddOnSummary | null = null
-  if (page.value.kind === "addon_detail" && path.startsWith("/addons/")) {
+  if (page.value.kind === "addon_detail" && path.startsWith("/dopy/")) {
     const dependency = page.value.dependencies.find((candidate) => candidate.type === "crm_projection" && candidate.version === "public.addon-summary.v1")
     if (!dependency) return { status: "unavailable" }
     const result = await source.addon(dependency.id)
@@ -163,7 +169,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     addon = result.value
   }
   let venue: PublicVenueSummary | null = null
-  if (page.value.kind === "resource_detail" && path.startsWith("/venues/")) {
+  if (page.value.kind === "resource_detail" && path.startsWith("/poshadki/")) {
     const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.venue-summary.v1")
     if (dependencies.length !== 1) return { status: "unavailable" }
     const dependency = dependencies[0]!
@@ -174,7 +180,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     venue = result.value
   }
   let program: PublicProgramSummary | null = null
-  if (page.value.kind === "program_detail" && path.startsWith("/programs/")) {
+  if (page.value.kind === "program_detail" && path.startsWith("/programmy/")) {
     const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.program-summary.v1")
     if (dependencies.length !== 1) return { status: "unavailable" }
     const dependency = dependencies[0]!
@@ -184,9 +190,9 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     program = result.value
   }
-  if (page.value.kind === "event_detail" && !path.startsWith("/events/")) return { status: "unavailable" }
+  if (page.value.kind === "event_detail" && !path.startsWith("/meropriyatiya/")) return { status: "unavailable" }
   let eventService: PublicEventServiceSummary | null = null
-  if (page.value.kind === "event_detail" && path.startsWith("/events/")) {
+  if (page.value.kind === "event_detail" && path.startsWith("/meropriyatiya/")) {
     const dependencies = page.value.dependencies.filter((candidate) => candidate.type === "crm_projection" && candidate.version === "public.event-service-summary.v1")
     if (dependencies.length !== 1) return { status: "unavailable" }
     const dependency = dependencies[0]!

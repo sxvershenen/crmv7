@@ -44,7 +44,6 @@ const visualChecks = [
 // fixture. New pages/components are token-strict immediately; the allowlist is a
 // migration fence, not a blanket exception for the application.
 const pixelVerifiedLegacyFiles = new Set([
-  "pages/privacy.astro",
   "pages/resources/[slug].astro",
   "react/components/common/FloatingHelper.tsx",
   "react/components/modals/BookingModal.tsx",
@@ -62,7 +61,6 @@ const pixelVerifiedLegacyFiles = new Set([
 const pageShellConsumers = [
   "pages/index.astro",
   "pages/[...path].astro",
-  "pages/blog.astro",
   "pages/dev/site-ui-v2.astro",
   "pages/resources/[slug].astro",
 ]

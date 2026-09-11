@@ -16,7 +16,7 @@ describe("event-service CMS source mapping", () => {
     expect(result.status).toBe("created")
     expect(saved).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "event_detail" }),
-      expect.objectContaining({ path: `/drafts/event-services/${offering.id}`, state: "draft" }),
+      expect.objectContaining({ path: `/drafts/meropriyatiya/${offering.id}`, state: "draft" }),
       expect.objectContaining({ relations: [{ kind: "catalog_offering", entityId: offering.id }] }),
     ]))
   })

@@ -77,7 +77,7 @@ describe("PublicHouseOfferingService", () => {
 
     expect(result.data).toMatchObject({
       kind: "house",
-      path: "/houses/forest",
+      path: "/domiki/forest",
       title: "Домик «Лесной»",
       price: { mode: "from", amount: { amountMinor: 650000, currency: "RUB" } },
       fulfillment: { capacityTotal: 4, availabilityMode: "resource", spaceType: "mixed" },

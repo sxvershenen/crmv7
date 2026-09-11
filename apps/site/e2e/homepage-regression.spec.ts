@@ -291,17 +291,14 @@ test("keeps catalog, review, map and FAQ interactions", async ({ page }, testInf
   await expect(location).toContainText("постельное белье премиум-класса");
 });
 
-test("keeps global modal actions and root anchors working on resource pages", async ({ page }) => {
-  await page.goto("/resources/sauna", { waitUntil: "domcontentloaded" });
-  await page.locator('[data-site-action="booking"]').click();
-  await expect(page.getByRole("dialog", { name: "Забронировать отдых" })).toContainText(
-    "Кедровая русская баня",
-  );
-  await page.keyboard.press("Escape");
+test("retires the prototype resource route without a temporary redirect", async ({ page, request }) => {
+  const legacy = await request.get("/resources/sauna-chan", { maxRedirects: 0 });
+  expect(legacy.status()).toBe(301);
+  expect(legacy.headers().location).toBe("/dopy/sauna-chan");
 
-  await page.getByRole("link", { name: "Домик «Гнездо» с чаном" }).click();
-  await expect(page).toHaveURL(/\/#houses$/);
-  await expect(page.locator("#houses")).toBeAttached();
+  const unknown = await page.goto("/resources/sauna", { waitUntil: "domcontentloaded" });
+  expect(unknown?.status()).toBe(404);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
 });
 
 test("keeps the unfinished privacy page out of the search index", async ({ page, request }) => {

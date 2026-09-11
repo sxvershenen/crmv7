@@ -12,7 +12,7 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
   it("documents only implemented public reads and never leaks CMS administration", () => {
     const publicDocument = JSON.stringify(publicOpenApiDocument);
     expect(Object.keys(publicOpenApiDocument.paths ?? {})).toEqual([
-      "/pages/resolve", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/event-services", "/offerings/event-services/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}",
+      "/pages/resolve", "/pages/manifest", "/pages/preview", "/site-settings", "/listings/resolve", "/offerings/addons", "/offerings/addons/{offeringId}", "/offerings/venues", "/offerings/venues/{offeringId}", "/offerings/programs", "/offerings/programs/{offeringId}", "/offerings/event-services", "/offerings/event-services/{offeringId}", "/offerings/houses", "/offerings/houses/detail", "/offerings/campgrounds", "/offerings/campgrounds/detail", "/media/{assetId}/{variantId}",
     ]);
     expect(publicDocument).not.toContain("CmsNodeMutation");
     expect(publicDocument).not.toContain("MediaUploadGrant");
@@ -61,6 +61,8 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(paths["/content/nodes/{id}/archive"]?.post).toBeDefined();
     expect(paths["/content/revisions/{revisionId}/preview-token"]?.post).toBeDefined();
     expect(paths["/content/nodes/{id}/approve"]?.post).toBeDefined();
+    expect(paths["/content/nodes/{id}/publication-preview"]?.get).toBeDefined();
+    expect(paths["/releases"]?.get).toBeDefined();
     expect(paths["/releases/build"]?.post).toBeDefined();
     expect(paths["/releases/{id}/activate"]?.post).toBeDefined();
     expect(paths["/releases/{id}/rollback"]?.post).toBeDefined();

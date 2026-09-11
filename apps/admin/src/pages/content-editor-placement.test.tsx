@@ -32,6 +32,6 @@ describe("content editor route placement", () => {
 
     fireEvent.change(screen.getByLabelText("Родительский раздел"), { target: { value: "houses" } })
 
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ parentNodeId: "houses", parent: "Домики", sortOrder: 30, url: "/houses/summer" }))
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ parentNodeId: "houses", parent: "Домики", sortOrder: 30, url: "/domiki/summer" }))
   })
 })

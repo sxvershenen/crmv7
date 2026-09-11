@@ -12,9 +12,9 @@ import { NavigationPage } from "@admin/pages/navigation-page"
 import { AdminAuthSessionProvider } from "@admin/features/auth-session"
 
 describe("CMS route screens", () => {
-  it("does not expose technical releases in navigation or quick create", () => {
+  it("exposes the publication journal without a technical release quick-create action", () => {
     const labels = [...navGroups.flatMap((group) => group.items), ...quickCreateItems].map((item) => item.label)
-    expect(labels).not.toContain("Публикации")
+    expect(labels).toContain("Публикации")
     expect(labels).not.toContain("Релиз")
   })
 
@@ -26,13 +26,13 @@ describe("CMS route screens", () => {
     expect(labels).not.toContain("Каталоги и категории")
     expect(labels).not.toContain("Посадочные")
     expect(hrefs).not.toContain("/content/public-profiles")
-    expect(hrefs).not.toContain("/offers/houses")
+    expect(hrefs).not.toContain("/offers/domiki")
   })
 
   it("restores the selected content node from the URL", async () => {
     renderWithRouter(<ContentTreePage />, "/content/tree?selected=houses")
     expect(await screen.findByRole("heading", { name: "Домики" })).toBeInTheDocument()
-    expect(screen.getAllByText("/houses")).toHaveLength(2)
+    expect(screen.getAllByText("/domiki")).toHaveLength(2)
   })
 
   it("collapses and restores profiles beneath the houses group", async () => {
@@ -54,7 +54,7 @@ describe("CMS route screens", () => {
 
     fireEvent.change(screen.getByLabelText("Поиск по структуре"), { target: { value: "Лесной" } })
 
-    expect(await screen.findByRole("button", { name: "Домики /houses" })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Домики /domiki" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Домик «Лесной»/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Свернуть Домики" })).toHaveAttribute("aria-expanded", "true")
   })
@@ -75,7 +75,7 @@ describe("CMS route screens", () => {
     renderWithRouter(<ContentEditorPage kind="landing" />, "/content/pages/new?parentNodeId=houses", "/content/pages/new")
 
     expect(await screen.findByLabelText("Родительский раздел")).toHaveValue("houses")
-    expect(screen.getAllByText("/houses/new-page").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("/domiki/new-page").length).toBeGreaterThan(0)
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
   })
 

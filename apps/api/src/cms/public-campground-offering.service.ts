@@ -4,6 +4,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnav
 import { DataSource, In, IsNull } from "typeorm"
 
 import {
+  canonicalPublicPath,
+  publicReleasePathCandidates,
   IdSchema,
   PublicCampgroundDetailQuerySchema,
   PublicCampgroundListResponseSchema,
@@ -79,7 +81,7 @@ export class PublicCampgroundOfferingService {
 
   async detail(query: PublicCampgroundDetailQuery): Promise<PublicCampgroundProjectionDocument<PublicCampgroundSummary>> {
     PublicCampgroundDetailQuerySchema.parse(query)
-    const rows = await this.rows(query.path, null, 1)
+    const rows = await this.rows(publicReleasePathCandidates(query.path), null, 1)
     const row = rows[0]
     if (!row) throw this.notFound()
     const summary = (await this.summaries([row]))[0]
@@ -93,7 +95,7 @@ export class PublicCampgroundOfferingService {
     ])
   }
 
-  private async rows(path: string | null, cursor: Cursor | null, limit: number): Promise<ProjectionRow[]> {
+  private async rows(paths: string[] | null, cursor: Cursor | null, limit: number): Promise<ProjectionRow[]> {
     return this.dataSource.query(`
       SELECT release.id AS "releaseId", release.created_at AS "releaseCreatedAt", release.published_at AS "releasePublishedAt",
         item.node_id AS "nodeId", item.revision_id AS "revisionId", item.path,
@@ -137,7 +139,7 @@ export class PublicCampgroundOfferingService {
       LEFT JOIN price_books price_book ON price_book.id = offering.active_price_book_id
         AND price_book.offering_id = offering.id AND price_book.state = 'active' AND price_book.archived_at IS NULL
       WHERE active.singleton_key = 'public'
-        AND item.path LIKE '/campgrounds/%'
+        AND (item.path LIKE '/campgrounds/%' OR item.path LIKE '/kemping/%')
         AND (SELECT COUNT(*) FROM offering_bindings primary_binding
           WHERE primary_binding.offering_id = offering.id AND primary_binding.role = 'primary'
           AND primary_binding.archived_at IS NULL) = 1
@@ -146,12 +148,12 @@ export class PublicCampgroundOfferingService {
           WHERE sellable_member.resource_id = resource.id AND sellable_member.archived_at IS NULL
             AND sellable_member.role = CASE WHEN terms.sellable_unit = 'owned_tent' THEN 'owned_tent' ELSE 'own_tent_area' END
             AND sellable_group.kind = 'campground' AND sellable_group.state = 'active' AND sellable_group.archived_at IS NULL) = 1
-        AND ($1::text IS NULL OR item.path = $1::text)
+        AND ($1::text[] IS NULL OR item.path = ANY($1::text[]))
         AND ($2::text IS NULL OR LOWER(COALESCE(item.resolved_content->>'title', '')) > $2::text
           OR (LOWER(COALESCE(item.resolved_content->>'title', '')) = $2::text AND offering.id > $3::uuid))
       ORDER BY LOWER(COALESCE(item.resolved_content->>'title', '')) ASC, offering.id ASC
       LIMIT $4
-    `, [path, cursor?.title ?? null, cursor?.id ?? null, limit]) as Promise<ProjectionRow[]>
+    `, [paths, cursor?.title ?? null, cursor?.id ?? null, limit]) as Promise<ProjectionRow[]>
   }
 
   private async summaries(rows: ProjectionRow[]): Promise<PublicCampgroundSummary[]> {
@@ -197,7 +199,7 @@ export class PublicCampgroundOfferingService {
     return PublicCampgroundSummarySchema.parse({
       offeringId: row.offeringId,
       kind: "campground",
-      path: row.path,
+      path: canonicalPublicPath(row.path),
       releaseId: row.releaseId,
       title: content.data.title,
       summary: content.data.summary,
