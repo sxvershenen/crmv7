@@ -47,8 +47,8 @@ const inheritedSections = [
 const defaultHero: EditorRecord["hero"] = {
   mode: "override", eyebrow: "Свистоплясово", title: "База отдыха «Свистоплясово»",
   description: "Загородный отдых, домики и программы в Нижегородской области.",
-  primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking",
-  secondaryCtaLabel: "Посмотреть домики", secondaryCtaTarget: "/domiki",
+  primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false,
+  secondaryCtaLabel: "Посмотреть домики", secondaryCtaTarget: "/domiki", secondaryCtaEnabled: false,
   desktopImage: "/images/hero.webp", mobileImage: "/images/hero-mobile.webp",
   overlay: 46, focalPosition: "center", alignment: "left",
 }

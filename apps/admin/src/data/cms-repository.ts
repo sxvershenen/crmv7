@@ -450,7 +450,8 @@ function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
   return {
     mode: revision.hero.mode, eyebrow: config?.eyebrow ?? "Свистоплясово", title: config?.title ?? revision.title,
     description: config?.subtitle ?? revision.summary ?? "", primaryCtaLabel: primary?.label ?? "Подобрать отдых",
-    primaryCtaTarget: primary?.href ?? "#booking", secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "",
+    primaryCtaTarget: primary?.href ?? "#booking", primaryCtaEnabled: primary?.enabled ?? false,
+    secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
     desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.foregroundAssetId ?? "",
     overlay: config?.overlay === "none" ? 0 : config?.overlay === "soft" ? 25 : config?.overlay === "strong" ? 70 : 45,
     focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left",
@@ -462,8 +463,8 @@ function heroPolicy(hero: HeroConfig): CmsHeroPolicy {
   const backgroundAssetId = isUuid(hero.desktopImage) ? hero.desktopImage : null
   const foregroundAssetId = isUuid(hero.mobileImage) ? hero.mobileImage : null
   const actions = [
-    ...(hero.primaryCtaLabel && hero.primaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000101", label: hero.primaryCtaLabel, href: hero.primaryCtaTarget, target: "_self" as const, style: "primary" as const }] : []),
-    ...(hero.secondaryCtaLabel && hero.secondaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000102", label: hero.secondaryCtaLabel, href: hero.secondaryCtaTarget, target: "_self" as const, style: "secondary" as const }] : []),
+    ...(hero.primaryCtaLabel && hero.primaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000101", label: hero.primaryCtaLabel, href: hero.primaryCtaTarget, target: "_self" as const, style: "primary" as const, enabled: hero.primaryCtaEnabled }] : []),
+    ...(hero.secondaryCtaLabel && hero.secondaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000102", label: hero.secondaryCtaLabel, href: hero.secondaryCtaTarget, target: "_self" as const, style: "secondary" as const, enabled: hero.secondaryCtaEnabled }] : []),
   ]
   return { mode: "override", config: {
     variant: "default", eyebrow: hero.eyebrow || null, title: hero.title, subtitle: hero.description || null,
@@ -528,7 +529,7 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
   }
 }
 function mapMutationError(error: unknown) { if (error instanceof AdminApiError && error.rawCode === "VERSION_CONFLICT") return new CmsConflictError(Number(error.details.serverVersion ?? 0), error.requestId); return error }
-function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", secondaryCtaLabel: "", secondaryCtaTarget: "", desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
+function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
 
 function sameEditorContent(left: EditorRecord, right: EditorRecord) {
   return JSON.stringify({ title: left.publicTitle, summary: left.description, hero: left.hero, sections: left.sections.map(({ id, mode, partnersConfig, whyUsConfig, homepageConfig }) => ({ id, mode, partnersConfig, whyUsConfig, homepageConfig })), seoTitle: left.seoTitle, seoDescription: left.seoDescription, indexPolicy: left.indexPolicy }) === JSON.stringify({ title: right.publicTitle, summary: right.description, hero: right.hero, sections: right.sections.map(({ id, mode, partnersConfig, whyUsConfig, homepageConfig }) => ({ id, mode, partnersConfig, whyUsConfig, homepageConfig })), seoTitle: right.seoTitle, seoDescription: right.seoDescription, indexPolicy: right.indexPolicy })

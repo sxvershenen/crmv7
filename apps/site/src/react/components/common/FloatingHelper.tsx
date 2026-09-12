@@ -24,7 +24,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
       {/* Desktop Floating Card (Bottom Right) */}
       <div
         data-site-component="floating-helper"
-        className="hidden lg:flex fixed bottom-6 right-6 z-40 items-center"
+        className="hidden lg:flex fixed bottom-6 right-4 z-40 items-center"
         onPointerEnter={open}
         onPointerLeave={closeSoon}
         onFocusCapture={open}
@@ -44,7 +44,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
           onClick={handleManagerChat}
           aria-label="Написать менеджеру в ВК"
           aria-expanded={isExpanded}
-          className={`site-floating-helper flex h-12 items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 hover:scale-[1.02] transition-[width,padding,gap,transform,border-color] duration-500 ease-[var(--ease-spring)] group cursor-pointer ${isExpanded ? 'w-[294px] gap-3 p-1 pr-3' : 'w-12 gap-0 p-0.5'}`}
+          className={`site-floating-helper flex h-12 items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 transition-[width,padding,gap,border-color] duration-500 ease-[var(--ease-spring)] group cursor-pointer ${isExpanded ? 'w-[min(18rem,calc(100vw-2rem))] gap-2 p-1 pr-2' : 'w-12 gap-0 p-0.5'}`}
         >
           {/* Avatar with pulsing online dot */}
           <div className="relative">
@@ -56,7 +56,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#2B9E47] border-2 border-white"></span>
           </div>
 
-          <div className={`text-left whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'max-w-[190px] opacity-100' : 'max-w-0 opacity-0'}`}>
+          <div className={`text-left whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'max-w-[12rem] opacity-100' : 'max-w-0 opacity-0'}`}>
             <div className="text-[12px] font-semibold text-[#18191b] flex items-center gap-1.5 leading-none mb-1">
               Нужна помощь?
               <span className="text-[10px] font-normal text-[#2B9E47] bg-[#2B9E47]/10 px-1.5 py-0.5 rounded-full">онлайн</span>

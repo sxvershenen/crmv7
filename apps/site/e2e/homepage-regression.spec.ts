@@ -77,17 +77,15 @@ test("keeps the requested responsive presentation details", async ({ page }, tes
     expect(Math.abs(distanceBox!.x - heroBox!.x - 20)).toBeLessThanOrEqual(1);
     expect(Math.abs(distanceBox!.y - heroBox!.y - 20)).toBeLessThanOrEqual(1);
     expect(slideChooserBox!.x).toBeGreaterThan(distanceBox!.x + distanceBox!.width);
-    await expect(page.locator("#hero .site-hero__actions")).toHaveCSS("flex-wrap", "nowrap");
-    await expect(page.locator("#hero .site-hero__action-label").first()).toBeHidden();
-    await expect(page.locator("#hero").getByText("Мероприятия", { exact: true })).toBeVisible();
+    await expect(page.locator("#hero .site-hero__actions")).toHaveCount(0);
+    await expect(page.locator("#hero .site-hero__action-label")).toHaveCount(0);
+    await expect(page.locator("#hero").getByText("Мероприятия", { exact: true })).toHaveCount(0);
     await expect(page.locator("#hero > div").first()).toHaveCSS("border-top-left-radius", "0px");
     await expect(mapAction).toBeHidden();
     await expect(page.locator("#hero .site-promo-card__title").first()).toHaveCSS("font-size", "20px");
     await expect(page.locator("#programs .site-program-card__description").first()).toHaveCSS("-webkit-line-clamp", "1");
     await expect(page.locator("#quiz").getByText("Предварительная цена", { exact: true }).first()).toHaveCSS("text-transform", "none");
-    const bookingWidth = await page.locator("#hero .site-hero__action").evaluate((element) => element.getBoundingClientRect().width);
-    expect(bookingWidth).toBeGreaterThanOrEqual(55);
-    expect(bookingWidth).toBeLessThanOrEqual(57);
+    await expect(page.locator("#hero .site-hero__action")).toHaveCount(0);
   } else {
     const heroBox = await page.locator("#hero > div").first().boundingBox();
     const chooserBox = await page.locator("#hero").getByRole("button", { name: /^Провести мероприятие/ }).boundingBox();
@@ -168,11 +166,16 @@ test("keeps the approved full homepage presentation", async ({ page }) => {
   });
 });
 
-test("hydrates booking, call and section interactions", async ({ page }) => {
-  const hero = page.locator("#hero");
-  await hero.getByRole("button", { name: "Забронировать", exact: true }).click();
-  await hero.getByRole("button", { name: /^ВКонтакте/ }).click();
-
+test("hydrates booking, call and section interactions", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "mobile-chromium") {
+    await page.getByRole("button", { name: "Меню", exact: true }).click();
+    await page.getByRole("button", { name: "Забронировать отдых", exact: true }).click();
+  } else {
+    const mapAction = page.locator('#map button[title="Забронировать"]');
+    await mapAction.scrollIntoViewIfNeeded();
+    await expect.poll(() => mapAction.evaluate((element) => !element.closest("astro-island")?.hasAttribute("ssr"))).toBe(true);
+    await mapAction.click();
+  }
   const bookingDialog = page.getByRole("dialog", { name: "Забронировать отдых" });
   await expect(bookingDialog).toBeVisible();
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");

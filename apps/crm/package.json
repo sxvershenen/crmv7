@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fixtures": "VITE_DATA_MODE=fixtures vite",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint src e2e vite.config.ts playwright.config.ts",

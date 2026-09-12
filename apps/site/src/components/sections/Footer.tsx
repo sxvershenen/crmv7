@@ -27,7 +27,7 @@ export default function Footer({ navigation }: FooterProps) {
 
           <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-2 lg:gap-6">
             {columns.map((column) => (
-              <SiteFooterColumn key={column.label} title={column.label}>{column.children.map((link) => <li key={`${link.label}:${link.href}`}><a href={link.href} target={'external' in link && link.external ? '_blank' : undefined} rel={'external' in link && link.external ? 'noreferrer' : undefined} className="group inline-flex items-center gap-1 hover:text-[var(--site-color-text-inverse)] transition-colors">{link.label}<ArrowUpRight size={12} className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" /></a></li>)}</SiteFooterColumn>
+              <SiteFooterColumn key={column.label} title={column.label}>{column.children.map((link) => <li key={`${link.label}:${link.href}`}><a href={link.href} target={'external' in link && link.external ? '_blank' : undefined} rel={'external' in link && link.external ? 'noreferrer' : undefined} className="group inline-flex items-center gap-1 hover:text-[var(--site-color-text-inverse)] transition-colors">{link.label}<ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:-rotate-45 transition-all" /></a></li>)}</SiteFooterColumn>
             ))}
           </div>
         </div>

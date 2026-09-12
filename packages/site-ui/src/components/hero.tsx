@@ -102,8 +102,8 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
             <div className="lg:col-span-7 flex flex-col gap-5 max-w-[640px]">
               <h1 className="text-white text-[32px] md:text-[44px] leading-[1.05] font-semibold tracking-[-1px] text-balance">{activeSlide.title || config.title}</h1>
               <p className="text-white/85 text-[14px] lg:text-[15px] max-w-[480px] hidden sm:block">{activeSlide.tagline}</p>
-              <div className="site-hero__actions flex flex-nowrap gap-2.5">
-                <div ref={bookingRef} className="relative min-w-0">
+              {config.primaryCta.enabled || config.secondaryCta.enabled ? <div className="site-hero__actions flex flex-nowrap gap-2.5">
+                {config.primaryCta.enabled ? <div ref={bookingRef} className="relative min-w-0">
                   <button type="button" aria-label={typeof config.primaryCta.label === "string" ? config.primaryCta.label : "Забронировать"} onClick={() => config.primaryCta.action === "booking" ? setBookingOpen((value) => !value) : runAction(config.primaryCta)} className="site-hero__action btn btn-primary">
                     <span className="site-hero__action-label">{config.primaryCta.label}</span>
                     <CalendarDays className="site-hero__action-mobile-icon" aria-hidden="true" />
@@ -115,16 +115,16 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
                       <button type="button" onClick={() => { setBookingOpen(false); onCall() }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-[8px]"><Phone size={13} /></span>Позвонить</button>
                     </div>
                   ) : null}
-                </div>
-                <SiteSecondaryAction onMedia onClick={() => runAction(config.secondaryCta)}>{config.secondaryCta.label}</SiteSecondaryAction>
-              </div>
+                </div> : null}
+                {config.secondaryCta.enabled ? <SiteSecondaryAction onMedia onClick={() => runAction(config.secondaryCta)}>{config.secondaryCta.label}</SiteSecondaryAction> : null}
+              </div> : null}
             </div>
           </div>
         </div>
 
         <div className="hidden lg:flex absolute right-8 bottom-8 z-20 flex-col gap-3 w-[300px]">
           {config.featureCards.slice(0, 2).map((card) => (
-            <button key={card.id} type="button" onClick={() => card.href.startsWith("/#") ? onNavigate(card.href.slice(2)) : window.location.assign(card.href)} className="site-motion-spring group bg-surface rounded-xl p-2.5 flex items-center gap-3 text-left hover:-translate-x-1.5 transition-transform">
+            <button key={card.id} type="button" onClick={() => card.href.startsWith("/#") ? onNavigate(card.href.slice(2)) : window.location.assign(card.href)} className="site-motion-spring group bg-surface rounded-xl p-2.5 flex items-center gap-3 text-left transition-colors hover:bg-white/95">
               <span className="card-img w-[64px] h-[64px] shrink-0 !rounded-[16px]"><img src={card.image} alt={card.imageAlt} loading="lazy" /></span>
               <span className="flex-1 flex flex-col gap-0.5 min-w-0"><span className="text-[15px] font-semibold tracking-[-0.4px] leading-tight text-ink">{card.title}</span><span className="text-[12px] text-ink-2 leading-tight">{card.description}</span></span>
               <span className="arrow-bubble mr-1"><ArrowRight size={16} /></span>
@@ -137,7 +137,7 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
         {promos.map((promo) => {
           const copied = copiedCode === promo.code
           return (
-            <button key={promo.id} type="button" onClick={() => void copyPromo(promo)} aria-label={`Скопировать промокод ${promo.code}`} className="site-promo-card site-motion-spring bg-surface rounded-xl p-3 flex items-center gap-3 text-left hover:-translate-y-[3px] transition-transform">
+            <button key={promo.id} type="button" onClick={() => void copyPromo(promo)} aria-label={`Скопировать промокод ${promo.code}`} className="site-promo-card site-motion-spring bg-surface rounded-xl p-3 flex items-center gap-3 text-left transition-colors hover:bg-white/95">
               <span className="icon-tile !w-12 !h-12 text-[22px]" aria-hidden="true">{promo.emoji}</span>
               <span className="flex-1 min-w-0"><span className="site-promo-card__title block text-[22px] font-semibold tracking-[-0.8px] leading-none text-ink">{promo.amount}</span><span className="site-promo-card__description block text-[12px] text-ink-2 mt-1 truncate">{promo.desc}</span></span>
               <span className={`h-9 rounded-full pl-3 pr-1.5 inline-flex items-center gap-2 text-[12px] font-semibold shrink-0 ${copied ? "bg-green text-white" : "bg-green-soft text-green-deep"}`}>

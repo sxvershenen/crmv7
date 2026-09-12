@@ -142,10 +142,11 @@ function mediaUrl(media: CmsHeroConfig["background"]): string | null {
 
 function heroAction(action: CmsHeroConfig["actions"][number] | undefined, fallback: SiteHeroCta): SiteHeroCta {
   if (!action) return fallback
-  if (/^(?:booking:|#booking$)/.test(action.href)) return { label: action.label, action: "booking" }
-  if (/^(?:tel:|call:|#call$)/.test(action.href)) return { label: action.label, action: "call" }
-  if (action.href.startsWith("#") || action.href.startsWith("/#")) return { label: action.label, action: "navigate", target: action.href.replace(/^\/?#/, "") }
-  return { label: action.label, action: "link", target: action.href }
+  const base = { label: action.label, enabled: action.enabled }
+  if (/^(?:booking:|#booking$)/.test(action.href)) return { ...base, action: "booking" }
+  if (/^(?:tel:|call:|#call$)/.test(action.href)) return { ...base, action: "call" }
+  if (action.href.startsWith("#") || action.href.startsWith("/#")) return { ...base, action: "navigate", target: action.href.replace(/^\/?#/, "") }
+  return { ...base, action: "link", target: action.href }
 }
 
 export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {

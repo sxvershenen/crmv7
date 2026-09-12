@@ -84,6 +84,8 @@ describe("CMS route screens", () => {
     expect(await screen.findByRole("heading", { name: "Hero этой страницы" })).toBeInTheDocument()
     expect(screen.getByLabelText("Заголовок hero")).toHaveValue("Семейный отдых на природе")
     expect(screen.getByLabelText("Фоновое изображение")).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "Показывать основную кнопку" })).not.toBeChecked()
+    expect(screen.getByRole("switch", { name: "Показывать вторую кнопку" })).not.toBeChecked()
   })
 
   it("renders the full public navigation editor", async () => {

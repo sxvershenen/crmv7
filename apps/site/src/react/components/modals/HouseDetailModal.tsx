@@ -162,7 +162,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
             className="w-full sm:flex-1 h-[48px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium flex items-center justify-center gap-3 hover:bg-[#23823a] transition-all group"
           >
             <span>Забронировать {house.title}</span>
-            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
+            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:-rotate-45 transition-transform">
               <ArrowRight className="w-3.5 h-3.5" />
             </span>
           </button>

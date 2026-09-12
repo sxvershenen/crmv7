@@ -48,7 +48,7 @@ pnpm db:seed
 pnpm dev:api
 ```
 
-В отдельных терминалах: `pnpm dev` (CRM `:5173`), `pnpm dev:admin` (CMS `:5174`), `pnpm dev:site` (public `:4321`). Перед runtime/UI QA сначала проверяйте уже запущенный stack и фактический host/port, затем затронутый API read и migration/schema alignment по [testing matrix](06-quality-process/testing-security.md). При mismatch остановитесь; не скрывайте его автоматическим reseed/migrate.
+В отдельных терминалах: `pnpm dev` (CRM `:5173`), `pnpm dev:admin` (CMS `:5174`), `pnpm dev:site` (public `:4321`). Для полного локального walkthrough CRM с demo fixtures используйте `pnpm dev:crm:fixtures`; это явный режим просмотра и не fallback для обычного API/dev или production. Перед runtime/UI QA сначала проверяйте уже запущенный stack и фактический host/port, затем затронутый API read и migration/schema alignment по [testing matrix](06-quality-process/testing-security.md). При mismatch остановитесь; не скрывайте его автоматическим reseed/migrate.
 
 OpenAPI: `/api/internal/v1/openapi.json`, `/api/admin/v1/openapi.json`, `/api/public/v1/openapi.json` на API host.
 

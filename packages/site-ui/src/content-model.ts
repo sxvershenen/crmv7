@@ -61,6 +61,7 @@ export interface SiteHeroCta {
   label: string
   action: "booking" | "call" | "navigate" | "link"
   target?: string
+  enabled: boolean
 }
 
 export interface SiteHeroFeatureCard {

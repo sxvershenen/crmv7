@@ -5,6 +5,8 @@ import {
   type PromotionMutation, type PromotionUpdate,
 } from "@crm/contracts"
 import { apiClient } from "@app/lib/api-client"
+import { useFixtureData } from "@app/lib/data-mode"
+import { marketingPromotionsFixture, marketingReportFixture } from "@app/fixtures/marketing"
 
 export interface MarketingRepository {
   list(): Promise<{ items: Promotion[]; canManage: boolean }>
@@ -25,5 +27,36 @@ export class ApiMarketingRepository implements MarketingRepository {
   }
 }
 
-// There is deliberately no production fallback to fixture marketing statistics.
-export const marketingRepository = new ApiMarketingRepository()
+export class FixtureMarketingRepository implements MarketingRepository {
+  private promotions = structuredClone(marketingPromotionsFixture)
+
+  async list() { return { items: structuredClone(this.promotions), canManage: true } }
+
+  async get(id: string) {
+    const promotion = this.promotions.find((item) => item.id === id)
+    if (!promotion) throw new Error("Промокод не найден")
+    return structuredClone(promotion)
+  }
+
+  async create(input: PromotionMutation) {
+    const now = new Date().toISOString()
+    const created: Promotion = { id: crypto.randomUUID(), version: 1, terms: structuredClone(input.terms), createdAt: now, updatedAt: now }
+    this.promotions = [created, ...this.promotions]
+    return structuredClone(created)
+  }
+
+  async update(id: string, input: PromotionUpdate) {
+    const index = this.promotions.findIndex((item) => item.id === id)
+    const current = this.promotions[index]
+    if (!current) throw new Error("Промокод не найден")
+    if (current.version !== input.expectedVersion) throw new Error("Промокод уже изменён в другой сессии")
+    const updated: Promotion = { ...current, version: current.version + 1, terms: structuredClone(input.terms), updatedAt: new Date().toISOString() }
+    this.promotions[index] = updated
+    return structuredClone(updated)
+  }
+
+  async report(period: MarketingPeriod) { return { period, ...structuredClone(marketingReportFixture) } }
+}
+
+export const fixtureMarketingRepository = new FixtureMarketingRepository()
+export const marketingRepository: MarketingRepository = useFixtureData ? fixtureMarketingRepository : new ApiMarketingRepository()

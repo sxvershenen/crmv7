@@ -67,8 +67,10 @@ export type HeroConfig = {
   description: string
   primaryCtaLabel: string
   primaryCtaTarget: string
+  primaryCtaEnabled: boolean
   secondaryCtaLabel: string
   secondaryCtaTarget: string
+  secondaryCtaEnabled: boolean
   desktopImage: string
   mobileImage: string
   overlay: number

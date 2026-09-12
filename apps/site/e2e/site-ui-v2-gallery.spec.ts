@@ -39,10 +39,8 @@ test("shares semantic component markers with the homepage", async ({ page }) => 
 
 test("keeps actual hero, SPA, sort, dropdown, FAQ and calculator states live", async ({ page }) => {
   const hero = page.locator("#hero")
-  await hero.getByRole("button", { name: "Забронировать" }).click()
-  await hero.getByRole("button", { name: /^ВКонтакте/ }).click()
-  await expect(page.getByRole("dialog", { name: "Забронировать отдых" })).toBeVisible()
-  await page.keyboard.press("Escape")
+  await expect(hero.getByRole("button", { name: "Забронировать", exact: true })).toHaveCount(0)
+  await expect(hero.getByRole("button", { name: "Мероприятия", exact: true })).toHaveCount(0)
 
   const spa = page.locator('section[aria-labelledby="v2-spa-title"]')
   await expect(spa.locator(".site-spa-tab-rail")).toHaveCount(0)

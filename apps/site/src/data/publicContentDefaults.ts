@@ -152,8 +152,8 @@ export const DEFAULT_HERO_CONFIG: SiteHeroConfig = {
     { id: "chan", image: RESORT_IMAGES.heroSunset, imageAlt: "Сибирский чан среди сосен", title: "Отдых с сибирским чаном среди сосен", tagline: "Парение на березовых дровах с пихтовыми ветками и цитрусами" },
     { id: "events", image: RESORT_IMAGES.heroNight, imageAlt: "Праздник на природе", title: "Праздники и свадьбы на природе", tagline: "Светлый банкетный зал, сцена, панорамная веранда и команда «Зажигай»" },
   ],
-  primaryCta: { label: "Забронировать", action: "booking" },
-  secondaryCta: { label: "Мероприятия", action: "navigate", target: "programs" },
+  primaryCta: { label: "Забронировать", action: "booking", enabled: false },
+  secondaryCta: { label: "Мероприятия", action: "navigate", target: "programs", enabled: false },
   featureCards: [
     { id: "choose-house", title: "Выбрать домик", description: "С баней и чаном", image: RESORT_IMAGES.houseGnezdo1, imageAlt: "Выбрать домик", href: "/#houses", accent: "brand" },
     { id: "plan-event", title: "Провести мероприятие", description: "Площадки и праздники", image: RESORT_IMAGES.venueBanquet, imageAlt: "Провести мероприятие", href: "/#programs", accent: "neutral" },

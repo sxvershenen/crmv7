@@ -86,6 +86,7 @@ export const CmsHeroActionSchema = z.object({
   href: z.string().min(1).max(2048),
   target: z.enum(["_self", "_blank"]).default("_self"),
   style: z.enum(["primary", "secondary", "link"]).default("primary"),
+  enabled: z.boolean().default(false),
 }).strict();
 
 export const CmsHeroMediaSchema = z.object({

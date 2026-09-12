@@ -55,11 +55,11 @@ Global style editing happens through semantic CSS variables, not page files.
 - typography families, weights, tracking and fluid display/H1/H2/H3/body/label/meta scales;
 - spacing and section rhythm;
 - container widths, page gutters, grids and breakpoints;
-- radii for control/card/modal/pill;
+- radii for control/card/modal/pill plus the global `corner-shape: superellipse(1.5)` treatment where supported;
 - border widths and shadows/elevation;
 - focus ring;
 - overlay/backdrop;
-- motion durations/easing and reduced-motion behavior;
+- motion durations/easing and reduced-motion behavior; hover must not translate buttons or icon affordances, while rotation is allowed for directional feedback;
 - z-index layers;
 - safe-area and sticky navigation offsets.
 

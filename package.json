@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @crm/app dev",
+    "dev:crm:fixtures": "pnpm --filter @crm/app dev:fixtures",
     "dev:admin": "pnpm --filter @crm/admin dev",
     "dev:site": "pnpm --filter @crm/site dev",
     "dev:api": "pnpm --filter @crm/api dev",
