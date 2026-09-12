@@ -173,6 +173,7 @@ export type AnalyticsSummary = {
   leads: number
   bookings: number
   paid: number
+  series?: { period: string; visitors: number; views: number; actions: number; leads: number; bookings: number; paid: number }[]
   channels: { name: string; value: number; percent: number }[]
   pages: { path: string; views: number; cta: number; leads: number }[]
 }

@@ -258,6 +258,15 @@ export class ApiCmsRepository implements CmsRepository {
       leads: totals.leads,
       bookings: totals.bookings,
       paid: totals.paid,
+      series: response.items.map((point) => ({
+        period: point.period,
+        visitors: point.uniqueVisitors,
+        views: point.pageViews,
+        actions: point.actions,
+        leads: point.leads,
+        bookings: point.bookings,
+        paid: point.payments,
+      })),
       channels: [{ name: "Все источники", value: totals.visitors, percent: totals.visitors > 0 ? 100 : 0 }],
       pages: [{ path: "Все страницы", views: totals.views, cta: totals.actions, leads: totals.leads }],
     }

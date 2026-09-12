@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 import { TooltipProvider } from "@crm/ui"
@@ -18,6 +18,7 @@ const summary = {
   leads: 2,
   bookings: 1,
   paid: 1,
+  series: [{ period: "2026-09-12", visitors: 5, views: 7, actions: 3, leads: 2, bookings: 1, paid: 1 }],
   channels: [{ name: "Все источники", value: 5, percent: 100 }],
   pages: [{ path: "Все страницы", views: 7, cta: 3, leads: 2 }],
 }
@@ -36,6 +37,20 @@ describe("AnalyticsPage", () => {
     expect(await screen.findByRole("heading", { name: "Аналитика" })).toBeInTheDocument()
     expect(screen.getAllByText("Все страницы").length).toBeGreaterThan(0)
     expect(screen.getByText(/site-wide first-party aggregate/)).toBeInTheDocument()
+    const table = screen.getByRole("table", { name: "Site-wide first-party aggregate по дням" })
+    expect(within(table).getByRole("columnheader", { name: "Действия" })).toBeInTheDocument()
+    expect(screen.getByText("2026-09-12")).toBeInTheDocument()
+    expect(screen.getByTestId("analytics-daily-series-scroll")).toHaveClass("overflow-x-auto")
+  })
+
+  it("keeps the fixture-compatible overview without a daily series", async () => {
+    const withoutSeries: Partial<typeof summary> = { ...summary }
+    delete withoutSeries.series
+    getAnalytics.mockResolvedValueOnce(withoutSeries)
+    renderPage()
+
+    expect(await screen.findByRole("heading", { name: "Аналитика" })).toBeInTheDocument()
+    expect(screen.queryByRole("table", { name: "Site-wide first-party aggregate по дням" })).not.toBeInTheDocument()
   })
 
   it("shows an error and retries the authoritative repository", async () => {

@@ -34,6 +34,10 @@ describe("ApiCmsRepository", () => {
 
     await expect(repository.getAnalytics()).resolves.toMatchObject({
       visitors: 11, views: 18, leads: 3, bookings: 2, paid: 1,
+      series: [
+        { period: "2026-08-14", visitors: 5, views: 7, actions: 3, leads: 2, bookings: 1, paid: 1 },
+        { period: "2026-08-15", visitors: 6, views: 11, actions: 4, leads: 1, bookings: 1, paid: 0 },
+      ],
       channels: [{ name: "Все источники", value: 11, percent: 100 }],
       pages: [{ path: "Все страницы", views: 18, cta: 7, leads: 3 }],
     })
