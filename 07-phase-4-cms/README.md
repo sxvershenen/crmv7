@@ -18,6 +18,7 @@
 
 Текущие ограничения:
 
+- CMS product readiness не закрыта: пять основных разделов (`globals/sections`, `seo`, `marketing/campaigns`, `redirects`, `settings/site`) отображают demo specification; рабочие редакторы требуют исправления потерь полей в adapters, dirty/conflict recovery, статусов публикации и mobile actions. Обязательный объём по всем разделам и acceptance — раздел «CMS — доведение продукта до production» в `IMPLEMENTATION-ROADMAP.md`. Завершённые backend foundations не означают готовность полного UX.
 - Booking/ProgramRegistration/Event принимают server-owned immutable quotes с exact context, versions и составом; preview не подтверждает заказ. Lifecycle/capacity/audit/outbox согласованы атомарно.
 - Поддержаны назначенные quantity/person add-ons. Shared-capacity Event resources и scheduled-resource add-ons заблокированы; legacy manual/unpriced flows сохранены без автоматической миграции.
 - CMS — editorial-only `/content/tree` и canonical drafts. Operational pricing/fulfillment остаются в CRM; CMS draft сам по себе не даёт public eligibility. Customer Event не создаёт CMS draft или payment.
@@ -28,8 +29,9 @@
 
 ## Следующий инкремент
 
-1. Закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
-2. Затем добавить P4.7 attribution linkage/models.
+1. CMS C1–C4: сохранение без потерь, восстановление после частично успешных действий, правдивые статусы и canonical editor/capability parity; затем редакционные сценарии C5–C10 и mobile/API E2E по roadmap.
+2. Параллельно закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
+3. После надёжного редакционного ядра расширять P4.7 attribution linkage/models; минимальная аналитика должна честно отражать уже поддержанные измерения.
 
 До go-live выбрать production media storage/CDN (хранение файлов и их публичная доставка), утвердить legal/privacy/retention и deployment gates. При выборе объяснить пользователю варианты и последствия; provider-neutral разработку это не блокирует.
 
