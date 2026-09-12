@@ -30,6 +30,10 @@ type AggregateRow = {
   payments: number | string
 }
 
+type RollupCoverageRow = {
+  covered_periods: number | string
+}
+
 type DateParts = {
   year: number
   month: number
@@ -43,7 +47,81 @@ export class AnalyticsAggregateService {
 
   async get(query: AnalyticsAggregateQuery): Promise<AnalyticsAggregateResponse> {
     const periods = this.validateAndBuildPeriods(query)
-    const rows = await this.dataSource.query<AggregateRow[]>(`
+    const rows = await this.queryRows(query, periods.length)
+
+    const byPeriod = new Map(rows.map((row) => {
+      const point = AnalyticsAggregatePointSchema.parse({
+        period: row.period,
+        pageNodeId: query.pageNodeId ?? null,
+        sectionKey: query.sectionKey ?? null,
+        pageViews: Number(row.page_views),
+        uniqueVisitors: Number(row.unique_visitors),
+        actions: Number(row.actions),
+        leads: Number(row.leads),
+        bookings: Number(row.bookings),
+        payments: Number(row.payments),
+      })
+      return [point.period, point] as const
+    }))
+
+    const items = periods.map((period) => byPeriod.get(period) ?? AnalyticsAggregatePointSchema.parse({
+      period,
+      pageNodeId: query.pageNodeId ?? null,
+      sectionKey: query.sectionKey ?? null,
+      pageViews: 0,
+      uniqueVisitors: 0,
+      actions: 0,
+      leads: 0,
+      bookings: 0,
+      payments: 0,
+    }))
+
+    return AnalyticsAggregateResponseSchema.parse({ items })
+  }
+
+  private async queryRows(query: AnalyticsAggregateQuery, expectedPeriods: number): Promise<AggregateRow[]> {
+    if (query.interval !== "day" || query.to >= this.currentMoscowDay()) {
+      return this.queryRaw(query)
+    }
+
+    const coverage = await this.dataSource.query<RollupCoverageRow[]>(`
+      SELECT count(DISTINCT period_date) AS covered_periods
+      FROM analytics_daily_aggregates
+      WHERE period_date >= $1::date
+        AND period_date <= $2::date
+        AND page_node_id IS NULL
+        AND section_key IS NULL
+    `, [query.from, query.to])
+
+    if (Number(coverage[0]?.covered_periods ?? 0) !== expectedPeriods) {
+      return this.queryRaw(query)
+    }
+
+    return this.dataSource.query<AggregateRow[]>(`
+      SELECT
+        to_char(period_date, 'YYYY-MM-DD') AS period,
+        page_views,
+        unique_visitors,
+        actions,
+        leads,
+        bookings,
+        payments
+      FROM analytics_daily_aggregates
+      WHERE period_date >= $1::date
+        AND period_date <= $2::date
+        AND page_node_id IS NOT DISTINCT FROM $3::uuid
+        AND section_key IS NOT DISTINCT FROM $4::text
+      ORDER BY period_date
+    `, [
+      query.from,
+      query.to,
+      query.pageNodeId ?? null,
+      query.sectionKey ?? null,
+    ])
+  }
+
+  private queryRaw(query: AnalyticsAggregateQuery): Promise<AggregateRow[]> {
+    return this.dataSource.query<AggregateRow[]>(`
       WITH parameters AS (
         SELECT
           $1::date AS from_date,
@@ -108,35 +186,17 @@ export class AnalyticsAggregateService {
       query.sectionKey ?? null,
       [...ANALYTICS_ACTION_EVENTS],
     ])
+  }
 
-    const byPeriod = new Map(rows.map((row) => {
-      const point = AnalyticsAggregatePointSchema.parse({
-        period: row.period,
-        pageNodeId: query.pageNodeId ?? null,
-        sectionKey: query.sectionKey ?? null,
-        pageViews: Number(row.page_views),
-        uniqueVisitors: Number(row.unique_visitors),
-        actions: Number(row.actions),
-        leads: Number(row.leads),
-        bookings: Number(row.bookings),
-        payments: Number(row.payments),
-      })
-      return [point.period, point] as const
-    }))
-
-    const items = periods.map((period) => byPeriod.get(period) ?? AnalyticsAggregatePointSchema.parse({
-      period,
-      pageNodeId: query.pageNodeId ?? null,
-      sectionKey: query.sectionKey ?? null,
-      pageViews: 0,
-      uniqueVisitors: 0,
-      actions: 0,
-      leads: 0,
-      bookings: 0,
-      payments: 0,
-    }))
-
-    return AnalyticsAggregateResponseSchema.parse({ items })
+  private currentMoscowDay(): string {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: ANALYTICS_AGGREGATE_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date())
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ""
+    return `${value("year")}-${value("month")}-${value("day")}`
   }
 
   private validateAndBuildPeriods(query: AnalyticsAggregateQuery): string[] {
