@@ -21,3 +21,26 @@ describe("homepage section contract", () => {
     expect(CmsHomeSectionSchema.safeParse({ ...section, ...patch }).success).toBe(false)
   })
 })
+
+const review = { id: "review-1", name: "Гость", text: "Отличный отдых", rating: 5 }
+const faq = { id: "faq-1", question: "Как добраться?", answer: "По дороге" }
+describe("homepage reviews and FAQ", () => {
+  it("accepts existing configs and empty lists, validates release-owned details", () => {
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, reviews: [review] } }).success).toBe(true)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "faq", config: { ...config, faq: [faq] } }).success).toBe(true)
+    expect(CmsHomeSectionConfigSchema.safeParse({ ...config, reviews: [], faq: [] }).success).toBe(true)
+    expect(CmsHomeSectionDraftSchema.safeParse({ ...config, reviews: [{ ...review, name: "", text: "" }], faq: [{ ...faq, question: "", answer: "" }] }).success).toBe(true)
+  })
+  it.each([
+    { reviews: [{ ...review, name: " " }] }, { reviews: [{ ...review, text: " " }] },
+    { reviews: [{ ...review, rating: 0 }] }, { reviews: [{ ...review, rating: 6 }] }, { reviews: [{ ...review, rating: 4.5 }] },
+    { reviews: [review, review] }, { reviews: [{ ...review, email: "private@example.test" }] },
+    { faq: [{ ...faq, question: " " }] }, { faq: [{ ...faq, answer: " " }] }, { faq: [faq, faq] }, { faq: [{ ...faq, price: 100 }] },
+  ])("blocks invalid published details", (details) => {
+    expect(CmsHomeSectionConfigSchema.safeParse({ ...config, ...details }).success).toBe(false)
+  })
+  it("rejects details attached to another section kind", () => {
+    expect(CmsHomeSectionSchema.safeParse({ ...section, config: { ...config, reviews: [review] } }).success).toBe(false)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, faq: [faq] } }).success).toBe(false)
+  })
+})

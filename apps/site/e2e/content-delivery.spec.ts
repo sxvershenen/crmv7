@@ -242,9 +242,10 @@ test("renders the ordered homepage section snapshot from CMS", async ({ page, re
   expect(html).toContain("Калькулятор из CMS")
   await page.goto("/")
   await expect(page.locator("#events")).toContainText("События из CMS")
+  await expect(page.locator("#sauna")).toHaveCount(0)
   await expect(page.locator("#map")).toContainText("Карта из CMS")
   expect(await page.locator('[data-section-key]').evaluateAll((sections) => sections.map((section) => section.getAttribute("data-section-key")).filter(Boolean))).toEqual([
-    "events", "houses", "sauna-chan", "programs", "venues", "blog", "reviews", "map", "faq", "calculator", "footer",
+    "events", "houses", "programs", "venues", "blog", "reviews", "map", "faq", "calculator", "footer",
   ])
   await expect(page.locator("footer")).toBeVisible()
 })

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "react-router-dom"
 import type { Capabilities } from "@crm/contracts/capabilities"
 
 import { AdminShell } from "@admin/app/shell"
@@ -23,7 +23,13 @@ import { NotFoundPage } from "@admin/pages/not-found-page"
 import { ReleaseDetailPage, ReleasesPage } from "@admin/pages/release-pages"
 
 export function AdminRouter() {
-  return <BrowserRouter><Routes><Route element={<AdminShell />}>
+  return <RouterProvider router={adminRouter} />
+}
+
+const adminRouter = createBrowserRouter([{ path: "*", element: <AdminRoutes /> }])
+
+function AdminRoutes() {
+  return <Routes><Route element={<AdminShell />}>
     <Route index element={<DashboardPage />} />
     <Route path="content/tree" element={<ContentTreePage />} />
     <Route path="content/home" element={<ContentEditorPage kind="home" />} />
@@ -72,7 +78,7 @@ export function AdminRouter() {
     <Route path="dev/ui/admin" element={<AdminUiGalleryPage />} />
     <Route path="forbidden" element={<NotFoundPage denied />} />
     <Route path="*" element={<NotFoundPage />} />
-  </Route></Routes></BrowserRouter>
+  </Route></Routes>
 }
 
 function CapabilityRoute({ capability, capabilities, children }: { capability?: keyof Capabilities; capabilities?: readonly (keyof Capabilities)[]; children: ReactNode }) {

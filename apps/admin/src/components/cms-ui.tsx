@@ -4,6 +4,8 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import { Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, DataTableShell, IconBox, Progress, StatusBadge, Tooltip, TooltipContent, TooltipTrigger, cn } from "@crm/ui"
 
+import { cmsDataMode } from "@admin/lib/data-mode"
+
 import type { ContentStatus, InheritanceMode, QualityLevel, ReleaseGate, SectionConfig, SourceKind } from "@admin/entities/cms"
 
 const statusMeta: Record<ContentStatus, { label: string; tone: "neutral" | "info" | "success" | "warning" | "danger" }> = {
@@ -21,7 +23,7 @@ const sourceMeta: Record<SourceKind, { label: string; icon: React.ElementType; c
 export function SourceMarker({ source }: { source: SourceKind }) { const meta = sourceMeta[source]; return <Badge className={cn("gap-1 font-normal", meta.className)} variant="outline"><meta.icon className="size-3" />{meta.label}</Badge> }
 
 export function QualityIndicator({ compact = false, level }: { compact?: boolean; level: QualityLevel }) {
-  const meta = level === "ok" ? { label: "Без ошибок", icon: IconCheck, tone: "success" as const } : level === "warning" ? { label: "Есть warning", icon: IconAlertTriangle, tone: "warning" as const } : { label: "Есть blocker", icon: IconX, tone: "danger" as const }
+  const meta = level === "ok" ? { label: "Без ошибок", icon: IconCheck, tone: "success" as const } : level === "warning" ? { label: "Нужно проверить", icon: IconAlertTriangle, tone: "warning" as const } : { label: "Есть ошибки", icon: IconX, tone: "danger" as const }
   return <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><span className={cn("size-2 rounded-full", level === "ok" ? "bg-success" : level === "warning" ? "bg-warning" : "bg-danger")} />{compact ? null : meta.label}</span>
 }
 
@@ -36,6 +38,14 @@ export function SegmentedControl<T extends string>({ ariaLabel, disabled = false
 export function PreviewDeviceSwitch({ value, onChange }: { value: "desktop" | "tablet" | "mobile"; onChange: (value: "desktop" | "tablet" | "mobile") => void }) { return <SegmentedControl ariaLabel="Размер preview" onChange={onChange} options={[{ value: "desktop", label: "Desktop", icon: IconDeviceDesktop }, { value: "tablet", label: "Tablet", icon: IconDeviceTablet }, { value: "mobile", label: "Mobile", icon: IconDeviceMobile }]} value={value} /> }
 
 export function InheritanceControl({ disabled = false, onChange, section }: { disabled?: boolean; onChange: (mode: InheritanceMode) => void; section: SectionConfig }) {
+  if (cmsDataMode === "api") {
+    const labels: Record<string, string> = { hero: "Первый экран", events: "Ближайшие события", houses: "Домики", "sauna-chan": "Баня и чан", programs: "Программы", venues: "Площадки", blog: "Блог", reviews: "Отзывы", map: "Карта", faq: "Вопросы и ответы", directions: "Как добраться", calculator: "Подбор отдыха", partners: "Партнёры", "why-us": "О нас" }
+    const label = labels[section.key ?? section.id] ?? section.label
+    return <div className="rounded-lg border bg-background p-3" data-testid={`inheritance-${section.id}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><h3 className="text-sm font-semibold">{label}</h3><SegmentedControl ariaLabel={`Поведение: ${label}`} disabled={disabled} onChange={onChange} options={[{ label: "Общие настройки", value: "inherit" }, { label: "Настроить", value: "override" }, { label: "Скрыть", value: "disabled" }]} value={section.mode} /></div>
+      {section.mode !== "override" && <p className="mt-3 text-xs leading-5 text-muted-foreground">{section.mode === "disabled" ? "После публикации эта секция не будет показана на странице." : "Используются общие настройки. Для изменений только на этой странице выберите «Настроить»."}</p>}
+    </div>
+  }
   return <div className="rounded-lg border bg-background p-3" data-testid={`inheritance-${section.id}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-start"><IconBox icon={section.id === "hero" ? IconPhoto : section.id === "footer" ? IconRoute : IconSparkles} size="sm" variant={section.quality === "warning" ? "warning" : "info"} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="text-[13px] font-semibold">{section.label}</h3><QualityIndicator compact level={section.quality ?? "ok"} /></div><p className="mt-0.5 text-[11px] text-muted-foreground">{section.description}</p></div><SegmentedControl ariaLabel={`Поведение: ${section.label}`} disabled={disabled} onChange={onChange} options={[{ label: "Наследовать", value: "inherit" }, { label: "Настроить", value: "override" }, { label: "Скрыть", value: "disabled" }]} value={section.mode} /></div>
     <div className={cn("mt-3 border-t pt-3", section.mode === "disabled" && "text-muted-foreground")}>
       {section.mode === "disabled" ? <Alert className="border-warning/30 bg-warning-subtle"><IconAlertTriangle /><AlertTitle>Секция не попадёт на страницу</AlertTitle><AlertDescription>{section.id === "calculator" ? "Может снизить конверсию. Publish не заблокирован." : "Проверьте quality policy перед публикацией."}</AlertDescription></Alert> : <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-[10px] text-muted-foreground">Effective value</p><p className="truncate text-xs font-medium">{section.effectiveTitle}</p><Link className="mt-1 inline-flex items-center gap-1 text-[10px] text-primary hover:underline" to={section.sourceHref}>{section.source}<IconExternalLink className="size-3" /></Link></div>{section.mode === "override" ? <div className="flex gap-1"><Button disabled size="xs" title="Сравнение эффективного содержимого пока недоступно" variant="outline">Показать diff</Button><Button disabled={disabled} onClick={() => onChange("inherit")} size="xs" variant="ghost">Сбросить</Button></div> : null}</div>}
@@ -50,6 +60,7 @@ export function ReleaseGateRow({ gate }: { gate: ReleaseGate }) {
 
 export function StateToolbar() {
   const [params, setParams] = useSearchParams(); const state = params.get("state") ?? "default"
+  if (cmsDataMode !== "fixtures") return null
   return <div className="flex items-center gap-2 rounded-lg border border-dashed bg-muted/30 p-2"><IconInfoCircle className="size-4 text-muted-foreground" /><span className="mr-auto text-[10px] text-muted-foreground">Prototype state</span><SegmentedControl ariaLabel="Состояние prototype" onChange={(next) => { const copy = new URLSearchParams(params); if (next === "default") copy.delete("state"); else copy.set("state", next); setParams(copy) }} options={[{ label: "Default", value: "default" }, { label: "Loading", value: "loading" }, { label: "Empty", value: "empty" }, { label: "Error", value: "error" }]} value={state} /> </div>
 }
 

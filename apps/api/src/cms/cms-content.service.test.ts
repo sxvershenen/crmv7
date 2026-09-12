@@ -152,6 +152,56 @@ describe("CmsContentService", () => {
     expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
   })
 
+  it("allows content editing when the submitted legacy technical placement is unchanged", async () => {
+    const sourceId = "77777777-7777-4777-8777-777777777777"
+    const route = { path: `/drafts/resources/${sourceId}`, slug: sourceId, parentNodeId: null, sortOrder: 10 }
+    const technical = { ...revision, state: "draft", ...route }
+    const harness = updateHarness({ current: technical })
+
+    const result = await harness.service.update(node.id, mutation({ route, summary: "Описание домика из CMS" }), actor, "request-content-technical")
+
+    expect(result.currentRevision).toMatchObject({ state: "draft", summary: "Описание домика из CMS", route })
+    expect(harness.manager.query).not.toHaveBeenCalled()
+    expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
+    expect(harness.manager.create).toHaveBeenCalledWith(ChangeLogEntity, expect.objectContaining({ action: "revision_created", requestId: "request-content-technical" }))
+    expect(harness.manager.create).toHaveBeenCalledWith(OutboxEventEntity, expect.objectContaining({ topic: "cms.content.revision.created", aggregateId: node.id }))
+  })
+
+  it.each([
+    ["path", (route: { path: string; slug: string; parentNodeId: string | null; sortOrder: number }) => ({ ...route, path: `${route.path}-changed` })],
+    ["slug", (route: { path: string; slug: string; parentNodeId: string | null; sortOrder: number }) => ({ ...route, slug: actor.id })],
+    ["parent", (route: { path: string; slug: string; parentNodeId: string | null; sortOrder: number }) => ({ ...route, parentNodeId: actor.id })],
+    ["sort order", (route: { path: string; slug: string; parentNodeId: string | null; sortOrder: number }) => ({ ...route, sortOrder: route.sortOrder + 10 })],
+  ])("still rejects an invalid legacy technical placement when %s changes", async (field, change) => {
+    const sourceId = "77777777-7777-4777-8777-777777777777"
+    const route = { path: `/drafts/resources/${sourceId}`, slug: sourceId, parentNodeId: null, sortOrder: 10 }
+    const harness = updateHarness({ current: { ...revision, state: "draft", ...route } })
+
+    await expect(harness.service.update(node.id, mutation({
+      route: change(route),
+      summary: "Описание не должно обойти topology validation",
+    }), actor, `request-content-technical-${field}`)).rejects.toMatchObject({ response: { code: "CMS_ROUTE_INVALID" } })
+
+    expect(harness.bumpQuery.execute).not.toHaveBeenCalled()
+    expect(harness.manager.create).not.toHaveBeenCalledWith(ChangeLogEntity, expect.anything())
+    expect(harness.manager.create).not.toHaveBeenCalledWith(OutboxEventEntity, expect.anything())
+  })
+
+  it("enforces optimistic versioning before accepting an unchanged legacy technical placement", async () => {
+    const sourceId = "77777777-7777-4777-8777-777777777777"
+    const route = { path: `/drafts/resources/${sourceId}`, slug: sourceId, parentNodeId: null, sortOrder: 10 }
+    const harness = updateHarness({ current: { ...revision, state: "draft", ...route } })
+
+    await expect(harness.service.update(node.id, mutation({
+      expectedVersion: 2,
+      route,
+      summary: "Устаревшая запись",
+    }), actor, "request-content-technical-stale")).rejects.toMatchObject({ response: { code: "VERSION_CONFLICT", details: { serverVersion: 3 } } })
+
+    expect(harness.revisionRepository.findOne).not.toHaveBeenCalled()
+    expect(harness.bumpQuery.execute).not.toHaveBeenCalled()
+  })
+
   it("enforces expectedVersion before evaluating route placement guards", async () => {
     const harness = updateHarness({ current: { ...revision, state: "draft" } })
 

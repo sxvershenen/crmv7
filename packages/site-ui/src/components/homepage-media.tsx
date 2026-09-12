@@ -7,19 +7,21 @@ export interface SiteAvailabilityDay { day: string; available: boolean }
 export function SiteHouseMedia({ photos, title }: { availability?: SiteAvailabilityDay[]; photos: string[]; title: string }) {
   const [active, setActive] = useState(0)
   const choosePhoto = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!photos.length) return
     const rect = event.currentTarget.getBoundingClientRect()
     setActive(Math.min(Math.floor((event.clientX - rect.left) / (rect.width / photos.length)), photos.length - 1))
   }
-  return <div onMouseMove={choosePhoto} onMouseLeave={() => setActive(0)} className="card-img relative aspect-[4/3] w-full bg-bg select-none"><img src={photos[active] ?? photos[0]} alt={title} className="w-full h-full object-cover" />{photos.length > 1 ? <div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 z-10">{photos.map((photo, index) => <div key={`${photo}-${index}`} className={`h-1 rounded-full flex-1 transition-all ${active === index ? "bg-surface" : "bg-surface/30"}`} />)}</div> : null}</div>
+  return <div onMouseMove={choosePhoto} onMouseLeave={() => setActive(0)} className="card-img relative aspect-[4/3] w-full bg-bg select-none">{photos.length > 0 && <img src={photos[active] ?? photos[0]} alt={title} className="w-full h-full object-cover" />}{photos.length > 1 ? <div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 z-10">{photos.map((photo, index) => <div key={`${photo}-${index}`} className={`h-1 rounded-full flex-1 transition-all ${active === index ? "bg-surface" : "bg-surface/30"}`} />)}</div> : null}</div>
 }
 
 export function SiteSpaMedia({ photos, title }: { photos: string[]; title: string }) {
   const [active, setActive] = useState(0)
   const choosePhoto = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!photos.length) return
     const rect = event.currentTarget.getBoundingClientRect()
     setActive(Math.min(Math.floor((event.clientX - rect.left) / (rect.width / photos.length)), photos.length - 1))
   }
-  return <div onMouseMove={choosePhoto} onMouseLeave={() => setActive(0)} className="card-img relative aspect-[16/10] w-full bg-bg select-none"><img src={photos[active] ?? photos[0]} alt={title} className="w-full h-full object-cover" /><div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 z-10">{photos.map((photo, index) => <div key={`${photo}-${index}`} className={`h-1 rounded-full flex-1 transition-all ${active === index ? "bg-surface" : "bg-surface/30"}`} />)}</div></div>
+  return <div onMouseMove={choosePhoto} onMouseLeave={() => setActive(0)} className="card-img relative aspect-[16/10] w-full bg-bg select-none">{photos.length > 0 && <img src={photos[active] ?? photos[0]} alt={title} className="w-full h-full object-cover" />}<div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 z-10">{photos.map((photo, index) => <div key={`${photo}-${index}`} className={`h-1 rounded-full flex-1 transition-all ${active === index ? "bg-surface" : "bg-surface/30"}`} />)}</div></div>
 }
 
 export function SiteVkCommunityCard() {

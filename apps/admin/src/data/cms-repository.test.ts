@@ -197,6 +197,70 @@ describe("ApiCmsRepository", () => {
     expect(body.idempotencyKey).toEqual(expect.any(String))
   })
 
+  it("preserves extended hero fields and stable action IDs while editing supported hero copy", async () => {
+    const hero = {
+      mode: "override" as const,
+      config: {
+        variant: "fullscreen" as const, eyebrow: "До города 20 минут", title: "Старый hero", subtitle: "Описание",
+        backgroundAssetId: ids.node, foregroundAssetId: ids.node2,
+        background: { assetId: ids.node, alt: "Лес", variants: [{ url: "/media/hero.webp", format: "webp" as const, width: 1600, height: 900 }] },
+        foreground: { assetId: ids.node2, alt: "Дом", variants: [{ url: "/media/house.webp", format: "webp" as const, width: 600, height: 800 }] },
+        overlay: "soft" as const, align: "left" as const,
+        actions: [
+          { id: ids.revision, label: "Смотреть", href: "/old", target: "_blank" as const, style: "primary" as const, enabled: true },
+          { id: ids.revision2, label: "Подробнее", href: "/details", target: "_self" as const, style: "link" as const, enabled: true },
+        ],
+        slides: [{ id: ids.revision, imageAssetId: ids.node, image: null, title: "Зима", tagline: "Тихо", focalPoint: { x: 0.2, y: 0.8 } }],
+        badge: { label: "Новинка", icon: "star" },
+        featureCards: [{ id: ids.revision2, imageAssetId: ids.node2, image: null, title: "Домики", description: "Уютно", href: "/houses", target: "_blank" as const }],
+        autoplayMs: 5000,
+      },
+    }
+    const server = { ...detail, currentRevision: { ...detail.currentRevision!, hero } }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(server)
+    client.patch.mockImplementation(async (_path: string, body: { hero: typeof hero }) => ({ ...server, currentRevision: { ...server.currentRevision!, hero: body.hero } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+
+    await repository.saveEditor({ ...editor, hero: { ...editor.hero, title: "Новый hero", primaryCtaTarget: "/new" } }, editor.version)
+
+    const savedHero = client.patch.mock.calls[0]?.[1].hero
+    expect(savedHero.config).toMatchObject({
+      variant: "fullscreen", title: "Новый hero", background: hero.config.background, foreground: hero.config.foreground,
+      slides: hero.config.slides, badge: hero.config.badge, featureCards: hero.config.featureCards, autoplayMs: 5000,
+    })
+    expect(savedHero.config.actions).toEqual([
+      { ...hero.config.actions[0], href: "/new" },
+      hero.config.actions[1],
+    ])
+  })
+
+  it.each([
+    ["only secondary/link actions", [
+      { id: ids.revision, label: "Вторичная", href: "/secondary", target: "_blank" as const, style: "secondary" as const, enabled: true },
+      { id: ids.revision2, label: "Текстовая", href: "/more", target: "_self" as const, style: "link" as const, enabled: true },
+    ]],
+    ["no actions", []],
+  ])("keeps null media/copy and %s unchanged during an unrelated save", async (_label, actions) => {
+    const hero = { mode: "override" as const, config: {
+      variant: "compact" as const, eyebrow: null, title: "Hero", subtitle: null,
+      backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null,
+      overlay: "none" as const, align: "center" as const, actions,
+      slides: [], badge: null, featureCards: [], autoplayMs: null,
+    } }
+    const server = { ...detail, currentRevision: { ...detail.currentRevision!, hero } }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(server)
+    client.patch.mockResolvedValueOnce(server)
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+
+    await repository.saveEditor({ ...editor, publicTitle: "Изменён только H1 страницы" }, editor.version)
+
+    expect(client.patch.mock.calls[0]?.[1].hero).toEqual(hero)
+  })
+
   it("creates a child with authoritative parent placement and end sort order", async () => {
     const client = clientMock()
     client.post.mockResolvedValueOnce({ ...detail, currentRevision: { ...detail.currentRevision!, route: { path: "/family/summer", slug: "summer", parentNodeId: ids.node2, sortOrder: 40 } } })
@@ -279,6 +343,39 @@ describe("ApiCmsRepository", () => {
       value: expect.objectContaining({ siteName: "Свистоплясово", headerNavigation: [], footerNavigation: expect.any(Array) }),
     }), expect.anything())
   })
+
+  it("preserves navigation target and device visibility and rejects silent truncation", async () => {
+    const navigationItem = { ...siteSettingsDetail().draft!.value.headerNavigation[0]!, target: "_blank" as const, visibleOn: "mobile" as const, icon: null, color: null }
+    const baseSettings = siteSettingsDetail()
+    const settings = { ...baseSettings, draft: { ...baseSettings.draft!, value: { ...baseSettings.draft!.value, headerNavigation: [navigationItem] } } }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(settings)
+    client.patch.mockResolvedValueOnce(settings)
+    const repository = new ApiCmsRepository(client as never)
+    const navigation = await repository.getNavigation()
+
+    await repository.saveNavigation({ ...navigation, header: navigation.header.map((item) => ({ ...item, label: "Изменено" })) }, navigation.version)
+
+    expect(client.patch.mock.calls[0]?.[1].value.headerNavigation[0]).toMatchObject({ target: "_blank", visibleOn: "mobile", icon: null, color: null, label: "Изменено", id: navigationItem.id })
+    const tooMany = Array.from({ length: 31 }, (_, index) => ({ ...navigation.header[0]!, id: `${navigation.header[0]!.id}-${index}` }))
+    await expect(repository.saveNavigation({ ...navigation, header: tooMany }, navigation.version)).rejects.toThrow("больше 30")
+    expect(client.patch).toHaveBeenCalledOnce()
+  })
+
+  it("round-trips media metadata fields which are not shown by the current form", async () => {
+    const asset = { ...wireMediaAsset(), license: null }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({ asset, usages: [], usageTotal: 0, usagesTruncated: false })
+    client.patch.mockResolvedValueOnce({ asset: { ...asset, title: "Новое название" }, usages: [], usageTotal: 0, usagesTruncated: false })
+    const repository = new ApiCmsRepository(client as never)
+    const editorAsset = await repository.getAsset(asset.id)
+
+    await repository.saveMediaMetadata({ ...editorAsset, title: "Новое название" })
+
+    expect(client.patch).toHaveBeenCalledWith(`/media/assets/${asset.id}`, expect.objectContaining({
+      title: "Новое название", caption: asset.caption, credit: asset.credit, license: null, tags: asset.tags, focalPoint: asset.focalPoint,
+    }), expect.anything())
+  })
 })
 
 describe("analyticsRecentDateRange", () => {
@@ -328,5 +425,14 @@ function siteSettingsDetail() {
     id: ids.node2, version: 3,
     draft: { id: ids.revision2, revision: 2, state: "draft" as const, value: { siteName: "Свистоплясово", headerNavigation: [navigationItem], mobileNavigation: [], footerNavigation: [navigationItem], headerCta: null, heroDefault: null }, contentHash: "b".repeat(64), createdBy: ids.actor, createdAt: "2026-08-31T10:00:00.000Z" },
     published: null,
+  }
+}
+
+function wireMediaAsset() {
+  return {
+    id: ids.node, version: 4, kind: "image" as const, state: "ready" as const, title: "Hero", alt: "Лес",
+    caption: "Подпись", credit: "Автор", license: "Собственное фото", tags: ["hero", "summer"], focalPoint: { x: 0.25, y: 0.75 },
+    originalFilename: "hero.jpg", mimeType: "image/jpeg", byteSize: 1200, width: 1600, height: 900, variants: [],
+    usageCount: 0, publishedUsage: false, archivedAt: null, createdAt: "2026-08-31T08:00:00.000Z", updatedAt: "2026-08-31T09:00:00.000Z",
   }
 }

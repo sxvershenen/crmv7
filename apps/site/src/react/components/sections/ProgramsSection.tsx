@@ -1,31 +1,38 @@
 import React, { useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
-import type { CmsHomeSectionConfig } from '@crm/contracts';
+import type { CmsHomeSectionConfig, PublicProgramSummary } from '@crm/contracts';
 import { POPULAR_PROGRAMS, PROGRAM_CATEGORIES, ProgramItem } from '../../data/resortData';
 import { Pagination, SiteActionSectionHeader, SiteFilterMenu, SiteImageCategoryCard, SiteProgramFeatureCard, SiteSecondaryAction } from '@crm/site-ui';
 
 interface ProgramsSectionProps {
   config: CmsHomeSectionConfig;
+  published?: PublicProgramSummary[] | undefined;
+  fixture?: boolean | undefined;
   onOpenBookingModal: (programTitle?: string) => void;
 }
 
-export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpenBookingModal }) => {
+export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpenBookingModal, published = [], fixture = false }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sort, setSort] = useState<'popular' | 'name' | 'short'>('popular');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
 
-  const filteredPrograms = POPULAR_PROGRAMS.filter((p) => {
+  const programs: Array<Omit<ProgramItem, "category"> & { category: string }> = fixture ? POPULAR_PROGRAMS : published.filter((item) => item.requestAvailable).map((item) => ({
+    id: item.offeringId, title: item.title, description: item.summary ?? "", photo: "", category: "", categoryLabel: "",
+    age: `до ${item.fulfillment.participantLimit} участников`, season: "", duration: `${item.fulfillment.durationMinutes} мин`, participants: String(item.fulfillment.participantLimit),
+  }))
+  const filteredPrograms = programs.filter((p) => {
     if (selectedCategory === 'all') return true;
     return p.category === selectedCategory;
-  }).sort((a, b) => sort === 'name' ? a.title.localeCompare(b.title, 'ru') : sort === 'short' ? parseFloat(a.duration) - parseFloat(b.duration) : POPULAR_PROGRAMS.indexOf(a) - POPULAR_PROGRAMS.indexOf(b));
+  }).sort((a, b) => sort === 'name' ? a.title.localeCompare(b.title, 'ru') : sort === 'short' ? parseFloat(a.duration) - parseFloat(b.duration) : programs.indexOf(a) - programs.indexOf(b));
 
   const pageSize = 4;
   const pageCount = Math.max(1, Math.ceil(filteredPrograms.length / pageSize));
   const displayedPrograms = showAll ? filteredPrograms : filteredPrograms.slice((page - 1) * pageSize, page * pageSize);
   const sortLabel = sort === 'name' ? 'По названию' : sort === 'short' ? 'Сначала короткие' : 'По популярности';
 
+  if (!programs.length) return null
   return (
     <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8">
       <SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={<SiteFilterMenu label={sortLabel} icon={<ArrowUpDown className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={sortDropdownOpen} onToggle={() => setSortDropdownOpen(!sortDropdownOpen)} options={[{ id: 'popular', label: 'По популярности', selected: sort === 'popular', onSelect: () => { setSort('popular'); setPage(1); setSortDropdownOpen(false); } }, { id: 'name', label: 'По названию', selected: sort === 'name', onSelect: () => { setSort('name'); setPage(1); setSortDropdownOpen(false); } }, { id: 'short', label: 'Сначала короткие', selected: sort === 'short', onSelect: () => { setSort('short'); setPage(1); setSortDropdownOpen(false); } }]} />} />
@@ -33,7 +40,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
       {/* Main Grid: Left Programs Listing / Right 4 Square Categories (Top on Mobile) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Right Section Cards (4 cards 2x2 grid) - Shown first on mobile */}
-        <div className="lg:col-span-5">
+        {fixture && <div className="lg:col-span-5">
           <div className="grid grid-cols-2 gap-3">
             {PROGRAM_CATEGORIES.map((cat) => {
               const isSelected = selectedCategory === cat.id;
@@ -60,9 +67,10 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
           )}
         </div>
 
+        }
         {/* Left Section: Popular Programs Horizontal Cards (Order 2 on Mobile) */}
-        <div className="lg:col-span-7 space-y-3">
-          {displayedPrograms.map((prog: ProgramItem) => (
+        <div className={fixture ? "lg:col-span-7 space-y-3" : "lg:col-span-12 space-y-3"}>
+          {displayedPrograms.map((prog) => (
             <SiteProgramFeatureCard
               key={prog.id}
               onSelect={() => onOpenBookingModal(`Программа: ${prog.title}`)}

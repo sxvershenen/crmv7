@@ -140,8 +140,11 @@ export class CmsContentService {
         relations: input.relations ?? currentDto.relations,
         schemaVersion: currentDto.schemaVersion,
       }
-      await this.assertParent(manager, content.route.parentNodeId, id)
-      await this.assertPlacement(manager, content.route, currentNode.kind)
+      const placementUnchanged = samePlacement(currentDto.route, content.route)
+      if (!placementUnchanged) {
+        await this.assertParent(manager, content.route.parentNodeId, id)
+        await this.assertPlacement(manager, content.route, currentNode.kind)
+      }
       await this.assertRouteChangeAllowed(manager, id, currentDto.route, content.route)
       const updatedNode = await this.bumpNode(manager, currentNode, input.expectedVersion, actor.id)
       const nextRevision = await this.nextRevision(manager, id)
@@ -513,6 +516,13 @@ export function decodeCursor(cursor: string): NodeCursor {
 
 function mutationHash(input: unknown): string {
   return createHash("sha256").update(stableStringify(input)).digest("hex")
+}
+
+function samePlacement(left: CmsNodeRevision["route"], right: CmsNodeRevision["route"]): boolean {
+  return left.path === right.path
+    && left.slug === right.slug
+    && left.parentNodeId === right.parentNodeId
+    && left.sortOrder === right.sortOrder
 }
 
 function stableStringify(value: unknown): string {

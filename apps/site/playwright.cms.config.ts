@@ -4,7 +4,7 @@ const production = process.env.SITE_TEST_RUNTIME === "production"
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "content-delivery.spec.ts",
+  testMatch: ["content-delivery.spec.ts", "homepage-details.spec.ts", "homepage-commerce.spec.ts"],
   workers: 1,
   retries: 0,
   reporter: "line",

@@ -14,7 +14,7 @@ Astro владеет meaningful HTML и metadata, React используется
 
 ## D-046 — Публикация целым immutable release
 
-Routes, redirects, navigation/defaults, editorial revisions и зависимости принадлежат одному complete release. Materialization фиксирует exact revisions, activation меняет один CAS pointer, rollback создаёт новый release на проверенные artifacts. Mutable draft/archive не меняет опубликованный snapshot. Inheritance разрешается явно; отсутствующая база блокирует публикацию. Оператор публикует страницу одной командой, а не управляет build/activation вручную.
+Routes, redirects, navigation/defaults, editorial revisions и зависимости принадлежат одному complete release. Materialization фиксирует exact revisions, activation меняет один CAS pointer, rollback создаёт новый release на проверенные artifacts. Mutable draft/archive не меняет опубликованный snapshot. Inheritance разрешается явно; отсутствующая база блокирует публикацию. Администратор работает со страницей: редактирует, сохраняет черновик, смотрит результат и публикует. Release/build/activation — внутренний механизм; собирать сущности в релиз вручную не требуется. Отзывы, FAQ и другие простые элементы секции хранятся в редакции страницы, пока реальный сценарий повторного использования не требует отдельного объекта. Технические сведения доступны по запросу, а не занимают обычный редактор.
 
 ## D-047 — Controlled code не исполняется из БД
 

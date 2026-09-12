@@ -6,7 +6,6 @@ import NavigationIsland from "../components/islands/NavigationIsland"
 import HeroIsland from "../components/islands/HeroIsland"
 import EventsIsland from "../components/islands/EventsIsland"
 import HousesIsland from "../components/islands/HousesIsland"
-import SaunaChanIsland from "../components/islands/SaunaChanIsland"
 import ProgramsIsland from "../components/islands/ProgramsIsland"
 import VenuesIsland from "../components/islands/VenuesIsland"
 import ReviewsIsland from "../components/islands/ReviewsIsland"
@@ -39,6 +38,8 @@ if (redirect.status === "published") return Astro.redirect(redirect.value.destin
 const result = await getPublishedRoute(path, Astro.url.searchParams)
 const page = result.status === "published" ? result.value.page : null
 const homepageSections = getHomepageSections(page, false)
+const commerce = result.status === "published" ? result.value.commerce : undefined
+Astro.response.headers.set("Cache-Control", "no-store")
 const publishedSiteSettings = result.status === "published" ? result.value.settings : null
 const listing = result.status === "published" ? result.value.listing : null
 const house = result.status === "published" ? result.value.house : null
@@ -99,17 +100,16 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {eventService && <EventServiceDetail eventService={eventService} />}
       {editorialSections.map(({ section, config }) => <EditorialContent config={config} sectionKey={section.key} {...(section.analyticsActionId ? { analyticsId: section.analyticsActionId } : {})} />)}
       {homepageSections.map((section) => {
-        if (section.key === "events") return <EventsIsland config={section.config} client:visible />
-        if (section.key === "houses") return <HousesIsland config={section.config} client:visible />
-        if (section.key === "sauna-chan") return <SaunaChanIsland config={section.config} client:visible />
-        if (section.key === "programs") return <ProgramsIsland config={section.config} client:visible />
-        if (section.key === "venues") return <VenuesIsland config={section.config} client:visible />
+        if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} client:visible />
+        if (section.key === "houses") return <HousesIsland config={section.config} published={commerce?.houses} fixture={false} client:visible />
+        if (section.key === "programs") return <ProgramsIsland config={section.config} published={commerce?.programs} fixture={false} client:visible />
+        if (section.key === "venues") return <VenuesIsland config={section.config} published={commerce?.venues} fixture={false} client:visible />
         if (section.key === "blog") return <BlogSection config={section.config} />
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
-        if (section.key === "reviews") return <ReviewsIsland config={section.config} client:visible />
+        if (section.key === "reviews") return <ReviewsIsland config={section.config} fixture={false} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
         if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
-        if (section.key === "calculator") return <BookingQuizIsland config={section.config} client:visible />
+        if (section.key === "calculator") return <BookingQuizIsland config={section.config} commerce={commerce} fixture={false} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}

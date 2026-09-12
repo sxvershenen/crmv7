@@ -1,6 +1,7 @@
 import type { AnalyticsSummary, CmsDashboard, CodeArtifact, ContentNode, EditorRecord, MediaAsset, PublicNavigation, ReleaseRecord } from "@admin/entities/cms"
 
 export const dashboardFixture: CmsDashboard = {
+  hasPublication: true,
   productionRelease: "Опубликованная версия",
   publishedAt: "Сегодня, 10:42",
   drafts: 14,

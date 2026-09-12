@@ -1,4 +1,4 @@
-import type { HouseItem } from "../react/data/resortData";
+import type { HomepageHouse } from "./content/homepage-commerce";
 
 /**
  * Browser-only event names used to coordinate independently hydrated islands.
@@ -19,7 +19,7 @@ export type SiteEventName = (typeof SITE_EVENTS)[keyof typeof SITE_EVENTS];
 export interface SiteEventDetails {
   [SITE_EVENTS.booking]: { itemName?: string };
   [SITE_EVENTS.call]: undefined;
-  [SITE_EVENTS.house]: { house: HouseItem };
+  [SITE_EVENTS.house]: { house: HomepageHouse };
   [SITE_EVENTS.privacy]: undefined;
   [SITE_EVENTS.promo]: { code: string };
   [SITE_EVENTS.toast]: { message: string };
@@ -107,7 +107,7 @@ export const openBooking = (itemName?: string) =>
 
 export const openCall = () => emitSiteEvent(SITE_EVENTS.call, undefined);
 
-export const openHouse = (house: HouseItem) =>
+export const openHouse = (house: HomepageHouse) =>
   emitSiteEvent(SITE_EVENTS.house, { house });
 
 export const openPrivacyPolicy = () =>

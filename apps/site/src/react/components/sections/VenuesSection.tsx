@@ -1,28 +1,35 @@
 import React, { useState } from 'react';
 import { Layers, Users } from 'lucide-react';
-import type { CmsHomeSectionConfig } from '@crm/contracts';
+import type { CmsHomeSectionConfig, PublicVenueSummary } from '@crm/contracts';
 import { VENUES, VenueItem } from '../../data/resortData';
 import { useSwipeHint } from '../../utils/useSwipeHint';
 import { SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
 
 interface VenuesSectionProps {
   config: CmsHomeSectionConfig;
+  published?: PublicVenueSummary[] | undefined;
+  fixture?: boolean | undefined;
   onOpenBookingModal: (venueTitle?: string) => void;
 }
 
-export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBookingModal }) => {
+export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBookingModal, published = [], fixture = false }) => {
   const swiperRef = useSwipeHint();
   const [capacityFilter, setCapacityFilter] = useState<'all' | 'small' | 'medium' | 'large'>('all');
   const [formatFilter, setFormatFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
   const [dropdownOpen, setDropdownOpen] = useState<'capacity' | 'format' | null>(null);
 
-  const filteredVenues = VENUES.filter((venue) => {
+  const venues: VenueItem[] = fixture ? VENUES : published.filter((item) => item.requestAvailable).map((item) => ({
+    id: item.offeringId, title: item.title, capacity: `до ${item.fulfillment.capacityTotal} гостей`, capacityNumber: item.fulfillment.capacityTotal,
+    shortDesc: item.summary ?? "", photo: "", suitableFor: [], area: "", features: [],
+  }))
+  const filteredVenues = venues.filter((venue) => {
     const capacityOk = capacityFilter === 'small' ? venue.capacityNumber <= 30 : capacityFilter === 'medium' ? venue.capacityNumber > 30 && venue.capacityNumber <= 70 : capacityFilter === 'large' ? venue.capacityNumber > 70 : true;
-    const indoor = ['banquet-hall', 'yurt'].includes(venue.id);
-    const formatOk = formatFilter === 'all' || (formatFilter === 'indoor' ? indoor : !indoor);
+    const spaceType = fixture ? (['banquet-hall', 'yurt'].includes(venue.id) ? 'indoor' : 'outdoor') : published.find((item) => item.offeringId === venue.id)?.fulfillment.spaceType;
+    const formatOk = formatFilter === 'all' || spaceType === formatFilter || spaceType === 'mixed';
     return capacityOk && formatOk;
   });
 
+  if (!venues.length) return null
   return (
     <section id="venues" data-section-key="venues" data-analytics-id="home.venues.view" className="w-full py-8">
       <SiteActionSectionHeader
@@ -31,7 +38,7 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
         description={config.description || undefined}
         action={<div className="flex items-center gap-2"><SiteFilterMenu
           width="md"
-          label={capacityFilter === 'all' ? 'Все площадки (5)' : capacityFilter === 'small' ? 'До 30 гостей' : capacityFilter === 'medium' ? 'От 30 до 70 гостей' : 'От 70 до 300 гостей'}
+          label={capacityFilter === 'all' ? `Все площадки (${venues.length})` : capacityFilter === 'small' ? 'До 30 гостей' : capacityFilter === 'medium' ? 'От 30 до 70 гостей' : 'От 70 до 300 гостей'}
           icon={<Users className="w-4 h-4 text-[var(--site-color-text-muted)]" />}
           open={dropdownOpen === 'capacity'}
           onToggle={() => setDropdownOpen((value) => value === 'capacity' ? null : 'capacity')}

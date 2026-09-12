@@ -4,7 +4,7 @@ import { BookingModal } from "../../react/components/modals/BookingModal";
 import { CallModal } from "../../react/components/modals/CallModal";
 import { HouseDetailModal } from "../../react/components/modals/HouseDetailModal";
 import { PrivacyPolicyModal } from "../../react/components/modals/PrivacyPolicyModal";
-import type { HouseItem } from "../../react/data/resortData";
+import type { HomepageHouse } from "../../lib/content/homepage-commerce";
 import {
   denyAnalyticsConsent,
   getAnalyticsConsentState,
@@ -18,7 +18,7 @@ export function ModalHub() {
   const [bookingItemName, setBookingItemName] = useState<string | undefined>();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isCallOpen, setIsCallOpen] = useState(false);
-  const [selectedHouse, setSelectedHouse] = useState<HouseItem | null>(null);
+  const [selectedHouse, setSelectedHouse] = useState<HomepageHouse | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [analyticsConsent, setAnalyticsConsent] = useState<AnalyticsConsentState>("unknown");
   const [toastMessage, setToastMessage] = useState<string | null>(null);

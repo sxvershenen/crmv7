@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Car, Clock, HelpCircle, Mail, MapPin, Navigation, Phone, Send } from 'lucide-react';
 import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { Accordion, SiteSectionHeader } from '@crm/site-ui';
-import { FAQ_ITEMS } from '../../data/resortData';
 
 interface FaqLocationSectionProps { config: CmsHomeSectionConfig; onOpenCallModal: () => void; }
 const coords = { lat: 58.5532, lng: 49.6234 };
@@ -19,6 +18,8 @@ const ContactRow = ({ icon, label, value, href, onClick }: { icon: React.ReactNo
 
 export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, onOpenCallModal }) => {
   const [mapOn, setMapOn] = useState(false);
+  const items = config.faq ?? [];
+  if (!items.length) return null;
   return <section id="location" data-section-key="faq" className="w-full py-8">
     <SiteSectionHeader eyebrow={config.eyebrow} eyebrowIcon={<HelpCircle className="w-3 h-3" />} eyebrowTone="brand" title={config.title} description={config.description} />
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
@@ -34,7 +35,7 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, 
           <ContactRow icon={<MapPin size={16} />} label="Адрес" value="дер. Свистоплясово" /><ContactRow icon={<Phone size={16} />} label="Бронирование" value="+7 (8332) 74-55-10" onClick={onOpenCallModal} /><ContactRow icon={<Send size={16} />} label="ВКонтакте" value="vk.com/svistoplyasovo" href="https://vk.com" /><ContactRow icon={<Mail size={16} />} label="Почта" value="info@svistoplyasovo.ru" href="mailto:info@svistoplyasovo.ru" /><ContactRow icon={<Clock size={16} />} label="Заезд / выезд" value="15:00 / 12:00" />
         </div>
       </div>
-      <Accordion className="lg:col-span-7" defaultOpenIds={FAQ_ITEMS[0] ? [FAQ_ITEMS[0].id] : []} items={FAQ_ITEMS.map((faq) => ({ id: faq.id, title: faq.question, content: <p>{faq.answer}</p> }))} />
+      <Accordion className="lg:col-span-7" defaultOpenIds={items[0] ? [items[0].id] : []} items={items.map((faq) => ({ id: faq.id, title: faq.question, content: <p>{faq.answer}</p> }))} />
     </div>
   </section>;
 };

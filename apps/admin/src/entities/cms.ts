@@ -1,4 +1,4 @@
-import type { CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
+import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
 import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 
@@ -35,6 +35,7 @@ export type AttentionItem = { id: string; title: string; detail: string; href: s
 export type ActivityItem = { id: string; actor: string; action: string; target: string; when: string; status: ContentStatus }
 
 export type CmsDashboard = {
+  hasPublication: boolean
   productionRelease: string
   publishedAt: string
   drafts: number
@@ -76,6 +77,8 @@ export type HeroConfig = {
   overlay: number
   focalPosition: "left" | "center" | "right"
   alignment: "left" | "center"
+  /** Original authoritative policy used to preserve fields this form does not edit. */
+  sourcePolicy?: CmsHeroPolicy
 }
 
 export type PublicNavigationItem = {
@@ -84,7 +87,11 @@ export type PublicNavigationItem = {
   href: string
   icon: string
   color: string
+  sourceIcon?: string | null
+  sourceColor?: string | null
   visible: boolean
+  target?: "_self" | "_blank"
+  visibleOn?: "all" | "desktop" | "mobile"
   children: PublicNavigationItem[]
 }
 
@@ -134,6 +141,7 @@ export type EditorRecord = {
   seoDescription: string
   indexPolicy: "index_follow" | "noindex_follow" | "noindex_nofollow"
   revision?: number
+  schemaVersion?: number
   readonlyCrm?: { entity: string; code: string; status: string; capacity: string; price: string; availability: string }
   hero: HeroConfig
   importedFromCrm?: boolean
@@ -152,6 +160,11 @@ export type MediaAsset = {
   publishedUsage: boolean
   alt: string
   license: string
+  sourceMetadata?: { alt: string | null; caption: string | null; credit: string | null; license: string | null }
+  caption?: string
+  credit?: string
+  tags?: string[]
+  focalPoint?: { x: number; y: number }
   dominant: string
   previewUrl?: string
   variants?: { id: string; format: "webp" | "avif" | "original"; width: number | null; height: number | null; byteSize: number; url: string }[]

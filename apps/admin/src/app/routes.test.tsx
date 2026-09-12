@@ -14,7 +14,7 @@ import { AdminAuthSessionProvider } from "@admin/features/auth-session"
 describe("CMS route screens", () => {
   it("exposes the publication journal without a technical release quick-create action", () => {
     const labels = [...navGroups.flatMap((group) => group.items), ...quickCreateItems].map((item) => item.label)
-    expect(labels).toContain("Публикации")
+    expect(labels).toContain("История публикаций")
     expect(labels).not.toContain("Релиз")
   })
 

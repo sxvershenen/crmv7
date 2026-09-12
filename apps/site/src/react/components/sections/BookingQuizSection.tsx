@@ -17,13 +17,16 @@ import {
   Ticket,
   User,
 } from "lucide-react";
-import { HOUSES, POPULAR_PROGRAMS, PROMO_CODES, VENUES } from "../../data/resortData";
+import { HOUSES as FIXTURE_HOUSES, POPULAR_PROGRAMS as FIXTURE_PROGRAMS, PROMO_CODES, VENUES as FIXTURE_VENUES } from "../../data/resortData";
+import { homepageHouse, offeringPriceLabel, type HomepageCommerce } from "../../../lib/content/homepage-commerce";
 import { fireConfetti } from "../../utils/confetti";
 import { listenForSiteEvent, SITE_EVENTS } from "../../../lib/site-events";
 import { publicIntakeErrorMessage, submitPublicLead } from "../../../lib/public-intake";
 
 interface BookingQuizSectionProps {
   config: CmsHomeSectionConfig;
+  commerce?: HomepageCommerce | undefined;
+  fixture?: boolean | undefined;
   onOpenPrivacyPolicy: () => void;
   onToast: (msg: string) => void;
   preselectedItem?: string;
@@ -39,7 +42,7 @@ const stepLabels = ["Что", "Дата", "Допы"];
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const monthLabels = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const monthGenitiveLabels = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-const addonOptions = [
+const fixtureAddonOptions = [
   { id: "chan", title: "Сибирский чан", price: 4500, icon: "🔥", desc: "3 часа на живом огне" },
   { id: "sauna", title: "Кедровая русская баня", price: 5000, icon: "🪵", desc: "2 часа, веники и чай" },
   { id: "catering", title: "Фермерский сет", price: 3200, icon: "🥩", desc: "Мясо и овощи гриль" },
@@ -73,17 +76,21 @@ function formatRange(start: string | null, end: string | null) {
   return `${first} — ${endDate.getDate()} ${monthGenitiveLabels[endDate.getMonth()]}`;
 }
 
-export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, onOpenPrivacyPolicy, onToast, preselectedItem }) => {
-  const [activeTab, setActiveTab] = useState<Kind>("glamping");
+export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, onOpenPrivacyPolicy, onToast, preselectedItem, commerce, fixture = false }) => {
+  const HOUSES = useMemo(() => fixture ? FIXTURE_HOUSES.map((item) => ({ ...item, publicOffering: undefined })) : (commerce?.houses ?? []).filter((item) => item.requestAvailable).map(homepageHouse), [commerce, fixture]);
+  const VENUES = useMemo(() => fixture ? FIXTURE_VENUES.map((item) => ({ ...item, publicOffering: undefined })) : (commerce?.venues ?? []).filter((item) => item.requestAvailable).map((item) => ({ id: item.offeringId, title: item.title, capacity: `до ${item.fulfillment.capacityTotal} гостей`, area: "", publicOffering: item })), [commerce, fixture]);
+  const POPULAR_PROGRAMS = useMemo(() => fixture ? FIXTURE_PROGRAMS.map((item) => ({ ...item, publicOffering: undefined })) : (commerce?.programs ?? []).filter((item) => item.requestAvailable).map((item) => ({ id: item.offeringId, title: item.title, duration: `${item.fulfillment.durationMinutes} мин`, participants: `до ${item.fulfillment.participantLimit} участников`, publicOffering: item })), [commerce, fixture]);
+  const addonOptions = useMemo(() => fixture ? fixtureAddonOptions.map((item) => ({ ...item, publicOffering: undefined })) : (commerce?.addons ?? []).filter((item) => item.requestAvailable).map((item) => ({ id: item.offeringId, title: item.title, price: 0, icon: "+", desc: item.summary ?? "", publicOffering: item })), [commerce, fixture]);
+  const [activeTab, setActiveTab] = useState<Kind>(HOUSES.length ? "glamping" : VENUES.length ? "venue" : "event");
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedHouseId, setSelectedHouseId] = useState(HOUSES[0]!.id);
-  const [selectedVenueId, setSelectedVenueId] = useState(VENUES[0]!.id);
-  const [selectedProgramId, setSelectedProgramId] = useState(POPULAR_PROGRAMS[0]!.id);
+  const [selectedHouseId, setSelectedHouseId] = useState(HOUSES[0]?.id ?? "");
+  const [selectedVenueId, setSelectedVenueId] = useState(VENUES[0]?.id ?? "");
+  const [selectedProgramId, setSelectedProgramId] = useState(POPULAR_PROGRAMS[0]?.id ?? "");
   const [rangeStart, setRangeStart] = useState<string | null>(null);
   const [rangeEnd, setRangeEnd] = useState<string | null>(null);
-  const [month, setMonth] = useState({ year: 2026, index: 8 });
+  const [month, setMonth] = useState(() => fixture ? { year: 2026, index: 8 } : { year: new Date().getFullYear(), index: new Date().getMonth() });
   const [guestCount, setGuestCount] = useState(2);
-  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>({ chan: true });
+  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>(fixture ? { chan: true } : {});
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
   const [contactMethod, setContactMethod] = useState<"phone" | "telegram" | "max">("phone");
@@ -103,28 +110,30 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
     if (house) { setActiveTab("glamping"); setSelectedHouseId(house.id); }
     else if (venue) { setActiveTab("venue"); setSelectedVenueId(venue.id); }
     else if (program) { setActiveTab("event"); setSelectedProgramId(program.id); }
-  }, [preselectedItem]);
+  }, [preselectedItem, HOUSES, VENUES, POPULAR_PROGRAMS]);
 
   const selected = useMemo(() => {
     if (activeTab === "glamping") {
       const item = HOUSES.find((house) => house.id === selectedHouseId) ?? HOUSES[0]!;
-      return { title: item.title, price: item.priceFrom };
+      return { title: item?.title ?? "", price: item?.priceFrom ?? 0, offering: item?.publicOffering };
     }
     if (activeTab === "venue") {
       const item = VENUES.find((venue) => venue.id === selectedVenueId) ?? VENUES[0]!;
-      return { title: item.title, price: 12_000 };
+      return { title: item?.title ?? "", price: fixture ? 12_000 : 0, offering: item?.publicOffering };
     }
     const item = POPULAR_PROGRAMS.find((program) => program.id === selectedProgramId) ?? POPULAR_PROGRAMS[0]!;
-    return { title: item.title, price: 18_000 };
-  }, [activeTab, selectedHouseId, selectedProgramId, selectedVenueId]);
+    return { title: item?.title ?? "", price: fixture ? 18_000 : 0, offering: item?.publicOffering };
+  }, [activeTab, selectedHouseId, selectedProgramId, selectedVenueId, fixture, HOUSES, VENUES, POPULAR_PROGRAMS]);
 
   const addonTotal = addonOptions.reduce((sum, item) => sum + (selectedAddons[item.id] ? item.price : 0), 0);
   const rawTotal = selected.price + addonTotal;
   const finalTotal = Math.max(0, rawTotal - (appliedPromo?.discount ?? 0));
+  const priceLabel = fixture ? `${finalTotal.toLocaleString("ru-RU")} ₽` : selected.offering ? offeringPriceLabel(selected.offering) : "По запросу";
   const rangeSummary = formatRange(rangeStart, rangeEnd);
   const checkoutDate = rangeEnd ?? rangeStart ?? "";
 
   const applyPromoCode = useCallback((code: string, announce = true) => {
+    if (!fixture) return;
     const normalized = code.trim().toUpperCase();
     const found = PROMO_CODES.find((promo) => promo.code === normalized);
     if (!found) {
@@ -137,13 +146,13 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
     setPromoInput(found.code);
     setAppliedPromo({ code: found.code, discount });
     if (announce) { fireConfetti(); onToast(`Промокод ${found.code} применен! Скидка: ${discount.toLocaleString("ru-RU")} ₽`); }
-  }, [onToast, rawTotal]);
+  }, [onToast, rawTotal, fixture]);
 
   useEffect(() => listenForSiteEvent(SITE_EVENTS.promo, ({ code }) => applyPromoCode(code, false)), [applyPromoCode]);
 
   const submit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || !selected.title) return;
     if (!rangeStart) { onToast("Пожалуйста, выберите даты поездки"); return; }
     if (!userPhone.trim()) { onToast("Пожалуйста, укажите номер телефона"); return; }
     if (!isConsentGiven) { onToast("Необходимо согласие на обработку данных"); return; }
@@ -166,9 +175,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
           appliedPromo ? `Промокод: ${appliedPromo.code}` : null,
         ].filter(Boolean).join("\n"),
         intent: {
-          // The homepage still uses editorial fixture cards; do not turn their
-          // local ids into operational entity references before a public
-          // projection supplies a UUID.
+          // This form requests conditions; it never confirms a booking or quote.
           kind: "general",
           startDate: rangeStart,
           ...(rangeEnd ? { endDate: rangeEnd } : {}),
@@ -213,7 +220,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
       setRangeEnd(null);
       return;
     }
-    if (containsBusyDate(rangeStart, date)) {
+    if (fixture && containsBusyDate(rangeStart, date)) {
       onToast("В диапазоне есть занятая дата — выберите более короткий период");
       return;
     }
@@ -224,6 +231,8 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
     setRangeStart(null);
     setRangeEnd(null);
   };
+
+  if (!HOUSES.length && !VENUES.length && !POPULAR_PROGRAMS.length) return null;
 
   return <section
     id="quiz"
@@ -238,7 +247,7 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
 
     <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
       <div className="lg:hidden sticky top-3 z-30 bg-surface rounded-[var(--site-radius-xl)] px-5 py-3 flex items-center justify-between gap-3">
-        <div><div className="text-[11px] text-ink-3">Предварительная цена</div><div className="text-[22px] font-semibold tracking-[-.8px] leading-none"><span>от </span><span data-calculated-price>{finalTotal.toLocaleString("ru-RU")} ₽</span></div></div>
+        <div><div className="text-[11px] text-ink-3">{fixture ? "Предварительная цена" : selected.offering?.priceBasisLabel ?? "Цена выбранного варианта"}</div><div className="text-[22px] font-semibold tracking-[-.8px] leading-none">{fixture && <span>от </span>}<span data-calculated-price>{priceLabel}</span></div></div>
         <div className="flex items-center gap-1" aria-label={`Шаг ${currentStep} из 3`}>{stepLabels.map((label, index) => <span key={label} className={`h-1.5 rounded-[var(--site-radius-round)] transition-all ${index + 1 === currentStep ? "w-6 bg-green" : index + 1 < currentStep ? "w-2 bg-green" : "w-2 bg-bg"}`} />)}</div>
       </div>
 
@@ -249,26 +258,26 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
 
         <div className="min-h-[290px]">
           {currentStep === 1 ? <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <Tabs className="site-calculator-tabs" value={activeTab} renderPanel={false} onValueChange={changeKind} items={kindTabs.map((tab) => ({ ...tab, content: null }))} />
-            {activeTab === "glamping" ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{HOUSES.map((house) => { const on = selectedHouseId === house.id; return <button key={house.id} type="button" aria-pressed={on} onClick={() => setSelectedHouseId(house.id)} className={`text-left rounded-[var(--site-radius-lg)] p-2 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="card-img w-14 h-14 !rounded-[var(--site-radius-sm)] shrink-0"><img src={house.photos[0]} alt="" /></span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold truncate">{house.title}</span><span className="block text-[11px] text-ink-3">до {house.capacityNumber} чел · за ночь</span><span className="block text-[13px] font-semibold mt-0.5">от {house.priceFrom.toLocaleString("ru-RU")} ₽</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
+            <Tabs className="site-calculator-tabs" value={activeTab} renderPanel={false} onValueChange={changeKind} items={kindTabs.filter((tab) => tab.id === "glamping" ? HOUSES.length : tab.id === "venue" ? VENUES.length : POPULAR_PROGRAMS.length).map((tab) => ({ ...tab, content: null }))} />
+            {activeTab === "glamping" ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{HOUSES.map((house) => { const on = selectedHouseId === house.id; return <button key={house.id} type="button" aria-pressed={on} onClick={() => setSelectedHouseId(house.id)} className={`text-left rounded-[var(--site-radius-lg)] p-2 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="card-img w-14 h-14 !rounded-[var(--site-radius-sm)] shrink-0">{house.photos[0] && <img src={house.photos[0]} alt="" />}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold truncate">{house.title}</span><span className="block text-[11px] text-ink-3">до {house.capacityNumber} чел{fixture ? " · за ночь" : house.publicOffering?.priceBasisLabel ? ` · ${house.publicOffering.priceBasisLabel}` : ""}</span><span className="block text-[13px] font-semibold mt-0.5">{house.publicOffering ? offeringPriceLabel(house.publicOffering) : `от ${house.priceFrom?.toLocaleString("ru-RU")} ₽`}</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
             {activeTab === "venue" ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{VENUES.map((venue) => { const on = selectedVenueId === venue.id; return <button key={venue.id} type="button" aria-pressed={on} onClick={() => setSelectedVenueId(venue.id)} className={`text-left rounded-[var(--site-radius-lg)] p-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="flex items-center justify-between gap-2"><span className="text-[13px] font-semibold">{venue.title}</span>{on ? <Check size={13} className="text-green" /> : null}</span><span className="block text-[11px] text-ink-3 mt-1">{venue.capacity} · {venue.area}</span></button>; })}</div> : null}
-            {activeTab === "event" ? <div className="flex flex-col gap-2">{POPULAR_PROGRAMS.map((program) => { const on = selectedProgramId === program.id; return <button key={program.id} type="button" aria-pressed={on} onClick={() => setSelectedProgramId(program.id)} className={`text-left rounded-[var(--site-radius-lg)] p-3 flex items-center justify-between gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span><span className="block text-[13px] font-semibold">{program.title}</span><span className="block text-[11px] text-ink-3 mt-1">{program.duration} · {program.age}</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
+            {activeTab === "event" ? <div className="flex flex-col gap-2">{POPULAR_PROGRAMS.map((program) => { const on = selectedProgramId === program.id; return <button key={program.id} type="button" aria-pressed={on} onClick={() => setSelectedProgramId(program.id)} className={`text-left rounded-[var(--site-radius-lg)] p-3 flex items-center justify-between gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span><span className="block text-[13px] font-semibold">{program.title}</span><span className="block text-[11px] text-ink-3 mt-1">{program.duration} · {program.publicOffering ? program.participants : program.age}</span></span><span className={`w-6 h-6 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-transparent"}`}><Check size={12} /></span></button>; })}</div> : null}
           </div> : null}
 
           {currentStep === 2 ? <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="flex items-center justify-between"><button type="button" onClick={() => moveMonth(-1)} className="arrow-bubble !bg-bg" aria-label="Предыдущий месяц"><ChevronLeft size={16} /></button><span className="text-[15px] font-semibold capitalize">{monthLabels[month.index]} {month.year}</span><button type="button" onClick={() => moveMonth(1)} className="arrow-bubble !bg-bg" aria-label="Следующий месяц"><ChevronRight size={16} /></button></div>
             <div className="grid grid-cols-7 gap-1 text-center" role="grid" aria-label={`Выбор диапазона: ${monthLabels[month.index]} ${month.year}`}>{weekDays.map((day) => <span key={day} role="columnheader" className="text-[11px] text-ink-3 py-1">{day}</span>)}{Array.from({ length: firstDayOffset }, (_, index) => <span key={`offset-${index}`} />)}{Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
               const date = isoDate(month.year, month.index, day);
-              const busy = isBusyDate(date);
+              const busy = fixture && isBusyDate(date);
               const endpoint = date === rangeStart || date === rangeEnd;
               const inRange = Boolean(rangeStart && rangeEnd && date > rangeStart && date < rangeEnd);
               const selectedDay = endpoint || inRange;
-              return <button key={day} type="button" role="gridcell" data-calendar-day={day} data-range-position={endpoint ? "endpoint" : inRange ? "within" : undefined} disabled={busy} aria-pressed={selectedDay} aria-label={`${day} ${monthLabels[month.index]} ${month.year}${busy ? ", недоступно" : endpoint ? ", граница выбранного диапазона" : inRange ? ", входит в выбранный диапазон" : ", доступно"}`} onClick={() => chooseDay(date)} className={`h-10 lg:h-11 rounded-[var(--site-radius-md)] text-[13px] font-medium transition-[background-color,color,transform] duration-300 ease-[var(--site-ease)] ${busy ? "bg-bg text-ink-3 opacity-60 line-through" : endpoint ? "bg-green text-white scale-[1.04]" : inRange ? "bg-green-soft text-green-deep" : "bg-green-soft text-green-deep hover:bg-green hover:text-white"}`}>{day}</button>;
+              return <button key={day} type="button" role="gridcell" data-calendar-day={day} data-range-position={endpoint ? "endpoint" : inRange ? "within" : undefined} disabled={busy} aria-pressed={selectedDay} aria-label={`${day} ${monthLabels[month.index]} ${month.year}${busy ? ", недоступно" : endpoint ? ", граница выбранного диапазона" : inRange ? ", входит в выбранный диапазон" : fixture ? ", доступно" : ", выбрать дату"}`} onClick={() => chooseDay(date)} className={`h-10 lg:h-11 rounded-[var(--site-radius-md)] text-[13px] font-medium transition-[background-color,color,transform] duration-300 ease-[var(--site-ease)] ${busy ? "bg-bg text-ink-3 opacity-60 line-through" : endpoint ? "bg-green text-white scale-[1.04]" : inRange ? "bg-green-soft text-green-deep" : "bg-green-soft text-green-deep hover:bg-green hover:text-white"}`}>{day}</button>;
             })}</div>
-            <div className="flex items-center justify-between gap-3 text-[11px] text-ink-3"><span className="flex items-center gap-4"><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-green-soft" />свободно</span><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-bg" />занято</span></span><span aria-live="polite" data-date-summary className="text-right">{rangeSummary}</span></div>
+            <div className="flex items-center justify-between gap-3 text-[11px] text-ink-3">{fixture ? <span className="flex items-center gap-4"><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-green-soft" />свободно</span><span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-[4px] bg-bg" />занято</span></span> : <span>Желаемые даты. Доступность проверит менеджер.</span>}<span aria-live="polite" data-date-summary className="text-right">{rangeSummary}</span></div>
           </div> : null}
 
-          {currentStep === 3 ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in slide-in-from-right-4 duration-300">{addonOptions.map((item) => { const on = Boolean(selectedAddons[item.id]); return <button key={item.id} type="button" aria-pressed={on} onClick={() => setSelectedAddons((value) => ({ ...value, [item.id]: !value[item.id] }))} className={`text-left rounded-[var(--site-radius-lg)] p-2.5 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="icon-tile !bg-surface text-[18px]">{item.icon}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold">{item.title}</span><span className="block text-[11px] text-ink-3">{item.desc} · +{item.price.toLocaleString("ru-RU")} ₽</span></span><span className={`w-7 h-7 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-ink"}`}>{on ? <Check size={13} /> : <Plus size={13} />}</span></button>; })}</div> : null}
+          {currentStep === 3 ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in slide-in-from-right-4 duration-300">{addonOptions.map((item) => { const on = Boolean(selectedAddons[item.id]); return <button key={item.id} type="button" aria-pressed={on} onClick={() => setSelectedAddons((value) => ({ ...value, [item.id]: !value[item.id] }))} className={`text-left rounded-[var(--site-radius-lg)] p-2.5 flex items-center gap-3 transition-colors ${on ? "bg-green-soft" : "bg-bg hover:bg-green-soft"}`}><span className="icon-tile !bg-surface text-[18px]">{item.icon}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold">{item.title}</span><span className="block text-[11px] text-ink-3">{item.desc} · {item.publicOffering ? offeringPriceLabel(item.publicOffering) : `+${item.price.toLocaleString("ru-RU")} ₽`}</span></span><span className={`w-7 h-7 rounded-[var(--site-radius-round)] inline-flex items-center justify-center ${on ? "bg-green text-white" : "bg-surface text-ink"}`}>{on ? <Check size={13} /> : <Plus size={13} />}</span></button>; })}</div> : null}
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
@@ -279,9 +288,10 @@ export const BookingQuizSection: React.FC<BookingQuizSectionProps> = ({ config, 
 
       <aside className="lg:col-span-5 lg:sticky lg:top-6">
         <div className="px-5 py-5 sm:p-6 rounded-[var(--site-radius-xl)] bg-surface flex flex-col gap-4">
-          <div aria-live="polite"><div className="text-[11px] text-ink-3">Предварительная цена</div><div className="flex items-baseline gap-2 mt-1"><span className="text-[32px] font-semibold tracking-[-1px] leading-none"><span>от </span><span data-calculated-price>{finalTotal.toLocaleString("ru-RU")} ₽</span></span>{appliedPromo ? <span className="text-[13px] text-ink-3 line-through">{rawTotal.toLocaleString("ru-RU")} ₽</span> : null}</div><div className="text-[12px] text-ink-2 mt-2 line-clamp-2">{selected.title} · <span data-date-summary>{rangeSummary}</span></div></div>
+          <div aria-live="polite"><div className="text-[11px] text-ink-3">{fixture ? "Предварительная цена" : selected.offering?.priceBasisLabel ?? "Цена выбранного варианта"}</div><div className="flex items-baseline gap-2 mt-1"><span className="text-[32px] font-semibold tracking-[-1px] leading-none">{fixture && <span>от </span>}<span data-calculated-price>{priceLabel}</span></span>{appliedPromo ? <span className="text-[13px] text-ink-3 line-through">{rawTotal.toLocaleString("ru-RU")} ₽</span> : null}</div><div className="text-[12px] text-ink-2 mt-2 line-clamp-2">{selected.title} · <span data-date-summary>{rangeSummary}</span></div></div>
           <div className="flex items-center justify-between rounded-[var(--site-radius-round)] bg-bg pl-4 pr-1 py-1"><span className="text-[13px] font-medium inline-flex items-center gap-2"><User size={14} />Количество гостей</span><span className="inline-flex items-center gap-1"><button type="button" onClick={() => setGuestCount(Math.max(1, guestCount - 1))} className="w-9 h-9 rounded-[var(--site-radius-round)] bg-surface inline-flex items-center justify-center hover:bg-green hover:text-white transition-colors" aria-label="Меньше гостей"><Minus size={13} /></button><span className="w-9 text-center text-[14px] font-semibold">{guestCount}</span><button type="button" onClick={() => setGuestCount(Math.min(300, guestCount + 1))} className="w-9 h-9 rounded-[var(--site-radius-round)] bg-surface inline-flex items-center justify-center hover:bg-green hover:text-white transition-colors" aria-label="Больше гостей"><Plus size={13} /></button></span></div>
-          <div className="relative h-11 rounded-[var(--site-radius-round)] bg-bg"><Ticket size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-3" /><Input aria-label="Промокод" placeholder="Введите промокод" value={promoInput} onChange={(event) => setPromoInput(event.target.value)} className="site-promo-input !h-11 !min-h-11 !rounded-[var(--site-radius-round)] !pl-10 !pr-14 !text-[14px] uppercase font-mono placeholder:normal-case placeholder:font-sans" /><button type="button" onClick={() => applyPromoCode(promoInput)} className="absolute right-0 top-0 w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center hover:bg-green-deep transition-colors" title="Применить промокод" aria-label="Применить промокод"><Gift size={15} /></button></div>
+          {fixture && <div className="relative h-11 rounded-[var(--site-radius-round)] bg-bg"><Ticket size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-3" /><Input aria-label="Промокод" placeholder="Введите промокод" value={promoInput} onChange={(event) => setPromoInput(event.target.value)} className="site-promo-input !h-11 !min-h-11 !rounded-[var(--site-radius-round)] !pl-10 !pr-14 !text-[14px] uppercase font-mono placeholder:normal-case placeholder:font-sans" /><button type="button" onClick={() => applyPromoCode(promoInput)} className="absolute right-0 top-0 w-11 h-11 rounded-[var(--site-radius-round)] bg-green text-white inline-flex items-center justify-center hover:bg-green-deep transition-colors" title="Применить промокод" aria-label="Применить промокод"><Gift size={15} /></button></div>}
+          {!fixture && <p className="text-[12px] text-ink-2">Стоимость выбранного варианта по опубликованному тарифу. Итог за даты, гостей и дополнительные услуги проверит менеджер.</p>}
           {!isSubmitted ? <form onSubmit={submit} className="flex flex-col gap-3" data-intake-range={`${rangeStart ?? ""}/${checkoutDate}`}>
             <input type="hidden" name="dateStart" value={rangeStart ?? ""} />
             <input type="hidden" name="dateEnd" value={checkoutDate} />

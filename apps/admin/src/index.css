@@ -14,6 +14,17 @@
 
 .admin-code-scroll { scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent) transparent; scrollbar-width: thin; }
 
+/* CMS actions wrap above its bottom navigation; CRM keeps its existing layout. */
+@media (max-width: 767px) {
+  #admin-main [data-slot="editor-actionbar"] { flex-direction: column; align-items: stretch; gap: .5rem; }
+  #admin-main [data-slot="editor-actionbar"] > [role="status"],
+  #admin-main [data-slot="editor-actionbar"] > [role="alert"] { align-self: flex-start; }
+  #admin-main [data-slot="editor-actionbar"] > div:last-child { display: flex; min-width: 0; flex-wrap: wrap; }
+  #admin-main [data-slot="editor-actionbar"] > div:last-child > button { flex: 1 1 auto; min-height: 44px; white-space: normal; }
+  #admin-main [data-slot="editor-actionbar"] > div:last-child > button:last-child { flex-basis: 100%; }
+  #admin-main [data-slot="editor-workspace"] { padding-bottom: 16rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

@@ -228,6 +228,7 @@ export class ApiCmsRepository implements CmsRepository {
   async getDashboard(): Promise<import("@admin/entities/cms").CmsDashboard> {
     const dashboard = await this.client.get("/dashboard", CmsDashboardResponseSchema)
     return {
+      hasPublication: dashboard.productionRelease !== null,
       productionRelease: dashboard.productionRelease ?? "Нет опубликованной версии",
       publishedAt: dashboard.publishedAt ? formatUpdated(dashboard.publishedAt) : "Пока не публиковали",
       drafts: dashboard.drafts,
@@ -249,7 +250,16 @@ export class ApiCmsRepository implements CmsRepository {
     return uploadGrantedMedia(grant, file)
   }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) {
-    const response = await this.client.patch(`/media/assets/${encodeURIComponent(asset.id)}`, { expectedVersion: asset.version ?? 1, title: asset.title, alt: asset.alt || null, caption: null, credit: null, license: asset.license || null, tags: [], focalPoint: { x: 0.5, y: 0.5 } }, MediaAssetDetailSchema)
+    const response = await this.client.patch(`/media/assets/${encodeURIComponent(asset.id)}`, {
+      expectedVersion: asset.version ?? 1,
+      title: asset.title,
+      alt: mediaTextValue(asset.alt, asset.sourceMetadata?.alt, ""),
+      caption: mediaTextValue(asset.caption ?? "", asset.sourceMetadata?.caption, ""),
+      credit: mediaTextValue(asset.credit ?? "", asset.sourceMetadata?.credit, ""),
+      license: mediaTextValue(asset.license, asset.sourceMetadata?.license, "Не указана"),
+      tags: asset.tags ?? [],
+      focalPoint: asset.focalPoint ?? { x: 0.5, y: 0.5 },
+    }, MediaAssetDetailSchema)
     return mediaView(response.asset, response.usages)
   }
   async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
@@ -352,7 +362,7 @@ export class ApiCmsRepository implements CmsRepository {
     return {
       id: detail.node.id, kind, internalName: revision.title, publicTitle: revision.title, slug: revision.route.path === "/" ? "" : revision.route.slug,
       parent: revision.route.parentNodeId ? `Node ${revision.route.parentNodeId.slice(0, 8)}` : "Корень сайта", parentNodeId: revision.route.parentNodeId, sortOrder: revision.route.sortOrder, hasPublishedRevision: detail.latestPublished !== null, url: revision.route.path,
-      status: detail.node.status === "archived" ? "archived" : contentStatus(revision.state), revisionState: revision.state, version: detail.node.version, revision: revision.revision,
+      status: detail.node.status === "archived" ? "archived" : contentStatus(revision.state), revisionState: revision.state, version: detail.node.version, revision: revision.revision, schemaVersion: revision.schemaVersion,
       owner: detail.source ? "Синхронизация CRM" : revision.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", source: detail.source ? "CRM" : "CMS", updatedLabel: formatUpdated(detail.node.updatedAt),
       reviewLabel: detail.latestPublished ? `Опубликована версия ${detail.latestPublished.revision}` : "Ещё не опубликовано", seoChecks: seoChecks(revision),
       sections: revision.sections.map((section) => {
@@ -444,34 +454,80 @@ function mergeSectionModes(sections: CmsSection[], local: EditorRecord["sections
 
 function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
   const config = revision.hero.mode === "override" ? revision.hero.config : null
-  const primary = config?.actions.find((action) => action.style === "primary") ?? config?.actions[0]
+  const primary = config?.actions.find((action) => action.style === "primary")
   const secondary = config?.actions.find((action) => action.style === "secondary")
   const focal = config?.slides[0]?.focalPoint.x ?? 0.5
   return {
     mode: revision.hero.mode, eyebrow: config?.eyebrow ?? "Свистоплясово", title: config?.title ?? revision.title,
-    description: config?.subtitle ?? revision.summary ?? "", primaryCtaLabel: primary?.label ?? "Подобрать отдых",
+    description: config ? config.subtitle ?? "" : revision.summary ?? "", primaryCtaLabel: primary?.label ?? "Подобрать отдых",
     primaryCtaTarget: primary?.href ?? "#booking", primaryCtaEnabled: primary?.enabled ?? false,
     secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
     desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.foregroundAssetId ?? "",
     overlay: config?.overlay === "none" ? 0 : config?.overlay === "soft" ? 25 : config?.overlay === "strong" ? 70 : 45,
     focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left",
+    sourcePolicy: clone(revision.hero),
   }
 }
 
 function heroPolicy(hero: HeroConfig): CmsHeroPolicy {
   if (hero.mode !== "override") return { mode: hero.mode }
-  const backgroundAssetId = isUuid(hero.desktopImage) ? hero.desktopImage : null
-  const foregroundAssetId = isUuid(hero.mobileImage) ? hero.mobileImage : null
-  const actions = [
-    ...(hero.primaryCtaLabel && hero.primaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000101", label: hero.primaryCtaLabel, href: hero.primaryCtaTarget, target: "_self" as const, style: "primary" as const, enabled: hero.primaryCtaEnabled }] : []),
-    ...(hero.secondaryCtaLabel && hero.secondaryCtaTarget ? [{ id: "00000000-0000-4000-8000-000000000102", label: hero.secondaryCtaLabel, href: hero.secondaryCtaTarget, target: "_self" as const, style: "secondary" as const, enabled: hero.secondaryCtaEnabled }] : []),
-  ]
-  return { mode: "override", config: {
-    variant: "default", eyebrow: hero.eyebrow || null, title: hero.title, subtitle: hero.description || null,
-    backgroundAssetId, foregroundAssetId, background: null, foreground: null,
-    overlay: hero.overlay <= 10 ? "none" : hero.overlay <= 35 ? "soft" : hero.overlay >= 60 ? "strong" : "medium",
-    align: hero.alignment, actions, slides: [], badge: null, featureCards: [], autoplayMs: null,
-  } }
+  const sourceConfig = hero.sourcePolicy?.mode === "override" ? hero.sourcePolicy.config : undefined
+  const base = sourceConfig ? clone(sourceConfig) : {
+    variant: "default" as const, eyebrow: null, title: hero.title, subtitle: null,
+    backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null,
+    overlay: "medium" as const, align: "left" as const, actions: [], slides: [], badge: null, featureCards: [], autoplayMs: null,
+  }
+  const baseline = sourceConfig ? heroEditableValues(sourceConfig) : heroEditableDefaults(hero.title)
+  if (hero.eyebrow !== baseline.eyebrow) base.eyebrow = hero.eyebrow || null
+  if (hero.title !== baseline.title) base.title = hero.title
+  if (hero.description !== baseline.description) base.subtitle = hero.description || null
+  if (hero.desktopImage !== baseline.desktopImage) { base.backgroundAssetId = isUuid(hero.desktopImage) ? hero.desktopImage : null; base.background = null }
+  if (hero.mobileImage !== baseline.mobileImage) { base.foregroundAssetId = isUuid(hero.mobileImage) ? hero.mobileImage : null; base.foreground = null }
+  if (hero.overlay !== baseline.overlay) base.overlay = overlayPolicy(hero.overlay)
+  if (hero.alignment !== baseline.alignment) base.align = hero.alignment
+  if (hero.focalPosition !== baseline.focalPosition && base.slides[0]) base.slides[0] = { ...base.slides[0], focalPoint: { ...base.slides[0].focalPoint, x: focalPoint(hero.focalPosition) } }
+  base.actions = mergeHeroActions(base.actions, hero, baseline)
+  return { mode: "override", config: base }
+}
+
+function mergeHeroActions(actions: NonNullable<Extract<CmsHeroPolicy, { mode: "override" }>["config"]>["actions"], hero: HeroConfig, baseline: ReturnType<typeof heroEditableValues>) {
+  const next = actions.map((action) => ({ ...action }))
+  if (hero.primaryCtaLabel !== baseline.primaryCtaLabel || hero.primaryCtaTarget !== baseline.primaryCtaTarget || hero.primaryCtaEnabled !== baseline.primaryCtaEnabled) {
+    mergeHeroAction(next, next.findIndex((action) => action.style === "primary"), "00000000-0000-4000-8000-000000000101", "primary", hero.primaryCtaLabel, hero.primaryCtaTarget, hero.primaryCtaEnabled)
+  }
+  if (hero.secondaryCtaLabel !== baseline.secondaryCtaLabel || hero.secondaryCtaTarget !== baseline.secondaryCtaTarget || hero.secondaryCtaEnabled !== baseline.secondaryCtaEnabled) {
+    mergeHeroAction(next, next.findIndex((action) => action.style === "secondary"), "00000000-0000-4000-8000-000000000102", "secondary", hero.secondaryCtaLabel, hero.secondaryCtaTarget, hero.secondaryCtaEnabled)
+  }
+  return next
+}
+
+function heroEditableValues(config: Extract<CmsHeroPolicy, { mode: "override" }>["config"]) {
+  const primary = config.actions.find((action) => action.style === "primary")
+  const secondary = config.actions.find((action) => action.style === "secondary")
+  const focal = config.slides[0]?.focalPoint.x ?? 0.5
+  return {
+    eyebrow: config.eyebrow ?? "Свистоплясово", title: config.title, description: config.subtitle ?? "",
+    primaryCtaLabel: primary?.label ?? "Подобрать отдых", primaryCtaTarget: primary?.href ?? "#booking", primaryCtaEnabled: primary?.enabled ?? false,
+    secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
+    desktopImage: config.backgroundAssetId ?? "", mobileImage: config.foregroundAssetId ?? "", overlay: overlayValue(config.overlay),
+    focalPosition: focal < 0.34 ? "left" as const : focal > 0.66 ? "right" as const : "center" as const, alignment: config.align,
+  }
+}
+
+function heroEditableDefaults(title: string): ReturnType<typeof heroEditableValues> { return { eyebrow: "Свистоплясово", title, description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" } }
+function overlayValue(overlay: Extract<CmsHeroPolicy, { mode: "override" }>["config"]["overlay"]) { return overlay === "none" ? 0 : overlay === "soft" ? 25 : overlay === "strong" ? 70 : 45 }
+function overlayPolicy(overlay: number) { return overlay <= 10 ? "none" as const : overlay <= 35 ? "soft" as const : overlay >= 60 ? "strong" as const : "medium" as const }
+function focalPoint(position: HeroConfig["focalPosition"]) { return position === "left" ? 0.2 : position === "right" ? 0.8 : 0.5 }
+
+function mergeHeroAction(actions: Extract<CmsHeroPolicy, { mode: "override" }>["config"]["actions"], index: number, fallbackId: string, style: "primary" | "secondary", label: string, href: string, enabled: boolean) {
+  if (!label || !href) {
+    if (index >= 0) actions.splice(index, 1)
+    return
+  }
+  const previous = index >= 0 ? actions[index] : undefined
+  const action = { id: previous?.id ?? fallbackId, label, href, target: previous?.target ?? "_self" as const, style, enabled }
+  if (index >= 0) actions[index] = action
+  else actions.push(action)
 }
 function apiKind(kind: EditorRecord["kind"]): CmsPageKind { return kind === "profile" ? "resource_detail" : kind }
 function localKind(kind: CmsPageKind): EditorRecord["kind"] { const type = localNodeType(kind); return type === "profile" ? "profile" : type }
@@ -525,10 +581,13 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
     progress: status === "ready" || status === "archived" ? 100 : status === "error" ? 0 : 55,
     dimensions: asset.width && asset.height ? `${asset.width}×${asset.height}` : "—", size: formatBytes(asset.byteSize),
     usageCount: asset.usageCount, publishedUsage: asset.publishedUsage, alt: asset.alt ?? "", license: asset.license ?? "Не указана",
+    sourceMetadata: { alt: asset.alt, caption: asset.caption, credit: asset.credit, license: asset.license },
+    caption: asset.caption ?? "", credit: asset.credit ?? "", tags: [...asset.tags], focalPoint: { ...asset.focalPoint },
     dominant: "#66705a", ...(preview ? { previewUrl: preview.url } : {}), variants: asset.variants, usages,
   }
 }
 function mapMutationError(error: unknown) { if (error instanceof AdminApiError && error.rawCode === "VERSION_CONFLICT") return new CmsConflictError(Number(error.details.serverVersion ?? 0), error.requestId); return error }
+function mediaTextValue(value: string, source: string | null | undefined, emptyDisplay: string) { return source !== undefined && value === (source ?? emptyDisplay) ? source : value || null }
 function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
 
 function sameEditorContent(left: EditorRecord, right: EditorRecord) {
@@ -564,6 +623,9 @@ function metrikaFromDetail(detail: CmsMetrikaSettingsDetail): MetrikaSettingsRec
 function navigationValues(value: PublicNavigation, detail: CmsSiteSettingsDetail): CmsSiteSettingsValue {
   const base = detail.draft?.value ?? detail.published?.value
   if (!base) throw new CmsUnavailableError("Настройки сайта")
+  assertNavigationLimit(value.header, 30, "Шапка")
+  assertNavigationLimit(value.mobile, 30, "Мобильное меню")
+  assertNavigationLimit(value.footer, 60, "Footer")
   return { ...base, headerNavigation: value.header.map(toWireItem), mobileNavigation: value.mobile.map(toWireItem), footerNavigation: value.footer.map(toWireItem) }
 }
 
@@ -571,28 +633,37 @@ function fromWireNavigation(item: WireNavigationAny): PublicNavigationItem {
   return {
     id: item.id, label: item.label,
     href: item.link.kind === "external" ? item.link.url : `${item.link.path}${item.link.anchor ? `#${item.link.anchor}` : ""}`,
-    icon: item.icon ?? "link", color: item.color ?? "#5f6368", visible: item.enabled,
+    icon: item.icon ?? "link", color: item.color ?? "#5f6368", sourceIcon: item.icon, sourceColor: item.color, visible: item.enabled, target: item.target, visibleOn: item.visibleOn,
     children: item.children.map(fromWireNavigation),
   }
 }
 
 function toWireItem(item: PublicNavigationItem): WireNavigationItem {
-  return { ...wireBase(item), children: item.children.slice(0, 30).map(toWireChild) }
+  assertNavigationLimit(item.children, 30, item.label)
+  return { ...wireBase(item), children: item.children.map(toWireChild) }
 }
 function toWireChild(item: PublicNavigationItem): WireNavigationChild {
-  return { ...wireBase(item), children: item.children.slice(0, 30).map(toWireLeaf) }
+  assertNavigationLimit(item.children, 30, item.label)
+  return { ...wireBase(item), children: item.children.map(toWireLeaf) }
 }
-function toWireLeaf(item: PublicNavigationItem): WireNavigationLeaf { return { ...wireBase(item), children: [] } }
+function toWireLeaf(item: PublicNavigationItem): WireNavigationLeaf {
+  if (item.children.length) throw new Error(`Пункт «${item.label}» превышает разрешённую вложенность меню`)
+  return { ...wireBase(item), children: [] }
+}
 function wireBase(item: PublicNavigationItem) {
-  return { id: isUuid(item.id) ? item.id : uuidForNavigation(), label: item.label, link: hrefToLink(item.href), target: "_self" as const, icon: item.icon || null, color: item.color || null, visibleOn: "all" as const, enabled: item.visible }
+  const icon = item.sourceIcon !== undefined && item.icon === (item.sourceIcon ?? "link") ? item.sourceIcon : item.icon || null
+  const color = item.sourceColor !== undefined && item.color === (item.sourceColor ?? "#5f6368") ? item.sourceColor : item.color || null
+  return { id: isUuid(item.id) ? item.id : uuidForNavigation(), label: item.label, link: hrefToLink(item.href), target: item.target ?? "_self", icon, color, visibleOn: item.visibleOn ?? "all", enabled: item.visible }
 }
 function hrefToLink(href: string): WireNavigationAny["link"] {
   if (/^https?:\/\//i.test(href)) return { kind: "external", url: href }
   const [rawPath, rawAnchor] = href.split("#", 2)
-  const path = rawPath?.startsWith("/") ? rawPath : "/"
+  const path = rawPath === "" ? "/" : rawPath?.startsWith("/") ? rawPath : null
+  if (!path) throw new Error(`Ссылка «${href}» должна начинаться с / или быть полным https:// URL`)
   return rawAnchor ? { kind: "internal", path, anchor: rawAnchor } : { kind: "internal", path }
 }
 function uuidForNavigation() { return globalThis.crypto?.randomUUID?.() ?? fallbackUuid() }
+function assertNavigationLimit(items: PublicNavigationItem[], limit: number, parent: string) { if (items.length > limit) throw new Error(`В пункте «${parent}» больше ${limit} подпунктов`) }
 
 const sessionResponseParser = {
   safeParse(value: unknown) {

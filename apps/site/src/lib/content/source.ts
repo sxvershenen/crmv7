@@ -1,5 +1,7 @@
 import {
   PublicListingResultSchema,
+  PublicHouseListResponseSchema, PublicProgramListResponseSchema, PublicVenueListResponseSchema, PublicAddOnListResponseSchema,
+  type PublicHouseListResponse, type PublicProgramListResponse, type PublicVenueListResponse, type PublicAddOnListResponse,
   PublicHouseSummarySchema,
   PublicCampgroundSummarySchema,
   PublicAddOnSummarySchema,
@@ -25,12 +27,18 @@ import {
   type PublicSiteSettings,
 } from "@crm/contracts"
 
+import type { HomepageCommerce } from "./homepage-commerce"
+
 export type ContentResult<T> =
   | { status: "published"; value: T }
   | { status: "not_found" }
   | { status: "unavailable" }
 
 export interface ContentSource {
+  houses(): Promise<ContentResult<PublicHouseListResponse>>
+  programs(): Promise<ContentResult<PublicProgramListResponse>>
+  venues(): Promise<ContentResult<PublicVenueListResponse>>
+  addons(): Promise<ContentResult<PublicAddOnListResponse>>
   page(path: string): Promise<ContentResult<PublicPage>>
   manifest(): Promise<ContentResult<PublicRouteManifest>>
   settings(): Promise<ContentResult<PublicSiteSettings>>
@@ -52,6 +60,7 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
         headers: { accept: "application/json" },
         signal: controller.signal,
         redirect: "error",
+        cache: "no-store",
       })
       if (response.status === 404) {
         const body: unknown = await response.json()
@@ -69,6 +78,10 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
   }
 
   return {
+    houses: () => document("/offerings/houses?limit=100", (value) => PublicHouseListResponseSchema.parse(value)),
+    programs: () => document("/offerings/programs?limit=100", (value) => PublicProgramListResponseSchema.parse(value)),
+    venues: () => document("/offerings/venues?limit=100", (value) => PublicVenueListResponseSchema.parse(value)),
+    addons: () => document("/offerings/addons?limit=100", (value) => PublicAddOnListResponseSchema.parse(value)),
     page(path) {
       const query = new URLSearchParams({ path, locale: "ru-RU" })
       return document(`/pages/resolve?${query}`, (value) => PublicPageSchema.parse(value))
@@ -109,6 +122,7 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
 
 export type PublishedRoute = ContentResult<{
   page: PublicPage
+  commerce: HomepageCommerce
   settings: PublicSiteSettings
   listing: PublicListingResult | null
   house: PublicHouseSummary | null
@@ -134,6 +148,28 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
   if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success) || whyUs.length > 1 || whyUs.some((section) => !CmsWhyUsSectionSchema.safeParse(section).success) || homepage.length !== uniqueHomepageKeys.size || homepage.some((section) => !CmsHomeSectionSchema.safeParse(section).success)) {
     return { status: "unavailable" }
   }
+  const commerce: HomepageCommerce = { houses: [], programs: [], venues: [], addons: [] }
+  const sectionKeys = new Set(homepage.map((section) => section.key))
+  const calculator = sectionKeys.has("calculator")
+  const [houses, programs, venues, addons] = await Promise.all([
+    sectionKeys.has("houses") || calculator ? source.houses() : null,
+    sectionKeys.has("programs") || sectionKeys.has("events") || calculator ? source.programs() : null,
+    sectionKeys.has("venues") || calculator ? source.venues() : null,
+    calculator ? source.addons() : null,
+  ])
+  for (const result of [houses, programs, venues, addons]) {
+    if (result && (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.items.some((item) => item.sourceVersions.contentReleaseId !== page.value.releaseId))) return { status: "unavailable" }
+  }
+  if (houses?.status === "published") {
+    if (houses.value.items.some((item) => item.releaseId !== page.value.releaseId)) return { status: "unavailable" }
+    commerce.houses = houses.value.items
+  }
+  if (programs?.status === "published") {
+    if (programs.value.items.some((item) => item.releaseId !== page.value.releaseId)) return { status: "unavailable" }
+    commerce.programs = programs.value.items
+  }
+  if (venues?.status === "published") commerce.venues = venues.value.items
+  if (addons?.status === "published") commerce.addons = addons.value.items
   let listing: PublicListingResult | null = null
   if (page.value.sections.some((section) => section.renderer === "listing")) {
     const result = await source.listing(path, searchParams)
@@ -202,7 +238,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     }
     eventService = result.value
   }
-  return { status: "published", value: { page: page.value, settings: settings.value, listing, house, campground, addon, venue, program, eventService } }
+  return { status: "published", value: { page: page.value, commerce, settings: settings.value, listing, house, campground, addon, venue, program, eventService } }
 }
 
 export function usesFixtureContent(environment: { DEV?: boolean; SITE_CONTENT_SOURCE?: string }): boolean {

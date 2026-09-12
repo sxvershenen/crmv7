@@ -8,6 +8,7 @@ import { ContentStatusBadge } from "@admin/components/cms-ui"
 import { cmsRepository } from "@admin/data/cms-repository"
 import { CmsConflictError, type PublicNavigation, type PublicNavigationItem } from "@admin/entities/cms"
 import { useRepository } from "@admin/features/use-repository"
+import { UnsavedChangesGuard } from "@admin/features/unsaved-changes-guard"
 
 const tabs = [
   { value: "header", label: "Шапка сайта", compactLabel: "Шапка", icon: IconDeviceDesktop },
@@ -25,23 +26,24 @@ export function NavigationPage() {
   const loader = useCallback(() => cmsRepository.getNavigation(), [])
   const accessLoader = useCallback(() => cmsRepository.getAccess(), [])
   const state = useRepository(loader); const access = useRepository(accessLoader)
-  const [draft, setDraft] = useState<PublicNavigation>(); const [saveState, setSaveState] = useState<EditorSaveState>("saved"); const [error, setError] = useState<string>(); const [publishing, setPublishing] = useState(false)
+  const [draft, setDraft] = useState<PublicNavigation>(); const [persistedDraft, setPersistedDraft] = useState<PublicNavigation>(); const [saveState, setSaveState] = useState<EditorSaveState>("saved"); const [error, setError] = useState<string>(); const [publishing, setPublishing] = useState(false)
   const [params, setParams] = useSearchParams(); const requestedTab = params.get("tab"); const tab: "header" | "mobile" | "footer" = requestedTab === "footer" || requestedTab === "mobile" ? requestedTab : "header"
-  useEffect(() => { if (state.data) { setDraft(state.data); setSaveState("saved") } }, [state.data])
+  useEffect(() => { if (state.data) { setDraft(state.data); setPersistedDraft(state.data); setSaveState("saved") } }, [state.data])
   const editable = access.data?.canEditContent === true
   const items = draft?.[tab] ?? []
   const updateItems = (next: PublicNavigationItem[]) => { if (!draft || !editable) return; setDraft({ ...draft, [tab]: next }); setSaveState("dirty"); setError(undefined) }
-  const save = async () => { if (!draft || !editable || saveState === "saved") return draft; setSaveState("saving"); setError(undefined); try { const saved = await cmsRepository.saveNavigation(draft, draft.version); setDraft(saved); setSaveState("saved"); return saved } catch (cause) { setSaveState(cause instanceof CmsConflictError ? "conflict" : "dirty"); setError(message(cause, "Не удалось сохранить меню")); return undefined } }
-  const publish = async () => { if (!draft || !access.data?.canPublishContent) return; setPublishing(true); setSaveState("saving"); setError(undefined); try { let current = draft; if (saveState === "dirty") { const saved = await cmsRepository.saveNavigation(current, current.version); if (!saved) return; current = saved } const published = await cmsRepository.publishNavigation(current.version); setDraft(published); setSaveState("saved") } catch (cause) { setSaveState(cause instanceof CmsConflictError ? "conflict" : "dirty"); setError(message(cause, "Не удалось опубликовать меню")) } finally { setPublishing(false) } }
-  const navigation = <PageNav items={tabs} onValueChange={(value) => { const next = new URLSearchParams(params); next.set("tab", value); setParams(next, { replace: true }) }} value={tab} />
+  const save = async () => { if (!draft || !editable || saveState === "saved") return draft; setSaveState("saving"); setError(undefined); try { const saved = await cmsRepository.saveNavigation(draft, draft.version); setDraft(saved); setPersistedDraft(saved); setSaveState("saved"); return saved } catch (cause) { setSaveState(cause instanceof CmsConflictError ? "conflict" : "dirty"); setError(message(cause, "Не удалось сохранить меню")); return undefined } }
+  const publish = async () => { if (!draft || !access.data?.canPublishContent) return; const hadLocalChanges = saveState === "dirty"; let saveCompleted = !hadLocalChanges; let current = draft; setPublishing(true); setSaveState("saving"); setError(undefined); try { if (hadLocalChanges) { current = await cmsRepository.saveNavigation(current, current.version); saveCompleted = true; setDraft(current); setPersistedDraft(current); setSaveState("saved") } const published = await cmsRepository.publishNavigation(current.version); setDraft(published); setPersistedDraft(published); setSaveState("saved") } catch (cause) { setDraft(current); setSaveState(cause instanceof CmsConflictError ? "conflict" : saveCompleted ? "saved" : "dirty"); setError(message(cause, "Не удалось опубликовать меню")) } finally { setPublishing(false) } }
+  const recoverConflict = async () => { if (!draft) return; setError(undefined); try { const server = await cmsRepository.getNavigation(); const recovered = mergeNavigationChanges(persistedDraft ?? draft, draft, server); setPersistedDraft(server); setDraft(recovered); setSaveState("dirty"); setError(`Загружена серверная версия ${server.version}. Локальные изменения сохранены в форме.`) } catch (cause) { setError(message(cause, "Не удалось загрузить серверное меню")) } }
+  const navigation = <><UnsavedChangesGuard when={saveState === "dirty" || saveState === "saving" || saveState === "conflict"} /><PageNav items={tabs} onValueChange={(value) => { const next = new URLSearchParams(params); next.set("tab", value); setParams(next, { replace: true }) }} value={tab} /></>
 
-  if (state.loading || access.loading || !draft) return <div className="p-4"><LoadingRows count={7} /></div>
   if (state.error) return <PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={state.reload} title="Не удалось загрузить меню">{state.error}</PageState>
+  if (state.loading || access.loading || !draft) return <div className="p-4"><LoadingRows count={7} /></div>
 
   return <EditorFrame actions={<ContentStatusBadge status={draft.status} />} footerActions={<><Button disabled={!editable || saveState === "saved" || saveState === "saving"} onClick={() => void save()} size="sm" variant="outline">Сохранить</Button><Button disabled={!access.data?.canPublishContent || publishing || saveState === "conflict"} onClick={() => void publish()} size="sm"><IconRocket />{publishing ? "Публикуем…" : saveState === "dirty" ? "Сохранить и опубликовать" : "Опубликовать"}</Button></>} mobileActions={<ContentStatusBadge status={draft.status} />} navigation={navigation} {...(saveState === "conflict" ? { saveDetail: "Меню изменено в другой вкладке" } : {})} saveState={saveState} sidebar={<NavigationSidebar draft={draft} />}>
     <div className="space-y-3">
       <EditorSection actions={<Button disabled={!editable} onClick={() => updateItems([...items, newItem()])} size="xs" variant="outline"><IconPlus />Добавить пункт</Button>} subtitle={tab === "header" ? "Основное меню на компьютере. Вложенность — до трёх уровней." : tab === "mobile" ? "Отдельный порядок и состав меню на телефоне." : "Ссылки, контакты и документы внизу каждой страницы."} title={tab === "header" ? "Навигация сайта" : tab === "mobile" ? "Меню телефона" : "Нижнее меню"}>
-        {error ? <Alert className="mb-3" variant="destructive"><IconAlertTriangle /><AlertTitle>Изменения не сохранены</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+        {error ? <Alert className="mb-3" variant="destructive"><IconAlertTriangle /><AlertTitle>{saveState === "conflict" ? "Меню изменено в другой вкладке" : "Операция не выполнена"}</AlertTitle><AlertDescription><p>{error}</p>{saveState === "conflict" ? <div className="mt-2 flex flex-wrap gap-2"><Button onClick={() => void recoverConflict()} size="xs" variant="outline">Сверить с сервером</Button><Button onClick={state.reload} size="xs" variant="outline">Загрузить серверное меню</Button></div> : null}</AlertDescription></Alert> : null}
         {items.length ? <NavigationList items={items} onChange={updateItems} readonly={!editable} /> : <PageState actionLabel="Добавить первый пункт" icon={IconLink} onAction={() => updateItems([newItem()])} title="Меню пока пустое">Добавьте ссылку на страницу или раздел сайта.</PageState>}
       </EditorSection>
       <NavigationPreview items={items} tab={tab} />
@@ -80,3 +82,42 @@ function Summary({ label, value }: { label: string; value: React.ReactNode }) { 
 function newItem(): PublicNavigationItem { const id = globalThis.crypto?.randomUUID?.() ?? `menu-${Date.now()}-${Math.random().toString(36).slice(2)}`; return { id, label: "Новый пункт", href: "/", icon: "link", color: "#5f6368", visible: true, children: [] } }
 function countItems(items: PublicNavigationItem[]): number { return items.reduce((sum, item) => sum + 1 + countItems(item.children), 0) }
 function message(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback }
+
+function mergeNavigationChanges(persisted: PublicNavigation, local: PublicNavigation, server: PublicNavigation): PublicNavigation {
+  return {
+    ...server,
+    header: mergeNavigationItems(persisted.header, local.header, server.header),
+    mobile: mergeNavigationItems(persisted.mobile, local.mobile, server.mobile),
+    footer: mergeNavigationItems(persisted.footer, local.footer, server.footer),
+  }
+}
+
+function mergeNavigationItems(persisted: PublicNavigationItem[], local: PublicNavigationItem[], server: PublicNavigationItem[]): PublicNavigationItem[] {
+  const before = new Map(persisted.map((item) => [item.id, item]))
+  const edited = new Map(local.map((item) => [item.id, item]))
+  const removed = new Set(persisted.filter((item) => !edited.has(item.id)).map((item) => item.id))
+  let merged = server.filter((item) => !removed.has(item.id)).map((item) => {
+    const previous = before.get(item.id)
+    const localItem = edited.get(item.id)
+    if (!previous || !localItem) return item
+    return {
+      ...item,
+      label: valueChanged(previous.label, localItem.label) ? localItem.label : item.label,
+      href: valueChanged(previous.href, localItem.href) ? localItem.href : item.href,
+      icon: valueChanged(previous.icon, localItem.icon) ? localItem.icon : item.icon,
+      color: valueChanged(previous.color, localItem.color) ? localItem.color : item.color,
+      visible: valueChanged(previous.visible, localItem.visible) ? localItem.visible : item.visible,
+      ...(valueChanged(previous.target, localItem.target) && localItem.target !== undefined ? { target: localItem.target } : {}),
+      ...(valueChanged(previous.visibleOn, localItem.visibleOn) && localItem.visibleOn !== undefined ? { visibleOn: localItem.visibleOn } : {}),
+      children: mergeNavigationItems(previous.children, localItem.children, item.children),
+    }
+  })
+  for (const item of local) if (!before.has(item.id) && !merged.some((current) => current.id === item.id)) merged.push(item)
+  if (valueChanged(persisted.map((item) => item.id), local.filter((item) => before.has(item.id)).map((item) => item.id))) {
+    const byId = new Map(merged.map((item) => [item.id, item]))
+    merged = [...local.map((item) => byId.get(item.id)).filter((item): item is PublicNavigationItem => Boolean(item)), ...merged.filter((item) => !edited.has(item.id))]
+  }
+  return merged
+}
+
+function valueChanged(left: unknown, right: unknown) { return JSON.stringify(left) !== JSON.stringify(right) }

@@ -30,8 +30,13 @@ export function getHomepageSections(page: PublicPage | null, fixture: boolean): 
     if (section.key === "partners") result.push({ key: "partners", config: CmsPartnersSectionSchema.parse(section).config })
     else if (section.key === "why-us") result.push({ key: "why-us", config: CmsWhyUsSectionSchema.parse(section).config })
     else if (isCmsHomeSectionKey(section.key) && (section.key !== "faq" && section.key !== "directions" || !locationRendered)) {
-      if (section.key === "faq" || section.key === "directions") locationRendered = true
-      result.push({ key: section.key, config: CmsHomeSectionSchema.parse(section).config })
+      const config = CmsHomeSectionSchema.parse(section).config
+      if (section.key === "reviews" && !config.reviews?.length) continue
+      if (section.key === "faq" || section.key === "directions") {
+        if (!config.faq?.length) continue
+        locationRendered = true
+      }
+      result.push({ key: section.key, config })
     }
   }
   return result

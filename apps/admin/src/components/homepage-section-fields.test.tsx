@@ -14,12 +14,12 @@ describe("homepage section fields", () => {
     const user = userEvent.setup(); render(<Harness />)
     await user.type(screen.getByLabelText("Заголовок секции"), " из CMS")
     await user.type(screen.getByLabelText("Описание секции"), " Текст")
-    await user.type(screen.getByLabelText("CTA · подпись"), "Все события")
-    await user.clear(screen.getByLabelText("CTA · путь"))
-    await user.type(screen.getByLabelText("CTA · путь"), "/events")
+    await user.type(screen.getByLabelText("Текст кнопки"), "Все события")
+    await user.clear(screen.getByLabelText("Ссылка кнопки"))
+    await user.type(screen.getByLabelText("Ссылка кнопки"), "/events")
     expect(screen.queryByText("Перед публикацией")).not.toBeInTheDocument()
     expect(screen.getByLabelText("Заголовок секции")).toHaveValue("События из CMS")
-    expect(screen.getByLabelText("CTA · путь")).toHaveValue("/events")
+    expect(screen.getByLabelText("Ссылка кнопки")).toHaveValue("/events")
   })
 
   it("shows an explicit draft warning and disables mutations without edit capability", async () => {

@@ -1,6 +1,6 @@
 import type { SiteHeroConfig, SiteNavigationConfig } from "@crm/site-ui"
 import type { CmsHomeSectionConfig, CmsHomeSectionKey, CmsPartnersSectionConfig, CmsWhyUsSectionConfig } from "@crm/contracts"
-import { PARTNERS_LIST, RESORT_IMAGES, WHY_US_FACTS } from "./resortData"
+import { FAQ_ITEMS, PARTNERS_LIST, RESORT_IMAGES, REVIEWS_DATA, WHY_US_FACTS } from "./resortData"
 
 export const DEFAULT_WHY_US_CONFIG: CmsWhyUsSectionConfig = {
   eyebrow: "Почему мы",
@@ -27,10 +27,10 @@ export const DEFAULT_HOMEPAGE_SECTION_CONFIGS: Record<CmsHomeSectionKey, CmsHome
   programs: { eyebrow: null, title: "Программы и направления", description: "", action: null },
   venues: { eyebrow: null, title: "Площадки", description: "", action: null },
   blog: { eyebrow: null, title: "Идеи и советы", description: "", action: { label: "Перейти", href: "/blog" } },
-  reviews: { eyebrow: "Доверие", title: "Отзывы гостей", description: "Только проверенные отзывы с Яндекс Карт и живое видео с площадки — без монтажа и прикрас.", action: null },
+  reviews: { reviews: REVIEWS_DATA.map(({ id, name, text, rating }) => ({ id, name, text, rating })), eyebrow: "Доверие", title: "Отзывы гостей", description: "Только проверенные отзывы с Яндекс Карт и живое видео с площадки — без монтажа и прикрас.", action: null },
   map: { eyebrow: "Схема", title: "Карта базы", description: "Нажмите на кругляш — покажем, что это за строение и где оно стоит.", action: null },
-  faq: { eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
-  directions: { eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
+  faq: { faq: FAQ_ITEMS.map(({ id, question, answer }) => ({ id, question, answer })), eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
+  directions: { faq: FAQ_ITEMS.map(({ id, question, answer }) => ({ id, question, answer })), eyebrow: "Полезное", title: "Как доехать и что спросить", description: "Дорога занимает полчаса, а ответы на частые вопросы — минуту.", action: null },
   calculator: { eyebrow: "Расчёт", title: "Соберите свой выезд", description: "Три шага — и у вас предварительная цена. Итог считается сразу, а мы перезвоним, чтобы всё уточнить.", action: null },
 }
 

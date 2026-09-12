@@ -10,15 +10,16 @@ interface HeroSectionProps {
   onOpenCallModal: () => void
   onNavigate: (sectionId: string) => void
   onToast: (message: string) => void
+  fixture?: boolean
   config?: SiteHeroConfig
 }
 
-export function HeroSection({ config, onNavigate, onOpenBookingModal, onOpenCallModal, onToast }: HeroSectionProps) {
+export function HeroSection({ config, fixture = false, onNavigate, onOpenBookingModal, onOpenCallModal, onToast }: HeroSectionProps) {
   // SiteHero owns the canonical data-section-key="hero" marker.
   return <SiteHero
     config={config ?? DEFAULT_HERO_CONFIG}
     configured={Boolean(config)}
-    promos={PROMO_CODES}
+    promos={fixture ? PROMO_CODES : []}
     onBooking={() => onOpenBookingModal()}
     onCall={onOpenCallModal}
     onNavigate={onNavigate}

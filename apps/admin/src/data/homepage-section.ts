@@ -18,7 +18,7 @@ export function homepageSectionDraft(section: CmsSection): CmsHomeSectionDraft |
   if (section.policy.mode !== "override") return blankConfig(key)
   const { scalars, objects, keyedArrays } = section.policy.patch
   if (Object.keys(objects).length || Object.keys(keyedArrays).length) return undefined
-  if (Object.entries(scalars).some(([field, patch]) => !["eyebrow", "title", "description", "action"].includes(field) || patch.operation !== "replace")) return undefined
+  if (Object.entries(scalars).some(([field, patch]) => !["eyebrow", "title", "description", "action", ...(key === "reviews" ? ["reviews"] : []), ...(key === "faq" || key === "directions" ? ["faq"] : [])].includes(field) || patch.operation !== "replace")) return undefined
   const values = Object.fromEntries(Object.entries(scalars).map(([field, patch]) => [field, patch.operation === "replace" ? patch.value : undefined]))
   const parsed = CmsHomeSectionDraftSchema.safeParse({ ...blankConfig(key), ...values })
   return parsed.success ? parsed.data : undefined
@@ -30,6 +30,8 @@ export function homepageSectionPolicy(config: CmsHomeSectionDraft): CmsSection["
     title: { operation: "replace", value: config.title },
     description: { operation: "replace", value: config.description },
     action: { operation: "replace", value: config.action },
+    ...(config.reviews !== undefined ? { reviews: { operation: "replace" as const, value: config.reviews } } : {}),
+    ...(config.faq !== undefined ? { faq: { operation: "replace" as const, value: config.faq } } : {}),
   }, objects: {}, keyedArrays: {} } }
 }
 

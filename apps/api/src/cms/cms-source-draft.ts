@@ -42,23 +42,22 @@ export type LegacyProgramOfferingPromotionReport = Readonly<{
 }>
 
 /** Read-only reconciliation used before a legacy resource link can be promoted. */
-export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManager, resourceId: string): Promise<LegacyCatalogOfferingPromotionReport> {
+export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManager, resourceId: string, offeringKind: "house" | "campground" | "venue" = "house"): Promise<LegacyCatalogOfferingPromotionReport> {
   const legacy = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: "resource", sourceId: resourceId })
-  if (!legacy) return { status: "missing_legacy_link", resourceId, legacyLinkId: null, candidateOfferingIds: [] }
   const rows = await manager.query(`
-    SELECT offering.id
+    SELECT offering.id, (offering.kind = $2) AS "matchesKind"
     FROM catalog_offerings offering
     JOIN offering_bindings binding ON binding.offering_id = offering.id
       AND binding.role = 'primary' AND binding.archived_at IS NULL AND binding.resource_id = $1
     JOIN resources resource ON resource.id = binding.resource_id AND resource.archived_at IS NULL
-    WHERE offering.kind = 'house' AND offering.archived_at IS NULL
+    WHERE offering.kind IN ('house', 'campground', 'venue') AND offering.archived_at IS NULL
     ORDER BY offering.id ASC
-  `, [resourceId]) as Array<{ id: string }>
+  `, [resourceId, offeringKind]) as Array<{ id: string; matchesKind: boolean }>
   const candidateOfferingIds = rows.map((row) => row.id)
   return {
-    status: candidateOfferingIds.length === 1 ? "eligible" : candidateOfferingIds.length === 0 ? "no_exact_primary" : "ambiguous",
+    status: candidateOfferingIds.length > 1 ? "ambiguous" : !rows[0]?.matchesKind ? "no_exact_primary" : legacy ? "eligible" : "missing_legacy_link",
     resourceId,
-    legacyLinkId: legacy.id,
+    legacyLinkId: legacy?.id ?? null,
     candidateOfferingIds,
   }
 }
@@ -123,8 +122,9 @@ export async function ensureCatalogOfferingEditorialDraft(
     WHERE offering_id = $1 AND role = 'primary' AND archived_at IS NULL AND resource_id IS NOT NULL
     ORDER BY id ASC
   `, [offering.id]) as Array<{ resourceId: string }>
-  if (offering.kind === "house" && primary.length === 1) {
-    const report = await inspectLegacyCatalogOfferingPromotion(manager, primary[0]!.resourceId)
+  if (offering.kind === "house" || offering.kind === "campground" || offering.kind === "venue") {
+    if (primary.length !== 1) throw new Error(`Resource offering ${offering.id} requires one exact primary Resource binding`)
+    const report = await inspectLegacyCatalogOfferingPromotion(manager, primary[0]!.resourceId, offering.kind)
     if (report.status === "eligible" && report.candidateOfferingIds[0] === offering.id && report.legacyLinkId) {
       const legacy = await links.findOneByOrFail({ id: report.legacyLinkId })
       await assertEditorialNode(manager, legacy, "resource_detail")

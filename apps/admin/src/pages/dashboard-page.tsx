@@ -1,34 +1,55 @@
 import { useCallback } from "react"
-import { IconAlertTriangle, IconArrowRight, IconCheck, IconClock, IconEye, IconFilePlus, IconPhotoPlus, IconRoute, IconTrendingUp, IconWorld } from "@tabler/icons-react"
-import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { IconAlertTriangle, IconArrowRight, IconCheck, IconFilePlus, IconHome, IconPhotoPlus, IconRoute } from "@tabler/icons-react"
+import { Link, useNavigate } from "react-router-dom"
 
-import { Button, ClickableCard, IconBox, ListRow, ListSection, LoadingRows, PageFrame, PageState, StatusBadge } from "@crm/ui"
-
-import { PageHeading, StateToolbar } from "@admin/components/cms-ui"
+import { Button, ClickableCard, LoadingRows, PageFrame, PageState, StatusBadge } from "@crm/ui"
+import { PageHeading } from "@admin/components/cms-ui"
 import { cmsRepository } from "@admin/data/cms-repository"
+import { useAdminAuthSession } from "@admin/features/auth-session-context"
 import { useRepository } from "@admin/features/use-repository"
-import { formatPercentOf } from "@admin/lib/analytics-format"
-
-const number = new Intl.NumberFormat("ru-RU")
 
 export function DashboardPage() {
   const loader = useCallback(() => cmsRepository.getDashboard(), [])
-  const state = useRepository(loader); const [params] = useSearchParams(); const prototype = params.get("state")
-  if (state.loading || prototype === "loading") return <PageFrame><PageHeading title="Обзор CMS" /><div className="rounded-xl border bg-background"><LoadingRows count={5} /></div></PageFrame>
-  if (state.error || prototype === "error") return <PageFrame><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={state.reload} title="Не удалось загрузить CMS">{state.error ?? "Демонстрация error state."}</PageState></PageFrame>
-  if (!state.data) return null
+  const state = useRepository(loader)
+  const navigate = useNavigate()
+  const { user } = useAdminAuthSession()
+  if (state.error) return <PageFrame><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={state.reload} title="Не удалось загрузить обзор">Попробуйте ещё раз.</PageState></PageFrame>
+  if (state.loading || !state.data) return <PageFrame><PageHeading title="Обзор сайта" /><LoadingRows count={5} /></PageFrame>
   const data = state.data
-  return <PageFrame><PageHeading actions={<Button onClick={() => window.location.assign("/?notice=preview")} size="sm" variant="outline"><IconEye />Предпросмотр сайта</Button>} description="Контент, SEO и воронка сайта — без технических шагов публикации." title="Обзор CMS" /><StateToolbar />
-    <section className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Метрики">{data.metrics.map((metric) => <ClickableCard className="p-4" key={metric.id} onClick={() => window.location.assign(metric.id === "seo" ? "/seo" : metric.id === "release" ? "/content/tree?status=draft" : metric.id === "media" ? "/media" : "/content/tree")}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] text-muted-foreground">{metric.label}</p><p className="mt-1 text-xl font-semibold tabular-nums">{metric.value}</p></div>{metric.trend ? <StatusBadge tone="success"><IconTrendingUp className="size-3" />{metric.trend}</StatusBadge> : null}</div><p className="mt-2 text-[10px] text-muted-foreground">{metric.detail}</p></ClickableCard>)}</section>
-    <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]"><div className="space-y-3"><section className="overflow-hidden rounded-xl border bg-background"><ListSection count={data.attention.length} icon={IconAlertTriangle} title="Требует внимания" tone="warning">{(prototype === "empty" ? [] : data.attention).map((item) => <ListRow key={item.id}><Link className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-muted/40" to={item.href}><IconBox icon={item.tone === "danger" ? IconAlertTriangle : item.tone === "warning" ? IconClock : IconCheck} size="sm" variant={item.tone === "danger" ? "danger" : item.tone === "warning" ? "warning" : "info"} /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">{item.title}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{item.detail}</span></span><IconArrowRight className="size-4 text-muted-foreground" /></Link></ListRow>)}{prototype === "empty" ? <PageState icon={IconCheck} title="Всё в порядке">Нет blocker, warning и сбоев публикации.</PageState> : null}</ListSection></section><QuickActions /><Activity items={data.activity} /></div><div className="space-y-3"><SiteStatus release={data.productionRelease} publishedAt={data.publishedAt} drafts={data.drafts} /><Funnel data={data.funnel} /></div></div>
+  const attention = data.attention.filter((item) => item.id !== "analytics-not-configured" && item.id !== "production-release")
+  const actions = [
+    { label: "Главная страница", href: "/content/home", icon: IconHome, allowed: true },
+    { label: "Новая страница", href: "/content/pages/new", icon: IconFilePlus, allowed: user.capabilities.canEditContent },
+    { label: "Загрузить фото", href: "/media?upload=1", icon: IconPhotoPlus, allowed: user.capabilities.canManageMedia },
+    { label: "Меню и подвал", href: "/globals/navigation", icon: IconRoute, allowed: true },
+  ].filter((action) => action.allowed)
+  return <PageFrame>
+    <PageHeading title="Обзор сайта" description="Редактируйте страницы, добавляйте фотографии и публикуйте готовые изменения." />
+    <section aria-label="Быстрые действия" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {actions.map((action) => <Button className="h-auto min-h-20 justify-start gap-3 whitespace-normal p-4" key={action.href} onClick={() => navigate(action.href)} variant="outline"><action.icon /><span>{action.label}</span></Button>)}
+    </section>
+    <section aria-label="Содержимое сайта" className="mt-4 grid gap-3 sm:grid-cols-3">
+      {data.metrics.filter((metric) => metric.id !== "seo").map((metric) => <ClickableCard className="p-4" key={metric.id} onClick={() => navigate(metric.id === "media" ? "/media" : "/content/tree")}>
+        <p className="text-xs text-muted-foreground">{metric.label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{metric.value}</p><p className="mt-2 text-xs text-muted-foreground">{metric.detail.replace("в production", "на сайте")}</p>
+      </ClickableCard>)}
+    </section>
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <section className="rounded-xl border bg-background p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold">Публикация сайта</h3><StatusBadge tone={!data.hasPublication ? "neutral" : data.queueHealthy ? "success" : "warning"}>{!data.hasPublication ? "Пока не опубликован" : data.queueHealthy ? "Изменения опубликованы" : "Проверить доставку"}</StatusBadge></div>
+        <p className="mt-3 text-sm text-muted-foreground">{data.hasPublication ? `Последняя публикация: ${data.publishedAt}.` : "Откройте страницу, заполните её и нажмите «Опубликовать». Черновики видны только сотрудникам."}</p>
+        <Button className="mt-4" onClick={() => navigate("/content/tree")} variant="outline">Открыть страницы<IconArrowRight /></Button>
+        {data.hasPublication && <Link className="ml-4 text-xs underline underline-offset-4" to="/releases">История публикаций</Link>}
+      </section>
+      <section className="rounded-xl border bg-background p-5">
+        <h3 className="text-sm font-semibold">Как работать со страницами</h3>
+        <p className="mt-3 text-sm text-muted-foreground">Новые ресурсы из CRM появляются здесь как черновики. Отредактируйте описание и фотографии, проверьте страницу и опубликуйте её.</p>
+        <p className="mt-3 text-sm text-muted-foreground">Цены и доступность задаются в CRM. В CMS вы управляете содержимым и оформлением сайта.</p>
+        {user.capabilities.canViewAnalytics && <Link className="mt-4 inline-flex text-xs underline underline-offset-4" to="/analytics">Статистика сайта</Link>}
+      </section>
+    </div>
+    <section className="mt-4 rounded-xl border bg-background p-5">
+      <h3 className="text-sm font-semibold">Требует внимания</h3>
+      {attention.length ? <div className="mt-3 divide-y">{attention.map((item) => <Link className="flex min-h-12 items-center gap-3 py-3 text-sm" key={item.id} to={item.id === "delivery-failures" ? "/releases" : item.href}><IconAlertTriangle className="size-4 shrink-0" /><span className="min-w-0 flex-1">{item.title}</span><IconArrowRight className="size-4" /></Link>)}</div> : <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><IconCheck className="size-4" />Нет сообщений, требующих действий.</p>}
+    </section>
   </PageFrame>
 }
-
-function QuickActions() { const navigate = useNavigate(); const actions = [{ label: "Новая посадочная", href: "/content/pages/new", icon: IconFilePlus }, { label: "Загрузить медиа", href: "/media?upload=1", icon: IconPhotoPlus }, { label: "Предпросмотр сайта", href: "/?notice=preview", icon: IconEye }, { label: "Изменить меню", href: "/globals/navigation", icon: IconRoute }]; return <section><h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">Быстрые действия</h3><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{actions.map((action) => <Button className="h-auto min-h-16 flex-col gap-1.5 whitespace-normal" key={action.href} onClick={() => navigate(action.href)} variant="outline"><action.icon /><span className="text-center text-[11px]">{action.label}</span></Button>)}</div></section> }
-
-function SiteStatus({ drafts, publishedAt, release }: { drafts: number; publishedAt: string; release: string }) { return <section className="rounded-xl border bg-background p-4"><div className="flex items-center gap-3"><IconBox icon={IconWorld} variant="success" /><div><h3 className="text-[13px] font-semibold">Сайт работает</h3><p className="text-[10px] text-muted-foreground">{release} · {publishedAt}</p></div><StatusBadge className="ml-auto" tone="success">Доступен</StatusBadge></div><div className="mt-4 grid grid-cols-2 divide-x border-y py-3 text-center"><div><p className="text-lg font-semibold tabular-nums">{drafts}</p><p className="text-[10px] text-muted-foreground">Черновиков</p></div><div><p className="text-lg font-semibold tabular-nums">2</p><p className="text-[10px] text-muted-foreground">В предпросмотре</p></div></div><Button className="mt-3 w-full" onClick={() => window.location.assign("/content/tree?status=draft")} size="sm" variant="outline">Открыть черновики</Button></section> }
-
-function Funnel({ data }: { data: { visitors: number; leads: number; bookings: number; paid: number } }) { const steps = [{ label: "Посетители", value: data.visitors, width: "100%" }, { label: "Заявки", value: data.leads, width: "72%" }, { label: "Брони", value: data.bookings, width: "48%" }, { label: "Оплаты", value: data.paid, width: "35%" }]; return <section className="rounded-xl border bg-background p-4"><div className="flex items-center justify-between"><div><h3 className="text-[13px] font-semibold">Воронка</h3><p className="text-[10px] text-muted-foreground">Август · first-party aggregates</p></div><Link className="text-[10px] text-primary hover:underline" to="/analytics/funnels">Подробнее</Link></div><div className="mt-4 space-y-2">{steps.map((step, index) => <div className="mx-auto rounded-md bg-primary/10 px-3 py-2" key={step.label} style={{ width: step.width }}><div className="flex items-center justify-between gap-2"><span className="text-[10px]">{step.label}</span><strong className="text-xs tabular-nums">{number.format(step.value)}</strong></div>{index > 0 ? <p className="mt-0.5 text-[9px] text-muted-foreground">{formatPercentOf(step.value, steps[index - 1]!.value)} от предыдущего</p> : null}</div>)}</div></section> }
-
-function Activity({ items }: { items: Awaited<ReturnType<typeof cmsRepository.getDashboard>>["activity"] }) { return <section className="overflow-hidden rounded-xl border bg-background"><ListSection count={items.length} icon={IconClock} title="Последние изменения">{items.map((item) => <ListRow key={item.id}><div className="flex min-h-14 items-center gap-3 px-4 py-2"><AvatarInitials name={item.actor} /><div className="min-w-0 flex-1"><p className="truncate text-xs"><strong>{item.actor}</strong> {item.action}</p><p className="truncate text-[10px] text-muted-foreground">{item.target} · {item.when}</p></div></div></ListRow>)}</ListSection></section> }
-function AvatarInitials({ name }: { name: string }) { return <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-semibold">{name.split(" ").map((value) => value[0]).join("").slice(0, 2)}</span> }

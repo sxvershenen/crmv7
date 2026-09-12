@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { X, Users, CheckCircle, ArrowRight, ShieldCheck } from 'lucide-react';
-import { HouseItem } from '../../data/resortData';
+import { offeringPriceLabel, type HomepageHouse } from '../../../lib/content/homepage-commerce';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
 
 interface HouseDetailModalProps {
-  house: HouseItem | null;
+  house: HomepageHouse | null;
   isOpen: boolean;
   onClose: () => void;
   onBook: (title: string) => void;
@@ -45,11 +45,11 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
         {/* Gallery */}
         <div className="relative mb-6 rounded-2xl overflow-hidden bg-neutral-100">
           <div className="h-[240px] md:h-[360px] w-full">
-            <img 
+            {house.photos.length > 0 && <img
               src={house.photos[activePhotoIndex] || house.photos[0]} 
               alt={house.title} 
               className="w-full h-full object-cover transition-all duration-300"
-            />
+            />}
           </div>
 
           {/* Photo Thumbnails */}
@@ -90,15 +90,15 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
           </div>
 
           <div className="shrink-0 text-left md:text-right">
-            <div className="text-[11px] uppercase tracking-wider text-[#6b7280] font-medium">Стоимость суток</div>
+            <div className="text-[11px] uppercase tracking-wider text-[#6b7280] font-medium">{house.publicOffering?.priceBasisLabel ?? (house.publicOffering ? "Стоимость" : "Стоимость суток")}</div>
             <div className="text-[26px] font-semibold text-[#2B9E47] tracking-tight">
-              от {house.priceFrom.toLocaleString('ru-RU')} ₽
+              {house.publicOffering ? offeringPriceLabel(house.publicOffering) : `от ${house.priceFrom?.toLocaleString('ru-RU')} ₽`}
             </div>
           </div>
         </div>
 
         {/* Availability Schedule */}
-        <div className="mb-6 p-4 rounded-2xl bg-[#f7f7f7]">
+        {house.availability.length > 0 && <div className="mb-6 p-4 rounded-2xl bg-[#f7f7f7]">
           <div className="text-[12px] font-medium text-[#18191b] mb-2.5 flex items-center justify-between">
             <span>Доступность на ближайшие 5 дней:</span>
             <span className="text-[11px] text-[#6b7280]">Обновлено сегодня</span>
@@ -122,6 +122,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
           </div>
         </div>
 
+        }
         {/* Description */}
         <div className="mb-6">
           <h4 className="text-[14px] font-semibold text-[#18191b] mb-2">О доме</h4>
@@ -131,7 +132,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
         </div>
 
         {/* Specs Grid */}
-        <div className="mb-6">
+        {house.specs.length > 0 && <div className="mb-6">
           <h4 className="text-[14px] font-semibold text-[#18191b] mb-2.5">Характеристики и удобства</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[13px]">
             {house.specs.map((s, idx) => (
@@ -146,22 +147,25 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
           </div>
         </div>
 
+        }
         {/* Security & Cleanliness note */}
-        <div className="mb-6 flex items-center gap-2.5 text-[12px] text-[#6b7280] bg-neutral-50 p-3 rounded-xl">
+        {!house.publicOffering && <div className="mb-6 flex items-center gap-2.5 text-[12px] text-[#6b7280] bg-neutral-50 p-3 rounded-xl">
           <ShieldCheck className="w-4 h-4 text-[#2B9E47] shrink-0" />
           <span>Перед каждым заездом проводится озонирование, смена белья премиум-сатин и дезинфекция чана.</span>
         </div>
 
+        }
         {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-neutral-100">
           <button
+            disabled={house.publicOffering ? !house.publicOffering.requestAvailable : false}
             onClick={() => {
               onClose();
               onBook(house.title);
             }}
             className="w-full sm:flex-1 h-[48px] px-6 rounded-full bg-[#2B9E47] text-white text-[14px] font-medium flex items-center justify-center gap-3 hover:bg-[#23823a] transition-all group"
           >
-            <span>Забронировать {house.title}</span>
+            <span>{house.publicOffering ? "Отправить заявку:" : "Забронировать"} {house.title}</span>
             <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:-rotate-45 transition-transform">
               <ArrowRight className="w-3.5 h-3.5" />
             </span>

@@ -7,12 +7,14 @@ import { ContentStatusBadge } from "@admin/components/cms-ui"
 import { cmsRepository } from "@admin/data/cms-repository"
 import { CmsConflictError, type MetrikaSettings, type MetrikaSettingsRecord } from "@admin/entities/cms"
 import { useRepository } from "@admin/features/use-repository"
+import { UnsavedChangesGuard } from "@admin/features/unsaved-changes-guard"
 import { extractMetrikaCounterId, isMetrikaCounterId } from "@admin/lib/metrika-settings"
 
 export function IntegrationsPage() {
   const loader = useCallback(() => cmsRepository.getMetrikaSettings(), [])
   const state = useRepository(loader)
   const [draft, setDraft] = useState<MetrikaSettingsRecord>()
+  const [persistedDraft, setPersistedDraft] = useState<MetrikaSettingsRecord>()
   const [snippet, setSnippet] = useState("")
   const [snippetError, setSnippetError] = useState<string>()
   const [saveState, setSaveState] = useState<EditorSaveState>("saved")
@@ -22,6 +24,7 @@ export function IntegrationsPage() {
   useEffect(() => {
     if (state.data) {
       setDraft(state.data)
+      setPersistedDraft(state.data)
       setSaveState("saved")
       setSnippet("")
       setSnippetError(undefined)
@@ -47,6 +50,7 @@ export function IntegrationsPage() {
     try {
       const saved = await cmsRepository.saveMetrikaSettings(draft.metrika, draft.version)
       setDraft(saved)
+      setPersistedDraft(saved)
       setSaveState("saved")
       return saved
     } catch (cause) {
@@ -58,25 +62,53 @@ export function IntegrationsPage() {
 
   const publish = async () => {
     if (!draft || publishing) return
+    const hadLocalChanges = saveState === "dirty"
+    let saveCompleted = !hadLocalChanges
+    let current = draft
     setPublishing(true)
     setSaveState("saving")
     setError(undefined)
     try {
-      let current = draft
-      if (saveState === "dirty") {
-        const saved = await save()
-        if (!saved) return
-        current = saved
+      if (hadLocalChanges) {
+        if (current.metrika.enabled && !current.metrika.counterId) {
+          setSaveState("dirty")
+          setError("Для включения Метрики укажите ID счётчика или извлеките его из кода.")
+          return
+        }
+        current = await cmsRepository.saveMetrikaSettings(current.metrika, current.version)
+        saveCompleted = true
+        setDraft(current)
+        setPersistedDraft(current)
+        setSaveState("saved")
       }
       const published = await cmsRepository.publishMetrikaSettings(current.version)
       setDraft(published)
+      setPersistedDraft(published)
       setSaveState("saved")
     } catch (cause) {
-      setSaveState(cause instanceof CmsConflictError ? "conflict" : "dirty")
+      setDraft(current)
+      setSaveState(cause instanceof CmsConflictError ? "conflict" : saveCompleted ? "saved" : "dirty")
       setError(message(cause, "Не удалось опубликовать настройки Метрики"))
     } finally {
       setPublishing(false)
     }
+  }
+
+  const recoverConflict = async () => {
+    if (!draft) return
+    setError(undefined)
+    try {
+      const server = await cmsRepository.getMetrikaSettings()
+      const baseline = persistedDraft?.metrika ?? draft.metrika
+      const recovered = { ...server, metrika: {
+        enabled: baseline.enabled !== draft.metrika.enabled ? draft.metrika.enabled : server.metrika.enabled,
+        counterId: baseline.counterId !== draft.metrika.counterId ? draft.metrika.counterId : server.metrika.counterId,
+      } }
+      setPersistedDraft(server)
+      setDraft(recovered)
+      setSaveState("dirty")
+      setError(`Загружена серверная версия ${server.version}. Локальные изменения сохранены в форме.`)
+    } catch (cause) { setError(message(cause, "Не удалось загрузить серверные настройки")) }
   }
 
   const extract = () => {
@@ -89,22 +121,22 @@ export function IntegrationsPage() {
     update({ counterId })
   }
 
-  if (state.loading || !draft) return <div className="p-4"><LoadingRows count={7} /></div>
   if (state.error) return <PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={state.reload} title="Не удалось загрузить настройки интеграций">{state.error}</PageState>
+  if (state.loading || !draft) return <div className="p-4"><LoadingRows count={7} /></div>
 
   return <EditorFrame
     actions={<ContentStatusBadge status={draft.status} />}
     footerActions={<><Button disabled={saveState === "saved" || saveState === "saving"} onClick={() => void save()} size="sm" variant="outline">Сохранить</Button><Button disabled={publishing || saveState === "conflict"} onClick={() => void publish()} size="sm"><IconRocket />{publishing ? "Публикуем…" : saveState === "dirty" ? "Сохранить и опубликовать" : "Опубликовать"}</Button></>}
     mobileActions={<ContentStatusBadge status={draft.status} />}
     {...(saveState === "conflict" ? { saveDetail: "Настройки изменены в другой вкладке" } : {})}
-    navigation={null}
+    navigation={<UnsavedChangesGuard when={saveState === "dirty" || saveState === "saving" || saveState === "conflict"} />}
     saveState={saveState}
     sidebar={<IntegrationSidebar draft={draft} />}
   >
     <div className="space-y-3">
       <Alert className="border-warning/30"><IconInfoCircle /><AlertTitle>Метрика подключается только после согласия посетителя</AlertTitle><AlertDescription>До разрешения аналитики тег не загружается. Отзыв согласия останавливает дальнейшую отправку данных. Публикуйте настройку только после проверки уведомления о приватности и прав доступа в Яндекс.Метрике.</AlertDescription></Alert>
 
-      {error ? <Alert variant="destructive"><IconAlertTriangle /><AlertTitle>Изменения не сохранены</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+      {error ? <Alert variant="destructive"><IconAlertTriangle /><AlertTitle>{saveState === "conflict" ? "Настройки изменены в другой вкладке" : "Операция не выполнена"}</AlertTitle><AlertDescription><p>{error}</p>{saveState === "conflict" ? <div className="mt-2 flex flex-wrap gap-2"><Button onClick={() => void recoverConflict()} size="xs" variant="outline">Сверить с сервером</Button><Button onClick={state.reload} size="xs" variant="outline">Загрузить серверные настройки</Button></div> : null}</AlertDescription></Alert> : null}
 
       <EditorSection subtitle="Хранится только числовой ID. Произвольный JavaScript из поля ниже не сохраняется и не исполняется на сайте." title="Яндекс.Метрика">
         <div className="space-y-4">

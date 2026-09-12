@@ -11,7 +11,7 @@ describe("partners composition in the home editor", () => {
   it("requires a visible guarded preflight before publication", async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={["/content/home"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
-    await user.click(await screen.findByRole("button", { name: "Проверить публикацию" }))
+    await user.click(await screen.findByRole("button", { name: "Опубликовать" }))
     expect(await screen.findByText("Что изменится после публикации")).toBeInTheDocument()
     expect(screen.getByText("CRM dependencies", { exact: false })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Подтвердить публикацию" })).toBeEnabled()
@@ -40,7 +40,7 @@ describe("partners composition in the home editor", () => {
   it("adds the typed why-us section to the home composition", async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={["/content/home?tab=composition"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
-    await user.click(await screen.findByRole("button", { name: "Добавить секцию «Why us»" }))
+    await user.click(await screen.findByRole("button", { name: "Добавить секцию «О нас»" }))
     expect(screen.getByLabelText("Надзаголовок")).toHaveValue("Почему мы")
     expect(screen.getAllByLabelText("Заголовок секции").at(-1)).toHaveValue("Почему выбирают нас")
     await user.click(screen.getByRole("button", { name: "Добавить факт" }))
@@ -50,8 +50,8 @@ describe("partners composition in the home editor", () => {
   it("adds a shared typed homepage section and exposes its editorial fields", async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={["/content/home?tab=composition"]}><TooltipProvider><ContentEditorPage kind="home" /></TooltipProvider></MemoryRouter>)
-    await user.click(await screen.findByRole("button", { name: "Добавить секцию «events»" }))
+    await user.click(await screen.findByRole("button", { name: "Добавить секцию «Ближайшие события»" }))
     expect(screen.getAllByLabelText("Заголовок секции").at(-1)).toHaveValue("События")
-    expect(screen.getByLabelText("CTA · подпись")).toBeInTheDocument()
+    expect(screen.getByLabelText("Текст кнопки")).toBeInTheDocument()
   })
 })

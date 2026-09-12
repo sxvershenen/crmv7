@@ -27,6 +27,8 @@ const result = fixtureContentEnabled ? null : await getPublishedRoute("/")
 const publishedPage = result?.status === "published" ? result.value.page : null
 const publishedSiteSettings = result?.status === "published" ? result.value.settings : null
 const homepageSections = getHomepageSections(publishedPage, fixtureContentEnabled)
+const commerce = result?.status === "published" ? result.value.commerce : undefined
+Astro.response.headers.set("Cache-Control", "no-store")
 const failure = result && result.status !== "published" ? result.status : null
 const contentAvailable = !failure
 if (failure) {
@@ -62,20 +64,20 @@ const failureTitle = failure === "not_found" ? "Страница не найде
 
   <SitePageShell>
     {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
-      {(fixtureContentEnabled || hero) && <HeroIsland {...(hero ? { hero } : {})} client:load />}
+      {(fixtureContentEnabled || hero) && <HeroIsland fixture={fixtureContentEnabled} {...(hero ? { hero } : {})} client:load />}
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {homepageSections.map((section) => {
-        if (section.key === "events") return <EventsIsland config={section.config} client:visible />
-        if (section.key === "houses") return <HousesIsland config={section.config} client:visible />
-        if (section.key === "sauna-chan") return <SaunaChanIsland config={section.config} client:visible />
-        if (section.key === "programs") return <ProgramsIsland config={section.config} client:visible />
-        if (section.key === "venues") return <VenuesIsland config={section.config} client:visible />
+        if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "houses") return <HousesIsland config={section.config} published={commerce?.houses} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "sauna-chan" && fixtureContentEnabled) return <SaunaChanIsland config={section.config} client:visible />
+        if (section.key === "programs") return <ProgramsIsland config={section.config} published={commerce?.programs} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "venues") return <VenuesIsland config={section.config} published={commerce?.venues} fixture={fixtureContentEnabled} client:visible />
         if (section.key === "blog") return <BlogSection config={section.config} />
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
-        if (section.key === "reviews") return <ReviewsIsland config={section.config} client:visible />
+        if (section.key === "reviews") return <ReviewsIsland config={section.config} fixture={fixtureContentEnabled} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
         if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
-        if (section.key === "calculator") return <BookingQuizIsland config={section.config} client:visible />
+        if (section.key === "calculator") return <BookingQuizIsland config={section.config} commerce={commerce} fixture={fixtureContentEnabled} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}
