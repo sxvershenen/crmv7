@@ -14,6 +14,7 @@ import { ContentListPage } from "@admin/pages/content-list-page"
 import { ContentTreePage } from "@admin/pages/content-tree-page"
 import { DashboardPage } from "@admin/pages/dashboard-page"
 import { HouseOfferingWorkspacePage } from "@admin/pages/house-offerings-page"
+import { IntegrationsPage } from "@admin/pages/integrations-page"
 import { ManagementPage } from "@admin/pages/management-page"
 import { AssetPage, MediaLibraryPage } from "@admin/pages/media-pages"
 import { MobileMenuPage } from "@admin/pages/mobile-menu-page"
@@ -64,7 +65,7 @@ export function AdminRouter() {
     <Route path="releases" element={<ReleasesPage />} />
     <Route path="releases/:releaseId" element={<ReleaseDetailPage />} />
     <Route path="settings/site" element={<CapabilityRoute capability="canManageSiteSettings"><ManagementPage /></CapabilityRoute>} />
-    <Route path="settings/integrations" element={<CapabilityRoute capability="canManageIntegrations"><ManagementPage /></CapabilityRoute>} />
+    <Route path="settings/integrations" element={<CapabilityRoute capability="canManageIntegrations"><IntegrationsPage /></CapabilityRoute>} />
     <Route path="settings/access" element={<CapabilityRoute capability="canManageUsers"><ManagementPage /></CapabilityRoute>} />
     <Route path="audit" element={<CapabilityRoute capability="canViewAudit"><ManagementPage /></CapabilityRoute>} />
     <Route path="menu" element={<MobileMenuPage />} />

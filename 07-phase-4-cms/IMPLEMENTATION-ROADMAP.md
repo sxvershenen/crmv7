@@ -58,7 +58,7 @@ Gate: retry не дублирует Lead; public success не подтвержд
 
 ## P4.7 — First-party analytics
 
-Порядок: taxonomy/consent/stable IDs → collector/visitor/session/dedupe/bot classification → attribution и server conversion facts → aggregates/dashboards → consent-gated Metrika reconciliation → retention/privacy/export audit.
+Порядок: taxonomy/consent/stable IDs → collector/visitor/session/dedupe/bot classification → attribution и server conversion facts → aggregates/dashboards → consent-gated Metrika counter settings/tag runtime и reconciliation → retention/privacy/export audit.
 
 Operational marketing reports не доказывают visitor collection. Gate: refuse/revoke, server reconciliation, отсутствие raw IP/contacts/form values/cookies, purpose-bound identity access. Спецификация — `ANALYTICS.md`.
 

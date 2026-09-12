@@ -50,6 +50,15 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(paths["/offerings/{offeringId}/quotes/preview"]?.post).toBeDefined();
     expect(paths["/analytics/aggregates"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/analytics/aggregates"]?.get?.responses).toEqual(expect.objectContaining({ 200: expect.anything(), 400: expect.anything(), 401: expect.anything(), 403: expect.anything() }));
+    expect(paths["/site-settings/integrations/metrika"]?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(paths["/site-settings/integrations/metrika"]?.patch?.requestBody).toBeDefined();
+    expect(paths["/site-settings/integrations/metrika/publish"]?.post?.requestBody).toBeDefined();
+    expect(adminOpenApiDocument.components?.schemas?.CmsMetrikaSettings).toBeDefined();
+    expect(adminOpenApiDocument.components?.schemas?.CmsMetrikaSettingsRevision).toBeDefined();
+    expect(adminOpenApiDocument.components?.schemas?.CmsMetrikaSettingsDetail).toBeDefined();
+    expect(adminOpenApiDocument.components?.schemas?.CmsMetrikaSettingsMutation).toBeDefined();
+    expect(adminOpenApiDocument.components?.schemas?.CmsMetrikaSettingsPublish).toBeDefined();
+    expect(publicOpenApiDocument.paths?.["/site-settings/integrations/metrika"]).toBeUndefined();
     expect(paths["/deliveries"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/deliveries/{consumer}/{eventId}/replay"]?.post).toBeDefined();
     expect(publicOpenApiDocument.paths?.["/deliveries"]).toBeUndefined();

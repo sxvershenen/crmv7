@@ -2,13 +2,13 @@ import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublishResultSch
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
-import { CmsSiteSettingsDetailSchema, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
+import { CmsMetrikaSettingsDetailSchema, CmsSiteSettingsDetailSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
-import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
+import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
@@ -27,6 +27,7 @@ export class FixtureCmsRepository implements CmsRepository {
   readonly mode = "fixtures" as const
   private editors = clone(editorFixtures)
   private navigation = clone(navigationFixture)
+  private metrika: MetrikaSettingsRecord = { version: 1, status: "published", updatedLabel: "не настроено", metrika: { enabled: false, counterId: null } }
 
   async getAccess() { return fixtureAccess }
   async getDashboard() { await pause(); return clone(dashboardFixture) }
@@ -70,6 +71,19 @@ export class FixtureCmsRepository implements CmsRepository {
     if (this.navigation.version !== expectedVersion) throw new CmsConflictError(this.navigation.version)
     this.navigation = { ...this.navigation, version: expectedVersion + 1, status: "published", updatedLabel: "только что" }
     return clone(this.navigation)
+  }
+  async getMetrikaSettings() { await pause(); return clone(this.metrika) }
+  async saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number) {
+    await pause()
+    if (this.metrika.version !== expectedVersion) throw new CmsConflictError(this.metrika.version)
+    this.metrika = { ...clone(this.metrika), version: expectedVersion + 1, status: "draft", updatedLabel: "только что", metrika: clone(value) }
+    return clone(this.metrika)
+  }
+  async publishMetrikaSettings(expectedVersion: number) {
+    await pause()
+    if (this.metrika.version !== expectedVersion) throw new CmsConflictError(this.metrika.version)
+    this.metrika = { ...this.metrika, version: expectedVersion + 1, status: "published", updatedLabel: "только что" }
+    return clone(this.metrika)
   }
   async getMedia() { await pause(); return clone(mediaFixtures) }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
@@ -192,6 +206,23 @@ export class ApiCmsRepository implements CmsRepository {
   async publishNavigation(expectedVersion: number): Promise<PublicNavigation> {
     try { const detail = await this.client.post("/site-settings/publish", { ...operationMeta(), expectedVersion }, CmsSiteSettingsDetailSchema); this.settingsDetail = detail; return navigationFromDetail(detail) }
     catch (error) { throw mapMutationError(error) }
+  }
+
+  async getMetrikaSettings(): Promise<MetrikaSettingsRecord> {
+    const detail = await this.client.get("/site-settings/integrations/metrika", CmsMetrikaSettingsDetailSchema)
+    return metrikaFromDetail(detail)
+  }
+  async saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number): Promise<MetrikaSettingsRecord> {
+    try {
+      const detail = await this.client.patch("/site-settings/integrations/metrika", { ...operationMeta(), expectedVersion, value }, CmsMetrikaSettingsDetailSchema)
+      return metrikaFromDetail(detail)
+    } catch (error) { throw mapMutationError(error) }
+  }
+  async publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord> {
+    try {
+      const detail = await this.client.post("/site-settings/integrations/metrika/publish", { ...operationMeta(), expectedVersion }, CmsMetrikaSettingsDetailSchema)
+      return metrikaFromDetail(detail)
+    } catch (error) { throw mapMutationError(error) }
   }
 
   async getDashboard(): Promise<import("@admin/entities/cms").CmsDashboard> {
@@ -515,6 +546,17 @@ function navigationFromDetail(detail: CmsSiteSettingsDetail): PublicNavigation {
     version: detail.version, status: detail.draft ? "draft" : "published", updatedLabel: formatUpdated(revision.createdAt),
     header: revision.value.headerNavigation.map(fromWireNavigation), mobile: revision.value.mobileNavigation.map(fromWireNavigation),
     footer: revision.value.footerNavigation.map(fromWireNavigation),
+  }
+}
+
+function metrikaFromDetail(detail: CmsMetrikaSettingsDetail): MetrikaSettingsRecord {
+  const revision = detail.draft ?? detail.published
+  if (!revision) throw new CmsUnavailableError("Настройки Метрики")
+  return {
+    version: detail.version,
+    status: detail.draft ? "draft" : "published",
+    updatedLabel: formatUpdated(revision.createdAt),
+    metrika: revision.value,
   }
 }
 

@@ -59,6 +59,29 @@ test("renders release content in SSR and respects disabled hero and absent blog"
   expect(errors).toEqual([])
 })
 
+test("loads Metrika only after consent and destroys it on revoke", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-published")
+  let scriptRequests = 0
+  await page.route("https://mc.yandex.ru/metrika/tag.js", async (route) => {
+    scriptRequests += 1
+    await route.fulfill({
+      contentType: "application/javascript",
+      body: `window.__metrikaState = { created: 0, destroyed: 0, hits: 0 }; window.Ya = { Metrika2: class { constructor() { window.__metrikaState.created += 1; } hit() { window.__metrikaState.hits += 1; } destruct() { window.__metrikaState.destroyed += 1; } } };`,
+    })
+  })
+  await page.goto("/", { waitUntil: "domcontentloaded" })
+  expect(scriptRequests).toBe(0)
+  await expect(page.locator('astro-island[component-url*="ModalHub"]')).not.toHaveAttribute("ssr", "")
+  await page.getByRole("link", { name: "Политика обработки персональных данных", exact: true }).click()
+  await page.getByRole("button", { name: "Разрешить аналитику" }).click()
+  await expect.poll(() => scriptRequests).toBe(1)
+  await expect.poll(() => page.evaluate(() => (window as Window & { __metrikaState: { created: number; destroyed: number; hits: number } }).__metrikaState)).toMatchObject({ created: 1, hits: 1, destroyed: 0 })
+
+  await page.getByRole("link", { name: "Политика обработки персональных данных", exact: true }).click()
+  await page.getByRole("button", { name: "Отозвать аналитику" }).click()
+  await expect.poll(() => page.evaluate(() => (window as Window & { __metrikaState: { created: number; destroyed: number; hits: number } }).__metrikaState)).toMatchObject({ created: 1, hits: 1, destroyed: 1 })
+})
+
 test("serves built CSS and JavaScript without exposing source files", async ({ page, request }) => {
   test.skip(process.env.SITE_TEST_RUNTIME !== "production", "Production asset delivery")
   await page.goto("/cms-test")

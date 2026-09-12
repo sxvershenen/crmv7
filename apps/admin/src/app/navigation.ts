@@ -2,6 +2,7 @@ import {
   IconArticle, IconDashboard, IconFileAnalytics, IconFiles, IconLink,
   IconMap, IconPhoto, IconReportSearch, IconRoute, IconSettings, IconSitemap, IconSparkles,
   IconTemplate, IconRocket,
+  IconWorldCog,
 } from "@tabler/icons-react"
 import type { Capabilities } from "@crm/contracts/capabilities"
 
@@ -26,6 +27,7 @@ export const navGroups: { label: string; items: AdminNavItem[] }[] = [
   ] },
   { label: "Настройки", items: [
     { label: "Настройки сайта", href: "/settings/site", icon: IconSettings, capability: "canManageSiteSettings" },
+    { label: "Интеграции", href: "/settings/integrations", icon: IconWorldCog, capability: "canManageIntegrations" },
   ] },
 ]
 

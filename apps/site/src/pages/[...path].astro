@@ -82,6 +82,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
   robots={robots}
   social={page?.seo.social}
   structuredData={page ? toSiteStructuredData(page.seo.structuredData) : []}
+  {...(publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
 >
   {page && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
   <SitePageShell>

@@ -1394,6 +1394,96 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect((await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/simple" }).expect(200)).body).toMatchObject({ title: "Вторая версия" })
   })
 
+  it("publishes normalized Metrika settings without exposing or publishing another owner's site-settings draft", async () => {
+    const baseValue = {
+      siteName: "Свистоплясово",
+      headerNavigation: [{ id: randomUUID(), label: "Опубликовано", link: { kind: "internal", path: "/" }, children: [] }],
+      heroDefault: null,
+      sectionDefaults: [],
+    }
+    const initial = await adminAgent.get("/api/admin/v1/site-settings").expect(200)
+    const savedBase = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-base-save-${randomUUID()}`, expectedVersion: initial.body.version, value: baseValue,
+    }).expect(200)
+    const publishedBase = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-base-publish-${randomUUID()}`, expectedVersion: savedBase.body.version,
+    }).expect(200)
+
+    await readonlyAgent.get("/api/admin/v1/site-settings/integrations/metrika").expect(403)
+    await readonlyAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-forbidden-${randomUUID()}`, expectedVersion: publishedBase.body.version,
+      value: { enabled: false, counterId: null },
+    }).expect(403)
+    await readonlyAgent.post("/api/admin/v1/site-settings/integrations/metrika/publish").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-publish-forbidden-${randomUUID()}`, expectedVersion: publishedBase.body.version,
+    }).expect(403)
+
+    const initialMetrika = await adminAgent.get("/api/admin/v1/site-settings/integrations/metrika").expect(200)
+    expect(initialMetrika.body).toMatchObject({ version: publishedBase.body.version, draft: null, published: { value: { enabled: false, counterId: null } } })
+    await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-invalid-${randomUUID()}`, expectedVersion: initialMetrika.body.version,
+      value: { enabled: true, counterId: null },
+    }).expect(400)
+    await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-snippet-${randomUUID()}`, expectedVersion: initialMetrika.body.version,
+      value: { enabled: true, counterId: "123", snippet: "<script>ym()</script>" },
+    }).expect(400)
+
+    const pendingNavigation = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-pending-navigation-${randomUUID()}`, expectedVersion: initialMetrika.body.version,
+      value: { ...baseValue, headerNavigation: [{ id: randomUUID(), label: "Черновик", link: { kind: "internal", path: "/draft" }, children: [] }] },
+    }).expect(200)
+    expect((await adminAgent.get("/api/admin/v1/site-settings/integrations/metrika").expect(200)).body.draft).toBeNull()
+
+    const operationId = randomUUID()
+    const idempotencyKey = `metrika-update-${randomUUID()}`
+    const metrikaMutation = {
+      operationId, idempotencyKey, expectedVersion: pendingNavigation.body.version,
+      value: { enabled: true, counterId: " 12345678901234567890 " },
+    }
+    const savedMetrika = await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send(metrikaMutation).expect(200)
+    expect(savedMetrika.body).toMatchObject({ draft: { value: { enabled: true, counterId: "12345678901234567890" } }, published: { value: { enabled: false, counterId: null } } })
+    expect((await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send(metrikaMutation).expect(200)).body).toEqual(savedMetrika.body)
+    await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send({
+      ...metrikaMutation, value: { enabled: false, counterId: null },
+    }).expect(409)
+
+    const publishedMetrika = await adminAgent.post("/api/admin/v1/site-settings/integrations/metrika/publish").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-publish-${randomUUID()}`, expectedVersion: savedMetrika.body.version,
+    }).expect(200)
+    expect(publishedMetrika.body).toMatchObject({ draft: null, published: { value: { enabled: true, counterId: "12345678901234567890" } } })
+    const publicAfterMetrika = await request(app.getHttpServer()).get("/api/public/v1/site-settings").expect(200)
+    expect(publicAfterMetrika.body.value).toMatchObject({
+      headerNavigation: [{ label: "Опубликовано" }],
+      analytics: { metrika: { enabled: true, counterId: "12345678901234567890" } },
+    })
+    expect(publicAfterMetrika.body.value.analytics.metrika).toEqual({ enabled: true, counterId: "12345678901234567890" })
+    expect((await adminAgent.get("/api/admin/v1/site-settings").expect(200)).body.draft.value.headerNavigation[0].label).toBe("Черновик")
+
+    const disabledDraft = await adminAgent.patch("/api/admin/v1/site-settings/integrations/metrika").send({
+      operationId: randomUUID(), idempotencyKey: `metrika-disable-${randomUUID()}`, expectedVersion: publishedMetrika.body.version,
+      value: { enabled: false, counterId: null },
+    }).expect(200)
+    const publishedNavigation = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `navigation-publish-with-metrika-draft-${randomUUID()}`, expectedVersion: disabledDraft.body.version,
+    }).expect(200)
+    expect(publishedNavigation.body).toMatchObject({ draft: null, published: { value: { headerNavigation: [{ label: "Черновик" }] } } })
+    const publicAfterNavigation = await request(app.getHttpServer()).get("/api/public/v1/site-settings").expect(200)
+    expect(publicAfterNavigation.body.value).toMatchObject({
+      headerNavigation: [{ label: "Черновик" }],
+      analytics: { metrika: { enabled: true, counterId: "12345678901234567890" } },
+    })
+    expect((await adminAgent.get("/api/admin/v1/site-settings/integrations/metrika").expect(200)).body).toMatchObject({
+      draft: { value: { enabled: false, counterId: null } },
+      published: { value: { enabled: true, counterId: "12345678901234567890" } },
+    })
+
+    const auditActions = await dataSource.getRepository(ChangeLogEntity).findBy({ entityType: "cms_site_settings" })
+    expect(auditActions.map((item) => item.action)).toEqual(expect.arrayContaining(["metrika_updated", "metrika_published"]))
+    const outboxTopics = await dataSource.getRepository(OutboxEventEntity).findBy({ aggregateType: "cms_site_settings" })
+    expect(outboxTopics.map((item) => item.topic)).toEqual(expect.arrayContaining(["cms.site_settings.metrika_updated", "cms.site_settings.metrika_published"]))
+  })
+
   it("builds and atomically activates a materialized CMS release while editorial archive leaves it live", async () => {
     const homeSectionId = randomUUID()
     const home = await adminAgent.post("/api/admin/v1/content/nodes").send({

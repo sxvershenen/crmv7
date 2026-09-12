@@ -36,6 +36,23 @@ export const CmsSiteSettingsValueSchema = z.object({
 }).strict();
 export type CmsSiteSettingsValue = z.infer<typeof CmsSiteSettingsValueSchema>;
 
+export const CmsMetrikaSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  counterId: z.string().trim().regex(/^[1-9][0-9]{0,19}$/).nullable().default(null),
+}).strict().superRefine((value, context) => {
+  if (value.enabled && value.counterId === null) {
+    context.addIssue({ code: "custom", path: ["counterId"], message: "Counter ID is required when Yandex Metrika is enabled" });
+  }
+});
+export type CmsMetrikaSettings = z.infer<typeof CmsMetrikaSettingsSchema>;
+
+export const CmsSiteSettingsStoredValueSchema = CmsSiteSettingsValueSchema.extend({
+  analytics: z.object({
+    metrika: CmsMetrikaSettingsSchema.default({ enabled: false, counterId: null }),
+  }).strict().default({ metrika: { enabled: false, counterId: null } }),
+}).strict();
+export type CmsSiteSettingsStoredValue = z.infer<typeof CmsSiteSettingsStoredValueSchema>;
+
 export const CmsSiteSettingsRevisionSchema = z.object({
   id: IdSchema,
   revision: VersionSchema,
@@ -69,11 +86,44 @@ export const CmsSiteSettingsPublishSchema = z.object({
 }).strict();
 export type CmsSiteSettingsPublish = z.infer<typeof CmsSiteSettingsPublishSchema>;
 
+export const CmsMetrikaSettingsRevisionSchema = z.object({
+  id: IdSchema,
+  revision: VersionSchema,
+  state: z.enum(["draft", "published", "superseded"]),
+  value: CmsMetrikaSettingsSchema,
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  createdBy: IdSchema,
+  createdAt: DateTimeSchema,
+}).strict();
+
+export const CmsMetrikaSettingsDetailSchema = z.object({
+  id: IdSchema,
+  version: VersionSchema,
+  draft: CmsMetrikaSettingsRevisionSchema.nullable(),
+  published: CmsMetrikaSettingsRevisionSchema.nullable(),
+}).strict();
+export type CmsMetrikaSettingsDetail = z.infer<typeof CmsMetrikaSettingsDetailSchema>;
+
+export const CmsMetrikaSettingsMutationSchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+  expectedVersion: VersionSchema,
+  value: CmsMetrikaSettingsSchema,
+}).strict();
+export type CmsMetrikaSettingsMutation = z.infer<typeof CmsMetrikaSettingsMutationSchema>;
+
+export const CmsMetrikaSettingsPublishSchema = z.object({
+  operationId: OperationIdSchema,
+  idempotencyKey: IdempotencyKeySchema,
+  expectedVersion: VersionSchema,
+}).strict();
+export type CmsMetrikaSettingsPublish = z.infer<typeof CmsMetrikaSettingsPublishSchema>;
+
 export const PublicSiteSettingsSchema = z.object({
   releaseId: IdSchema,
   revisionId: IdSchema,
   contentVersion: z.string().regex(/^[a-f0-9]{64}$/),
   publishedAt: DateTimeSchema,
-  value: CmsSiteSettingsValueSchema,
+  value: CmsSiteSettingsStoredValueSchema,
 }).strict();
 export type PublicSiteSettings = z.infer<typeof PublicSiteSettingsSchema>;

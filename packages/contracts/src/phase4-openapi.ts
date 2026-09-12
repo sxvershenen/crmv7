@@ -33,7 +33,17 @@ import {
   PublicListingHttpQuerySchema,
   PublicListingResultSchema,
 } from "./public-site.js";
-import { CmsSiteSettingsDetailSchema, CmsSiteSettingsMutationSchema, CmsSiteSettingsPublishSchema, PublicSiteSettingsSchema } from "./site-settings.js";
+import {
+  CmsMetrikaSettingsDetailSchema,
+  CmsMetrikaSettingsMutationSchema,
+  CmsMetrikaSettingsPublishSchema,
+  CmsMetrikaSettingsRevisionSchema,
+  CmsMetrikaSettingsSchema,
+  CmsSiteSettingsDetailSchema,
+  CmsSiteSettingsMutationSchema,
+  CmsSiteSettingsPublishSchema,
+  PublicSiteSettingsSchema,
+} from "./site-settings.js";
 import { PublicRouteManifestSchema } from "./public-routes.js";
 import {
   MediaAssetArchiveSchema,
@@ -99,6 +109,11 @@ const cmsReleaseList = adminRegister("CmsReleaseListResponse", CmsReleaseListRes
 const siteSettingsDetail = adminRegister("CmsSiteSettingsDetail", CmsSiteSettingsDetailSchema);
 const siteSettingsMutation = adminRegister("CmsSiteSettingsMutation", CmsSiteSettingsMutationSchema);
 const siteSettingsPublish = adminRegister("CmsSiteSettingsPublish", CmsSiteSettingsPublishSchema);
+adminRegister("CmsMetrikaSettings", CmsMetrikaSettingsSchema);
+adminRegister("CmsMetrikaSettingsRevision", CmsMetrikaSettingsRevisionSchema);
+const metrikaSettingsDetail = adminRegister("CmsMetrikaSettingsDetail", CmsMetrikaSettingsDetailSchema);
+const metrikaSettingsMutation = adminRegister("CmsMetrikaSettingsMutation", CmsMetrikaSettingsMutationSchema);
+const metrikaSettingsPublish = adminRegister("CmsMetrikaSettingsPublish", CmsMetrikaSettingsPublishSchema);
 const idParams = adminRegister("CmsNodeIdParams", CmsNodeIdParamsSchema);
 const previewRevisionParams = adminRegister("CmsRevisionIdParams", CmsRevisionIdParamsSchema);
 const previewTokenIssue = adminRegister("CmsPreviewTokenIssue", CmsPreviewTokenIssueSchema);
@@ -214,6 +229,9 @@ adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}/publicati
 adminRegistry.registerPath({ method: "get", path: "/site-settings", ...adminPrivate, tags: ["Site settings"], summary: "Read draft and published navigation/site settings", responses: { 200: { description: "Versioned site settings", content: json(siteSettingsDetail) }, 403: errorResponse("Content view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "patch", path: "/site-settings", ...adminPrivate, tags: ["Site settings"], summary: "Save navigation and global site settings as a draft", request: { body: { required: true, content: json(siteSettingsMutation) } }, responses: { 200: { description: "Saved settings draft", content: json(siteSettingsDetail) }, 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Version conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/site-settings/publish", ...adminPrivate, tags: ["Site settings"], summary: "Publish navigation and site settings directly", request: { body: { required: true, content: json(siteSettingsPublish) } }, responses: { 200: { description: "Published settings", content: json(siteSettingsDetail) }, 403: errorResponse("Publication capability denied", adminError), 409: errorResponse("Version or concurrent publication conflict", adminError) } });
+adminRegistry.registerPath({ method: "get", path: "/site-settings/integrations/metrika", ...adminPrivate, tags: ["Integrations"], summary: "Read the versioned Yandex Metrika counter settings", responses: { 200: { description: "Draft and published Metrika settings", content: json(metrikaSettingsDetail) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Integration management capability denied", adminError) } });
+adminRegistry.registerPath({ method: "patch", path: "/site-settings/integrations/metrika", ...adminPrivate, tags: ["Integrations"], summary: "Save only normalized Yandex Metrika counter settings as a draft", request: { body: { required: true, content: json(metrikaSettingsMutation) } }, responses: { 200: { description: "Saved Metrika settings draft", content: json(metrikaSettingsDetail) }, 400: errorResponse("Invalid Metrika settings", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Integration management capability denied", adminError), 409: errorResponse("Version, base publication or idempotency conflict", adminError) } });
+adminRegistry.registerPath({ method: "post", path: "/site-settings/integrations/metrika/publish", ...adminPrivate, tags: ["Integrations"], summary: "Publish only the Yandex Metrika counter settings", request: { body: { required: true, content: json(metrikaSettingsPublish) } }, responses: { 200: { description: "Published Metrika settings", content: json(metrikaSettingsDetail) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Integration management capability denied", adminError), 409: errorResponse("Version, draft or concurrent publication conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/revisions/{revisionId}/preview-token", ...adminPrivate, tags: ["Content"], summary: "Issue a short-lived noindex preview token for one revision", request: { params: previewRevisionParams, body: { required: true, content: json(previewTokenIssue) } }, responses: { 200: { description: "Preview token", content: json(previewTokenResponse) }, 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Revision not found", adminError), 503: errorResponse("Preview signing secret is not configured", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/approve", ...adminPrivate, tags: ["Content"], summary: "Approve a reviewed immutable revision for release building", request: { params: idParams, body: { required: true, content: json(cmsTransition) } }, responses: { 200: { description: "Approved revision", content: json(cmsDetail) }, 403: errorResponse("Content review capability denied", adminError), 409: errorResponse("Invalid state or version conflict", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/releases/{id}", ...adminPrivate, tags: ["Publication"], summary: "Read an immutable CMS release manifest", request: { params: releaseIdParams }, responses: { 200: { description: "Release detail", content: json(releaseDetail) }, 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Release not found", adminError) } });

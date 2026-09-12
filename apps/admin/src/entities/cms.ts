@@ -95,6 +95,18 @@ export type PublicNavigation = {
   footer: PublicNavigationItem[]
 }
 
+export type MetrikaSettings = {
+  enabled: boolean
+  counterId: string | null
+}
+
+export type MetrikaSettingsRecord = {
+  version: number
+  status: "draft" | "published"
+  updatedLabel: string
+  metrika: MetrikaSettings
+}
+
 export type EditorRecord = {
   id: string
   kind: "home" | "landing" | "category" | "profile" | "article"
@@ -207,6 +219,9 @@ export interface CmsRepository {
   getNavigation(): Promise<PublicNavigation>
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>
   publishNavigation(expectedVersion: number): Promise<PublicNavigation>
+  getMetrikaSettings(): Promise<MetrikaSettingsRecord>
+  saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number): Promise<MetrikaSettingsRecord>
+  publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord>
   getMedia(): Promise<MediaAsset[]>
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   uploadMedia(file: File): Promise<MediaAsset>

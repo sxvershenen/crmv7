@@ -148,6 +148,8 @@ Before production, the operator/legal/privacy owner must approve purposes, notic
 ## 10. Я.Метрика
 
 - consent-gated tag/config;
+- CMS stores only a validated counter ID; a pasted installation snippet is used only in the editor to extract that ID and is never stored or executed;
+- public delivery loads `tag.js` only after first-party analytics consent, sends path-only page hits, disables Webvisor/clickmap/link tracking, and calls the provider's destructor on revoke;
 - encrypted integration settings, secrets never returned;
 - aggregate reconciliation by date/page/campaign;
 - discrepancies shown as coverage, not overwritten business facts;

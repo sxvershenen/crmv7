@@ -60,6 +60,7 @@ createServer(async (request, response) => {
         siteName: "Тестовый опубликованный сайт",
         headerNavigation: [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" } }],
         heroDefault: { title: "Глобальный hero не должен воскреснуть" },
+        analytics: { metrika: { enabled: true, counterId: "12345678" } },
       },
     })
   }

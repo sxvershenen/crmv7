@@ -1,6 +1,7 @@
 ---
 import { siteIdentity } from "../lib/content"
 import AnalyticsIsland from "../react/components/islands/AnalyticsIsland"
+import MetrikaIsland from "../react/components/islands/MetrikaIsland"
 import ModalHub from "../components/islands/ModalHub"
 import ScrollRevealController from "../components/ScrollRevealController.astro"
 import "../styles/global.css"
@@ -19,6 +20,7 @@ interface Props {
   } | undefined
   structuredData?: Array<Record<string, unknown>>
   contentAvailable?: boolean
+  metrika?: { enabled: boolean; counterId: string | null }
 }
 
 const {
@@ -30,6 +32,7 @@ const {
   social,
   structuredData = [],
   contentAvailable = true,
+  metrika,
 } = Astro.props
 
 const robotsContent = robots === "noindex_follow" ? "noindex, follow" : robots === "noindex_nofollow" || noindex ? "noindex, nofollow" : null
@@ -84,7 +87,8 @@ const serializeJsonLd = (value: Record<string, unknown>) => JSON.stringify(value
       <slot />
     </div>
     {contentAvailable && <ScrollRevealController />}
-    <AnalyticsIsland client:load />
+    {contentAvailable && <AnalyticsIsland client:load />}
+    {metrika && <MetrikaIsland metrika={metrika} client:load />}
     {contentAvailable && <ModalHub client:load />}
   </body>
 </html>
