@@ -1,4 +1,5 @@
 import type {
+  AnalyticsConsentSource,
   AnalyticsEventBatch,
   ClientAnalyticsEvent,
 } from "@crm/contracts";
@@ -8,29 +9,66 @@ export type AnalyticsConsentState = ClientAnalyticsEvent["consent"];
 export const ANALYTICS_CONSENT_STORAGE_KEY = "svistoplyasovo.analytics-consent.v1";
 export const ANALYTICS_CONSENT_POLICY_VERSION = "v1";
 export const ANALYTICS_CONSENT_CHANGED_EVENT = "site:analytics-consent-changed";
+export const ANALYTICS_CONSENT_SOURCE = "privacy-settings" satisfies AnalyticsConsentSource;
 
 const ANALYTICS_ENDPOINT = "/api/public/v1/analytics/events";
 const ANALYTICS_ID_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
 type StoredAnalyticsConsentState = Extract<AnalyticsConsentState, "analytics" | "denied">;
 
-interface StoredAnalyticsConsent {
+interface LegacyStoredAnalyticsConsent {
   state: StoredAnalyticsConsentState;
   policyVersion: typeof ANALYTICS_CONSENT_POLICY_VERSION;
 }
 
-export interface AnalyticsConsentChangedDetail {
-  state: AnalyticsConsentState;
+interface AnalyticsConsentEvidence {
+  policyVersion: typeof ANALYTICS_CONSENT_POLICY_VERSION;
+  timestamp: string;
+  source: AnalyticsConsentSource;
 }
 
-function isStoredConsent(value: unknown): value is StoredAnalyticsConsent {
+interface StoredAnalyticsConsent extends LegacyStoredAnalyticsConsent, AnalyticsConsentEvidence {}
+
+export interface AnalyticsConsentChangedDetail {
+  state: AnalyticsConsentState;
+  policyVersion: typeof ANALYTICS_CONSENT_POLICY_VERSION;
+  timestamp: string;
+  source: AnalyticsConsentSource;
+}
+
+function isStoredConsent(value: unknown): value is LegacyStoredAnalyticsConsent | StoredAnalyticsConsent {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   const candidate = value as Partial<StoredAnalyticsConsent>;
-  return candidate.policyVersion === ANALYTICS_CONSENT_POLICY_VERSION
-    && (candidate.state === "analytics" || candidate.state === "denied");
+  if (candidate.policyVersion !== ANALYTICS_CONSENT_POLICY_VERSION
+    || (candidate.state !== "analytics" && candidate.state !== "denied")) {
+    return false;
+  }
+
+  const hasTimestamp = Object.hasOwn(candidate, "timestamp");
+  const hasSource = Object.hasOwn(candidate, "source");
+  if (!hasTimestamp && !hasSource) {
+    return true;
+  }
+
+  return hasTimestamp
+    && hasSource
+    && isConsentTimestamp(candidate.timestamp)
+    && candidate.source === ANALYTICS_CONSENT_SOURCE;
+}
+
+function isConsentTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  try {
+    return new Date(value).toISOString() === value;
+  } catch {
+    return false;
+  }
 }
 
 export function getAnalyticsConsentState(): AnalyticsConsentState {
@@ -51,10 +89,18 @@ export function getAnalyticsConsentState(): AnalyticsConsentState {
   }
 }
 
-function dispatchConsentChanged(state: AnalyticsConsentState) {
+function createConsentEvidence(): AnalyticsConsentEvidence {
+  return {
+    policyVersion: ANALYTICS_CONSENT_POLICY_VERSION,
+    timestamp: new Date().toISOString(),
+    source: ANALYTICS_CONSENT_SOURCE,
+  };
+}
+
+function dispatchConsentChanged(state: AnalyticsConsentState, evidence: AnalyticsConsentEvidence) {
   window.dispatchEvent(new CustomEvent<AnalyticsConsentChangedDetail>(
     ANALYTICS_CONSENT_CHANGED_EVENT,
-    { detail: { state } },
+    { detail: { state, ...evidence } },
   ));
 }
 
@@ -64,12 +110,13 @@ function storeConsent(state: StoredAnalyticsConsentState): boolean {
   }
 
   try {
+    const evidence = createConsentEvidence();
     const value: StoredAnalyticsConsent = {
       state,
-      policyVersion: ANALYTICS_CONSENT_POLICY_VERSION,
+      ...evidence,
     };
     window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, JSON.stringify(value));
-    dispatchConsentChanged(state);
+    dispatchConsentChanged(state, evidence);
     return true;
   } catch {
     return false;
@@ -204,7 +251,8 @@ export function revokeAnalyticsConsent(): boolean {
     // The in-page event still disables analytics for the current document.
   }
 
-  dispatchConsentChanged("denied");
+  const evidence = createConsentEvidence();
+  dispatchConsentChanged("denied", evidence);
   sendEvent(createEvent(
     "consent_changed",
     "denied",
@@ -212,7 +260,7 @@ export function revokeAnalyticsConsent(): boolean {
     {
       kind: "consent",
       state: "denied",
-      policyVersion: ANALYTICS_CONSENT_POLICY_VERSION,
+      ...evidence,
     },
   ));
   return removed;

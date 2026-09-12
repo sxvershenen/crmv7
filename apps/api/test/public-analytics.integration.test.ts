@@ -86,7 +86,9 @@ describe.sequential("public analytics collector + PostgreSQL", () => {
   it("expires identity and stores no event when analytics consent is revoked", async () => {
     const response = await request(app.getHttpServer()).post(endpoint).send({ events: [{
       eventId: randomUUID(), schemaVersion: 1, occurredAt: new Date().toISOString(), eventName: "consent_changed", consent: "denied", purpose: "essential",
-      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null }, properties: { kind: "consent", state: "denied", policyVersion: "v1" },
+      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null }, properties: {
+        kind: "consent", state: "denied", policyVersion: "v1", timestamp: new Date().toISOString(), source: "privacy-settings",
+      },
     }] }).expect(202)
     expect(response.body).toMatchObject({ accepted: 0, duplicates: 0, dropped: 1 })
     expect(response.headers["set-cookie"]).toEqual(expect.arrayContaining([expect.stringContaining("sv_analytics_visitor=;"), expect.stringContaining("sv_analytics_session=;")]))

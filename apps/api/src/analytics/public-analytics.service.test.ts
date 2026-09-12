@@ -28,7 +28,9 @@ describe("PublicAnalyticsService consent boundary", () => {
     const service = new PublicAnalyticsService({ transaction } as never, { get: vi.fn((key: string, fallback?: unknown) => fallback) } as never, { issue: vi.fn(), clear } as never)
     const result = await service.collect({ events: [{
       eventId: randomUUID(), schemaVersion: 1, occurredAt: new Date().toISOString(), eventName: "consent_changed", consent: "denied", purpose: "essential",
-      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null }, properties: { kind: "consent", state: "denied", policyVersion: "v1" },
+      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null }, properties: {
+        kind: "consent", state: "denied", policyVersion: "v1", timestamp: new Date().toISOString(), source: "privacy-settings",
+      },
     }] }, { header: () => undefined } as never, { cookie: vi.fn(), clearCookie: vi.fn() } as never)
     expect(result).toMatchObject({ accepted: 0, duplicates: 0, dropped: 1 })
     expect(clear).toHaveBeenCalledOnce()

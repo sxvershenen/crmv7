@@ -44,9 +44,17 @@ test("refuses analytics without sending or retaining hidden events", async ({ pa
   await page.getByRole("button", { name: "Только необходимые" }).click();
 
   await expect(page.getByRole("dialog", { name: "Политика обработки персональных данных и согласие" })).toBeHidden();
-  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), CONSENT_KEY)).toBe(
-    JSON.stringify({ state: "denied", policyVersion: "v1" }),
-  );
+  await expect.poll(() => page.evaluate((key) => {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as unknown : null;
+  }, CONSENT_KEY)).toMatchObject({
+    state: "denied",
+    policyVersion: "v1",
+    timestamp: expect.any(String),
+    source: "privacy-settings",
+  });
+  const deniedEvidence = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key)!) as { timestamp: string }, CONSENT_KEY);
+  expect(Date.parse((deniedEvidence as { timestamp: string }).timestamp)).not.toBeNaN();
 
   await page.locator("#events").dispatchEvent("click");
   await page.waitForTimeout(100);
@@ -58,6 +66,18 @@ test("accepts analytics, sends one page view, and captures allowlisted CTA data"
   await page.goto("/?campaign=private#hero", { waitUntil: "domcontentloaded" });
   await openPrivacySettings(page);
   await page.getByRole("button", { name: "Разрешить аналитику" }).click();
+
+  await expect.poll(() => page.evaluate((key) => {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as unknown : null;
+  }, CONSENT_KEY)).toMatchObject({
+    state: "analytics",
+    policyVersion: "v1",
+    timestamp: expect.any(String),
+    source: "privacy-settings",
+  });
+  const grantedEvidence = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key)!) as { timestamp: string }, CONSENT_KEY);
+  expect(Date.parse((grantedEvidence as { timestamp: string }).timestamp)).not.toBeNaN();
 
   await expect.poll(() => batches.length).toBe(1);
   expect(batches[0]?.events).toHaveLength(1);
@@ -119,8 +139,11 @@ test("revokes analytics with an essential denied event and clears consent", asyn
       kind: "consent",
       state: "denied",
       policyVersion: "v1",
+      timestamp: expect.any(String),
+      source: "privacy-settings",
     },
   });
+  expect(Date.parse((batches[1]?.events[0]?.properties as { timestamp: string }).timestamp)).not.toBeNaN();
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), CONSENT_KEY)).toBeNull();
 
   await page.locator("#events").dispatchEvent("click");

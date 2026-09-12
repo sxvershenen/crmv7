@@ -110,6 +110,43 @@ describe("Phase 4 contracts", () => {
       context: { path: "/", pageNodeId: null, releaseId: null, referrer: null },
       properties: { kind: "action", actionId: "hero.book", component: "hero", phone: "+79990000000" },
     }] }).success).toBe(false);
+
+    const consentEvent = {
+      eventId: secondId,
+      schemaVersion: 1 as const,
+      occurredAt: timestamp,
+      eventName: "consent_changed" as const,
+      consent: "denied" as const,
+      purpose: "essential" as const,
+      context: { path: "/", pageNodeId: null, releaseId: null, referrer: null },
+      properties: {
+        kind: "consent" as const,
+        state: "denied" as const,
+        policyVersion: "v1",
+        timestamp,
+        source: "privacy-settings" as const,
+      },
+    };
+    expect(AnalyticsEventBatchSchema.parse({ events: [consentEvent] }).events[0]?.properties).toMatchObject({
+      timestamp,
+      source: "privacy-settings",
+    });
+    expect(AnalyticsEventBatchSchema.safeParse({ events: [{
+      ...consentEvent,
+      properties: { ...consentEvent.properties, source: "query-string" },
+    }] }).success).toBe(false);
+    expect(AnalyticsEventBatchSchema.safeParse({ events: [{
+      ...consentEvent,
+      properties: { ...consentEvent.properties, timestamp: "not-a-timestamp" },
+    }] }).success).toBe(false);
+    expect(AnalyticsEventBatchSchema.safeParse({ events: [{
+      ...consentEvent,
+      properties: { kind: "consent", state: "denied", policyVersion: "v1", source: "privacy-settings" },
+    }] }).success).toBe(false);
+    expect(AnalyticsEventBatchSchema.safeParse({ events: [{
+      ...consentEvent,
+      properties: { kind: "consent", state: "denied", policyVersion: "v1" },
+    }] }).success).toBe(true);
   });
 
   it("keeps aggregate reads date-shaped, dimension-safe and free of raw analytics fields", () => {

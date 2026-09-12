@@ -2,6 +2,8 @@ import { z } from "zod";
 import { DateTimeSchema, IdSchema } from "./primitives.js";
 
 export const AnalyticsConsentStateSchema = z.enum(["unknown", "denied", "analytics", "analytics_and_marketing"]);
+export const AnalyticsConsentSourceSchema = z.enum(["privacy-settings"]);
+export type AnalyticsConsentSource = z.infer<typeof AnalyticsConsentSourceSchema>;
 export const AnalyticsPurposeSchema = z.enum(["essential", "analytics", "marketing"]);
 export const AnalyticsEventNameSchema = z.enum([
   "page_view", "section_impression", "navigation_click", "outbound_click", "file_download",
@@ -48,7 +50,14 @@ const ConsentPayloadSchema = z.object({
   kind: z.literal("consent"),
   state: AnalyticsConsentStateSchema,
   policyVersion: z.string().min(1).max(100),
-}).strict();
+  // Optional in schema v1 so previously deployed clients remain valid.
+  timestamp: DateTimeSchema.optional(),
+  source: AnalyticsConsentSourceSchema.optional(),
+}).strict().superRefine((value, context) => {
+  if ((value.timestamp === undefined) !== (value.source === undefined)) {
+    context.addIssue({ code: "custom", message: "Consent timestamp and source must be provided together" });
+  }
+});
 
 export const AnalyticsClientPayloadSchema = z.discriminatedUnion("kind", [
   PageViewPayloadSchema, ActionPayloadSchema, FunnelPayloadSchema, ConsentPayloadSchema,
