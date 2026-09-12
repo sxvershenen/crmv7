@@ -99,8 +99,8 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
-            <div className="lg:col-span-7 flex flex-col gap-5 max-w-[640px]">
-              <h1 className="text-white text-[32px] md:text-[44px] leading-[1.05] font-semibold tracking-[-1px] text-balance">{activeSlide.title || config.title}</h1>
+            <div className="lg:col-span-7 flex flex-col gap-3 max-w-[640px]">
+              <h1 className="text-white text-[32px] md:text-[44px] leading-[1] font-semibold tracking-[-1px] text-balance">{activeSlide.title || config.title}</h1>
               <p className="text-white/85 text-[14px] lg:text-[15px] max-w-[480px] hidden sm:block">{activeSlide.tagline}</p>
               {config.primaryCta.enabled || config.secondaryCta.enabled ? <div className="site-hero__actions flex flex-nowrap gap-2.5">
                 {config.primaryCta.enabled ? <div ref={bookingRef} className="relative min-w-0">

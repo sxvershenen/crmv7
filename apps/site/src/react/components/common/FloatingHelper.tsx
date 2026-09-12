@@ -47,7 +47,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
           className={`site-floating-helper flex h-12 items-center overflow-hidden rounded-full bg-white border border-neutral-200/80 shadow-lg hover:border-neutral-300 transition-[width,padding,gap,border-color] duration-500 ease-[var(--ease-spring)] group cursor-pointer ${isExpanded ? 'w-[min(18rem,calc(100vw-2rem))] gap-2 p-1 pr-2' : 'w-12 gap-0 p-0.5'}`}
         >
           {/* Avatar with pulsing online dot */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <img
               src="https://images.pexels.com/photos/7551763/pexels-photo-7551763.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=90&w=90"
               alt="Менеджер Алёна"
@@ -56,7 +56,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#2B9E47] border-2 border-white"></span>
           </div>
 
-          <div className={`text-left whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'max-w-[12rem] opacity-100' : 'max-w-0 opacity-0'}`}>
+          <div className={`text-left whitespace-nowrap overflow-hidden transition-[width,opacity] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'w-[168px] min-w-0 flex-1 opacity-100' : 'w-0 shrink-0 opacity-0'}`}>
             <div className="text-[12px] font-semibold text-[#18191b] flex items-center gap-1.5 leading-none mb-1">
               Нужна помощь?
               <span className="text-[10px] font-normal text-[#2B9E47] bg-[#2B9E47]/10 px-1.5 py-0.5 rounded-full">онлайн</span>
@@ -66,7 +66,7 @@ export const FloatingHelper: React.FC<FloatingHelperProps> = () => {
             </div>
           </div>
 
-          <div className={`w-7 h-7 shrink-0 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white flex items-center justify-center text-[#18191b] transition-[opacity,transform,background-color,color] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-75'}`}>
+          <div className={`w-7 h-7 shrink-0 rounded-full bg-[#f7f7f7] group-hover:bg-[#2B9E47] group-hover:text-white items-center justify-center text-[#18191b] transition-[opacity,background-color,color] duration-300 ease-[var(--ease-out)] ${isExpanded ? 'flex opacity-100' : 'hidden'}`}>
             <Send className="w-3.5 h-3.5 -rotate-12" />
           </div>
         </button>

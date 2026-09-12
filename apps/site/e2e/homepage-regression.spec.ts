@@ -34,11 +34,14 @@ test("keeps the restored homepage structure and typography", async ({ page }, te
 
   if (testInfo.project.name === "desktop-chromium") {
     await expect(heroTitle).toHaveCSS("font-size", "44px");
+    await expect(heroTitle).toHaveCSS("line-height", "44px");
+    await expect(heroTitle.locator("xpath=..")).toHaveCSS("gap", "12px");
     await expect(page.locator("#events h2")).toHaveCSS("font-size", "32px");
     await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page.locator('aside.fixed[aria-label="Основная навигация"]')).toBeVisible();
   } else {
     await expect(heroTitle).toHaveCSS("font-size", "32px");
+    await expect(heroTitle).toHaveCSS("line-height", "32px");
     await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page.locator('aside.fixed[aria-label="Основная навигация"]')).toBeHidden();
   }
@@ -96,6 +99,11 @@ test("keeps the requested responsive presentation details", async ({ page }, tes
       const box = await card.boundingBox();
       expect(box?.height).toBeLessThanOrEqual(92);
     }
+    const compact = page.locator("#blog .site-article-card--compact").first();
+    const [compactBox, compactBodyBox] = await Promise.all([compact.boundingBox(), compact.locator(".site-article-card__body").boundingBox()]);
+    expect(compactBox).not.toBeNull();
+    expect(compactBodyBox).not.toBeNull();
+    expect(Math.abs(compactBodyBox!.x - compactBox!.x - 20)).toBeLessThanOrEqual(1);
   }
 });
 
@@ -331,6 +339,9 @@ test("keeps catalog, review, map and FAQ interactions", async ({ page }, testInf
   await expect.poll(() => location.evaluate((element) => !element.closest("astro-island")?.hasAttribute("ssr"))).toBe(true);
   await location.getByRole("button", { name: "Что входит в стоимость проживания в домике?" }).click();
   await expect(location).toContainText("постельное белье премиум-класса");
+  const openFaq = location.locator('.site-accordion[data-state="open"]');
+  await expect(openFaq).toHaveCSS("border-radius", "24px");
+  await expect(location.locator(".site-accordion-list")).toHaveCSS("padding", "8px");
 });
 
 test("retires the prototype resource route without a temporary redirect", async ({ page, request }) => {
