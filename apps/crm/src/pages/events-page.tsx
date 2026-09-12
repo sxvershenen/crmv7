@@ -8,13 +8,15 @@ import { EventsControls, EventsNav, type EventFilterValues } from "@app/componen
 import { shiftIso } from "@app/components/events/event-format"
 import { EventScheduler } from "@app/components/events/event-scheduler"
 import { EventsLoading, EventsTableView } from "@app/components/events/event-views"
-import { eventsRepository, type EventsRepository } from "@app/data/events-repository"
+import { eventsRepository, FixtureEventsRepository, type EventsRepository } from "@app/data/events-repository"
 import type { EventQuery, EventSortKey, EventStatus, EventStatusFilter } from "@app/entities/events"
 import { eventPeriods, eventSortKeys, eventStatusFilters, eventViews } from "@app/entities/events"
 import { useEvents } from "@app/features/use-events"
+import { defaultBusinessDate } from "@app/lib/business-datetime"
+import { useFixtureData } from "@app/lib/data-mode"
 
-const DEFAULT_DATE = "2026-08-24"
-const DEFAULT_RANGE_END = "2026-08-30"
+const FIXTURE_DEFAULT_DATE = "2026-08-24"
+const FIXTURE_DEFAULT_RANGE_END = "2026-08-30"
 
 function oneOf<T extends string>(value: string | null, values: readonly T[], fallback: T): T { return value && values.includes(value as T) ? value as T : fallback }
 function validDate(value: string | null, fallback: string) { return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value! : fallback }
@@ -22,11 +24,14 @@ function validDate(value: string | null, fallback: string) { return /^\d{4}-\d{2
 export function EventsPage({ repository = eventsRepository }: { repository?: EventsRepository }) {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
+  const fixtureDefaults = useFixtureData || repository instanceof FixtureEventsRepository
+  const [defaultDate] = useState(() => defaultBusinessDate(FIXTURE_DEFAULT_DATE, fixtureDefaults))
+  const defaultRangeEnd = fixtureDefaults ? FIXTURE_DEFAULT_RANGE_END : shiftIso(defaultDate, 6)
   const status = oneOf(params.get("status"), eventStatusFilters, "all")
   const view = oneOf(params.get("view"), eventViews, "table")
   const period = oneOf(params.get("period"), eventPeriods, "3days")
-  const date = validDate(params.get("date"), DEFAULT_DATE)
-  const tableRangeEnd = validDate(params.get("to"), DEFAULT_RANGE_END)
+  const date = validDate(params.get("date"), defaultDate)
+  const tableRangeEnd = validDate(params.get("to"), defaultRangeEnd)
   const rangeEnd = view === "scheduler" ? shiftIso(date, period === "week" ? 6 : 2) : tableRangeEnd
   const sortKey = oneOf(params.get("sort"), eventSortKeys, "date")
   const sortDirection = oneOf(params.get("order"), ["asc", "desc"] as const, "asc")
@@ -48,7 +53,7 @@ export function EventsPage({ repository = eventsRepository }: { repository?: Eve
   const counts = state.status === "ready" ? state.data.counts : { in_work: 0, booked: 0, completed: 0, cancelled: 0, archived: 0 }
 
   const setParam = (name: string, value: string, fallback?: string) => setParams((current) => { const next = new URLSearchParams(current); if (value === fallback) next.delete(name); else next.set(name, value); return next })
-  const setRange = (from: string, to: string) => setParams((current) => { const next = new URLSearchParams(current); if (from === DEFAULT_DATE) next.delete("date"); else next.set("date", from); if (to === DEFAULT_RANGE_END) next.delete("to"); else next.set("to", to); return next })
+  const setRange = (from: string, to: string) => setParams((current) => { const next = new URLSearchParams(current); if (from === defaultDate) next.delete("date"); else next.set("date", from); if (to === defaultRangeEnd) next.delete("to"); else next.set("to", to); return next })
   const resetFilters = () => setParams((current) => { const next = new URLSearchParams(current); for (const key of ["category", "assignee", "nearest", "action", "unpaid", "conflict"]) next.delete(key); return next })
   const onFilterChange = (name: string, value: string, fallback?: string) => setParam(name === "requiresAction" ? "action" : name, value, fallback)
   const activeFilters = Number(filterValues.category !== "all") + Number(filterValues.assignee !== "all") + Number(filterValues.nearest) + Number(filterValues.requiresAction) + Number(filterValues.unpaid) + Number(filterValues.conflict)
@@ -59,7 +64,7 @@ export function EventsPage({ repository = eventsRepository }: { repository?: Eve
   return (
     <PageFrame className="space-y-3" width="full">
       <EventsNav counts={counts} onChange={(next: EventStatusFilter) => setParam("status", next, "all")} value={status} />
-      <EventsControls activeFilters={activeFilters} assignees={state.status === "ready" ? state.data.assignees : []} categories={state.status === "ready" ? state.data.categories : []} date={date} filterValues={filterValues} onDateChange={(next) => setParam("date", next, DEFAULT_DATE)} onFilterChange={onFilterChange} onOpenCategories={() => navigate("/events/categories")} onPeriodChange={(next) => setParam("period", next, "3days")} onRangeChange={setRange} onReset={resetFilters} onViewChange={(next) => setParam("view", next, "table")} period={period} rangeEnd={tableRangeEnd} view={view} />
+      <EventsControls activeFilters={activeFilters} assignees={state.status === "ready" ? state.data.assignees : []} categories={state.status === "ready" ? state.data.categories : []} date={date} filterValues={filterValues} onDateChange={(next) => setParam("date", next, defaultDate)} onFilterChange={onFilterChange} onOpenCategories={() => navigate("/events/categories")} onPeriodChange={(next) => setParam("period", next, "3days")} onRangeChange={setRange} onReset={resetFilters} onViewChange={(next) => setParam("view", next, "table")} period={period} rangeEnd={tableRangeEnd} view={view} />
       {state.status === "loading" ? <EventsLoading /> : null}
       {state.status === "error" ? <div className="rounded-xl border bg-surface-raised"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={retry} title="Мероприятия не загрузились" tone="danger">{state.message}</PageState></div> : null}
       {state.status === "ready" && state.data.events.length === 0 && view === "table" ? <div className="rounded-xl border bg-surface-raised"><PageState actionLabel="Сбросить фильтры" icon={IconFilter} onAction={resetFilters} title="Ничего не найдено">Измените период, тип или признаки.</PageState></div> : null}

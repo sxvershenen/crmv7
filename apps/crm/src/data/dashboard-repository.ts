@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import { apiClient } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
+import { minorToMajor } from "@app/lib/money"
 
 export interface DashboardRepository {
   assign(item: DashboardItem): Promise<void>
@@ -151,7 +152,7 @@ export class ApiDashboardRepository implements DashboardRepository {
   private bookingItem(booking: ReturnType<typeof BookingProjectionResponseSchema.parse>["bookings"][number], variant: "conflict" | "debt" | "cancelled" | "arrival" | "departure", today: string, currentUserId: string | null): DashboardData["attention"][number]["items"][number] {
     const date = variant === "departure" ? booking.endAt : booking.startAt
     const isToday = date.slice(0, 10) === today
-    const paidSummary = payment(booking.paid, booking.amount)
+    const paidSummary = payment(minorToMajor(booking.paid), minorToMajor(booking.amount))
     return {
       id: `${variant}-${booking.id}`,
       entityId: booking.id,

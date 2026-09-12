@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 
 import { TooltipProvider } from "@crm/ui"
 import { FixtureFinanceRepository } from "@app/data/finance-repository"
+import { financePeriodRanges } from "@app/lib/finance-period"
 import { FinancePage } from "./finance-page"
 
 function Probe() { const location = useLocation(); return <output aria-label="Текущий URL">{location.pathname}{location.search}</output> }
@@ -15,6 +16,22 @@ function renderFinance(entry = "/finance") {
 }
 
 describe("FinancePage", () => {
+  it("uses current API periods while preserving fixture ranges", () => {
+    expect(financePeriodRanges("2026-09-12", false)).toEqual({
+      today: ["2026-09-12", "2026-09-12"],
+      week: ["2026-09-06", "2026-09-12"],
+      month: ["2026-09-01", "2026-09-12"],
+      quarter: ["2026-07-01", "2026-09-12"],
+    })
+    expect(financePeriodRanges("2026-09-12", true).week).toEqual(["2026-08-18", "2026-08-24"])
+  })
+
+  it("keeps an explicit URL range instead of replacing it with defaults", async () => {
+    renderFinance("/finance?date=2026-09-01&to=2026-09-02")
+    await screen.findByTestId("finance-content")
+    expect(screen.getByLabelText("Текущий URL")).toHaveTextContent("date=2026-09-01&to=2026-09-02")
+  })
+
   it("uses shared metrics, list sections and payment progress", async () => {
     renderFinance()
     const content = await screen.findByTestId("finance-content")

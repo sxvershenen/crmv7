@@ -59,6 +59,11 @@
 - Оценивать по пакетам после выбора поддержанных page/section types и глубины аналитики. Это несколько связанных инкрементов frontend/contracts/backend/public consumer/QA; cosmetic cleanup не закрывает оставшиеся редакционные сценарии.
 - До финальной приёмки нужны disposable CMS API E2E с заполненными данными, roles/conflicts, реальным preview/public renderer и negative paths. Live smoke по пустой медиатеке/журналу и component tests не доказывают publication/media recovery.
 
+### Связанный CRM scope
+
+- Финансовая проекция (`apps/api/src/finance/finance.service.ts`) пока выбирает только booking payments: подключить Event/ProgramRegistration без двойного учёта и исправить fallback категории проживания. Gate: оплата каждого типа заказа появляется один раз в сводке и правильном направлении; возврат согласован с исходной оплатой.
+- API-таблицы мероприятий/регистраций показывают customer/assignee IDs вместо имён; новые регистрации без расчёта могут выглядеть оплаченными при нулевой сумме. Подключить имена из разрешённых projections и отличать «не рассчитано» от «оплачено», сохранив CRM layout.
+
 ## P4.5 — Offering и публичная миграция
 
 ### Оставшиеся commercial boundaries

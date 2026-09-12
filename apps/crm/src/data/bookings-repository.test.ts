@@ -92,6 +92,35 @@ describe("BookingRepository", () => {
     })
   })
 
+  it("round-trips booking RUB values through integer minor-unit transport", async () => {
+    const base = rawBookingDetail()
+    const raw = {
+      ...base,
+      amount: 400_001,
+      paid: 200_001,
+      items: [{ ...base.items[0]!, price: { amountMinor: 400_001, currency: "RUB" } }],
+      payments: [{ id: "10000000-0000-4000-8000-000000000004", operationId: "10000000-0000-4000-8000-000000000005", kind: "payment", amount: 200_001, currency: "RUB", method: "card", sourcePaymentId: null, reason: "", createdAt: "2026-09-09T10:00:00.000Z", createdBy: null }],
+    }
+    const repository = new ApiBookingRepository({ client: { get: vi.fn().mockResolvedValue(raw), patch: vi.fn(), post: vi.fn() } } as never)
+
+    const booking = await repository.get(bookingId)
+    if (!booking) throw new Error("Booking is missing")
+
+    expect(booking).toMatchObject({ amount: 4_000.01, paid: 2_000.01 })
+    expect(booking.positions[0]?.basePrice).toBe(4_000.01)
+    expect(booking.payments[0]?.amount).toBe(2_000.01)
+    expect(bookingItemsForApi(booking)[0]?.price.amountMinor).toBe(400_001)
+  })
+
+  it("converts RUB amount filters to minor units before requesting the API projection", async () => {
+    const get = vi.fn().mockResolvedValue({ bookings: [], operations: [], resources: [], window: {} })
+    const repository = new ApiBookingRepository({ client: { get, patch: vi.fn(), post: vi.fn() } } as never)
+
+    await repository.list({ ...baseQuery, amountFrom: 20_000.01, debtFrom: 5_000.02 })
+
+    expect(get).toHaveBeenCalledWith(expect.stringContaining("amountFrom=2000001&debtFrom=500002"), expect.anything())
+  })
+
   it("round-trips the authoritative preparation buffer instead of resetting it", async () => {
     const get = vi.fn().mockResolvedValue(rawBookingDetail())
     const repository = new ApiBookingRepository({ client: { get, patch: vi.fn(), post: vi.fn() } } as never)

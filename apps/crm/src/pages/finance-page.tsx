@@ -75,14 +75,17 @@ import {
   type DateRange,
 } from "@crm/ui"
 
-import { financeRepository, type FinanceRepository } from "@app/data/finance-repository"
+import { financeRepository, FixtureFinanceRepository, type FinanceRepository } from "@app/data/finance-repository"
 import type { FinanceDataset, FinanceOperation, FinancePeriod, FinanceQuery, FinanceSection, FinanceSortKey } from "@app/entities/finance"
 import { financeMethodLabels, financeMethods, financeOperationTypeLabels, financeOperationTypes, financePeriodLabels, financePeriods, financeSectionLabels, financeSections, financeSortKeys } from "@app/entities/finance"
 import { useFinance } from "@app/features/use-finance"
+import { defaultBusinessDate } from "@app/lib/business-datetime"
+import { useFixtureData } from "@app/lib/data-mode"
+import { financePeriodRanges } from "@app/lib/finance-period"
 
 const money = new Intl.NumberFormat("ru-RU", { currency: "RUB", maximumFractionDigits: 0, style: "currency" })
 const navItems = financeSections.map((value) => ({ value, label: financeSectionLabels[value] }))
-const periodRanges: Record<FinancePeriod, [string, string]> = { today: ["2026-08-24", "2026-08-24"], week: ["2026-08-18", "2026-08-24"], month: ["2026-08-01", "2026-08-24"], quarter: ["2026-06-01", "2026-08-31"] }
+const FIXTURE_TODAY = "2026-08-24"
 const pageSize = 5
 const moneyChartConfig = {
   accrued: { label: "Начислено", color: "var(--chart-2)" },
@@ -102,6 +105,9 @@ function positiveInteger(value: string | null, fallback: number) { const parsed 
 export function FinancePage({ repository = financeRepository }: { repository?: FinanceRepository }) {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
+  const fixtureDefaults = useFixtureData || repository instanceof FixtureFinanceRepository
+  const [defaultDate] = useState(() => defaultBusinessDate(FIXTURE_TODAY, fixtureDefaults))
+  const periodRanges = useMemo(() => financePeriodRanges(defaultDate, fixtureDefaults), [defaultDate, fixtureDefaults])
   const section = oneOf(params.get("section"), financeSections, "summary")
   const period = oneOf(params.get("period"), financePeriods, "week")
   const defaults = periodRanges[period]

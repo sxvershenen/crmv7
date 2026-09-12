@@ -47,6 +47,30 @@ describe("ApiDashboardRepository", () => {
     expect(get).toHaveBeenCalledWith("/auth/session", expect.anything())
   })
 
+  it("maps booking projection minor units to RUB display units without losing cents", async () => {
+    const booking = {
+      id: "10000000-0000-4000-8000-000000000001", code: "B-1", version: 3, customerId: null, clientName: "Клиент", phone: "",
+      resourceId: "10000000-0000-4000-8000-000000000002", resourceName: "Дом «Сосна»", category: "houses",
+      date: "2026-09-10", startAt: "2026-09-10T09:00:00.000Z", endAt: "2026-09-11T09:00:00.000Z",
+      startHour: 9, endHour: 9, preparationEndHour: 10, guestCount: 2, status: "debt", lifecycleStatus: "confirmed",
+      amount: 800_099, paid: 200_001, paymentState: "partial", source: "", utm: "", promo: "", sourceLeadId: null,
+      assignees: [], itemId: "10000000-0000-4000-8000-000000000003", hasConflict: false,
+    }
+    const get = vi.fn(async (path: string) => {
+      if (path.startsWith("/tasks") || path.startsWith("/leads")) return []
+      if (path.startsWith("/bookings/projection")) return { bookings: [booking], operations: [], resources: [], window: {} }
+      return { items: [], nextCursor: null }
+    })
+    const repository = new ApiDashboardRepository({ client: { get }, now: () => new Date("2026-08-30T12:00:00+03:00") } as never)
+
+    const data = await repository.getOverview("all")
+
+    expect(data.attention.find((section) => section.id === "debts")?.items[0]).toMatchObject({
+      contentSummary: { value: "Дом «Сосна»" },
+      payment: { paid: 2_000.01, total: 8_000.99 },
+    })
+  })
+
   it("posts the authoritative version for supported self-assignment only", async () => {
     const post = vi.fn(async () => ({}))
     const repository = new ApiDashboardRepository({ client: { get: vi.fn(), post }, now: () => new Date("2026-08-30T12:00:00+03:00") } as never)

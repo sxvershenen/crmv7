@@ -12,8 +12,10 @@ import { VerticalScheduler } from "@app/components/bookings/vertical-scheduler"
 import type { Booking, BookingDataset, BookingQuery, BookingResource, BookingSortKey, BookingView, SortDirection } from "@app/entities/bookings"
 import { bookingCategories, bookingViews } from "@app/entities/bookings"
 import { useBookings } from "@app/features/use-bookings"
+import { defaultBusinessDate } from "@app/lib/business-datetime"
+import { useFixtureData } from "@app/lib/data-mode"
 
-const DEFAULT_DATE = "2026-08-23"
+const FIXTURE_DEFAULT_DATE = "2026-08-23"
 const EMPTY_BOOKING_RESOURCES: BookingResource[] = []
 const standaloneQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
@@ -39,9 +41,10 @@ export function BookingsPage(props: { defaultView?: BookingView }) {
 
 function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: BookingView }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [defaultDate] = useState(() => defaultBusinessDate(FIXTURE_DEFAULT_DATE, useFixtureData))
   const category = oneOf(searchParams.get("category"), bookingCategories, "all")
   const view = oneOf(searchParams.get("view"), bookingViews, defaultView)
-  const date = validDate(searchParams.get("date"), DEFAULT_DATE)
+  const date = validDate(searchParams.get("date"), defaultDate)
   const rangeEnd = validDate(searchParams.get("to"), date)
   const resource = searchParams.get("resource") ?? "all"
   const source = searchParams.get("source") ?? "all"
@@ -88,7 +91,7 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
   const setDate = (nextDate: string) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current)
-      if (nextDate === DEFAULT_DATE) next.delete("date")
+      if (nextDate === defaultDate) next.delete("date")
       else next.set("date", nextDate)
       next.delete("to")
       return next

@@ -8,14 +8,15 @@ import { ProgramsControls, ProgramsNav } from "@app/components/programs/program-
 import { shiftIso } from "@app/components/programs/program-format"
 import { ProgramScheduler } from "@app/components/programs/program-scheduler"
 import { ProgramRegistrationsView, ProgramRunsView, ProgramsLoading, ProgramTemplatesView } from "@app/components/programs/program-views"
-import { programsRepository, type ProgramsRepository } from "@app/data/programs-repository"
+import { FixtureProgramsRepository, programsRepository, type ProgramsRepository } from "@app/data/programs-repository"
 import type { ProgramQuery, ProgramRegistrationSortKey, ProgramRunSortKey, ProgramSortKey, ProgramTemplateSortKey } from "@app/entities/programs"
 import { programPeriods, programRegistrationSortKeys, programRunSortKeys, programRunViews, programSections, programTemplateSortKeys } from "@app/entities/programs"
 import { usePrograms } from "@app/features/use-programs"
 import { useFixtureData } from "@app/lib/data-mode"
+import { defaultBusinessDate } from "@app/lib/business-datetime"
 
-const DEFAULT_DATE = "2026-08-24"
-const DEFAULT_RANGE_END = "2026-08-30"
+const FIXTURE_DEFAULT_DATE = "2026-08-24"
+const FIXTURE_DEFAULT_RANGE_END = "2026-08-30"
 
 function oneOf<T extends string>(value: string | null, options: readonly T[], fallback: T): T {
   return value && options.includes(value as T) ? value as T : fallback
@@ -28,13 +29,16 @@ function validDate(value: string | null, fallback: string) {
 export function ProgramsPage({ repository = programsRepository }: { repository?: ProgramsRepository }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const fixtureDefaults = useFixtureData || repository instanceof FixtureProgramsRepository
+  const [defaultDate] = useState(() => defaultBusinessDate(FIXTURE_DEFAULT_DATE, fixtureDefaults))
+  const defaultRangeEnd = fixtureDefaults ? FIXTURE_DEFAULT_RANGE_END : shiftIso(defaultDate, 6)
   const section = oneOf(searchParams.get("section"), programSections, "templates")
   const view = oneOf(searchParams.get("view"), programRunViews, "table")
   const period = oneOf(searchParams.get("period"), programPeriods, "3days")
   const category = searchParams.get("category") ?? "all"
   const status = searchParams.get("status") ?? "all"
-  const date = validDate(searchParams.get("date"), DEFAULT_DATE)
-  const tableRangeEnd = validDate(searchParams.get("to"), DEFAULT_RANGE_END)
+  const date = validDate(searchParams.get("date"), defaultDate)
+  const tableRangeEnd = validDate(searchParams.get("to"), defaultRangeEnd)
   const rangeEnd = section === "runs" && view === "scheduler" ? shiftIso(date, period === "week" ? 6 : 2) : tableRangeEnd
   const allowedSortKeys = section === "templates" ? programTemplateSortKeys : section === "runs" ? programRunSortKeys : programRegistrationSortKeys
   const fallbackSort: ProgramSortKey = section === "templates" ? "name" : section === "runs" ? "date" : "program"
@@ -55,8 +59,8 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
   })
   const setRange = (from: string, to: string) => setSearchParams((current) => {
     const next = new URLSearchParams(current)
-    if (from === DEFAULT_DATE) next.delete("date"); else next.set("date", from)
-    if (to === DEFAULT_RANGE_END) next.delete("to"); else next.set("to", to)
+    if (from === defaultDate) next.delete("date"); else next.set("date", from)
+    if (to === defaultRangeEnd) next.delete("to"); else next.set("to", to)
     return next
   })
   const resetFilters = () => setSearchParams((current) => {
@@ -113,7 +117,7 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
         category={category}
         date={date}
         onCategoryChange={(next) => setParam("category", next, "all")}
-        onDateChange={(next) => setParam("date", next, DEFAULT_DATE)}
+        onDateChange={(next) => setParam("date", next, defaultDate)}
         onOpenCategories={() => navigate("/programs/categories")}
         onPeriodChange={(next) => setParam("period", next, "3days")}
         onRangeChange={setRange}

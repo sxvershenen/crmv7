@@ -5,6 +5,7 @@ import { apiClient, type ApiClientError } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
 import { bookingPriceKey } from "@app/lib/booking-pricing"
 import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime"
+import { majorToMinor, minorToMajor } from "@app/lib/money"
 import { BookingPromotionPreviewResultSchema, type BookingItemInput, type BookingPromotionPreviewResult } from "@crm/contracts"
 
 export interface BookingRepository {
@@ -286,7 +287,7 @@ export class ApiBookingRepository implements BookingRepository, BookingEditorRep
   }
 
   async list(query: BookingQuery): Promise<BookingDataset> {
-    const params = new URLSearchParams({ date: query.date, rangeEnd: query.rangeEnd, category: query.category, resource: query.resource, source: query.source, amountFrom: String(query.amountFrom), debtFrom: String(query.debtFrom), utm: query.utm, promo: query.promo, conflictOnly: String(query.conflictOnly), overpayOnly: String(query.overpayOnly), sort: query.sort.key, order: query.sort.direction })
+    const params = new URLSearchParams({ date: query.date, rangeEnd: query.rangeEnd, category: query.category, resource: query.resource, source: query.source, amountFrom: String(majorToMinor(query.amountFrom)), debtFrom: String(majorToMinor(query.debtFrom)), utm: query.utm, promo: query.promo, conflictOnly: String(query.conflictOnly), overpayOnly: String(query.overpayOnly), sort: query.sort.key, order: query.sort.direction })
     const dto = await this.client.get(`/bookings/projection?${params.toString()}`, BookingProjectionResponseSchema)
     return { bookings: dto.bookings.map(mapProjection), operations: dto.operations.map((operation) => ({ ...operation, status: operation.status, timeLabel: operation.timeLabel })), resources: dto.resources.map((resource) => ({ id: resource.id, name: resource.name, category: resource.category as Booking["category"], capacity: resource.capacity, occupied: resource.occupied })), window: dto.window }
   }
@@ -440,14 +441,6 @@ export class ApiBookingRepository implements BookingRepository, BookingEditorRep
 
 function isUuid(value: string | null | undefined): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-}
-
-function minorToMajor(value: number) {
-  return value / 100
-}
-
-function majorToMinor(value: number) {
-  return Math.round(value * 100)
 }
 
 export const fixtureBookingRepository: BookingRepository & BookingEditorRepository = new FixtureBookingRepository()
