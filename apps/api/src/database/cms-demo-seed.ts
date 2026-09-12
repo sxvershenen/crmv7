@@ -165,7 +165,7 @@ function page(input: Omit<DemoPage, "hero" | "seo" | "sections"> & { indexPolicy
 }
 
 function hero(title: string) {
-  return { variant: "default" as const, eyebrow: "Свистоплясово", title, subtitle: null, backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null, overlay: "soft" as const, align: "left" as const, actions: [{ id: randomUUID(), label: "Посмотреть домики", href: "/houses", target: "_self" as const, style: "primary" as const }], slides: [], badge: null, featureCards: [], autoplayMs: null }
+  return { variant: "default" as const, eyebrow: "Свистоплясово", title, subtitle: null, backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null, overlay: "soft" as const, align: "left" as const, actions: [{ id: randomUUID(), label: "Посмотреть домики", href: "/houses", target: "_self" as const, style: "primary" as const, enabled: true }], slides: [], badge: null, featureCards: [], autoplayMs: null }
 }
 
 function textSection(key: string, content: string): CmsSection {

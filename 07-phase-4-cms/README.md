@@ -6,6 +6,8 @@
 
 | Контур | Реализовано | Осталось |
 |---|---|---|
+| CMS editor | Lossless hero/navigation/media adapters; сохранённый ID/version при частично успешных командах; SPA/unload/logout guard, conflict recovery и unsupported-schema readonly; простой обзор/дерево и mobile actionbar; FAQ/отзывы внутри страницы | C3–C12: остальные production UX gaps по roadmap |
+| CRM ↔ CMS drafts | Resource draft редактируется с неизменённым техническим URL; house/campground/venue переиспользуют тот же node/link/revisions при подготовке к продаже; конкурирующие связи блокируются. `seed:demo` добавляет связанный локальный набор DEMO-WS1 без перезаписи существующих данных | Публикация требует отдельно заполненного контента, корректного адреса и operational readiness; старые неоднозначные mappings не исправляются автоматически |
 | P4.1–P4.2 | Public UI kit/homepage, CMS frontend/core, Admin/Public API | Новые страницы используют существующие boundaries |
 | P4.3 | Guarded render-ready preflight, effective diff/blast radius/dependencies, atomic direct publication, publication journal, delivery status/replay и immutable rollback | Закрыт; расширять только под новый publication consumer |
 | P4.4 | Local/test и S3-compatible media storage, CDN URL delivery, fail-closed external scanner, staged processing retry/DLQ, orphan cleanup, safe health metrics, versioned blob replacement и page-filtered usage flows | Provider/data-location/retention approval и rights/source review перед migration |
@@ -18,18 +20,18 @@
 
 Текущие ограничения:
 
-- CMS product readiness не закрыта: пять основных разделов (`globals/sections`, `seo`, `marketing/campaigns`, `redirects`, `settings/site`) отображают demo specification; рабочие редакторы требуют исправления потерь полей в adapters, dirty/conflict recovery, статусов публикации и mobile actions. Обязательный объём по всем разделам и acceptance — раздел «CMS — доведение продукта до production» в `IMPLEMENTATION-ROADMAP.md`. Завершённые backend foundations не означают готовность полного UX.
+- CMS product readiness не закрыта: пять основных разделов (`globals/sections`, `seo`, `marketing/campaigns`, `redirects`, `settings/site`) отображают demo specification; остаются visual preview, body authoring, полноценные settings/media/SEO flows, достоверность отдельных статусов и расширенная аналитика. Обязательный объём по всем разделам и acceptance — раздел «CMS — доведение продукта до production» в `IMPLEMENTATION-ROADMAP.md`. Завершённые backend foundations не означают готовность полного UX.
 - Booking/ProgramRegistration/Event принимают server-owned immutable quotes с exact context, versions и составом; preview не подтверждает заказ. Lifecycle/capacity/audit/outbox согласованы атомарно.
 - Поддержаны назначенные quantity/person add-ons. Shared-capacity Event resources и scheduled-resource add-ons заблокированы; legacy manual/unpriced flows сохранены без автоматической миграции.
 - CMS — editorial-only `/content/tree` и canonical drafts. Operational pricing/fulfillment остаются в CRM; CMS draft сам по себе не даёт public eligibility. Customer Event не создаёт CMS draft или payment.
 - DB tests требуют отдельную disposable test database и restricted role. Старые результаты прогонов — исторические, не текущий gate.
 - Media production config fail-closed: `APP_ENV=production` требует S3-compatible bucket, CDN base URL, external HTTP scanner и upload signing secret; local storage/scanner остаются только development/test adapters.
 - Standalone site runtime проверяется HTTP contract stub без БД; production backend/CDN/deployment gates этим не закрыты. Full-homepage visual baselines сверены с текущими секциями why-us/partners; стандартный site E2E теперь проходит.
-- Homepage editorial snapshot теперь typed и release-pinned; operational карточки секций пока сохраняют отдельную safe-projection migration boundary и не должны восприниматься как CMS-owned facts.
+- Главная читает published public summaries домиков/программ/площадок/допов, афиша — ближайшие открытые проведения программ. Цена в карточке/окне/подборе обновляется при следующем запросе без новой CMS-публикации; no-store и один release проверяются. Media карточек ещё отсутствует в этих summaries; баня/чан и промокоды не показываются в API mode до соответствующих safe contracts. Map/directions и прежние hero media fallbacks требуют отдельного контентного подключения.
 
 ## Следующий инкремент
 
-1. CMS C1–C4: сохранение без потерь, восстановление после частично успешных действий, правдивые статусы и canonical editor/capability parity; затем редакционные сценарии C5–C10 и mobile/API E2E по roadmap.
+1. CMS: media picker/bindings и визуальный preview; затем оставшиеся C3–C10, CRM promotions/sauna contracts и API E2E по roadmap. Сохранность редактора и FAQ/отзывы уже реализованы; новые формы переиспользуют этот flow.
 2. Параллельно закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
 3. После надёжного редакционного ядра расширять P4.7 attribution linkage/models; минимальная аналитика должна честно отражать уже поддержанные измерения.
 

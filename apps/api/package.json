@@ -18,7 +18,8 @@
     "test:db:prepare-e2e": "pnpm test:db:assert-safe && pnpm seed",
     "offering:backfill:dry-run": "TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm src/offerings/legacy-offering-backfill-dry-run.ts",
     "offering:editorial-locator:dry-run": "TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm src/offerings/catalog-offering-editorial-locator-dry-run.ts",
-    "seed": "TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm src/database/seed.ts"
+    "seed": "TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm src/database/seed.ts",
+    "seed:demo": "TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm src/database/demo-workspace-seed.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
