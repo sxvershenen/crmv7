@@ -472,7 +472,7 @@ export class MediaService {
 
   async publicVariant(assetId: string, variantId: string) {
     const variant = await this.dataSource.getRepository(MediaVariantEntity).createQueryBuilder("variant")
-      .innerJoin(MediaAssetEntity, "asset", "asset.id = variant.asset_id AND asset.current_blob_id = variant.blob_id")
+      .innerJoin(MediaAssetEntity, "asset", "asset.id = variant.asset_id")
       .where("variant.id = :variantId AND variant.asset_id = :assetId AND asset.state = 'ready'", { variantId, assetId }).getOne()
     if (!variant) throw new NotFoundException({ code: "MEDIA_VARIANT_NOT_FOUND", message: "Media variant не найден" })
     return { value: await this.storage.readPublic(variant.storageKey), format: variant.format, contentHash: variant.contentHash }

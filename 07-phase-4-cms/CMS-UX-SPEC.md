@@ -339,6 +339,7 @@ Upload grant содержит `assetId`. Если signed upload возвраща
 Версии и технический журнал показывать только после подключения серверной истории. Пока её нет, эти вкладки отсутствуют; интерфейс не генерирует временные метки, проверки или проценты обработки.
 
 Archive is blocked for published usage until replace/unlink. Original may remain private; delivery UI presents public WebP URLs/variants, not storage secrets.
+Замена создаёт новые публичные URL вариантов: ранее опубликованные URL продолжают отдавать прежние неизменяемые варианты, пока asset активен. Новое изображение попадает на опубликованную страницу только после публикации обновлённой CMS-ссылки.
 
 ## 15. Files and code
 
