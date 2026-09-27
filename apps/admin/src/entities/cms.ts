@@ -3,6 +3,7 @@ import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetai
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 import type { SeoMetadata } from "@crm/contracts/seo"
+import type { PublicRouteManifest } from "@crm/contracts"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -264,6 +265,7 @@ export interface CmsRepository {
   publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord>
   getMedia(query?: MediaAssetListQuery): Promise<MediaAssetPage>
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
+  getPublishedRedirects(): Promise<PublicRouteManifest | null>
   uploadMedia(file: File): Promise<MediaAsset>
   replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>
   saveMediaMetadata(asset: MediaAsset): Promise<MediaAsset>

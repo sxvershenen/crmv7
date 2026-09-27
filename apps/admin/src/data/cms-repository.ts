@@ -7,6 +7,7 @@ import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/co
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
+import { PublicRouteManifestSchema } from "@crm/contracts"
 
 import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetListQuery, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
@@ -186,6 +187,7 @@ export class FixtureCmsRepository implements CmsRepository {
     return { items: clone(filtered.slice(offset, offset + limit)), nextCursor: offset + limit < filtered.length ? String(offset + limit) : null }
   }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
+  async getPublishedRedirects() { await pause(); return PublicRouteManifestSchema.parse({ releaseId: "00000000-0000-4000-8000-000000000020", generatedAt: "2026-09-01T09:00:00.000Z", routes: [], redirects: [{ sourcePath: "/houses", destinationPath: "/domiki", statusCode: 301 }, { sourcePath: "/campgrounds", destinationPath: "/kemping", statusCode: 301 }], cache: { etag: '"fixture-routes"', maxAgeSeconds: 60, staleWhileRevalidateSeconds: 60, tags: [] } }) }
   async uploadMedia(file: File) {
     await pause()
     const bitmap = await createImageBitmap(file)
@@ -443,6 +445,15 @@ export class ApiCmsRepository implements CmsRepository {
   }
   async getMedia(query?: MediaAssetListQuery) { const search = new URLSearchParams({ limit: String(query?.limit ?? 30) }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); if (query?.cursor) search.set("cursor", query.cursor); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return { items: response.items.map((asset) => mediaView(asset)), nextCursor: response.nextCursor } }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated), processing: response.processing } }
+  async getPublishedRedirects() {
+    const base = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "/api/public/v1").replace(/\/$/, "")
+    const response = await fetch(`${base}/pages/manifest`, { cache: "no-store" })
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error("Не удалось загрузить опубликованные редиректы. Повторите попытку.")
+    const parsed = PublicRouteManifestSchema.safeParse(await response.json())
+    if (!parsed.success) throw new Error("Сервер вернул неверный список редиректов.")
+    return parsed.data
+  }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
     return uploadGrantedMedia(grant, file, () => this.getAsset(grant.assetId))

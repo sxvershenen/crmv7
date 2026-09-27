@@ -85,6 +85,20 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("reads the active public redirect manifest and distinguishes no publication from a server failure", async () => {
+    const repository = new ApiCmsRepository(clientMock() as never)
+    const redirect = { sourcePath: "/houses", destinationPath: "/domiki", statusCode: 301 }
+    const manifest = { releaseId: ids.revision, generatedAt: "2026-09-27T12:00:00.000Z", routes: [], redirects: [redirect], cache: { etag: '"routes"', maxAgeSeconds: 60, staleWhileRevalidateSeconds: 60, tags: [] } }
+    const fetcher = vi.fn().mockResolvedValueOnce({ status: 200, ok: true, json: async () => manifest }).mockResolvedValueOnce({ status: 404, ok: false }).mockResolvedValueOnce({ status: 503, ok: false })
+    vi.stubGlobal("fetch", fetcher)
+    try {
+      await expect(repository.getPublishedRedirects()).resolves.toMatchObject({ redirects: [redirect] })
+      expect(fetcher).toHaveBeenCalledWith("/api/public/v1/pages/manifest", { cache: "no-store" })
+      await expect(repository.getPublishedRedirects()).resolves.toBeNull()
+      await expect(repository.getPublishedRedirects()).rejects.toThrow("Не удалось загрузить опубликованные редиректы")
+    } finally { vi.unstubAllGlobals() }
+  })
+
   it("reads an accepted queued upload back through its grant asset ID", async () => {
     const client = clientMock()
     client.post.mockResolvedValue({ uploadId: ids.revision, assetId: ids.node, uploadUrl: "http://localhost/upload", method: "PUT", requiredHeaders: {}, expiresAt: "2026-09-27T12:00:00.000Z", maxByteSize: 10 })

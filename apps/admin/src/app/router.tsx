@@ -16,6 +16,7 @@ import { DashboardPage } from "@admin/pages/dashboard-page"
 import { HouseOfferingWorkspacePage } from "@admin/pages/house-offerings-page"
 import { IntegrationsPage } from "@admin/pages/integrations-page"
 import { ManagementPage } from "@admin/pages/management-page"
+import { RedirectsPage } from "@admin/pages/redirects-page"
 import { AssetPage, MediaLibraryPage } from "@admin/pages/media-pages"
 import { MobileMenuPage } from "@admin/pages/mobile-menu-page"
 import { NavigationPage } from "@admin/pages/navigation-page"
@@ -69,7 +70,7 @@ function AdminRoutes() {
     <Route path="seo" element={<SeoPage />} />
     <Route path="seo/pages/:nodeId" element={<SeoPage />} />
     <Route path="marketing/campaigns" element={<ManagementPage />} />
-    <Route path="redirects" element={<CapabilityRoute capability="canManageRedirects"><ManagementPage /></CapabilityRoute>} />
+    <Route path="redirects" element={<CapabilityRoute capability="canManageRedirects"><RedirectsPage /></CapabilityRoute>} />
     <Route path="analytics/*" element={<CapabilityRoute capability="canViewAnalytics"><AnalyticsPage /></CapabilityRoute>} />
     <Route path="releases" element={<ReleasesPage />} />
     <Route path="releases/:releaseId" element={<ReleaseDetailPage />} />
