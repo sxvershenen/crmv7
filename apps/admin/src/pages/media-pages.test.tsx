@@ -215,3 +215,19 @@ it("searches on the server and loads older media without the first-page limit", 
   fireEvent.click(screen.getByRole("button", { name: "Ошибка" }))
   await waitFor(() => expect(getMedia).toHaveBeenLastCalledWith(expect.objectContaining({ q: "берёза", state: "failed", limit: 30 })))
 })
+
+it("refreshes file statuses without appending an older page from the previous request", async () => {
+  const older = { ...asset, id: "asset-2", title: "Старый кадр" }
+  let finishOlder!: (value: { items: typeof asset[]; nextCursor: null }) => void
+  getMedia.mockImplementation((query?: { cursor?: string }) => query?.cursor
+    ? new Promise((resolve) => { finishOlder = resolve })
+    : Promise.resolve({ items: [asset], nextCursor: "older" }))
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText(asset.title)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }))
+  await waitFor(() => expect(finishOlder).toBeTypeOf("function"))
+  fireEvent.click(screen.getByRole("button", { name: "Обновить список медиа" }))
+  await waitFor(() => expect(getMedia).toHaveBeenCalledTimes(3))
+  finishOlder({ items: [older], nextCursor: null })
+  await waitFor(() => expect(screen.queryByText(older.title)).not.toBeInTheDocument())
+})
