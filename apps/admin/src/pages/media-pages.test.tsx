@@ -86,6 +86,44 @@ it("distinguishes a queued replacement from the still available original", async
   expect(screen.getByRole("button", { name: "Заменить" })).toBeDisabled()
 })
 
+it("keeps the metadata form mounted during a status refresh and protects unsaved edits", async () => {
+  const queued = { ...asset, processing: { state: "queued", purpose: "replacement", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } }
+  let finishRefresh!: (value: typeof queued) => void
+  getAsset.mockResolvedValueOnce(queued).mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve }))
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  const caption = await screen.findByLabelText("Подпись")
+  fireEvent.click(screen.getByRole("button", { name: "Обновить статус" }))
+  expect(caption).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Обновить статус" })).toBeDisabled()
+  finishRefresh(queued)
+  await waitFor(() => expect(screen.getByRole("button", { name: "Обновить статус" })).toBeEnabled())
+
+  fireEvent.change(caption, { target: { value: "Подпись в работе" } })
+  await waitFor(() => expect(screen.getByRole("button", { name: "Обновить статус" })).toBeDisabled())
+  expect(screen.getByRole("button", { name: "Архивировать" })).toBeDisabled()
+  expect(caption).toHaveValue("Подпись в работе")
+  expect(getAsset).toHaveBeenCalledTimes(2)
+})
+
+it("pauses a replacement panel while its description has unsaved changes", async () => {
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Заменить" }))
+  expect(view.container.querySelector('input[type="file"]')).toBeEnabled()
+  fireEvent.change(screen.getByLabelText("Подпись"), { target: { value: "Новая подпись" } })
+  await waitFor(() => expect(view.container.querySelector('input[type="file"]')).toBeDisabled())
+  expect(screen.getByText("Сначала сохраните описание или дождитесь обновления файла.")).toBeInTheDocument()
+})
+
+it("retains the open asset when refreshing its status fails", async () => {
+  const queued = { ...asset, processing: { state: "queued", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: null } }
+  getAsset.mockResolvedValueOnce(queued).mockRejectedValueOnce(new Error("Сеть недоступна"))
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByLabelText("Подпись")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Обновить статус" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Сеть недоступна")
+  expect(screen.getByLabelText("Подпись")).toBeInTheDocument()
+})
+
 it("allows another replacement after the previous attempt failed", async () => {
   getAsset.mockResolvedValue({ ...asset, processing: { state: "failed", purpose: "replacement", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_DECODE_FAILED" } })
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
