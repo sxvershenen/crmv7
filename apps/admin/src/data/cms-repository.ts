@@ -285,16 +285,15 @@ export class ApiCmsRepository implements CmsRepository {
     const params = new URLSearchParams({ from, to, interval: "day" })
     const response = await this.client.get(`/analytics/aggregates?${params.toString()}`, AnalyticsAggregateResponseSchema)
     const totals = response.items.reduce((result, point) => ({
-      visitors: result.visitors + point.uniqueVisitors,
       views: result.views + point.pageViews,
       actions: result.actions + point.actions,
       leads: result.leads + point.leads,
       bookings: result.bookings + point.bookings,
       paid: result.paid + point.payments,
-    }), { visitors: 0, views: 0, actions: 0, leads: 0, bookings: 0, paid: 0 })
+    }), { views: 0, actions: 0, leads: 0, bookings: 0, paid: 0 })
     return {
       period: `${from} — ${to} · ${ANALYTICS_TIME_ZONE}`,
-      visitors: totals.visitors,
+      visitors: response.uniqueVisitors,
       views: totals.views,
       leads: totals.leads,
       bookings: totals.bookings,
@@ -308,7 +307,7 @@ export class ApiCmsRepository implements CmsRepository {
         bookings: point.bookings,
         paid: point.payments,
       })),
-      channels: [{ name: "Все источники", value: totals.visitors, percent: totals.visitors > 0 ? 100 : 0 }],
+      channels: [{ name: "Все источники", value: response.uniqueVisitors, percent: response.uniqueVisitors > 0 ? 100 : 0 }],
       pages: [{ path: "Все страницы", views: totals.views, cta: totals.actions, leads: totals.leads }],
     }
   }

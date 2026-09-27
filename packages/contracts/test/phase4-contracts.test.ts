@@ -156,7 +156,7 @@ describe("Phase 4 contracts", () => {
     expect(AnalyticsAggregateQuerySchema.safeParse({ from: "2026-02-30", to: "2026-03-01", interval: "day" }).success).toBe(false);
     expect(AnalyticsAggregateQuerySchema.safeParse({ from: "2026-09-01", to: "2026-09-30", interval: "day", sectionKey: "Hero Primary" }).success).toBe(false);
 
-    const response = AnalyticsAggregateResponseSchema.parse({ items: [{
+    const response = AnalyticsAggregateResponseSchema.parse({ uniqueVisitors: 2, items: [{
       period: "2026-09-01", pageNodeId: null, sectionKey: null,
       pageViews: 3, uniqueVisitors: 2, actions: 1, leads: 1, bookings: 0, payments: 1,
     }] });

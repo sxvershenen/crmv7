@@ -13,6 +13,7 @@ import { AnalyticsEventEntity, AnalyticsIngestDedupEntity, assertSafeTestDatabas
 
 import { AppModule } from "../src/app.module.js"
 import { configureApplication } from "../src/configure-application.js"
+import { AnalyticsAggregateService } from "../src/analytics/analytics-aggregate.service.js"
 
 const endpoint = "/api/public/v1/analytics/events"
 
@@ -74,6 +75,28 @@ describe.sequential("public analytics collector + PostgreSQL", () => {
     expect(JSON.stringify(stored)).not.toContain("email=secret")
     expect(JSON.stringify(stored)).not.toContain("secret-full-ua")
     expect(await dataSource.getRepository(AnalyticsIngestDedupEntity).count()).toBe(1)
+  })
+
+  it("counts one visitor across two days once in the period total", async () => {
+    const moscowDay = (date: Date) => new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(date)
+    const from = moscowDay(new Date(Date.now() - 24 * 60 * 60 * 1000))
+    const to = moscowDay(new Date())
+    const returningVisitor = randomUUID()
+    const secondVisitor = randomUUID()
+    for (const [day, visitorId] of [[from, returningVisitor], [to, returningVisitor], [to, secondVisitor]]) {
+      const eventId = randomUUID()
+      await dataSource.query("INSERT INTO analytics_ingest_dedup (event_id, request_hash, received_at) VALUES ($1, $2, now())", [eventId, "a".repeat(64)])
+      await dataSource.query(`
+        INSERT INTO analytics_events (id, event_id, schema_version, event_name, occurred_at, received_at, visitor_id, session_id, consent, purpose, context, properties, device_class, traffic_class)
+        VALUES ($1, $2, 1, 'page_view', $3::timestamptz, now(), $4, $5, 'analytics', 'analytics', '{}'::jsonb, '{}'::jsonb, 'desktop', 'human')
+      `, [randomUUID(), eventId, `${day}T12:00:00+03:00`, visitorId, randomUUID()])
+    }
+
+    const result = await app.get(AnalyticsAggregateService).get({ from, to, interval: "day" })
+    expect(result.uniqueVisitors).toBe(2)
+    expect(result.items.map((item) => item.uniqueVisitors)).toEqual([1, 2])
   })
 
   it("drops refused analytics consent without issuing identity or storing an event", async () => {

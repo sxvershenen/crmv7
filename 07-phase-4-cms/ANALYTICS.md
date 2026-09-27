@@ -91,6 +91,8 @@ On Lead creation server stores immutable attribution snapshot. Dashboard must le
 
 Collector: `POST /api/public/v1/analytics/events`, small batch, body limit, rate limit, dedupe, accepted schema versions. Aggregation is asynchronous. Server facts arrive through per-consumer Outbox delivery.
 
+`GET /api/admin/v1/analytics/aggregates` возвращает дневные/месячные точки и отдельное `uniqueVisitors` за весь запрошенный период: distinct consented `visitorId` с теми же page/section filters. Сумма дневных уникальных не заменяет число посетителей за период.
+
 ## 7. CMS/CRM analytics IA
 
 Полный раздел находится в `apps/admin`; CRM получает deep link и compact operational view on the same read models, без второй логики расчёта.

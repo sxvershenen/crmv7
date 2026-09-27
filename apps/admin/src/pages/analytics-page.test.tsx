@@ -35,6 +35,7 @@ describe("AnalyticsPage", () => {
     resolve(summary)
 
     expect(await screen.findByRole("heading", { name: "Аналитика" })).toBeInTheDocument()
+    expect(screen.getAllByText("Уникальные посетители")).toHaveLength(2)
     expect(screen.getAllByText("Все страницы").length).toBeGreaterThan(0)
     expect(screen.getByText(/site-wide first-party aggregate/)).toBeInTheDocument()
     const table = screen.getByRole("table", { name: "Site-wide first-party aggregate по дням" })

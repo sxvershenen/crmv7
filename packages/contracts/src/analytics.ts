@@ -152,5 +152,6 @@ export type AnalyticsAggregatePoint = z.infer<typeof AnalyticsAggregatePointSche
 
 export const AnalyticsAggregateResponseSchema = z.object({
   items: z.array(AnalyticsAggregatePointSchema).max(366),
+  uniqueVisitors: z.number().int().nonnegative().safe(),
 }).strict();
 export type AnalyticsAggregateResponse = z.infer<typeof AnalyticsAggregateResponseSchema>;

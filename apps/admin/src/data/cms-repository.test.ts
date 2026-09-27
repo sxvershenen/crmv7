@@ -26,19 +26,19 @@ describe("FixtureCmsRepository", () => {
 describe("ApiCmsRepository", () => {
   it("maps the bounded site-wide aggregate without inventing source or page dimensions", async () => {
     const client = clientMock()
-    client.get.mockResolvedValueOnce({ items: [
+    client.get.mockResolvedValueOnce({ uniqueVisitors: 7, items: [
       { period: "2026-08-14", pageNodeId: null, sectionKey: null, pageViews: 7, uniqueVisitors: 5, actions: 3, leads: 2, bookings: 1, payments: 1 },
       { period: "2026-08-15", pageNodeId: null, sectionKey: null, pageViews: 11, uniqueVisitors: 6, actions: 4, leads: 1, bookings: 1, payments: 0 },
     ] })
     const repository = new ApiCmsRepository(client as never)
 
     await expect(repository.getAnalytics()).resolves.toMatchObject({
-      visitors: 11, views: 18, leads: 3, bookings: 2, paid: 1,
+      visitors: 7, views: 18, leads: 3, bookings: 2, paid: 1,
       series: [
         { period: "2026-08-14", visitors: 5, views: 7, actions: 3, leads: 2, bookings: 1, paid: 1 },
         { period: "2026-08-15", visitors: 6, views: 11, actions: 4, leads: 1, bookings: 1, paid: 0 },
       ],
-      channels: [{ name: "Все источники", value: 11, percent: 100 }],
+      channels: [{ name: "Все источники", value: 7, percent: 100 }],
       pages: [{ path: "Все страницы", views: 18, cta: 7, leads: 3 }],
     })
     const [path, parser] = client.get.mock.calls[0] as [string, unknown]

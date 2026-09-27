@@ -48,6 +48,7 @@ export class AnalyticsAggregateService {
   async get(query: AnalyticsAggregateQuery): Promise<AnalyticsAggregateResponse> {
     const periods = this.validateAndBuildPeriods(query)
     const rows = await this.queryRows(query, periods.length)
+    const uniqueVisitors = await this.queryUniqueVisitors(query)
 
     const byPeriod = new Map(rows.map((row) => {
       const point = AnalyticsAggregatePointSchema.parse({
@@ -76,7 +77,21 @@ export class AnalyticsAggregateService {
       payments: 0,
     }))
 
-    return AnalyticsAggregateResponseSchema.parse({ items })
+    return AnalyticsAggregateResponseSchema.parse({ items, uniqueVisitors })
+  }
+
+  private async queryUniqueVisitors(query: AnalyticsAggregateQuery): Promise<number> {
+    const rows = await this.dataSource.query<Array<{ unique_visitors: number | string }>>(`
+      SELECT count(DISTINCT event.visitor_id) AS unique_visitors
+      FROM analytics_events event
+      WHERE event.occurred_at >= $1::date::timestamp AT TIME ZONE $3
+        AND event.occurred_at < ($2::date + 1)::timestamp AT TIME ZONE $3
+        AND event.purpose = 'analytics'
+        AND event.consent IN ('analytics', 'analytics_and_marketing')
+        AND ($4::uuid IS NULL OR event.context->>'pageNodeId' = $4::uuid::text)
+        AND ($5::text IS NULL OR event.context->>'sectionKey' = $5::text)
+    `, [query.from, query.to, ANALYTICS_AGGREGATE_TIMEZONE, query.pageNodeId ?? null, query.sectionKey ?? null])
+    return Number(rows[0]?.unique_visitors ?? 0)
   }
 
   private async queryRows(query: AnalyticsAggregateQuery, expectedPeriods: number): Promise<AggregateRow[]> {
