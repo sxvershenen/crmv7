@@ -7,6 +7,7 @@ import { useAdminAuthSession } from "@admin/features/auth-session-context"
 import { AdminUiGalleryPage } from "@admin/pages/admin-ui-gallery-page"
 import { AddOnOfferingWorkspacePage } from "@admin/pages/addon-offerings-page"
 import { AnalyticsPage } from "@admin/pages/analytics-page"
+import { AuditPage } from "@admin/pages/audit-page"
 import { CodePage } from "@admin/pages/code-page"
 import { CampgroundOfferingWorkspacePage } from "@admin/pages/campground-offerings-page"
 import { ContentEditorPage } from "@admin/pages/content-editor-page"
@@ -15,7 +16,6 @@ import { ContentTreePage } from "@admin/pages/content-tree-page"
 import { DashboardPage } from "@admin/pages/dashboard-page"
 import { HouseOfferingWorkspacePage } from "@admin/pages/house-offerings-page"
 import { IntegrationsPage } from "@admin/pages/integrations-page"
-import { ManagementPage } from "@admin/pages/management-page"
 import { MarketingInfoPage } from "@admin/pages/marketing-info-page"
 import { RedirectsPage } from "@admin/pages/redirects-page"
 import { AssetPage, MediaLibraryPage } from "@admin/pages/media-pages"
@@ -62,9 +62,9 @@ function AdminRoutes() {
     <Route path="globals/footer" element={<Navigate replace to="/globals/navigation?tab=footer" />} />
     <Route path="media" element={<MediaLibraryPage />} />
     <Route path="media/:assetId" element={<AssetPage />} />
-    <Route path="components" element={<ManagementPage />} />
-    <Route path="components/new" element={<ManagementPage mode="component" />} />
-    <Route path="components/:blockId" element={<ManagementPage mode="component" />} />
+    <Route path="components" element={<Navigate replace to="/content/home?tab=composition" />} />
+    <Route path="components/new" element={<Navigate replace to="/content/home?tab=composition" />} />
+    <Route path="components/:blockId" element={<Navigate replace to="/content/home?tab=composition" />} />
     <Route path="code" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
     <Route path="code/new" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
     <Route path="code/:artifactId" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
@@ -78,7 +78,7 @@ function AdminRoutes() {
     <Route path="settings/site" element={<CapabilityRoute capability="canManageSiteSettings"><SiteSettingsPage /></CapabilityRoute>} />
     <Route path="settings/integrations" element={<CapabilityRoute capability="canManageIntegrations"><IntegrationsPage /></CapabilityRoute>} />
     <Route path="settings/access" element={<CapabilityRoute capability="canViewContent"><AccessPage /></CapabilityRoute>} />
-    <Route path="audit" element={<CapabilityRoute capability="canViewAudit"><ManagementPage /></CapabilityRoute>} />
+    <Route path="audit" element={<CapabilityRoute capability="canViewAudit"><AuditPage /></CapabilityRoute>} />
     <Route path="menu" element={<MobileMenuPage />} />
     <Route path="dev/ui/admin" element={<AdminUiGalleryPage />} />
     <Route path="forbidden" element={<NotFoundPage denied />} />

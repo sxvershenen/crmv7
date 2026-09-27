@@ -306,7 +306,7 @@ Editor fields:
 
 `/settings/site` читает тот же серверный черновик, позволяет изменить название сайта и показывает состав изменений, которые выйдут вместе с ним. Сохранение меняет только `siteName`, сохраняя меню, CTA, hero и секции; публикация применяет весь общий черновик. Права редактирования и публикации проверяются отдельно. Домен и контакты пока не входят в site-settings contract; экран не показывает их как подтверждённые или редактируемые значения.
 
-`/components`: block registry and reusable instances. Each row shows key, schema version, renderer version, owner, usage, status. Editors can duplicate/configure an instance, but cannot create an unknown renderer from JSON.
+Секции и шаблоны настраиваются в редакторе соответствующей страницы. Старые `/components/*` ведут в секции главной; отдельный CRUD блоков без подтверждённого сценария переиспользования не нужен. Проверка допустимых renderer/schema остаётся на сервере. `/audit` не показывает вымышленные события: до подключения scoped audit API он сообщает о недоступности журнала и ведёт в реальную историю публикаций.
 
 ## 14. Media manager
 
