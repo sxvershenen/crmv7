@@ -12,6 +12,7 @@ import {
   CmsSiteSettingsStoredValueSchema,
   CmsSiteSettingsValueSchema,
   PublicSiteSettingsSchema,
+  canonicalPublicPath,
   type CmsMetrikaSettings,
   type CmsMetrikaSettingsDetail,
   type CmsMetrikaSettingsMutation,
@@ -137,6 +138,17 @@ export class CmsSiteSettingsService {
       }
 
       const active = await this.activePublication(manager)
+      if (active.row.releaseId) {
+        const rows = await manager.query<Array<{ path: string }>>(`SELECT path FROM cms_release_items WHERE release_id = $1`, [active.row.releaseId])
+        if (rows.length > 0) {
+          const missing = unpublishedNavigationTargets(draftValue, rows.map((row) => row.path))
+          if (missing.length > 0) throw new UnprocessableEntityException({
+            code: "CMS_NAVIGATION_TARGET_UNPUBLISHED",
+            message: `Ссылки меню ведут на неопубликованные страницы: ${missing.map((target) => target.path).join(", ")}`,
+            details: { targets: missing },
+          })
+        }
+      }
       const publicMetrika = active.value?.analytics.metrika ?? DISABLED_METRIKA
       let publishedRevision = draft
 
@@ -429,6 +441,26 @@ export class CmsSiteSettingsService {
       createdAt: now,
     }))
   }
+}
+
+export function unpublishedNavigationTargets(value: CmsSiteSettingsValue, publishedPaths: Iterable<string>): Array<{ label: string; path: string }> {
+  const paths = new Set([...publishedPaths].map(canonicalPublicPath))
+  const missing = new Map<string, { label: string; path: string }>()
+  const check = (label: string, path: string) => {
+    if (!paths.has(canonicalPublicPath(path)) && !missing.has(path)) missing.set(path, { label, path })
+  }
+  const visit = (items: CmsSiteSettingsValue["headerNavigation"]) => {
+    for (const item of items) {
+      if (!item.enabled) continue
+      if (item.link.kind === "internal") check(item.label, item.link.path)
+      visit(item.children)
+    }
+  }
+  visit(value.headerNavigation)
+  visit(value.mobileNavigation)
+  visit(value.footerNavigation)
+  if (value.headerCta?.enabled && value.headerCta.link.kind === "internal") check(value.headerCta.label, value.headerCta.link.path)
+  return [...missing.values()]
 }
 
 function parseStoredValue(value: unknown): CmsSiteSettingsStoredValue {

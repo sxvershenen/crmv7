@@ -75,6 +75,7 @@ import { createPublicCampgroundProjectionDependency } from "../offerings/public-
 import { createPublicVenueProjectionDependency } from "../offerings/public-venue-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
 import { createPublicEventServiceProjectionDependency } from "../offerings/public-event-service-projection.js"
+import { unpublishedNavigationTargets } from "./cms-site-settings.service.js"
 
 type Candidate = {
   node: CmsNodeEntity
@@ -722,12 +723,12 @@ export class CmsPublicationService {
     return Number(raw[0]?.next ?? 1)
   }
 
-  private async siteDefaults(manager: EntityManager, revisionId: string | null): Promise<{ hero: CmsHeroConfig | null; sections: PublicReleasePageContent["sections"] } | undefined> {
+  private async siteDefaults(manager: EntityManager, revisionId: string | null): Promise<{ hero: CmsHeroConfig | null; sections: PublicReleasePageContent["sections"]; navigation: CmsSiteSettingsStoredValue } | undefined> {
     if (!revisionId) return undefined
     const revision = await manager.getRepository(CmsSiteSettingsRevisionEntity).findOneBy({ id: revisionId })
     if (!revision) throw new ConflictException({ code: "CMS_BASE_RELEASE_INVALID", message: "Базовые настройки публикации не найдены" })
     const value = CmsSiteSettingsStoredValueSchema.parse(revision.value)
-    return { hero: value.heroDefault, sections: value.sectionDefaults }
+    return { hero: value.heroDefault, sections: value.sectionDefaults, navigation: value }
   }
 
   private assertActiveBase(active: CmsActiveReleaseEntity, input: CmsReleaseActivateInput) {
@@ -868,7 +869,7 @@ export function publicationPreview(
   }
 }
 
-export function materializeRelease(candidates: Candidate[], siteDefaults?: { hero: CmsHeroConfig | null; sections: PublicReleasePageContent["sections"] }): MaterializationResult {
+export function materializeRelease(candidates: Candidate[], siteDefaults?: { hero: CmsHeroConfig | null; sections: PublicReleasePageContent["sections"]; navigation?: CmsSiteSettingsStoredValue }): MaterializationResult {
   const issues: ReleaseValidationIssue[] = []
   const byNode = new Map(candidates.map((candidate) => [candidate.node.id, candidate]))
   const resolved = new Map<string, MaterializedRoute | null>()
@@ -988,6 +989,12 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     const canonicalPath = canonicalPublicPath(route.content.path)
     if (paths.has(canonicalPath)) issues.push(issue("CMS_RELEASE_PATH_CONFLICT", "В релизе два материала используют один canonical URL", route.content.path))
     paths.set(canonicalPath, route)
+  }
+  if (routes.length > 0 && siteDefaults?.navigation) {
+    const affectedPath = paths.has("/") ? "/" : routes[0]!.content.path
+    for (const target of unpublishedNavigationTargets(siteDefaults.navigation, paths.keys())) {
+      issues.push(issue("CMS_NAVIGATION_TARGET_UNPUBLISHED", `Ссылка меню «${target.label}» ведёт на неопубликованную страницу ${target.path}`, affectedPath))
+    }
   }
   for (const route of routes) for (const section of route.content.sections) {
     if (section.renderer !== "editorial-content") continue

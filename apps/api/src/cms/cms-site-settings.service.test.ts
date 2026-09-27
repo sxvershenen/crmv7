@@ -1,11 +1,29 @@
 import { describe, expect, it, vi } from "vitest"
+import { CmsSiteSettingsValueSchema } from "@crm/contracts"
 
-import { CmsSiteSettingsService } from "./cms-site-settings.service.js"
+import { CmsSiteSettingsService, unpublishedNavigationTargets } from "./cms-site-settings.service.js"
 
 const id = "11111111-1111-4111-8111-111111111111"
 const revisionId = "22222222-2222-4222-8222-222222222222"
 
 describe("CmsSiteSettingsService", () => {
+  it("checks enabled menu items and CTA against published canonical routes", () => {
+    const value = CmsSiteSettingsValueSchema.parse({
+      siteName: "Сайт",
+      headerNavigation: [
+        { id, label: "Домик", link: { kind: "internal", path: "/houses/sosna" }, children: [] },
+        { id: revisionId, label: "Семья", link: { kind: "internal", path: "/family" }, children: [] },
+        { id: "33333333-3333-4333-8333-333333333333", label: "Скрытый раздел", link: { kind: "internal", path: "/hidden" }, enabled: false, children: [] },
+      ],
+      mobileNavigation: [{ id: "44444444-4444-4444-8444-444444444444", label: "Семья", link: { kind: "internal", path: "/family" }, children: [] }],
+      headerCta: { label: "Бронь", link: { kind: "internal", path: "/book" }, enabled: true },
+    })
+    expect(unpublishedNavigationTargets(value, ["/", "/domiki/sosna"])).toEqual([
+      { label: "Семья", path: "/family" },
+      { label: "Бронь", path: "/book" },
+    ])
+  })
+
   it("enforces integration capability inside the service for every Metrika operation", async () => {
     const service = new CmsSiteSettingsService({} as never)
     const actor = { id, capabilities: { canManageIntegrations: false } }

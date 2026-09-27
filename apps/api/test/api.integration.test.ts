@@ -1423,13 +1423,54 @@ describe.sequential("internal API + PostgreSQL", () => {
     }
   })
 
+  it("keeps broken menu links out of a live homepage release", async () => {
+    const initial = await adminAgent.get("/api/admin/v1/site-settings").expect(200)
+    const brokenValue = { siteName: "Свистоплясово", headerNavigation: [{ id: randomUUID(), label: "Семья", link: { kind: "internal", path: "/family" }, children: [] }], heroDefault: null, sectionDefaults: [] }
+    const initialDraft = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `nav-before-home-${randomUUID()}`, expectedVersion: initial.body.version, value: brokenValue,
+    }).expect(200)
+    const publishedBeforeHome = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `nav-before-home-publish-${randomUUID()}`, expectedVersion: initialDraft.body.version,
+    }).expect(200)
+    const home = await adminAgent.post("/api/admin/v1/content/nodes").send({
+      operationId: randomUUID(), idempotencyKey: `nav-home-${randomUUID()}`, kind: "home",
+      route: { path: "/", slug: "home", parentNodeId: null, sortOrder: 0 }, title: "Главная", summary: null,
+      hero: { mode: "disabled" }, sections: [], seo: { title: "Главная", description: "Отдых за городом" }, relations: [], schemaVersion: 1,
+    }).expect(201)
+    const blockedHome = await adminAgent.post(`/api/admin/v1/content/nodes/${home.body.node.id}/publish`).send({
+      operationId: randomUUID(), idempotencyKey: `nav-home-blocked-${randomUUID()}`, expectedVersion: home.body.node.version,
+    }).expect(422)
+    expect(blockedHome.body).toMatchObject({ code: "CMS_PUBLICATION_VALIDATION_FAILED", details: { issues: expect.arrayContaining([
+      expect.objectContaining({ code: "CMS_NAVIGATION_TARGET_UNPUBLISHED", route: "/" }),
+    ]) } })
+
+    const safeDraft = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `nav-safe-${randomUUID()}`, expectedVersion: publishedBeforeHome.body.version,
+      value: { ...brokenValue, headerNavigation: [] },
+    }).expect(200)
+    const safeSettings = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `nav-safe-publish-${randomUUID()}`, expectedVersion: safeDraft.body.version,
+    }).expect(200)
+    await adminAgent.post(`/api/admin/v1/content/nodes/${home.body.node.id}/publish`).send({
+      operationId: randomUUID(), idempotencyKey: `nav-home-publish-${randomUUID()}`, expectedVersion: home.body.node.version,
+    }).expect(200)
+    const brokenDraft = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `nav-broken-${randomUUID()}`, expectedVersion: safeSettings.body.version, value: brokenValue,
+    }).expect(200)
+    const blockedSettings = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `nav-broken-publish-${randomUUID()}`, expectedVersion: brokenDraft.body.version,
+    }).expect(422)
+    expect(blockedSettings.body).toMatchObject({ code: "CMS_NAVIGATION_TARGET_UNPUBLISHED", details: { targets: [{ label: "Семья", path: "/family" }] } })
+    expect((await request(app.getHttpServer()).get("/api/public/v1/site-settings").expect(200)).body.value.headerNavigation).toEqual([])
+  })
+
   it("publishes navigation and pages directly, then auto-forks the next edit from the published snapshot", async () => {
     const initialSettings = await adminAgent.get("/api/admin/v1/site-settings").expect(200)
     const savedSettings = await adminAgent.patch("/api/admin/v1/site-settings").send({
       operationId: randomUUID(), idempotencyKey: `site-settings-save-${randomUUID()}`, expectedVersion: initialSettings.body.version,
       value: {
         siteName: "Свистоплясово",
-        headerNavigation: [{ id: randomUUID(), label: "Домики", link: { kind: "internal", path: "/", anchor: "houses" }, icon: "home", color: "forest", children: [] }],
+        headerNavigation: [],
         heroDefault: null,
         sectionDefaults: ["map", "faq", "directions", "calculator", "footer"].map((key, index) => ({ id: randomUUID(), key, renderer: key === "footer" ? key : "homepage-section", rendererVersion: "1", schemaVersion: 1, order: 100 + index, config: key === "footer" ? {} : { eyebrow: null, title: key, description: "", action: null } })),
       },
@@ -1439,7 +1480,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     }).expect(200)
     expect(publishedSettings.body).toMatchObject({ draft: null, published: { value: { siteName: "Свистоплясово" } } })
     const publicSettings = await request(app.getHttpServer()).get("/api/public/v1/site-settings").expect(200)
-    expect(publicSettings.body.value.headerNavigation[0]).toMatchObject({ icon: "home", color: "forest", link: { path: "/", anchor: "houses" } })
+    expect(publicSettings.body.value.headerNavigation).toEqual([])
 
     const created = await adminAgent.post("/api/admin/v1/content/nodes").send({
       operationId: randomUUID(), idempotencyKey: `direct-page-create-${randomUUID()}`, kind: "landing",
@@ -1457,6 +1498,16 @@ describe.sequential("internal API + PostgreSQL", () => {
     const firstPage = (await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/simple" }).expect(200)).body
     expect(firstPage).toMatchObject({ title: "Первая версия", hero: { title: "Первая версия" } })
     expect(firstPage.sections.map((section: { key: string }) => section.key)).toEqual(["map", "faq", "directions", "calculator", "footer"])
+
+    const menuDraft = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `site-settings-menu-${randomUUID()}`, expectedVersion: publishedSettings.body.version,
+      value: { ...publishedSettings.body.published.value, headerNavigation: [{ id: randomUUID(), label: "Страница", link: { kind: "internal", path: "/simple" }, icon: "home", color: "forest", children: [] }] },
+    }).expect(200)
+    await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `site-settings-menu-publish-${randomUUID()}`, expectedVersion: menuDraft.body.version,
+    }).expect(200)
+    expect((await request(app.getHttpServer()).get("/api/public/v1/site-settings").expect(200)).body.value.headerNavigation[0])
+      .toMatchObject({ icon: "home", color: "forest", link: { path: "/simple" } })
 
     const edited = await adminAgent.patch(`/api/admin/v1/content/nodes/${nodeId}`).send({
       operationId: randomUUID(), idempotencyKey: `direct-page-edit-${randomUUID()}`, expectedVersion: firstPublication.body.node.version,

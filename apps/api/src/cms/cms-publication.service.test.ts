@@ -198,6 +198,21 @@ const heroOverride = {
 }
 
 describe("materializeRelease", () => {
+  it("blocks a homepage release while published navigation points to absent pages", () => {
+    const home = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [] })
+    const navigation = CmsSiteSettingsStoredValueSchema.parse({ siteName: "Сайт", headerNavigation: [{ id: childId, label: "Семейный отдых", link: { kind: "internal", path: "/family" }, children: [] }] })
+    const result = materializeRelease([home] as never, { hero: null, sections: [], navigation })
+    expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_NAVIGATION_TARGET_UNPUBLISHED", route: "/" })]))
+  })
+
+  it("also checks navigation when a non-home page is published first", () => {
+    const page = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "landing", path: "/simple", slug: "simple", sections: [] })
+    const navigation = CmsSiteSettingsStoredValueSchema.parse({ siteName: "Сайт", headerNavigation: [{ id: childId, label: "Главная", link: { kind: "internal", path: "/" }, children: [] }] })
+    expect(materializeRelease([page] as never, { hero: null, sections: [], navigation }).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "CMS_NAVIGATION_TARGET_UNPUBLISHED", route: "/simple" }),
+    ]))
+  })
+
   it("blocks a legacy homepage section that the public renderer cannot display", () => {
     const home = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [{ ...heroOverride, key: "welcome", renderer: "rich-text", rendererVersion: "site-ui@1", policy: { mode: "override", patch: { scalars: { content: { operation: "replace", value: "Invisible welcome" } }, objects: {}, keyedArrays: {} } } }] })
     expect(materializeRelease([home] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_HOMEPAGE_SECTION_UNSUPPORTED" })]))
