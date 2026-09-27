@@ -17,6 +17,8 @@ export type ContentNode = {
   sortOrder: number
   type: "home" | "landing" | "category" | "profile" | "article"
   status: ContentStatus
+  /** A revision was published at least once; active-release membership is separate. */
+  hasPublishedRevision?: boolean
   quality: QualityLevel
   parentId: string | null
   children: string[]

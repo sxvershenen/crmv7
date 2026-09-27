@@ -35,6 +35,20 @@ describe("CMS route screens", () => {
     expect(screen.getAllByText("/domiki")).toHaveLength(2)
   })
 
+  it("distinguishes a current draft from its earlier publication in the tree", async () => {
+    renderWithRouter(<ContentTreePage />, "/content/tree?selected=house-lesnoy")
+    expect(await screen.findByRole("heading", { name: "Домик «Лесной»" })).toBeInTheDocument()
+    expect(screen.getByText("Статус относится к редакции. Страницы на сайте определяются активной публикацией.")).toBeInTheDocument()
+    expect(screen.getByText("Ранее публиковалась")).toBeInTheDocument()
+  })
+
+  it("labels the editor workflow and previous publication separately", async () => {
+    renderWithRouter(<ContentEditorPage kind="profile" />, "/content/public-profiles/resource/house-lesnoy", "/content/public-profiles/resource/:nodeId")
+    expect(await screen.findByText("Редакция 11 публиковалась")).toBeInTheDocument()
+    expect(screen.getByText("Наличие страницы на сайте определяет активная публикация.")).toBeInTheDocument()
+    expect(screen.getByText("/domiki/lesnoy · Редакция 12")).toBeInTheDocument()
+  })
+
   it("collapses and restores profiles beneath the houses group", async () => {
     renderWithRouter(<ContentTreePage />, "/content/tree")
     const collapse = await screen.findByRole("button", { name: "Свернуть Домики" })

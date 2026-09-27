@@ -12,7 +12,7 @@ describe("content editor route placement", () => {
 
     expect(screen.getByLabelText("Slug")).toHaveProperty("readOnly", true)
     expect(screen.getByLabelText("Родительский раздел")).toBeDisabled()
-    expect(screen.getByText(/redirect workflow/)).toBeInTheDocument()
+    expect(screen.getByText(/для переноса нужен редирект/)).toBeInTheDocument()
   })
 
   it("disables route controls for a branch even when it was never published", () => {

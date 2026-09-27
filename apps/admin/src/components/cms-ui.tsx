@@ -14,6 +14,10 @@ const statusMeta: Record<ContentStatus, { label: string; tone: "neutral" | "info
 
 export function ContentStatusBadge({ status }: { status: ContentStatus }) { const meta = statusMeta[status]; return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge> }
 
+export function ContentRevisionStatus({ hasPublishedRevision, status }: { hasPublishedRevision?: boolean; status: ContentStatus }) {
+  return <span className="inline-flex flex-wrap items-center gap-1"><ContentStatusBadge status={status} />{hasPublishedRevision && status !== "published" ? <StatusBadge tone="info">Ранее публиковалась</StatusBadge> : null}</span>
+}
+
 const sourceMeta: Record<SourceKind, { label: string; icon: React.ElementType; className: string }> = {
   CMS: { label: "CMS", icon: IconSparkles, className: "border-primary/20 bg-primary/5 text-primary" },
   CRM: { label: "CRM · readonly", icon: IconLock, className: "border-info/25 bg-info-subtle text-info-foreground" },

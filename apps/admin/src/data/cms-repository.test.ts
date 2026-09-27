@@ -176,6 +176,17 @@ describe("ApiCmsRepository", () => {
     expect(result[0]).toMatchObject({ inboundLinks: null, mediaCount: null, pageKind: "landing", path: "/family", sortOrder: 10, source: "CRM", sourceKind: "catalog_offering", status: "draft" })
   })
 
+  it("keeps the current draft separate from its publication history", async () => {
+    const published = { ...listItem(detail).currentRevision!, id: ids.revision2, revision: 3, state: "published" as const }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({ items: [{ ...listItem(detail), latestPublished: published }], nextCursor: null })
+    const repository = new ApiCmsRepository(client as never)
+
+    await expect(repository.getNodes()).resolves.toMatchObject([{ status: "draft", hasPublishedRevision: true }])
+    client.get.mockResolvedValueOnce({ ...detail, latestPublished: published })
+    await expect(repository.getEditor(ids.node, "landing")).resolves.toMatchObject({ status: "draft", reviewLabel: "Редакция 3 публиковалась" })
+  })
+
   it("updates by immutable revision with expectedVersion and preserved server fields", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce(detail)

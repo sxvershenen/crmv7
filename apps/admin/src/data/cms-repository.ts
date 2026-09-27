@@ -346,7 +346,7 @@ export class ApiCmsRepository implements CmsRepository {
     const status = item.node.status === "archived" ? "archived" : contentStatus(revision?.state)
     const importedDraft = item.source !== null
     return {
-      id: item.node.id, title: revision?.title ?? "Без названия", path: revision?.route.path ?? "—", type: localNodeType(item.node.kind), status,
+      id: item.node.id, title: revision?.title ?? "Без названия", path: revision?.route.path ?? "—", type: localNodeType(item.node.kind), status, hasPublishedRevision: item.latestPublished !== null,
       pageKind: item.node.kind, sortOrder: revision?.route.sortOrder ?? 0, quality: status === "draft" || status === "review" ? "warning" : "ok", parentId: revision?.route.parentNodeId ?? null, children: [],
       owner: importedDraft ? "Синхронизация CRM" : revision?.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", updatedLabel: formatUpdated(item.node.updatedAt), inboundLinks: null, mediaCount: null,
       source: importedDraft ? "CRM" : "CMS", ...(item.source ? { sourceKind: item.source.sourceKind } : {}), importedDraft,
@@ -361,7 +361,7 @@ export class ApiCmsRepository implements CmsRepository {
       parent: revision.route.parentNodeId ? `Node ${revision.route.parentNodeId.slice(0, 8)}` : "Корень сайта", parentNodeId: revision.route.parentNodeId, sortOrder: revision.route.sortOrder, hasPublishedRevision: detail.latestPublished !== null, url: revision.route.path,
       status: detail.node.status === "archived" ? "archived" : contentStatus(revision.state), revisionState: revision.state, version: detail.node.version, revision: revision.revision, schemaVersion: revision.schemaVersion,
       owner: detail.source ? "Синхронизация CRM" : revision.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", source: detail.source ? "CRM" : "CMS", updatedLabel: formatUpdated(detail.node.updatedAt),
-      reviewLabel: detail.latestPublished ? `Опубликована версия ${detail.latestPublished.revision}` : "Ещё не опубликовано", seoChecks: seoChecks(revision),
+      reviewLabel: detail.latestPublished ? `Редакция ${detail.latestPublished.revision} публиковалась` : "Ещё не публиковалось", seoChecks: seoChecks(revision),
       sections: revision.sections.map((section) => {
         const partnersConfig = partnersDraft(section)
         const whyUsConfig = whyUsDraft(section)

@@ -48,6 +48,8 @@ Frontend CMS использует существующие tokens, generated sha
 
 Главная, посадочные, категории/listings и страницы домиков, кемпингов, площадок, программ и допов являются типизированными узлами единого дерева «Страницы сайта». Public profiles, source links, bindings, access matrix, raw versions, components registry и code artifacts доступны только как capability-gated diagnostics/tools и не входят в обычную навигацию администратора.
 
+В реестре и редакторе статус относится к текущей редакции. Если после публикации создан новый черновик, отдельно показывается факт прежней публикации. Этот факт не означает наличие URL в активном релизе: для достоверного состояния «на сайте» нужен active-release route и delivery evidence.
+
 Topbar: breadcrumbs/route identity, environment `Черновик / Preview / Production`, глобальный поиск, «Открыть сайт», очередь публикации, уведомления, app switcher, профиль.
 
 Mobile: отдельная адаптация — компактный topbar, bottom nav `Обзор / Страницы / Создать / Медиа / Меню`; таблицы становятся card lists; editor tabs горизонтально прокручиваются; preview открывается отдельным full-screen режимом.
