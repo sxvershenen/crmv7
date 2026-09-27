@@ -10,17 +10,30 @@ const actor: SessionUser = { id: "11111111-1111-4111-8111-111111111111", name: "
 describe("CmsDashboardService", () => {
   it("maps authoritative aggregates and audited activity without analytics fixtures", async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce([{ production_release: "REL-7", published_at: new Date("2026-09-01T10:00:00Z"), drafts: "2", review: "1", pages: "4", published_pages: "3", seo_healthy: "3", seo_risks: "1", media: "8", media_processing: "1", delivery_failures: "0", delivery_expired: "0", leads: "12", bookings: "5", paid: "3" }])
+      .mockResolvedValueOnce([{ production_release: "REL-7", published_at: new Date("2026-09-01T10:00:00Z"), drafts: "2", review: "1", pages: "4", published_pages: "3", seo_healthy: "3", seo_risks: "1", media: "8", media_processing: "1", delivery_failures: "0", delivery_pending: "0" }])
       .mockResolvedValueOnce([{ id: "22222222-2222-4222-8222-222222222222", actor: "Марина", action: "revision_created", entity_type: "cms_node", target: "Главная", created_at: new Date("2026-09-01T09:00:00Z"), status: "draft" }])
     const service = new CmsDashboardService({ query } as never)
 
     const result = await service.get(actor)
 
-    expect(result).toMatchObject({ productionRelease: "REL-7", drafts: 2, queueHealthy: true, funnel: { visitors: 0, leads: 12, bookings: 5, paid: 3 } })
+    expect(result).toMatchObject({ productionRelease: "REL-7", drafts: 2 })
     expect(result.metrics).toHaveLength(4)
     expect(result.activity[0]).toMatchObject({ actor: "Марина", action: "создал версию", target: "Главная" })
-    expect(result.attention).toEqual(expect.arrayContaining([expect.objectContaining({ title: "Сбор веб-аналитики не настроен" })]))
+    expect(result.attention).toEqual([expect.objectContaining({ id: "media-processing" })])
+    expect(result).not.toHaveProperty("funnel")
+    const sql = String(query.mock.calls[0]?.[0])
+    expect(sql).toContain("event.aggregate_type = 'cms_release' AND event.aggregate_id = active.release_id")
+    expect(sql).not.toContain("FROM leads")
     expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    [{ delivery_failures: "1", delivery_pending: "0" }, "delivery-failures"],
+    [{ delivery_failures: "0", delivery_pending: "2" }, "delivery-pending"],
+  ])("reports active release delivery state from the server", async (delivery, expectedId) => {
+    const query = vi.fn().mockResolvedValueOnce([{ production_release: "REL-7", ...delivery }]).mockResolvedValueOnce([])
+    const result = await new CmsDashboardService({ query } as never).get(actor)
+    expect(result.attention).toEqual([expect.objectContaining({ id: expectedId, href: "/releases" })])
   })
 
   it("fails before touching persistence without canViewContent", async () => {

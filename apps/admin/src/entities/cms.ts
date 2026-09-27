@@ -39,11 +39,9 @@ export type CmsDashboard = {
   productionRelease: string
   publishedAt: string
   drafts: number
-  queueHealthy: boolean
   metrics: DashboardMetric[]
   attention: AttentionItem[]
   activity: ActivityItem[]
-  funnel: { visitors: number; leads: number; bookings: number; paid: number }
 }
 
 export type SectionConfig = {

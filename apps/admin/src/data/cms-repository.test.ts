@@ -144,20 +144,20 @@ describe("ApiCmsRepository", () => {
   it("reads and strictly parses the authoritative dashboard endpoint", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce({
-      productionRelease: "REL-7", publishedAt: "2026-09-01T10:00:00.000Z", drafts: 2, queueHealthy: true,
+      productionRelease: "REL-7", publishedAt: "2026-09-01T10:00:00.000Z", drafts: 2,
       metrics: [
         { id: "pages", label: "Страницы", value: "4", detail: "3 в production" },
         { id: "seo", label: "SEO-качество", value: "3 / 4", detail: "1 страниц с рисками" },
         { id: "media", label: "Медиа", value: "8", detail: "0 файлов в обработке" },
         { id: "release", label: "Черновики", value: "2", detail: "1 на проверке" },
-      ], attention: [], activity: [{ id: "change-1", actor: "Марина", action: "обновил", target: "Главная", when: "2026-09-01T09:00:00.000Z", status: "draft" }], funnel: { visitors: 0, leads: 12, bookings: 5, paid: 3 },
+      ], attention: [], activity: [{ id: "change-1", actor: "Марина", action: "обновил", target: "Главная", when: "2026-09-01T09:00:00.000Z", status: "draft" }],
     })
     const repository = new ApiCmsRepository(client as never)
 
     const result = await repository.getDashboard()
 
     expect(client.get).toHaveBeenCalledWith("/dashboard", expect.anything())
-    expect(result).toMatchObject({ productionRelease: "REL-7", drafts: 2, funnel: { visitors: 0, leads: 12 } })
+    expect(result).toMatchObject({ productionRelease: "REL-7", drafts: 2 })
     expect(result.activity[0]?.when).not.toBe("2026-09-01T09:00:00.000Z")
   })
 

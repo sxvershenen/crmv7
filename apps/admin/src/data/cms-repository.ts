@@ -232,11 +232,9 @@ export class ApiCmsRepository implements CmsRepository {
       productionRelease: dashboard.productionRelease ?? "Нет опубликованной версии",
       publishedAt: dashboard.publishedAt ? formatUpdated(dashboard.publishedAt) : "Пока не публиковали",
       drafts: dashboard.drafts,
-      queueHealthy: dashboard.queueHealthy,
       metrics: dashboard.metrics.map(({ trend, ...metric }) => trend === undefined ? metric : { ...metric, trend }),
       attention: dashboard.attention,
       activity: dashboard.activity.map((item) => ({ ...item, when: formatUpdated(item.when) })),
-      funnel: dashboard.funnel,
     }
   }
   async getMedia() { const response = await this.client.get("/media/assets?limit=100", MediaAssetListResponseSchema); return response.items.map((asset) => mediaView(asset)) }

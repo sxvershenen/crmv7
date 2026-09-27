@@ -15,10 +15,7 @@ type DashboardRow = {
   media: number | string
   media_processing: number | string
   delivery_failures: number | string
-  delivery_expired: number | string
-  leads: number | string
-  bookings: number | string
-  paid: number | string
+  delivery_pending: number | string
 }
 
 type ActivityRow = {
@@ -43,6 +40,13 @@ export class CmsDashboardService {
           SELECT DISTINCT ON (node_id) node_id, state, title, seo
           FROM cms_node_revisions
           ORDER BY node_id, revision DESC
+        ), active_delivery AS (
+          SELECT delivery.status, delivery.lease_expires_at
+          FROM cms_active_release active
+          JOIN outbox_events event ON event.aggregate_type = 'cms_release' AND event.aggregate_id = active.release_id
+            AND event.topic IN ('cms.release.published', 'cms.release.rolled_back')
+          JOIN outbox_deliveries delivery ON delivery.event_id = event.id
+          WHERE active.singleton_key = 'public'
         )
         SELECT
           (SELECT 'REL-' || release.sequence::text
@@ -77,18 +81,12 @@ export class CmsDashboardService {
                 OR length(COALESCE(revision.seo->>'description', '')) NOT BETWEEN 1 AND 160)) AS seo_risks,
           (SELECT count(*) FROM media_assets WHERE archived_at IS NULL) AS media,
           (SELECT count(*) FROM media_assets WHERE archived_at IS NULL AND state IN ('uploading', 'processing')) AS media_processing,
-          (SELECT count(*) FROM outbox_deliveries WHERE status IN ('failed', 'dead_letter')) AS delivery_failures,
-          (SELECT count(*) FROM outbox_deliveries WHERE status = 'processing' AND lease_expires_at IS NOT NULL AND lease_expires_at < now()) AS delivery_expired,
-          (SELECT count(*) FROM leads WHERE archived_at IS NULL AND status NOT IN ('archived', 'spam')) AS leads,
-          (SELECT count(*) FROM bookings WHERE archived_at IS NULL AND status NOT IN ('cancelled', 'archived')) AS bookings,
-          (SELECT count(*) FROM (
-             SELECT payment.booking_id,
-                    SUM(CASE WHEN payment.kind = 'payment' THEN payment.amount ELSE -payment.amount END) AS net
-               FROM payments payment
-               JOIN bookings booking ON booking.id = payment.booking_id
-              WHERE booking.archived_at IS NULL AND booking.status NOT IN ('cancelled', 'archived')
-              GROUP BY payment.booking_id
-          ) paid_booking WHERE paid_booking.net > 0) AS paid
+          (SELECT count(*) FROM active_delivery
+             WHERE status IN ('failed', 'dead_letter')
+                OR (status = 'processing' AND lease_expires_at IS NOT NULL AND lease_expires_at < now())) AS delivery_failures,
+          (SELECT count(*) FROM active_delivery
+             WHERE status = 'pending'
+                OR (status = 'processing' AND (lease_expires_at IS NULL OR lease_expires_at >= now()))) AS delivery_pending
       `) as unknown as DashboardRow[],
       this.dataSource.query(`
         SELECT change.id, COALESCE(actor.display_name, CASE WHEN change.actor_id IS NULL THEN 'Система' ELSE 'Оператор' END) AS actor,
@@ -119,13 +117,14 @@ export class CmsDashboardService {
     ])
 
     const row = aggregateRows[0] ?? this.emptyRow()
-    const failures = this.number(row.delivery_failures) + this.number(row.delivery_expired)
+    const failures = this.number(row.delivery_failures)
+    const pending = this.number(row.delivery_pending)
     const mediaProcessing = this.number(row.media_processing)
     const attention: CmsDashboard["attention"] = []
-    if (!row.production_release) attention.push({ id: "production-release", title: "Сайт ещё не опубликован", detail: "Создайте и активируйте первый production release", href: "/releases", tone: "danger" })
-    if (failures > 0) attention.push({ id: "delivery-failures", title: "Есть ошибки доставки", detail: `${failures} событий требуют проверки`, href: "/settings/integrations", tone: "danger" })
-    if (mediaProcessing > 0) attention.push({ id: "media-processing", title: "Медиа ещё обрабатывается", detail: `${mediaProcessing} файлов ожидают WebP/AVIF`, href: "/media", tone: "warning" })
-    attention.push({ id: "analytics-not-configured", title: "Сбор веб-аналитики не настроен", detail: "Посетители показываются как 0, пока не подключён first-party collector", href: "/analytics", tone: "info" })
+    if (!row.production_release) attention.push({ id: "production-release", title: "Сайт ещё не опубликован", detail: "Опубликуйте первую страницу через редактор", href: "/content/tree", tone: "info" })
+    if (failures > 0) attention.push({ id: "delivery-failures", title: "Есть ошибки доставки публикации", detail: `Событий с ошибкой: ${failures}`, href: "/releases", tone: "danger" })
+    if (pending > 0) attention.push({ id: "delivery-pending", title: "Доставка публикации выполняется", detail: `Событий в очереди: ${pending}`, href: "/releases", tone: "info" })
+    if (mediaProcessing > 0) attention.push({ id: "media-processing", title: "Медиа ещё обрабатывается", detail: `${mediaProcessing} файлов находятся в обработке`, href: "/media", tone: "warning" })
 
     const pages = this.number(row.pages)
     const seoHealthy = this.number(row.seo_healthy)
@@ -135,16 +134,14 @@ export class CmsDashboardService {
       productionRelease: row.production_release,
       publishedAt: this.iso(row.published_at),
       drafts,
-      queueHealthy: failures === 0,
       metrics: [
-        { id: "pages", label: "Страницы", value: String(pages), detail: `${this.number(row.published_pages)} в production` },
-        { id: "seo", label: "SEO-качество", value: `${seoHealthy} / ${pages}`, detail: `${seoRisks} страниц с рисками` },
+        { id: "pages", label: "Страницы", value: String(pages), detail: `${this.number(row.published_pages)} в активной версии` },
+        { id: "seo", label: "SEO-поля", value: `${seoHealthy} / ${pages}`, detail: `${seoRisks} страниц требуют проверки длины заголовка и описания` },
         { id: "media", label: "Медиа", value: String(this.number(row.media)), detail: `${mediaProcessing} файлов в обработке` },
         { id: "release", label: "Черновики", value: String(drafts), detail: `${this.number(row.review)} на проверке` },
       ],
       attention,
       activity: activityRows.map((item) => ({ id: item.id, actor: item.actor ?? "Система", action: this.action(item.action), target: item.target ?? "Изменение", when: this.iso(item.created_at)!, status: this.status(item.status) })),
-      funnel: { visitors: 0, leads: this.number(row.leads), bookings: this.number(row.bookings), paid: this.number(row.paid) },
     }
     return CmsDashboardSchema.parse(result)
   }
@@ -160,5 +157,5 @@ export class CmsDashboardService {
     const labels: Record<string, string> = { created: "создал", updated: "обновил", revision_created: "создал версию", submitted: "отправил на проверку", approved: "одобрил", published: "опубликовал", archived: "архивировал", activated: "активировал" }
     return labels[value] ?? value.replaceAll("_", " ")
   }
-  private emptyRow(): DashboardRow { return { production_release: null, published_at: null, drafts: 0, review: 0, pages: 0, published_pages: 0, seo_healthy: 0, seo_risks: 0, media: 0, media_processing: 0, delivery_failures: 0, delivery_expired: 0, leads: 0, bookings: 0, paid: 0 } }
+  private emptyRow(): DashboardRow { return { production_release: null, published_at: null, drafts: 0, review: 0, pages: 0, published_pages: 0, seo_healthy: 0, seo_risks: 0, media: 0, media_processing: 0, delivery_failures: 0, delivery_pending: 0 } }
 }

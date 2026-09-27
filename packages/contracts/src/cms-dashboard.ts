@@ -31,23 +31,13 @@ export const CmsDashboardActivitySchema = z.object({
 }).strict()
 export type CmsDashboardActivity = z.infer<typeof CmsDashboardActivitySchema>
 
-export const CmsDashboardFunnelSchema = z.object({
-  visitors: z.number().int().nonnegative(),
-  leads: z.number().int().nonnegative(),
-  bookings: z.number().int().nonnegative(),
-  paid: z.number().int().nonnegative(),
-}).strict()
-export type CmsDashboardFunnel = z.infer<typeof CmsDashboardFunnelSchema>
-
 export const CmsDashboardSchema = z.object({
   productionRelease: z.string().min(1).nullable(),
   publishedAt: DateTimeSchema.nullable(),
   drafts: z.number().int().nonnegative(),
-  queueHealthy: z.boolean(),
   metrics: z.array(CmsDashboardMetricSchema).length(4),
   attention: z.array(CmsDashboardAttentionSchema).max(20),
   activity: z.array(CmsDashboardActivitySchema).max(20),
-  funnel: CmsDashboardFunnelSchema,
 }).strict()
 export type CmsDashboard = z.infer<typeof CmsDashboardSchema>
 

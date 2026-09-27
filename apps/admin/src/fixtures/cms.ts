@@ -5,7 +5,6 @@ export const dashboardFixture: CmsDashboard = {
   productionRelease: "Опубликованная версия",
   publishedAt: "Сегодня, 10:42",
   drafts: 14,
-  queueHealthy: true,
   metrics: [
     { id: "pages", label: "Страницы", value: "48", detail: "42 в production", trend: "+3 за месяц" },
     { id: "seo", label: "SEO-качество", value: "39 / 42", detail: "3 страницы с рисками" },
@@ -17,7 +16,6 @@ export const dashboardFixture: CmsDashboard = {
     { id: "a2", title: "3 страницы без входящих ссылок", detail: "Проверьте внутреннюю перелинковку", href: "/seo?tab=links", tone: "warning" },
     { id: "a3", title: "Публикация работает", detail: "Изменения проходят автоматическую проверку перед появлением на сайте", href: "/content/tree", tone: "info" },
   ],
-  funnel: { visitors: 12840, leads: 436, bookings: 118, paid: 86 },
   activity: [
     { id: "ch1", actor: "Марина К.", action: "обновила hero", target: "Главная", when: "12 мин назад", status: "draft" },
     { id: "ch2", actor: "Олег М.", action: "отправил на проверку", target: "Отдых с детьми", when: "34 мин назад", status: "review" },

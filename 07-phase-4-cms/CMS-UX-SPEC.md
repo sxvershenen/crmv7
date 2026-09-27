@@ -113,12 +113,13 @@ List/view/filter state хранится в URL: `q`, `status`, `type`, `owner`, 
 Секции без лишних card-in-card:
 
 - **Требует внимания:** failed publish, broken reference, SEO blocker, unprocessed media, stale CRM relation, expiring preview, analytics gap.
-- **Статус сайта:** production release, время последней публикации, pending draft count, queue/worker health.
+- **Статус сайта:** активная версия, время последней публикации, pending draft count, доставка именно активной версии: выполняется/ошибка/нет уведомлений. Наличие версии само по себе не подтверждает доставку.
 - **Быстрые действия:** новая посадочная, статья, asset upload, preview, release.
 - **Контент:** draft/review/scheduled/published, обновления за период.
 - **SEO:** indexable pages, blockers/warnings, redirects, orphan pages.
-- **Воронка:** visitors → leads → confirmed bookings → paid revenue, только агрегаты.
 - **Последние изменения:** actor, entity, diff summary, status.
+
+Воронка показывается в аналитике с единым периодом измерения; обзор CMS не подставляет ноль посетителей и несопоставимые общие CRM-счётчики.
 
 ## 5. Структура сайта
 

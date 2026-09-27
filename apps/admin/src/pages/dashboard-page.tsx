@@ -1,5 +1,5 @@
 import { useCallback } from "react"
-import { IconAlertTriangle, IconArrowRight, IconCheck, IconFilePlus, IconHome, IconPhotoPlus, IconRoute } from "@tabler/icons-react"
+import { IconAlertTriangle, IconArrowRight, IconFilePlus, IconHome, IconPhotoPlus, IconRoute } from "@tabler/icons-react"
 import { Link, useNavigate } from "react-router-dom"
 
 import { Button, ClickableCard, LoadingRows, PageFrame, PageState, StatusBadge } from "@crm/ui"
@@ -16,7 +16,9 @@ export function DashboardPage() {
   if (state.error) return <PageFrame><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={state.reload} title="Не удалось загрузить обзор">Попробуйте ещё раз.</PageState></PageFrame>
   if (state.loading || !state.data) return <PageFrame><PageHeading title="Обзор сайта" /><LoadingRows count={5} /></PageFrame>
   const data = state.data
-  const attention = data.attention.filter((item) => item.id !== "analytics-not-configured" && item.id !== "production-release")
+  const attention = data.attention.filter((item) => item.id !== "production-release")
+  const deliveryFailed = attention.some((item) => item.id === "delivery-failures")
+  const deliveryPending = attention.some((item) => item.id === "delivery-pending")
   const actions = [
     { label: "Главная страница", href: "/content/home", icon: IconHome, allowed: true },
     { label: "Новая страница", href: "/content/pages/new", icon: IconFilePlus, allowed: user.capabilities.canEditContent },
@@ -30,12 +32,12 @@ export function DashboardPage() {
     </section>
     <section aria-label="Содержимое сайта" className="mt-4 grid gap-3 sm:grid-cols-3">
       {data.metrics.filter((metric) => metric.id !== "seo").map((metric) => <ClickableCard className="p-4" key={metric.id} onClick={() => navigate(metric.id === "media" ? "/media" : "/content/tree")}>
-        <p className="text-xs text-muted-foreground">{metric.label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{metric.value}</p><p className="mt-2 text-xs text-muted-foreground">{metric.detail.replace("в production", "на сайте")}</p>
+        <p className="text-xs text-muted-foreground">{metric.label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{metric.value}</p><p className="mt-2 text-xs text-muted-foreground">{metric.detail}</p>
       </ClickableCard>)}
     </section>
     <div className="mt-4 grid gap-4 lg:grid-cols-2">
       <section className="rounded-xl border bg-background p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold">Публикация сайта</h3><StatusBadge tone={!data.hasPublication ? "neutral" : data.queueHealthy ? "success" : "warning"}>{!data.hasPublication ? "Пока не опубликован" : data.queueHealthy ? "Изменения опубликованы" : "Проверить доставку"}</StatusBadge></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold">Публикация сайта</h3><StatusBadge tone={deliveryFailed ? "warning" : deliveryPending ? "info" : "neutral"}>{!data.hasPublication ? "Пока не опубликован" : deliveryFailed ? "Проверить доставку" : deliveryPending ? "Доставка выполняется" : "Активная версия сайта"}</StatusBadge></div>
         <p className="mt-3 text-sm text-muted-foreground">{data.hasPublication ? `Последняя публикация: ${data.publishedAt}.` : "Откройте страницу, заполните её и нажмите «Опубликовать». Черновики видны только сотрудникам."}</p>
         <Button className="mt-4" onClick={() => navigate("/content/tree")} variant="outline">Открыть страницы<IconArrowRight /></Button>
         {data.hasPublication && <Link className="ml-4 text-xs underline underline-offset-4" to="/releases">История публикаций</Link>}
@@ -49,7 +51,7 @@ export function DashboardPage() {
     </div>
     <section className="mt-4 rounded-xl border bg-background p-5">
       <h3 className="text-sm font-semibold">Требует внимания</h3>
-      {attention.length ? <div className="mt-3 divide-y">{attention.map((item) => <Link className="flex min-h-12 items-center gap-3 py-3 text-sm" key={item.id} to={item.id === "delivery-failures" ? "/releases" : item.href}><IconAlertTriangle className="size-4 shrink-0" /><span className="min-w-0 flex-1">{item.title}</span><IconArrowRight className="size-4" /></Link>)}</div> : <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><IconCheck className="size-4" />Нет сообщений, требующих действий.</p>}
+      {attention.length ? <div className="mt-3 divide-y">{attention.map((item) => <Link className="flex min-h-12 items-center gap-3 py-3 text-sm" key={item.id} to={item.href}><IconAlertTriangle className="size-4 shrink-0" /><span className="min-w-0 flex-1">{item.title}</span><IconArrowRight className="size-4" /></Link>)}</div> : <p className="mt-3 text-sm text-muted-foreground">Дополнительных уведомлений пока нет.</p>}
     </section>
   </PageFrame>
 }

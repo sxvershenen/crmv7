@@ -182,6 +182,38 @@ describe.sequential("internal API + PostgreSQL", () => {
     if (app) await app.close()
   })
 
+  it("reports only active CMS publication delivery without fabricated analytics", async () => {
+    const empty = await adminAgent.get("/api/admin/v1/dashboard").expect(200)
+    expect(empty.body.productionRelease).toBeNull()
+    expect(empty.body.attention).toEqual([expect.objectContaining({ id: "production-release" })])
+    expect(empty.body).not.toHaveProperty("funnel")
+
+    const releaseId = randomUUID()
+    await dataSource.query(`
+      INSERT INTO cms_releases (id, sequence, state, manifest_hash, created_by, published_at)
+      VALUES ($1, 1, 'published', $2, $3, now())
+    `, [releaseId, "a".repeat(64), adminId])
+    await dataSource.query("UPDATE cms_active_release SET release_id = $1 WHERE singleton_key = 'public'", [releaseId])
+    const activeEventId = randomUUID()
+    const unrelatedEventId = randomUUID()
+    for (const [eventId, aggregateType, aggregateId, topic, status] of [
+      [activeEventId, "cms_release", releaseId, "cms.release.published", "pending"],
+      [unrelatedEventId, "catalog_offering", randomUUID(), "public.offering_projection.invalidated", "failed"],
+    ]) {
+      await dataSource.query(`
+        INSERT INTO outbox_events (id, topic, aggregate_type, aggregate_id, payload, available_at, created_at)
+        VALUES ($1, $2, $3, $4, '{}'::jsonb, now(), now())
+      `, [eventId, topic, aggregateType, aggregateId])
+      await dataSource.query("INSERT INTO outbox_deliveries (event_id, consumer, status) VALUES ($1, 'sse', $2)", [eventId, status])
+    }
+
+    const pending = await adminAgent.get("/api/admin/v1/dashboard").expect(200)
+    expect(pending.body).toMatchObject({ productionRelease: "REL-1", attention: [expect.objectContaining({ id: "delivery-pending" })] })
+    await dataSource.query("UPDATE outbox_deliveries SET status = 'failed', last_error_code = 'TEST_FAILURE', updated_at = now() WHERE event_id = $1", [activeEventId])
+    const failed = await adminAgent.get("/api/admin/v1/dashboard").expect(200)
+    expect(failed.body.attention).toEqual([expect.objectContaining({ id: "delivery-failures", detail: "Событий с ошибкой: 1" })])
+  })
+
   it("persists server promotions, forbids stacking, preserves snapshots and reports real cohort totals", async () => {
     const terms = { code: " autumn10 ", name: "Осенний промокод", active: true, discountType: "percent", value: 10, minimumAmountMinor: 0, startsAt: null, endsAt: null, scope: "all", resourceIds: [], offeringIds: [] }
     const command = { terms, operationId: randomUUID(), idempotencyKey: "marketing-promotion-create-001" }
