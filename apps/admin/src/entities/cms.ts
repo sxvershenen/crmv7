@@ -1,5 +1,5 @@
 import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
-import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetail, CmsWhyUsSectionDraft, PublicEditorialContentConfig } from "@crm/contracts"
+import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetail, CmsWhyUsSectionDraft, MediaAssetDetail, PublicEditorialContentConfig } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 import type { SeoMetadata } from "@crm/contracts/seo"
@@ -182,6 +182,7 @@ export type MediaAsset = {
   usages?: { ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }[]
   usageTotal?: number
   usagesTruncated?: boolean
+  processing?: MediaAssetDetail["processing"]
 }
 
 export type MediaAssetUsageQuery = { pageId?: string; path?: string }

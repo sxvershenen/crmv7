@@ -56,6 +56,24 @@ it("shows published usage locations and narrows them by a page address", async (
   await waitFor(() => expect(getAsset).toHaveBeenLastCalledWith("asset-1", { path: "/family" }))
 })
 
+it("explains a failed initial upload without displaying raw processing messages", async () => {
+  getAsset.mockResolvedValue({ ...asset, status: "error", processing: { state: "failed", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_DECODE_FAILED" } })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText("Файл не подготовлен")).toBeInTheDocument()
+  expect(screen.getByText(/Изображение повреждено/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Загрузить исправленный файл" })).toHaveAttribute("href", "/media?upload=1")
+  fireEvent.click(screen.getByRole("button", { name: "Обновить статус" }))
+  await waitFor(() => expect(getAsset).toHaveBeenCalledTimes(2))
+})
+
+it("distinguishes a queued replacement from the still available original", async () => {
+  getAsset.mockResolvedValue({ ...asset, processing: { state: "queued", purpose: "replacement", attempts: 1, nextAttemptAt: "2026-09-27T12:00:00.000Z", errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText("Ожидает повторной обработки")).toBeInTheDocument()
+  expect(screen.getByText(/Прежняя готовая версия файла остаётся доступной/)).toBeInTheDocument()
+  expect(screen.getByText(/15:00:00 МСК/)).toBeInTheDocument()
+})
+
 it("keeps metadata edits after a failed save", async () => {
   saveMediaMetadata.mockRejectedValueOnce(new Error("Сервер не сохранил изменения"))
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)

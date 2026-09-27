@@ -442,7 +442,7 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
   async getMedia(query?: MediaAssetListQuery) { const search = new URLSearchParams({ limit: String(query?.limit ?? 30) }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); if (query?.cursor) search.set("cursor", query.cursor); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return { items: response.items.map((asset) => mediaView(asset)), nextCursor: response.nextCursor } }
-  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated) }
+  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated), processing: response.processing } }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
     return uploadGrantedMedia(grant, file)
@@ -462,9 +462,9 @@ export class ApiCmsRepository implements CmsRepository {
       tags: asset.tags ?? [],
       focalPoint: asset.focalPoint ?? { x: 0.5, y: 0.5 },
     }, MediaAssetDetailSchema)
-    return mediaView(response.asset, response.usages)
+    return { ...mediaView(response.asset, response.usages), processing: response.processing }
   }
-  async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
+  async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages), processing: response.processing } }
   async getReleases(): Promise<import("@admin/entities/cms").ReleaseRecord[]> {
     const response = await this.client.get("/releases", CmsReleaseListResponseSchema)
     return response.items.map((item) => releaseView(item, response.activeReleaseId, response.activeReleaseVersion))

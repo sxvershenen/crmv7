@@ -101,7 +101,28 @@ export class MediaService {
       usages,
       usageTotal: matchingUsages.length,
       usagesTruncated: matchingUsages.length > usages.length,
+      processing: await this.processingStatus(assetId),
     })
+  }
+
+  private async processingStatus(assetId: string) {
+    const upload = await this.dataSource.getRepository(MediaUploadEntity).findOne({
+      where: { assetId }, order: { createdAt: "DESC", id: "DESC" },
+    })
+    if (!upload || upload.state === "completed") return null
+    const job = await this.dataSource.getRepository(MediaProcessingJobEntity).findOneBy({ uploadId: upload.id })
+    const expiredGrant = upload.state === "pending" && upload.expiresAt.getTime() < Date.now()
+    const state = job?.state === "queued" ? "queued"
+      : job?.state === "processing" ? "processing"
+        : expiredGrant || upload.state === "failed" || upload.state === "expired" || job?.state === "failed" || job?.state === "dead_letter" ? "failed" : "uploading"
+    const rawCode = job?.errorCode ?? upload.errorCode ?? (expiredGrant ? "MEDIA_UPLOAD_EXPIRED" : null)
+    return {
+      state,
+      purpose: upload.purpose === "replacement" ? "replacement" : "initial",
+      attempts: job?.attempts ?? 0,
+      nextAttemptAt: state === "queued" ? job!.availableAt.toISOString() : null,
+      errorCode: rawCode && /^MEDIA_[A-Z_]+$/.test(rawCode) && rawCode.length <= 120 ? rawCode : null,
+    }
   }
 
   async initUpload(input: MediaUploadInit, actor: SessionUser, requestOrigin: string): Promise<MediaUploadGrant> {

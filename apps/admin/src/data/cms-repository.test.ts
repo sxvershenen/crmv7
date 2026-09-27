@@ -102,12 +102,12 @@ describe("ApiCmsRepository", () => {
 
   it("preserves media usage totals and sends the page path to the server", async () => {
     const client = clientMock()
-    client.get.mockResolvedValue({ asset: wireMediaAsset(), usages: [], usageTotal: 12, usagesTruncated: true })
+    client.get.mockResolvedValue({ asset: wireMediaAsset(), usages: [], usageTotal: 12, usagesTruncated: true, processing: { state: "queued", purpose: "replacement", attempts: 1, nextAttemptAt: "2026-09-27T12:00:00.000Z", errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
     const repository = new ApiCmsRepository(client as never)
 
     const result = await repository.getAsset(ids.node, { path: "/family" })
 
-    expect(result).toMatchObject({ usageTotal: 12, usagesTruncated: true })
+    expect(result).toMatchObject({ usageTotal: 12, usagesTruncated: true, processing: { state: "queued", purpose: "replacement" } })
     expect(client.get).toHaveBeenCalledWith(`/media/assets/${ids.node}?path=%2Ffamily`, expect.anything())
   })
 
@@ -173,7 +173,7 @@ describe("ApiCmsRepository", () => {
     const client = clientMock()
     client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? {
       asset: { ...wireMediaAsset(), id: path.endsWith(mobileId) ? mobileId : desktopId, variants: [{ id: ids.revision, format: "webp", width: 1600, height: 900, byteSize: 1200, url: path.endsWith(mobileId) ? "/mobile.webp" : "/desktop.webp", contentHash: "a".repeat(64) }] },
-      usages: [], usageTotal: 0, usagesTruncated: false,
+      usages: [], usageTotal: 0, usagesTruncated: false, processing: null,
     } : detail)
     client.patch.mockImplementation(async (_path: string, body: { hero: unknown }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, hero: body.hero } }))
     const repository = new ApiCmsRepository(client as never)
@@ -189,7 +189,7 @@ describe("ApiCmsRepository", () => {
 
   it("refuses media without a ready public variant before changing the page", async () => {
     const client = clientMock()
-    client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? { asset: wireMediaAsset(), usages: [], usageTotal: 0, usagesTruncated: false } : detail)
+    client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? { asset: wireMediaAsset(), usages: [], usageTotal: 0, usagesTruncated: false, processing: null } : detail)
     const repository = new ApiCmsRepository(client as never)
     const editor = await repository.getEditor(ids.node, "landing")
 
@@ -683,8 +683,8 @@ describe("ApiCmsRepository", () => {
   it("round-trips media metadata fields which are not shown by the current form", async () => {
     const asset = { ...wireMediaAsset(), license: null }
     const client = clientMock()
-    client.get.mockResolvedValueOnce({ asset, usages: [], usageTotal: 0, usagesTruncated: false })
-    client.patch.mockResolvedValueOnce({ asset: { ...asset, title: "Новое название" }, usages: [], usageTotal: 0, usagesTruncated: false })
+    client.get.mockResolvedValueOnce({ asset, usages: [], usageTotal: 0, usagesTruncated: false, processing: null })
+    client.patch.mockResolvedValueOnce({ asset: { ...asset, title: "Новое название" }, usages: [], usageTotal: 0, usagesTruncated: false, processing: null })
     const repository = new ApiCmsRepository(client as never)
     const editorAsset = await repository.getAsset(asset.id)
 

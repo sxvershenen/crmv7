@@ -109,6 +109,13 @@ export const MediaAssetDetailSchema = z.object({
   usages: z.array(MediaUsageSchema).max(200),
   usageTotal: z.number().int().nonnegative(),
   usagesTruncated: z.boolean(),
+  processing: z.object({
+    state: z.enum(["uploading", "queued", "processing", "failed"]),
+    purpose: z.enum(["initial", "replacement"]),
+    attempts: z.number().int().nonnegative(),
+    nextAttemptAt: DateTimeSchema.nullable(),
+    errorCode: z.string().regex(/^MEDIA_[A-Z_]+$/).max(120).nullable(),
+  }).strict().nullable(),
 }).strict();
 
 export const MediaHealthSchema = z.object({
