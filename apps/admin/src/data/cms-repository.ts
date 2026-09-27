@@ -128,7 +128,29 @@ export class FixtureCmsRepository implements CmsRepository {
   }
   async getMedia(query?: { q?: string; state?: "ready" }) { await pause(); return clone(mediaFixtures.filter((asset) => (!query?.q || `${asset.title} ${asset.filename} ${asset.alt}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query?.state || asset.status === query.state))) }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
-  async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, kind: "image" as const, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
+  async uploadMedia(file: File) {
+    await pause()
+    const bitmap = await createImageBitmap(file)
+    let webp: Blob
+    let width: number
+    let height: number
+    try {
+      width = Math.min(bitmap.width, 1600)
+      height = Math.max(1, Math.round(bitmap.height * width / bitmap.width))
+      const canvas = document.createElement("canvas")
+      canvas.width = width; canvas.height = height
+      const context = canvas.getContext("2d")
+      if (!context) throw new Error("Не удалось подготовить изображение")
+      context.drawImage(bitmap, 0, 0, width, height)
+      webp = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Не удалось подготовить WebP")), "image/webp", 0.82))
+    } finally { bitmap.close() }
+    const url = URL.createObjectURL(webp)
+    const asset = { id: `fixture-${crypto.randomUUID()}`, kind: "image" as const, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const,
+      dimensions: `${width}×${height}`, size: formatBytes(webp.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a",
+      previewUrl: url, variants: [{ id: `fixture-variant-${crypto.randomUUID()}`, format: "webp" as const, width, height, byteSize: webp.size, url }] }
+    mediaFixtures.unshift(asset)
+    return clone(asset)
+  }
   async replaceMedia(id: string, file: File, expectedVersion: number) { await pause(); const asset = await this.getAsset(id); if ((asset.version ?? 1) !== expectedVersion) throw new Error("Asset уже изменён в другой сессии"); const replaced = { ...asset, version: expectedVersion + 1, filename: file.name, title: file.name.replace(/\.[^.]+$/, ""), status: "ready" as const, size: formatBytes(file.size) }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = replaced; return clone(replaced) }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) { const index = mediaFixtures.findIndex((item) => item.id === asset.id); if (index >= 0) mediaFixtures[index] = clone(asset); return clone(asset) }
   async archiveMedia(id: string) { const asset = await this.getAsset(id); const archived = { ...asset, status: "archived" as const, version: (asset.version ?? 1) + 1 }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = archived; return clone(archived) }
