@@ -48,7 +48,7 @@
 | Аналитика `/analytics/*` | C3, C11: overview/acquisition/content/funnels/forms/retention/quality показывают только доступный authoritative срез. |
 | Настройки `/settings/site` | C7: сохранение и публикация поддержанных site fields. |
 | Интеграции `/settings/integrations` | C7: надёжный текущий Metrika flow; новые integrations только под конкретного consumer. |
-| Диагностика `/settings/access`, `/audit`, `/components/*` | C4/C12: реальная матрица прав/ссылка в CRM, scoped audit read, readonly renderer registry; убрать выдуманные пользователи/events/версии. Не строить второй user-management backend. |
+| Диагностика `/settings/access`, `/audit`, `/components/*` | `/settings/access` показывает capabilities текущего сеанса и ссылку на состав команды CRM. C4/C12: подключить scoped audit read и readonly renderer registry; убрать выдуманные events/версии. Не строить второй user-management backend. |
 | Code `/code/*`, вкладка «Файлы и код» | P4.8, P2: скрыть из обычного редакционного flow до реального use case и безопасного исполнения. Наличие code workspace не требуется для обычной typed CMS. |
 | `/menu`, shell, dev gallery | C12: parity permissions, mobile actions, navigation/search, explicit dev-only diagnostics. |
 
