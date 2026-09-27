@@ -379,6 +379,20 @@ describe("ApiCmsRepository", () => {
     await expect(new ApiCmsRepository(client as never).getNavigation()).resolves.toMatchObject({ status: "draft", hasPublishedRevision: true })
   })
 
+  it("shows other site-setting changes which a menu publication would include", async () => {
+    const settings = siteSettingsDetail()
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({
+      ...settings,
+      draft: { ...settings.draft!, value: { ...settings.draft!.value, headerCta: { label: "Оставить заявку", link: { kind: "internal", path: "/contacts" }, enabled: true } } },
+      published: { ...settings.draft!, id: ids.revision, state: "published", revision: 1, value: { ...settings.draft!.value, siteName: "Старое название" } },
+    })
+
+    const navigation = await new ApiCmsRepository(client as never).getNavigation()
+
+    expect(navigation.otherDraftChanges).toEqual(["Название сайта", "Кнопка в шапке"])
+  })
+
   it("preserves navigation target and device visibility and rejects silent truncation", async () => {
     const navigationItem = { ...siteSettingsDetail().draft!.value.headerNavigation[0]!, target: "_blank" as const, visibleOn: "mobile" as const, icon: null, color: null }
     const baseSettings = siteSettingsDetail()

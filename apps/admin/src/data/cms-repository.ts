@@ -598,10 +598,26 @@ function navigationFromDetail(detail: CmsSiteSettingsDetail): PublicNavigation {
   const revision = detail.draft ?? detail.published
   if (!revision) throw new CmsUnavailableError("Настройки сайта")
   return {
-    version: detail.version, status: detail.draft ? "draft" : "published", hasPublishedRevision: detail.published !== null, updatedLabel: formatUpdated(revision.createdAt),
+    version: detail.version, status: detail.draft ? "draft" : "published", hasPublishedRevision: detail.published !== null, otherDraftChanges: otherSettingsDraftChanges(detail), updatedLabel: formatUpdated(revision.createdAt),
     header: revision.value.headerNavigation.map(fromWireNavigation), mobile: revision.value.mobileNavigation.map(fromWireNavigation),
     footer: revision.value.footerNavigation.map(fromWireNavigation),
   }
+}
+
+function otherSettingsDraftChanges(detail: CmsSiteSettingsDetail): string[] {
+  const draft = detail.draft?.value
+  if (!draft) return []
+  const published = detail.published?.value
+  const fields = [
+    ["siteName", "Название сайта"],
+    ["headerCta", "Кнопка в шапке"],
+    ["heroDefault", "Общий hero"],
+    ["sectionDefaults", "Секции по умолчанию"],
+  ] as const
+  return fields.filter(([key]) => published
+    ? JSON.stringify(draft[key]) !== JSON.stringify(published[key])
+    : key === "siteName" || (draft[key] !== null && (!Array.isArray(draft[key]) || draft[key].length > 0)))
+    .map(([, label]) => label)
 }
 
 function metrikaFromDetail(detail: CmsMetrikaSettingsDetail): MetrikaSettingsRecord {

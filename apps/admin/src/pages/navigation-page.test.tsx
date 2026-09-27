@@ -21,7 +21,7 @@ describe("NavigationPage mutation recovery", () => {
     render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><NavigationPage /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
     const names = await screen.findAllByLabelText("Название")
     expect(screen.getByText("Меню публиковалось")).toBeInTheDocument()
-    expect(screen.getByText("Формат ссылок проверяется при сохранении. Доступность страниц проверяйте вручную.")).toBeInTheDocument()
+    expect(screen.getByText("Шапка, мобильное меню и подвал публикуются вместе. Формат ссылок проверяется при сохранении; доступность страниц проверяйте вручную.")).toBeInTheDocument()
     expect(screen.queryByText("Ошибок нет")).not.toBeInTheDocument()
     fireEvent.change(names[0]!, { target: { value: "Новое меню" } })
     fireEvent.click(screen.getByRole("button", { name: "Сохранить и опубликовать" }))
@@ -42,5 +42,15 @@ describe("NavigationPage mutation recovery", () => {
     render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><NavigationPage /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
     expect(await screen.findByText("Site settings offline")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Повторить" })).toBeEnabled()
+  })
+
+  it("warns before publishing other changes stored in the shared site-settings draft", async () => {
+    vi.spyOn(cmsRepository, "getNavigation").mockResolvedValue({ ...structuredClone(navigationFixture), otherDraftChanges: ["Название сайта", "Общий hero"] })
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><NavigationPage /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+
+    expect(await screen.findByText("Публикация затронет и настройки сайта")).toBeInTheDocument()
+    expect(screen.getByText(/Вместе с меню будут опубликованы: Название сайта, Общий hero/)).toBeInTheDocument()
   })
 })
