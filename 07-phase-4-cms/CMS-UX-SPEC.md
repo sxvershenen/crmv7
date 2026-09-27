@@ -353,6 +353,8 @@ Actions: create draft workspace, edit, format, save draft, validate, typecheck/l
 
 Текущий `/seo` читает `currentSeo` списка content nodes: число рабочих страниц, title/description warnings, index policy и canonical. `/seo/pages/:nodeId` раскрывает проверку и ведёт в canonical editor `?tab=seo`. Это отчёт по рабочей редакции, а не по active release или поисковой выдаче; остальные проверки ниже остаются scope C10.
 
+В редакторе поле индексации меняет `index_follow`/`noindex_follow`/`noindex_nofollow` через обычное сохранение черновика. Canonical пока показывается без отдельной формы; custom canonical из существующей редакции сохраняется при изменении других SEO-полей.
+
 SEO dashboard tabs: Overview, Pages, Indexing, Metadata, Schema, Internal links, Images, Sitemap/robots, Redirects, Content freshness.
 
 Page SEO fields:

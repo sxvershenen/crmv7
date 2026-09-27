@@ -150,6 +150,7 @@ export type EditorRecord = {
   seoTitle: string
   seoDescription: string
   indexPolicy: "index_follow" | "noindex_follow" | "noindex_nofollow"
+  seoCanonical?: SeoMetadata["canonical"]
   revision?: number
   schemaVersion?: number
   readonlyCrm?: { entity: string; code: string; status: string; capacity: string; price: string; availability: string }

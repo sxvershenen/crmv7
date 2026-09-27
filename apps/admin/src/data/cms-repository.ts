@@ -588,7 +588,7 @@ export class ApiCmsRepository implements CmsRepository {
           ...(editorial && !editorialConfig ? { editorialUnsupported: true } : {}),
         }
       }),
-      description: revision.summary ?? "", seoTitle: revision.seo.title, seoDescription: revision.seo.description, indexPolicy: revision.seo.indexPolicy,
+      description: revision.summary ?? "", seoTitle: revision.seo.title, seoDescription: revision.seo.description, indexPolicy: revision.seo.indexPolicy, seoCanonical: revision.seo.canonical,
       hero: heroFromRevision(revision), importedFromCrm: detail.source !== null,
     }
   }

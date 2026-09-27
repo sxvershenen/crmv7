@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 import { TooltipProvider } from "@crm/ui"
@@ -121,9 +122,16 @@ describe("CMS route screens", () => {
   })
 
   it("opens route-driven editor tab from query params", async () => {
+    const user = userEvent.setup()
     renderWithRouter(<ContentEditorPage kind="landing" />, "/content/pages/landing-family?tab=seo", "/content/pages/:nodeId")
     expect(await screen.findByRole("heading", { name: "Metadata" })).toBeInTheDocument()
     expect(screen.getByText(/checks passed/)).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Индексация" })).toBeEnabled()
+    expect(screen.getByLabelText("Canonical")).toHaveValue("Адрес этой страницы: /family")
+    await user.click(screen.getByRole("combobox", { name: "Индексация" }))
+    await user.click(await screen.findByRole("option", { name: /^Не индексировать$/ }))
+    expect(screen.getByRole("combobox", { name: "Индексация" })).toHaveTextContent("Не индексировать")
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
   })
 
   it("initializes a saveable child draft from the tree parent query", async () => {

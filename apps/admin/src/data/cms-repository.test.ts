@@ -85,6 +85,21 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("preserves a custom canonical when changing the index policy", async () => {
+    const client = clientMock()
+    const canonical = { mode: "custom" as const, url: "https://example.org/family" }
+    const server = { ...detail, currentRevision: { ...detail.currentRevision!, seo: { ...detail.currentRevision!.seo, canonical } } }
+    client.get.mockResolvedValue(server)
+    client.patch.mockImplementation(async (_path: string, body: { seo: typeof server.currentRevision.seo }) => ({ ...server, node: { ...server.node, version: 8 }, currentRevision: { ...server.currentRevision, revision: 5, seo: body.seo } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+
+    expect(editor.seoCanonical).toEqual(canonical)
+    await repository.saveEditor({ ...editor, indexPolicy: "noindex_follow" }, editor.version)
+
+    expect(client.patch.mock.calls[0]?.[1].seo).toMatchObject({ indexPolicy: "noindex_follow", canonical })
+  })
+
   it("preserves media usage totals and sends the page path to the server", async () => {
     const client = clientMock()
     client.get.mockResolvedValue({ asset: wireMediaAsset(), usages: [], usageTotal: 12, usagesTruncated: true })
