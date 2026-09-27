@@ -53,12 +53,15 @@ export function Sidebar({
       <nav className="flex-1 px-4 pt-2 flex flex-col gap-1">
         {items.map((item) => {
           const open = hovered === item.id;
-          return <div key={item.id} className="relative" onMouseEnter={() => { keep(); setHovered(item.id); }} onMouseLeave={closeSoon}>
+          return <div key={item.id} className="relative" onFocusCapture={() => { keep(); setHovered(item.id); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeSoon(); }} onMouseEnter={() => { keep(); setHovered(item.id); }} onMouseLeave={closeSoon}>
             <button type="button" onClick={() => go(item.href, item.external)} className={`nav-item w-full ${open ? "open" : ""} ${isCollapsed ? "justify-center !px-0" : ""}`} title={isCollapsed ? item.label : undefined}>
               <span className="icon-tile"><NavigationIcon icon={item.icon} color={configuredColors ? item.color : undefined} /></span>
               {!isCollapsed ? <><span className="flex-1 whitespace-nowrap text-left">{item.label}</span><ArrowRight size={13} className={`text-ink-3 transition-all duration-300 ${open ? "opacity-100 rotate-90" : "opacity-0 rotate-0"}`} /></> : null}
             </button>
-            {open && item.children.length ? <div className="absolute left-full top-0 pl-3 z-[70]" onMouseEnter={keep} onMouseLeave={closeSoon}><div className="dropdown-panel !p-2 w-[300px] shadow-xl"><div className="flex items-center gap-3 px-3 pt-2 pb-3"><span className="icon-tile !bg-green-soft !text-green-deep"><NavigationIcon icon={item.icon} /></span><div><div className="text-[14px] font-semibold tracking-[-.4px]">{item.label}</div></div></div><div className="hair mx-3 mb-1" />{item.children.map((child) => <button key={child.id} type="button" onClick={() => { setHovered(null); go(child.href, child.external); }} className="dropdown-item justify-between group/i"><span>{child.label}</span><ArrowRight size={13} className="opacity-0 group-hover/i:opacity-100 group-hover/i:-rotate-45 transition-all" /></button>)}</div></div> : null}
+            {open && item.children.length ? <div className="absolute left-full top-0 pl-3 z-[70]" onMouseEnter={keep} onMouseLeave={closeSoon}><div className="dropdown-panel !p-2 w-[300px] max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-xl"><div className="flex items-center gap-3 px-3 pt-2 pb-3"><span className="icon-tile !bg-green-soft !text-green-deep"><NavigationIcon icon={item.icon} /></span><div><div className="text-[14px] font-semibold tracking-[-.4px]">{item.label}</div></div></div><div className="hair mx-3 mb-1" />{item.children.map((child) => <div key={child.id}>
+              <button type="button" onClick={() => { setHovered(null); go(child.href, child.external); }} className="dropdown-item justify-between group/i"><span>{child.label}</span><ArrowRight size={13} className="opacity-0 group-hover/i:opacity-100 group-hover/i:-rotate-45 transition-all" /></button>
+              {child.children?.length ? <div className="ml-4 border-l border-border pl-2">{child.children.map((grandchild) => <button key={grandchild.id} type="button" onClick={() => { setHovered(null); go(grandchild.href, grandchild.external); }} className="dropdown-item w-full text-left"><span>{grandchild.label}</span></button>)}</div> : null}
+            </div>)}</div></div> : null}
           </div>;
         })}
       </nav>

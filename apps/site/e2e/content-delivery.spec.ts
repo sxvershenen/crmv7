@@ -73,6 +73,48 @@ test("respects published empty footer and hidden nested menu links", async ({ pa
   await expect(page.locator("aside[aria-label='Основная навигация']")).not.toContainText("Только телефон")
 })
 
+test("opens published nested mobile links with keyboard and follows their destination", async ({ page, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-chromium", "Mobile drawer interaction")
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
+  await page.goto("/")
+  await page.getByRole("button", { name: "Меню", exact: true }).click()
+  const drawer = page.getByRole("dialog", { name: "Навигация по сайту" })
+
+  const openRoot = drawer.getByRole("button", { name: "Показать подпункты: Раздел из CMS" })
+  await openRoot.press("Enter")
+  await expect(drawer.getByRole("button", { name: "Видимая ссылка" })).toBeVisible()
+  await expect(drawer.getByRole("button", { name: "Скрытая ссылка" })).toHaveCount(0)
+  await drawer.getByRole("button", { name: "Показать подпункты: Группа" }).click()
+  await expect(drawer.getByRole("button", { name: "Доступный третий уровень" })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await drawer.getByRole("button", { name: "Доступный третий уровень" }).click()
+  await expect(page).toHaveURL(/\/cms-test$/)
+})
+
+test("opens third-level published desktop links by keyboard", async ({ page, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "Desktop navigation interaction")
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
+  await page.goto("/")
+  const navigation = page.getByRole("complementary", { name: "Основная навигация" })
+  await navigation.getByRole("button", { name: "Раздел из CMS" }).focus()
+
+  await expect(navigation.getByRole("button", { name: "Доступный третий уровень" })).toBeVisible()
+  await expect(navigation.getByRole("button", { name: "Скрытый третий уровень" })).toHaveCount(0)
+  await navigation.getByRole("button", { name: "Доступный третий уровень" }).click()
+  await expect(page).toHaveURL(/\/cms-test$/)
+})
+
+test("renders every published footer column and its third-level link", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-footer-nested")
+  await page.goto("/")
+  const footer = page.locator("footer")
+
+  await expect(footer.getByRole("heading", { name: "Раздел подвала 4" })).toBeVisible()
+  await expect(footer.getByRole("link", { name: "Раздел подвала 4" })).toHaveAttribute("href", "/")
+  await expect(footer.getByRole("link", { name: "Глубокая ссылка" })).toHaveAttribute("href", "/privacy")
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test("loads Metrika only after consent and destroys it on revoke", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=homepage-published")
   let scriptRequests = 0

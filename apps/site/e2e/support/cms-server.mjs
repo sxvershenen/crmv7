@@ -67,9 +67,17 @@ createServer(async (request, response) => {
           { id: "11111111-1111-4111-8111-111111111114", label: "Только телефон", link: { kind: "internal", path: "/cms-test" }, visibleOn: "mobile" },
           { id: "11111111-1111-4111-8111-111111111115", label: "Группа", link: { kind: "internal", path: "/cms-test" }, children: [
             { id: "11111111-1111-4111-8111-111111111116", label: "Скрытый третий уровень", link: { kind: "internal", path: "/cms-test" }, enabled: false },
+            { id: "11111111-1111-4111-8111-111111111117", label: "Доступный третий уровень", link: { kind: "internal", path: "/cms-test" } },
           ] },
         ] }] : [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" } }],
-        ...(scenario === "homepage-navigation-managed" ? { footerNavigation: [] } : {}),
+        ...(scenario === "homepage-navigation-managed" ? { footerNavigation: [] } : scenario === "homepage-footer-nested" ? { footerNavigation: Array.from({ length: 4 }, (_, index) => ({
+          id: `11111111-1111-4111-8111-${String(index + 20).padStart(12, "0")}`,
+          label: `Раздел подвала ${index + 1}`,
+          link: { kind: "internal", path: "/" },
+          children: index === 3 ? [{ id: "11111111-1111-4111-8111-111111111130", label: "Вложенный пункт", link: { kind: "internal", path: "/privacy" }, children: [
+            { id: "11111111-1111-4111-8111-111111111131", label: "Глубокая ссылка", link: { kind: "internal", path: "/privacy" } },
+          ] }] : [],
+        })) } : {}),
         heroDefault: { title: "Глобальный hero не должен воскреснуть" },
         analytics: { metrika: { enabled: true, counterId: "12345678" } },
       },

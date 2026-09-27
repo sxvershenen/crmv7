@@ -1,16 +1,17 @@
 import { ArrowUpRight, Leaf, Mail, MapPin, Phone } from "lucide-react";
-import { SiteFooterBrand, SiteFooterColumn, SiteFooterLegal, SiteFooterShell, type SiteNavigationItem } from "@crm/site-ui";
+import { SiteFooterBrand, SiteFooterColumn, SiteFooterLegal, SiteFooterShell, type SiteNavigationChild, type SiteNavigationItem } from "@crm/site-ui";
 
 interface FooterProps { navigation?: SiteNavigationItem[] }
+interface FooterColumn { label: string; href?: string; external?: boolean; children: Pick<SiteNavigationChild, 'label' | 'href' | 'external' | 'children'>[] }
 
-const fallback = [
+const fallback: FooterColumn[] = [
   { label: "Глэмпинг", children: [{ label: "Домик «Гнездо» с чаном", href: "/#houses" }, { label: "Баня и чан", href: "/#sauna" }] },
   { label: "Мероприятия", children: [{ label: "Программы", href: "/#programs" }, { label: "Площадки", href: "/#venues" }] },
   { label: "Информация", children: [{ label: "Карта базы", href: "/#map" }, { label: "Вопросы", href: "/#location" }] },
 ];
 
 export default function Footer({ navigation }: FooterProps) {
-  const columns = (navigation ?? fallback).slice(0, 3);
+  const columns: FooterColumn[] = navigation ?? fallback;
   return (
     <SiteFooterShell data-section-key="footer">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-6">
@@ -27,7 +28,12 @@ export default function Footer({ navigation }: FooterProps) {
 
           <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-2 lg:gap-6">
             {columns.map((column) => (
-              <SiteFooterColumn key={column.label} title={column.label}>{column.children.map((link) => <li key={`${link.label}:${link.href}`}><a href={link.href} target={'external' in link && link.external ? '_blank' : undefined} rel={'external' in link && link.external ? 'noreferrer' : undefined} className="group inline-flex items-center gap-1 hover:text-[var(--site-color-text-inverse)] transition-colors">{link.label}<ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:-rotate-45 transition-all" /></a></li>)}</SiteFooterColumn>
+              <SiteFooterColumn key={column.label} title={column.href ? <a href={column.href} target={column.external ? '_blank' : undefined} rel={column.external ? 'noreferrer' : undefined} className="hover:underline underline-offset-4">{column.label}</a> : column.label}>
+                {column.children.map((link) => <li key={`${link.label}:${link.href}`}>
+                  <a href={link.href} target={link.external ? '_blank' : undefined} rel={link.external ? 'noreferrer' : undefined} className="group inline-flex items-center gap-1 hover:text-[var(--site-color-text-inverse)] transition-colors">{link.label}<ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:-rotate-45 transition-all" /></a>
+                  {link.children?.length ? <ul className="mt-2 ml-3 flex flex-col gap-2 pl-3">{link.children.map((nested) => <li key={`${nested.label}:${nested.href}`}><a href={nested.href} target={nested.external ? '_blank' : undefined} rel={nested.external ? 'noreferrer' : undefined} className="hover:text-[var(--site-color-text-inverse)] transition-colors">{nested.label}</a></li>)}</ul> : null}
+                </li>)}
+              </SiteFooterColumn>
             ))}
           </div>
         </div>

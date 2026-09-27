@@ -1,6 +1,6 @@
-import React from 'react';
-import { X, Home, Flame, Sparkles, Layers, CalendarDays, Compass, MapPin, Phone, Send, Calculator } from 'lucide-react';
-import type { SiteNavigationConfig, SiteNavigationItem } from '@crm/site-ui';
+import React, { useState } from 'react';
+import { ChevronDown, X, Home, Flame, Sparkles, Layers, CalendarDays, Compass, MapPin, Phone, Send, Calculator } from 'lucide-react';
+import type { SiteNavigationChild, SiteNavigationConfig, SiteNavigationItem } from '@crm/site-ui';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
 import { NavigationIcon } from './NavigationIcon';
 
@@ -79,20 +79,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
           {/* Links list */}
           <div className="flex flex-col gap-1">
-            {(configuredLinks ?? defaultLinks).map((link) => (
+            {configuredLinks ? configuredLinks.map((link) => <MobileNavigationRow followLink={followLink} item={link} key={link.id} />) : defaultLinks.map((link) => (
               <button
                 key={link.id}
                 onClick={() => {
-                  if ("href" in link) followLink(link.href, link.external);
-                  else {
-                    onNavigate(link.id);
-                    onClose();
-                  }
+                  onNavigate(link.id);
+                  onClose();
                 }}
                 className="nav-item w-full !bg-bg text-left"
               >
                 <div className="icon-tile !bg-surface !w-9 !h-9">
-                  {typeof link.icon === "string" ? <NavigationIcon icon={link.icon} color={link.color} /> : link.icon}
+                  {link.icon}
                 </div>
                 <span>{link.label}</span>
               </button>
@@ -138,3 +135,22 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
     </div>
   );
 };
+
+function MobileNavigationRow({ item, followLink }: { item: SiteNavigationItem | SiteNavigationChild; followLink: (href: string, external?: boolean) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const children = item.children ?? [];
+  const submenuId = `mobile-nav-${item.id}`;
+
+  return <div>
+    <div className="flex items-stretch gap-1">
+      <button type="button" onClick={() => followLink(item.href, item.external)} className="nav-item min-w-0 flex-1 !bg-bg text-left">
+        <span className="icon-tile !bg-surface !w-9 !h-9"><NavigationIcon icon={item.icon ?? "arrow-right"} color={item.color} /></span>
+        <span className="min-w-0 truncate">{item.label}</span>
+      </button>
+      {children.length > 0 ? <button type="button" aria-controls={expanded ? submenuId : undefined} aria-expanded={expanded} aria-label={`${expanded ? "Скрыть" : "Показать"} подпункты: ${item.label}`} onClick={() => setExpanded((value) => !value)} className="icon-tile !w-11 !h-11 shrink-0 !bg-bg">
+        <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button> : null}
+    </div>
+    {children.length > 0 && expanded ? <div id={submenuId} className="ml-4 border-l border-border pl-3 pt-1 flex flex-col gap-1">{children.map((child) => <MobileNavigationRow followLink={followLink} item={child} key={child.id} />)}</div> : null}
+  </div>;
+}
