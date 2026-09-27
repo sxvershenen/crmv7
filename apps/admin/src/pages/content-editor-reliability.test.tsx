@@ -124,7 +124,7 @@ describe("ContentEditorPage mutation recovery", () => {
 
     await user.click(screen.getAllByRole("button", { name: "Ещё" })[0]!)
     await user.click(await screen.findByRole("menuitem", { name: "Архивировать" }))
-    expect(confirm).toHaveBeenCalledWith("Есть несохранённые изменения. Архивировать материал без них?")
+    expect(confirm).toHaveBeenCalledWith("Архивировать «Отдых с детьми»? История редакций сохранится. Архивирование не снимает страницу с сайта, если она уже опубликована. Несохранённые изменения будут потеряны.")
     expect(archive).not.toHaveBeenCalled()
 
     confirm.mockReturnValue(true)
@@ -133,6 +133,24 @@ describe("ContentEditorPage mutation recovery", () => {
     expect(await screen.findByText("Archive failed")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
     expect(archive).toHaveBeenCalledOnce()
+  })
+
+  it("confirms archive even when the editor has no local changes", async () => {
+    const user = userEvent.setup()
+    const initial = structuredClone(editorFixtures["landing-family"]!)
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+    vi.spyOn(cmsRepository, "getNodes").mockResolvedValue(nodeFixtures)
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    const archive = vi.spyOn(cmsRepository, "archive")
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+
+    await screen.findByLabelText("Заголовок H1")
+    await user.click(screen.getAllByRole("button", { name: "Ещё" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "Архивировать" }))
+
+    expect(confirm).toHaveBeenCalledWith("Архивировать «Отдых с детьми»? История редакций сохранится. Архивирование не снимает страницу с сайта, если она уже опубликована.")
+    expect(archive).not.toHaveBeenCalled()
   })
 })
 
