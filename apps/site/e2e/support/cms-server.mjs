@@ -2,6 +2,7 @@ import { createServer } from "node:http"
 import { URL } from "node:url"
 
 const id = "11111111-1111-4111-8111-111111111111"
+const secondHouseId = "11111111-1111-4111-8111-111111111112"
 const releaseId = "22222222-2222-4222-8222-222222222222"
 const nextReleaseId = "33333333-3333-4333-8333-333333333333"
 const asOf = "2026-09-10T10:00:00.000Z"
@@ -38,6 +39,7 @@ createServer(async (request, response) => {
         { path: "/", lastModified: asOf, schemaTypes: ["WebSite"] },
         { path: "/catalog", lastModified: asOf, schemaTypes: ["CollectionPage"] },
         { path: "/domiki/forest", lastModified: asOf, schemaTypes: ["Service"] },
+        ...(scenario === "commerce-curated" ? [{ path: "/domiki/second", lastModified: asOf, schemaTypes: ["Service"] }] : []),
         { path: "/kemping/pitches", lastModified: asOf, schemaTypes: ["Service"] },
         { path: "/dopy/firewood", lastModified: asOf, schemaTypes: ["Service"] },
         { path: "/poshadki/meadow", lastModified: asOf, schemaTypes: ["Service"] },
@@ -128,6 +130,10 @@ createServer(async (request, response) => {
     }
     if (scenario === "house-wrong-path") house.path = "/houses/other"
     if (isList) {
+      if (scenario === "commerce-curated") {
+        if (url.searchParams.has("cursor")) return send({ items: [{ ...house, offeringId: secondHouseId, path: "/domiki/second", title: "Второй домик из CMS" }], nextCursor: null, releaseId, asOf })
+        return send({ items: [house], nextCursor: "second-house", releaseId, asOf })
+      }
       if (scenario === "commerce-private") house.internalNotes = "PRIVATE_BACKEND_DETAIL"
       if (scenario === "commerce-mixed-item") house.sourceVersions.contentReleaseId = nextReleaseId
       if (scenario === "commerce-unavailable") { house.requestAvailable = false; house.readiness = "temporarily_unavailable" }
@@ -410,6 +416,11 @@ createServer(async (request, response) => {
     if (scenario === "details-rating") homepageConfigs.reviews.reviews[0].rating = 6
     if (scenario === "details-duplicate") homepageConfigs.reviews.reviews[1].id = homepageConfigs.reviews.reviews[0].id
     if (scenario === "details-private") homepageConfigs.reviews.reviews[0].email = "PRIVATE_BACKEND_DETAIL"
+    if (scenario === "commerce-curated") {
+      homepageConfigs.houses.selectedOfferingIds = [secondHouseId, id]
+      homepageConfigs.programs.selectedOfferingIds = []
+      homepageConfigs.venues.selectedOfferingIds = []
+    }
     const homepageEntries = Object.entries(homepageConfigs).filter(([key]) => scenario.startsWith("commerce-") ? ["events", "houses", "sauna-chan", "programs", "venues", "calculator"].includes(key) : !scenario.startsWith("details-") || ["reviews", "faq"].includes(key))
     if (scenario === "homepage-duplicate") homepageEntries.push(["events", homepageConfigs.events])
     return send({

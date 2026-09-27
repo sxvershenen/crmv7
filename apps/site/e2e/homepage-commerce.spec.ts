@@ -47,6 +47,18 @@ test("shows request-only pricing without invented amounts", async ({ request, pa
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText("По запросу")
 })
 
+test("renders manually ordered CRM cards across cursor pages while events remain automatic", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=commerce-curated")
+  const response = await page.goto("/")
+  expect(response?.status()).toBe(200)
+  const houses = page.locator("#houses")
+  await expect(houses).toBeVisible()
+  await expect(houses.getByRole("button").first()).toContainText("Второй домик из CMS")
+  await expect(houses.getByRole("button").nth(1)).toContainText("Домик из CMS")
+  await expect(page.locator("#programs, #venues")).toHaveCount(0)
+  await expect(page.locator("#events")).toContainText("Программа из CMS")
+})
+
 test("hides empty published catalogs without fixture cards", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-empty")
   const response = await page.goto("/")
