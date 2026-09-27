@@ -922,7 +922,13 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     const seo = parsedSeo.success ? parsedSeo.data : { title: candidate.revision.title.slice(0, 70), description: "Страница временно не готова к публикации.", indexPolicy: "noindex_nofollow" as const, canonical: { mode: "self" as const }, structuredData: [] }
     validateSeo(candidate.node.kind, candidate.revision.path, seo, [...parentSections.values()], issues)
     visiting.delete(candidate.node.id)
-    const content = PublicReleasePageContentSchema.parse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo })
+    const parsedContent = PublicReleasePageContentSchema.safeParse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo })
+    if (!parsedContent.success) {
+      if (!issues.some((item) => item.route === candidate.revision.path)) issues.push(issue("CMS_PAGE_CONTENT_INVALID", "Содержимое страницы не готово к публикации", candidate.revision.path))
+      resolved.set(candidate.node.id, null)
+      return null
+    }
+    const content = parsedContent.data
     const ownDependency: ReleaseDependencyRef = { type: "node_revision", id: candidate.revision.id, version: String(candidate.revision.revision), contentHash: candidate.revision.contentHash }
     const dependencies = normalizeDependencies([
       ...(parentRoute?.dependencies ?? []),

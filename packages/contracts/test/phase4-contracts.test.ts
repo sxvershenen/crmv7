@@ -30,6 +30,12 @@ describe("Phase 4 contracts", () => {
     expect(CmsSectionPolicySchema.safeParse({ mode: "override", patch: { scalars: {}, objects: {}, keyedArrays: {} }, extra: true }).success).toBe(false);
   });
 
+  it("saves editorial list blocks as bounded typed draft patches", () => {
+    const patch = { mode: "override", patch: { scalars: { blocks: { operation: "replace", value: [{ type: "paragraph", text: "Текст" }, { type: "list", items: ["Домики", "Программы"] }] } }, objects: {}, keyedArrays: {} } };
+    expect(CmsSectionPolicySchema.parse(patch)).toMatchObject(patch);
+    expect(CmsSectionPolicySchema.safeParse({ ...patch, patch: { ...patch.patch, scalars: { blocks: { operation: "replace", value: [{ type: "list", items: [{ nested: "unsafe" }] }] } } } }).success).toBe(false);
+  });
+
   it("does not expose the operational Event aggregate as a public profile kind", () => {
     expect(CmsEntityRelationSchema.safeParse({ kind: "event", entityId: id }).success).toBe(false);
     expect(CmsEntityRelationSchema.parse({ kind: "public_event_offering", entityId: id }).kind).toBe("public_event_offering");
@@ -203,6 +209,9 @@ describe("Phase 4 contracts", () => {
     };
     expect(PublicPageSchema.parse(page).sections[0]).toHaveProperty("config");
     expect(PublicPageSchema.safeParse({ ...page, sections: [{ ...page.sections[0], config: undefined, policy: { mode: "inherit" } }] }).success).toBe(false);
+    const editorial = { ...page.sections[0], key: "body", renderer: "editorial-content", config: { heading: null, lead: null, blocks: [{ type: "list", items: ["Домики"] }], links: [] } };
+    expect(PublicPageSchema.safeParse({ ...page, sections: [editorial] }).success).toBe(true);
+    expect(PublicPageSchema.safeParse({ ...page, sections: [{ ...editorial, config: { ...editorial.config, blocks: [] } }] }).success).toBe(false);
   });
 
   it("keeps CMS writes strict, versioned and idempotent", () => {

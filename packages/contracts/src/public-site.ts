@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CmsHeroConfigSchema, CmsHeroMediaSchema, CmsHeroPolicySchema, CmsPageKindSchema, CmsPathSchema, CmsSectionSchema } from "./content.js";
+import { CmsEditorialBlocksPatchValueSchema, CmsHeroConfigSchema, CmsHeroMediaSchema, CmsHeroPolicySchema, CmsPageKindSchema, CmsPathSchema, CmsSectionSchema } from "./content.js";
 import { ReleaseDependencyRefSchema } from "./publication.js";
 import { SeoMetadataSchema } from "./seo.js";
 import { BoundedJsonValueSchema, DateTimeSchema, IdSchema, MoneySchema } from "./primitives.js";
@@ -65,7 +65,7 @@ export const PublicResolvedSectionSchema = z.object({
   rendererVersion: z.string().min(1).max(40),
   schemaVersion: z.number().int().positive(),
   order: z.number().int().min(-100000).max(100000),
-  config: z.record(z.string().min(1).max(120), z.union([BoundedJsonValueSchema, ListingDefinitionSchema])),
+  config: z.record(z.string().min(1).max(120), z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema])),
   analyticsActionId: z.string().min(1).max(120).optional(),
 }).strict();
 
@@ -81,6 +81,13 @@ export const PublicEditorialContentConfigSchema = z.object({
 }).strict();
 export type PublicEditorialContentConfig = z.infer<typeof PublicEditorialContentConfigSchema>;
 
+function requireValidEditorialSections(sections: z.infer<typeof PublicResolvedSectionSchema>[], context: z.RefinementCtx) {
+  for (const [index, section] of sections.entries()) {
+    if (section.renderer !== "editorial-content") continue;
+    if (!PublicEditorialContentConfigSchema.safeParse(section.config).success) context.addIssue({ code: "custom", path: ["sections", index, "config"], message: "Invalid published editorial content" });
+  }
+}
+
 export const PublicReleasePageContentSchema = z.object({
   kind: CmsPageKindSchema,
   path: CmsPathSchema,
@@ -89,7 +96,7 @@ export const PublicReleasePageContentSchema = z.object({
   hero: CmsHeroConfigSchema.nullable().default(null),
   sections: z.array(PublicResolvedSectionSchema).max(200),
   seo: SeoMetadataSchema,
-}).strict();
+}).strict().superRefine((value, context) => requireValidEditorialSections(value.sections, context));
 export type PublicReleasePageContent = z.infer<typeof PublicReleasePageContentSchema>;
 
 export const PublicPageSchema = z.object({
@@ -116,7 +123,7 @@ export const PublicPageSchema = z.object({
     crmProjectionAsOf: DateTimeSchema.nullable(),
     ready: z.boolean(),
   }).strict(),
-}).strict();
+}).strict().superRefine((value, context) => requireValidEditorialSections(value.sections, context));
 export type PublicPage = z.infer<typeof PublicPageSchema>;
 
 /** Signed authoring snapshot. It is intentionally not a render-ready public page until inheritance is materialised. */

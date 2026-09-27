@@ -31,6 +31,7 @@ test("renders article and legal bodies as meaningful SSR from the active release
   await page.goto("/blog/guide")
   await expect(page.locator("h1")).toHaveText("Гид по отдыху")
   await expect(page.locator("h2")).toHaveText("Важно знать")
+  await expect(page.locator(".site-editorial-content li")).toHaveText(["Домики", "Программы"])
   expect(await page.locator('script[type="application/ld+json"]').evaluateAll((nodes) => nodes.map((node) => node.textContent).join("\n"))).toContain('"@type":"Article"')
   const relatedLink = page.getByRole("link", { name: "На главную" })
   for (let index = 0; index < 50 && !await relatedLink.evaluate((element) => element === document.activeElement); index += 1) await page.keyboard.press("Tab")

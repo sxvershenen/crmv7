@@ -1,5 +1,5 @@
 import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
-import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft } from "@crm/contracts"
+import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft, PublicEditorialContentConfig } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 
@@ -53,6 +53,8 @@ export type SectionConfig = {
   partnersConfig?: CmsPartnersSectionDraft
   whyUsConfig?: CmsWhyUsSectionDraft
   homepageConfig?: CmsHomeSectionDraft
+  editorialConfig?: PublicEditorialContentConfig
+  editorialUnsupported?: boolean
   label: string
   description: string
   mode: InheritanceMode

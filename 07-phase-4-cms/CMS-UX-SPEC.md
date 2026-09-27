@@ -284,6 +284,8 @@ Editor fields:
 - citations/source notes where applicable;
 - common SEO/schema/media/analytics/versions.
 
+Первый рабочий текстовый блок в редакторе страницы использует `editorial-content`: абзацы, H2/H3, списки и внутренние ссылки редактируются в «Текст и блоки», сохраняются в редакции страницы и проходят обычный preview/publish. Пустые блоки допускаются только в черновике; перед публикацией нужен хотя бы один заполненный блок. Неподдерживаемые сложные patches форма оставляет без изменений. Авторские поля, изображения в теле статьи и полноценный визуальный preview остаются в C5/C8/C9.
+
 ## 13. Глобальные секции, navigation и components
 
 `/globals/sections`: presets for hero/map/FAQ/directions/calculator/footer, usage count, published version, affected routes, variants.

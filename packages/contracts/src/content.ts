@@ -36,8 +36,14 @@ export const CmsRoutePlacementSchema = z.object({
   sortOrder: z.number().int().min(-100000).max(100000),
 }).strict();
 
+export const CmsEditorialBlocksPatchValueSchema = z.array(z.discriminatedUnion("type", [
+  z.object({ type: z.literal("paragraph"), text: z.string().max(5000) }).strict(),
+  z.object({ type: z.literal("heading"), level: z.enum(["h2", "h3"]), text: z.string().max(240) }).strict(),
+  z.object({ type: z.literal("list"), items: z.array(z.string().max(1000)).max(50) }).strict(),
+])).max(200);
+
 export const CmsScalarPatchSchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema]) }).strict(),
+  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema]) }).strict(),
   z.object({ operation: z.literal("reset") }).strict(),
 ]);
 

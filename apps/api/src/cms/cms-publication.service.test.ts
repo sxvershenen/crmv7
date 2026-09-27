@@ -182,6 +182,20 @@ describe("materializeRelease", () => {
     scalars: Object.fromEntries(Object.entries(homepageConfig).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
   } } }
 
+  it("materializes authored article blocks and rejects an empty published body", () => {
+    const config = { heading: "История места", lead: null, blocks: [{ type: "paragraph", text: "О природе" }, { type: "list", items: ["Лес", "Река"] }], links: [] }
+    const editorial = { ...heroOverride, key: "body", renderer: "editorial-content", policy: { mode: "override", patch: {
+      scalars: Object.fromEntries(Object.entries(config).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
+    } } }
+    const home = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [] })
+    const article = candidate({ nodeId: childId, revisionId: childRevisionId, kind: "article", path: "/story", slug: "story", parentNodeId: rootId, sections: [editorial] })
+    const result = materializeRelease([home, article] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[1]?.content.sections[0]?.config).toEqual(config)
+    const empty = { ...editorial, policy: { mode: "override", patch: { scalars: { ...editorial.policy.patch.scalars, blocks: { operation: "replace", value: [] } }, objects: {}, keyedArrays: {} } } }
+    expect(materializeRelease([home, { ...article, revision: { ...article.revision, sections: [empty] } }] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_EDITORIAL_SECTION_INVALID" })]))
+  })
+
   it("pins partners content through inherited revisions without mutable draft reads", () => {
     const root = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [partners] })
     const child = candidate({ nodeId: childId, revisionId: childRevisionId, kind: "landing", path: "/family", slug: "family", parentNodeId: rootId, sections: [{ ...partners, policy: { mode: "inherit" } }] })

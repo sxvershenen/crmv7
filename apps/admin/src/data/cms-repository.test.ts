@@ -7,6 +7,7 @@ import { AdminApiError } from "@admin/lib/api-client"
 import { createPartnersEditorSection, partnersPolicy } from "@admin/data/partners-section"
 import { createWhyUsEditorSection, whyUsPolicy } from "@admin/data/why-us-section"
 import { createHomepageSectionEditorSection, homepageSectionPolicy } from "@admin/data/homepage-section"
+import { createEditorialSection, editorialPolicy } from "@admin/data/editorial-section"
 
 describe("FixtureCmsRepository", () => {
   it("keeps fixtures behind a typed repository and increments versions", async () => {
@@ -43,6 +44,53 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("creates an article with its text inside the first CMS revision", async () => {
+    const client = clientMock()
+    client.post.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({
+      ...detail, node: { ...detail.node, kind: "article" }, currentRevision: { ...detail.currentRevision!, sections: body.sections },
+    }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor("new", "article")
+    const section = createEditorialSection()
+    section.editorialConfig = { heading: null, lead: null, blocks: [{ type: "paragraph", text: "Первая статья" }], links: [] }
+    await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
+    expect(client.post).toHaveBeenCalledWith("/content/nodes", expect.objectContaining({ kind: "article", sections: [expect.objectContaining({ renderer: "editorial-content" })] }), expect.anything())
+  })
+
+  it("saves and reopens a typed text section with paragraphs, lists and links", async () => {
+    let server = detail
+    const client = clientMock()
+    client.get.mockImplementation(async () => server)
+    client.patch.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => {
+      server = { ...server, node: { ...server.node, version: server.node.version + 1 }, currentRevision: { ...server.currentRevision!, sections: body.sections } }
+      return server
+    })
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+    const section = createEditorialSection()
+    section.editorialConfig = { heading: "О семейном отдыхе", lead: "Приезжайте вместе.", blocks: [
+      { type: "paragraph", text: "Живой текст страницы." },
+      { type: "list", items: ["Домики", "Программы"] },
+    ], links: [{ label: "Домики", href: "/domiki" }] }
+    const saved = await repository.saveEditor({ ...editor, sections: [section] }, editor.version)
+    expect(saved.sections[0]?.editorialConfig).toEqual(section.editorialConfig)
+    expect(client.patch.mock.calls[0]?.[1].sections[0]).toMatchObject({ key: "body", renderer: "editorial-content", policy: editorialPolicy(section.editorialConfig) })
+    expect((await repository.getEditor(ids.node, "landing")).sections[0]?.editorialConfig).toEqual(section.editorialConfig)
+  })
+
+  it("keeps an unsupported text patch opaque when saving another field", async () => {
+    const opaque = { id: ids.node2, key: "body", renderer: "editorial-content", rendererVersion: "1", schemaVersion: 1, order: 10, policy: { mode: "override" as const, patch: { scalars: {}, objects: { blocks: { operation: "merge" as const, values: {} } }, keyedArrays: {} } } }
+    const server = { ...detail, currentRevision: { ...detail.currentRevision!, sections: [opaque] } }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(server)
+    client.patch.mockResolvedValueOnce(server)
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+    expect(editor.sections[0]?.editorialUnsupported).toBe(true)
+    await repository.saveEditor({ ...editor, publicTitle: "Новый заголовок" }, editor.version)
+    expect(client.patch.mock.calls[0]?.[1].sections).toEqual([opaque])
+  })
+
   it("sends an exact active-release guard when unpublishing", async () => {
     const client = clientMock()
     client.post.mockResolvedValue({ unpublishedPath: "/family", publicationId: ids.node2, publicationVersion: 8, unpublishedAt: "2026-09-27T10:00:00.000Z" })

@@ -9,9 +9,11 @@ import { cmsRepository } from "@admin/data/cms-repository"
 import { createPartnersEditorSection } from "@admin/data/partners-section"
 import { createWhyUsEditorSection } from "@admin/data/why-us-section"
 import { createHomepageSectionEditorSection } from "@admin/data/homepage-section"
+import { createEditorialSection } from "@admin/data/editorial-section"
 import { PartnersSectionFields } from "@admin/components/partners-section-fields"
 import { WhyUsSectionFields } from "@admin/components/why-us-section-fields"
 import { HomepageSectionFields } from "@admin/components/homepage-section-fields"
+import { EditorialSectionFields } from "@admin/components/editorial-section-fields"
 import { CmsConflictError, type ContentNode, type EditorRecord, type InheritanceMode } from "@admin/entities/cms"
 import { useAdminAuthSession } from "@admin/features/auth-session-context"
 import { useRepository } from "@admin/features/use-repository"
@@ -36,7 +38,7 @@ export type ContentEditorPageProps = {
 }
 
 const commonTabs = [
-  { value: "content", label: "Содержимое", compactLabel: "Контент", icon: IconListDetails }, { value: "composition", label: "Композиция", compactLabel: "Блоки", icon: IconLayoutBoard }, { value: "seo", label: "SEO", icon: IconSearch }, { value: "media", label: "Медиа", icon: IconPhoto }, { value: "code", label: "Файлы и код", compactLabel: "Код", icon: IconCode, capability: "canManageSiteCode" as const }, { value: "analytics", label: "Аналитика", compactLabel: "Метрики", icon: IconFileAnalytics, capability: "canViewAnalytics" as const }, { value: "versions", label: "История", icon: IconHistory },
+  { value: "content", label: "Содержимое", compactLabel: "Контент", icon: IconListDetails }, { value: "composition", label: "Текст и блоки", compactLabel: "Блоки", icon: IconLayoutBoard }, { value: "seo", label: "SEO", icon: IconSearch }, { value: "media", label: "Медиа", icon: IconPhoto }, { value: "code", label: "Файлы и код", compactLabel: "Код", icon: IconCode, capability: "canManageSiteCode" as const }, { value: "analytics", label: "Аналитика", compactLabel: "Метрики", icon: IconFileAnalytics, capability: "canViewAnalytics" as const }, { value: "versions", label: "История", icon: IconHistory },
 ]
 const offeringTabs = [
   { value: "content", editorTab: "content", label: "Содержимое", compactLabel: "Контент", icon: IconListDetails },
@@ -195,16 +197,19 @@ function HeroEditor({ draft, editable, update, compact = false }: { draft: Edito
 
 function CompositionTab({ draft, editable, updateSection, update }: { draft: EditorRecord; editable: boolean; updateSection: (id: string, mode: InheritanceMode) => void; update: (patch: Partial<EditorRecord>) => void }) {
   return <EditorSection subtitle={draft.kind === "home" ? "Выберите секцию, чтобы изменить её содержимое. Изменения сохраняются вместе со страницей." : "Общие настройки можно заменить или скрыть только для этой страницы."} title={draft.kind === "home" ? "Секции главной" : "Секции страницы"}><div className="space-y-3">{draft.sections.map((section) => <div key={section.id}>
-    <InheritanceControl disabled={!editable || ((section.key === "partners" && !section.partnersConfig) || (section.key === "why-us" && !section.whyUsConfig))} onChange={(mode) => updateSection(section.id, mode)} section={section} />
+    <InheritanceControl disabled={!editable || section.editorialUnsupported || ((section.key === "partners" && !section.partnersConfig) || (section.key === "why-us" && !section.whyUsConfig))} onChange={(mode) => updateSection(section.id, mode)} section={section} />
     {section.mode === "override" && section.partnersConfig && <PartnersSectionFields id={section.id} value={section.partnersConfig} editable={editable} onChange={(partnersConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, partnersConfig } : current) })} />}
     {section.mode === "override" && section.whyUsConfig && <WhyUsSectionFields id={section.id} value={section.whyUsConfig} editable={editable} onChange={(whyUsConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, whyUsConfig } : current) })} />}
     {section.mode === "override" && section.homepageConfig && <HomepageSectionFields id={section.id} {...(section.key ? { sectionKey: section.key } : {})} value={section.homepageConfig} editable={editable} onChange={(homepageConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, homepageConfig } : current) })} />}
+    {section.mode === "override" && section.editorialConfig && <EditorialSectionFields id={section.id} value={section.editorialConfig} editable={editable} onChange={(editorialConfig) => update({ sections: draft.sections.map((current) => current.id === section.id ? { ...current, editorialConfig } : current) })} />}
+    {section.editorialUnsupported && <p className="mt-2 text-xs text-muted-foreground">Эта текстовая секция содержит неподдерживаемую настройку. Форма не изменяет её; обратитесь к техническому администратору.</p>}
     {section.key === "partners" && !section.partnersConfig && <p className="mt-2 text-xs text-muted-foreground">Редактор этой версии или составной конфигурации пока недоступен. Сохранение остальных полей не изменяет её содержимое.</p>}
     {section.key === "why-us" && !section.whyUsConfig && <p className="mt-2 text-xs text-muted-foreground">Редактор этой версии или составной конфигурации пока недоступен. Сохранение остальных полей не изменяет её содержимое.</p>}
   </div>)}
   {draft.kind === "home" && !draft.sections.some((section) => section.key === "partners") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createPartnersEditorSection()] })} size="sm" variant="outline">Добавить секцию «Партнёры»</Button>}
   {draft.kind === "home" && !draft.sections.some((section) => section.key === "why-us") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createWhyUsEditorSection()] })} size="sm" variant="outline">Добавить секцию «О нас»</Button>}
   {draft.kind === "home" && homepageEditableSections.filter((key) => !draft.sections.some((section) => section.key === key)).map((key) => <Button key={key} disabled={!editable} onClick={() => update({ sections: [...draft.sections, createHomepageSectionEditorSection(key)] })} size="sm" variant="outline">Добавить секцию «{homepageSectionLabel(key)}»</Button>)}
+  {(draft.kind === "article" || draft.kind === "landing" || draft.kind === "profile") && !draft.sections.some((section) => section.editorialConfig || section.editorialUnsupported) && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createEditorialSection()] })} size="sm" variant="outline">Добавить текст страницы</Button>}
   </div></EditorSection>
 }
 
@@ -245,6 +250,7 @@ function mergeLocalSectionChanges(persisted: EditorRecord["sections"], local: Ed
       ...(changed(persistedSection.partnersConfig, localSection.partnersConfig) ? { partnersConfig: localSection.partnersConfig } : {}),
       ...(changed(persistedSection.whyUsConfig, localSection.whyUsConfig) ? { whyUsConfig: localSection.whyUsConfig } : {}),
       ...(changed(persistedSection.homepageConfig, localSection.homepageConfig) ? { homepageConfig: localSection.homepageConfig } : {}),
+      ...(changed(persistedSection.editorialConfig, localSection.editorialConfig) ? { editorialConfig: localSection.editorialConfig } : {}),
     }
   })
   for (const section of local) if (!before.has(section.id) && !current.has(section.id)) merged.push(section)
