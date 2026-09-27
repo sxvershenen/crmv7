@@ -147,6 +147,18 @@ describe("PublicContentService", () => {
     expect(page).not.toHaveProperty("relations")
   })
 
+  it("resolves current CRM promotions for a signed homepage draft preview", async () => {
+    const subject = service()
+    const promotionId = "66666666-6666-4666-8666-666666666666"
+    subject.repositories.get(CmsNodeEntity)!.findOneBy!.mockResolvedValue({ ...node, kind: "home" })
+    subject.repositories.get(CmsNodeRevisionEntity)!.findOneBy!.mockResolvedValue({ ...revision, path: "/", state: "draft" })
+    subject.publication.materializePreviewRevision.mockResolvedValue({ content: { ...resolvedContent, kind: "home", path: "/", hero: { title: "Главная", promotionIds: [promotionId] } }, issues: [] })
+    subject.repositories.get(PromotionEntity)!.find!.mockResolvedValue([{ id: promotionId, code: "AUTUMN15", archivedAt: null, terms: { code: "AUTUMN15", name: "Осенние выходные", active: true, discountType: "percent", value: 15, minimumAmountMinor: 0, startsAt: null, endsAt: null, scope: "all", resourceIds: [], offeringIds: [] } }])
+    const token = signPreviewToken({ version: 1, revisionId, contentHash: hash, expiresAt: Date.now() + 60_000 }, secret)
+    const preview = await subject.service.preview({ token })
+    expect(preview).toMatchObject({ renderable: true, path: "/", page: { path: "/", seo: { indexPolicy: "noindex_nofollow" } }, featuredPromotions: [{ code: "AUTUMN15", value: 15 }] })
+  })
+
   it("rejects an invalid preview token before looking up a revision", async () => {
     const subject = service()
     await expect(subject.service.preview({ token: "not-a-valid-token-with-enough-length-123456" })).rejects.toMatchObject({ response: { code: "NOT_FOUND" } })

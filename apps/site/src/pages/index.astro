@@ -20,72 +20,86 @@ import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
 import ContentFailure from "../components/ContentFailure.astro"
-import { fixtureContentEnabled, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
+import { fixtureContentEnabled, getDraftPreview, getPublishedRoute, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
 import { getHomepageSections } from "../lib/content/homepage-sections"
 
-const result = fixtureContentEnabled ? null : await getPublishedRoute("/")
-const publishedPage = result?.status === "published" ? result.value.page : null
-const publishedSiteSettings = result?.status === "published" ? result.value.settings : null
-const homepageSections = getHomepageSections(publishedPage, fixtureContentEnabled)
+const previewRequested = Astro.url.searchParams.has("__cms_preview")
+const previewToken = Astro.url.searchParams.get("__cms_preview") ?? ""
+const preview = previewRequested && previewToken.length >= 32 ? await getDraftPreview(previewToken) : null
+const previewDocument = preview?.status === "published" && preview.value.renderable && preview.value.path === "/" && preview.value.page.path === "/" ? preview.value : null
+const result = previewRequested || fixtureContentEnabled ? null : await getPublishedRoute("/")
+const publishedPage = previewRequested ? previewDocument?.page ?? null : result?.status === "published" ? result.value.page : null
+const publishedSiteSettings = previewRequested ? await getPublishedSiteSettings() : result?.status === "published" ? result.value.settings : null
+const fixture = fixtureContentEnabled && !previewRequested
+const homepageSections = getHomepageSections(publishedPage, fixture)
 const commerce = result?.status === "published" ? result.value.commerce : undefined
 Astro.response.headers.set("Cache-Control", "no-store")
-const failure = result && result.status !== "published" ? result.status : null
+if (previewRequested) {
+  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive")
+  Astro.response.headers.set("Referrer-Policy", "no-referrer")
+}
+const failure = previewRequested ? previewDocument ? null : "not_found" : result && result.status !== "published" ? result.status : null
 const contentAvailable = !failure
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
   Astro.response.statusText = failure === "not_found" ? "Not Found" : "Service Unavailable"
   Astro.response.headers.set("Cache-Control", "no-store")
-  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  Astro.response.headers.set("X-Robots-Tag", previewRequested ? "noindex, nofollow, noarchive" : "noindex, nofollow")
   if (failure === "unavailable") Astro.response.headers.set("Retry-After", "60")
 }
 const canonical = publishedPage?.seo.canonical.mode === "custom"
   ? publishedPage.seo.canonical.url
   : new URL(publicRoute("/").pathname, Astro.site).toString()
-const robots = failure || fixtureContentEnabled ? "noindex_nofollow" : publishedPage?.seo.indexPolicy
+const robots = failure || fixtureContentEnabled || previewRequested ? "noindex_nofollow" : publishedPage?.seo.indexPolicy
 const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
 // Inheritance and disabled slots have already been materialized by the release.
 const effectiveHero = publishedPage?.hero
-const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
-const promos = publishedPage?.featuredPromotions.map(toSitePromo) ?? []
+const originalHero = effectiveHero ? toSiteHero(effectiveHero) : undefined
+const hero = originalHero && previewRequested ? {
+  ...originalHero,
+  primaryCta: originalHero.primaryCta.action === "booking" ? { ...originalHero.primaryCta, enabled: false } : originalHero.primaryCta,
+  secondaryCta: originalHero.secondaryCta.action === "booking" ? { ...originalHero.secondaryCta, enabled: false } : originalHero.secondaryCta,
+} : originalHero
+const promos = (previewRequested ? previewDocument?.featuredPromotions ?? [] : result?.status === "published" ? result.value.page.featuredPromotions : []).map(toSitePromo)
 const failureTitle = failure === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"
 ---
 
 <BaseLayout
   title={failure ? failureTitle : publishedPage?.seo.title ?? siteIdentity.title}
   description={failure ? "Попробуйте открыть страницу позже." : publishedPage?.seo.description ?? siteIdentity.description}
-  {contentAvailable}
+  contentAvailable={contentAvailable && !previewRequested}
   canonical={canonical}
   robots={robots}
   social={publishedPage?.seo.social}
-  structuredData={publishedPage ? toSiteStructuredData(publishedPage.seo.structuredData) : []}
-  {...(publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
+  structuredData={!previewRequested && publishedPage ? toSiteStructuredData(publishedPage.seo.structuredData) : []}
+  {...(!previewRequested && publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
 >
   {contentAvailable && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
 
   <SitePageShell>
     {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
-      {(fixtureContentEnabled || hero) && <HeroIsland fixture={fixtureContentEnabled} promos={promos} {...(hero ? { hero } : {})} client:load />}
+      {(fixture || hero) && <HeroIsland {fixture} promos={promos} {...(hero ? { hero } : {})} client:load />}
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {homepageSections.map((section) => {
-        if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} fixture={fixtureContentEnabled} client:visible />
-        if (section.key === "houses") return <HousesIsland config={section.config} published={commerce?.houses} fixture={fixtureContentEnabled} client:visible />
-        if (section.key === "sauna-chan" && fixtureContentEnabled) return <SaunaChanIsland config={section.config} client:visible />
-        if (section.key === "programs") return <ProgramsIsland config={section.config} published={commerce?.programs} fixture={fixtureContentEnabled} client:visible />
-        if (section.key === "venues") return <VenuesIsland config={section.config} published={commerce?.venues} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
+        if (section.key === "houses") return <HousesIsland config={section.config} published={commerce?.houses} {fixture} client:visible />
+        if (section.key === "sauna-chan" && fixture) return <SaunaChanIsland config={section.config} client:visible />
+        if (section.key === "programs") return <ProgramsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
+        if (section.key === "venues") return <VenuesIsland config={section.config} published={commerce?.venues} {fixture} client:visible />
         if (section.key === "blog") return <BlogSection config={section.config} />
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
-        if (section.key === "reviews") return <ReviewsIsland config={section.config} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "reviews") return <ReviewsIsland config={section.config} {fixture} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
         if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
-        if (section.key === "calculator") return <BookingQuizIsland config={section.config} commerce={commerce} fixture={fixtureContentEnabled} client:visible />
+        if (section.key === "calculator") return previewRequested ? null : <BookingQuizIsland config={section.config} commerce={commerce} {fixture} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}
     </SitePageFrame>}
 
-    {contentAvailable && (fixtureContentEnabled || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {contentAvailable && (fixture || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
   </SitePageShell>
 
-  {contentAvailable && <FloatingHelperIsland client:idle />}
+  {contentAvailable && !previewRequested && <FloatingHelperIsland client:idle />}
 </BaseLayout>

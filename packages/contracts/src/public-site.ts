@@ -161,6 +161,7 @@ const CmsRenderablePreviewDocumentSchema = z.object({
   kind: CmsPageKindSchema,
   path: CmsPathSchema,
   page: PublicReleasePageContentSchema,
+  featuredPromotions: z.array(PublicFeaturedPromotionSchema).max(3).default([]),
   renderable: z.literal(true),
   blockingIssues: z.array(z.string().min(1).max(120)).max(30),
   generatedAt: DateTimeSchema,

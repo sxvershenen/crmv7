@@ -206,9 +206,11 @@ export class PublicContentService {
     const materialized = await this.publication.materializePreviewRevision(node, revision)
     const issues = [...new Set(materialized.issues.map((issue) => issue.code))].slice(0, 30)
     if (materialized.content && materialized.issues.every((issue) => PREVIEW_ONLY_ISSUES.has(issue.code))) {
+      const promotionIds = materialized.content.path === "/" ? materialized.content.hero?.promotionIds ?? [] : []
       return CmsPreviewDocumentSchema.parse({
         nodeId: node.id, revisionId: revision.id, kind: node.kind, path: revision.path,
         page: { ...materialized.content, seo: { ...materialized.content.seo, indexPolicy: "noindex_nofollow" } },
+        featuredPromotions: await this.featuredPromotions(promotionIds),
         renderable: true, blockingIssues: issues, generatedAt: new Date().toISOString(),
       })
     }
