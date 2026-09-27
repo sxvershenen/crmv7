@@ -33,6 +33,8 @@ Required/conditional fields:
 
 Effective previews: SERP-like snippet, social card, desktop/mobile page, schema validation, link graph and published/draft diff.
 
+Для статьи с заполненным публичным именем автора включённые `Article`/`BlogPosting` JSON-LD получают `author` из того же редакционного поля при сборке публикации. Без имени старый schema payload сохраняется; даты публикации и само включение schema пока управляются отдельно.
+
 ## 4. Quality gates
 
 ### Publish blockers

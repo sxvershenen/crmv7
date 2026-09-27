@@ -952,7 +952,7 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     }
     const parsedSeo = SeoMetadataSchema.safeParse(candidate.revision.seo)
     if (!parsedSeo.success) issues.push(issue("CMS_SEO_INVALID", "SEO metadata не соответствует опубликованному контракту", candidate.revision.path))
-    const seo = parsedSeo.success ? parsedSeo.data : { title: candidate.revision.title.slice(0, 70), description: "Страница временно не готова к публикации.", indexPolicy: "noindex_nofollow" as const, canonical: { mode: "self" as const }, structuredData: [] }
+    const seo = withArticleAuthor(candidate.node.kind, parsedSeo.success ? parsedSeo.data : { title: candidate.revision.title.slice(0, 70), description: "Страница временно не готова к публикации.", indexPolicy: "noindex_nofollow" as const, canonical: { mode: "self" as const }, structuredData: [] }, [...parentSections.values()])
     validateSeo(candidate.node.kind, candidate.revision.path, seo, [...parentSections.values()], issues)
     visiting.delete(candidate.node.id)
     const parsedContent = PublicReleasePageContentSchema.safeParse({ kind: candidate.node.kind, path: candidate.revision.path, title: candidate.revision.title, summary: candidate.revision.summary, hero, sections: [...parentSections.values()].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)), seo })
@@ -1033,6 +1033,16 @@ function insertAfter(order: string[], key: string, afterKey: string | null, rout
 }
 
 function issue(code: string, message: string, route?: string): ReleaseValidationIssue { return { severity: "error", code, message, ...(route ? { route } : {}) } }
+function withArticleAuthor(kind: string, seo: SeoMetadata, sections: PublicReleasePageContent["sections"]): SeoMetadata {
+  if (kind !== "article") return seo
+  const body = sections.find((section) => section.key === "body" && section.renderer === "editorial-content")
+  const editorial = body && PublicEditorialContentConfigSchema.safeParse(body.config)
+  const authorName = editorial?.success ? editorial.data.authorName : null
+  if (!authorName) return seo
+  return { ...seo, structuredData: seo.structuredData.map((binding) => binding.enabled && (binding.schemaType === "Article" || binding.schemaType === "BlogPosting")
+    ? { ...binding, payload: { ...binding.payload, author: { "@type": "Person", name: authorName } } }
+    : binding) }
+}
 function validateSeo(kind: string, route: string, seo: SeoMetadata, sections: PublicReleasePageContent["sections"], issues: ReleaseValidationIssue[]) {
   if (seo.canonical.mode === "custom") {
     const canonical = new URL(seo.canonical.url)

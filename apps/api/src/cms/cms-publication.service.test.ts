@@ -226,6 +226,27 @@ describe("materializeRelease", () => {
     const result = materializeRelease([home, article] as never)
     expect(result.issues).toEqual([])
     expect(result.routes[1]?.content.sections[0]?.config).toEqual(config)
+    const articleWithSchema = {
+      ...article, revision: { ...article.revision, seo: { ...article.revision.seo, structuredData: [
+        { id: childId, schemaType: "Article", enabled: true, payload: { headline: "История места", author: { "@type": "Person", name: "Старое имя" }, datePublished: "2026-09-27" } },
+        { id: rootId, schemaType: "BlogPosting", enabled: true, payload: { headline: "История места", datePublished: "2026-09-27" } },
+      ] } },
+    }
+    const withSchema = materializeRelease([home, articleWithSchema] as never)
+    expect(withSchema.issues).toEqual([])
+    expect(withSchema.routes[1]?.content.seo.structuredData[0]?.payload.author).toEqual({ "@type": "Person", name: "Марина Кириллова" })
+    expect(withSchema.routes[1]?.content.seo.structuredData[1]?.payload.author).toEqual({ "@type": "Person", name: "Марина Кириллова" })
+    expect(articleWithSchema.revision.seo.structuredData[0]?.payload.author).toEqual({ "@type": "Person", name: "Старое имя" })
+    expect(articleWithSchema.revision.seo.structuredData[1]?.payload.author).toBeUndefined()
+    const legacyScalars = { ...editorial.policy.patch.scalars }
+    delete legacyScalars.authorName
+    const legacyEditorial = { ...editorial, policy: { ...editorial.policy, patch: { ...editorial.policy.patch, scalars: legacyScalars } } }
+    const legacyArticle = { ...articleWithSchema, revision: { ...articleWithSchema.revision, sections: [legacyEditorial], seo: {
+      ...articleWithSchema.revision.seo, structuredData: articleWithSchema.revision.seo.structuredData.slice(0, 1),
+    } } }
+    const legacyResult = materializeRelease([home, legacyArticle] as never)
+    expect(legacyResult.issues).toEqual([])
+    expect(legacyResult.routes[1]?.content.seo.structuredData[0]?.payload.author).toEqual({ "@type": "Person", name: "Старое имя" })
     const empty = { ...editorial, policy: { mode: "override", patch: { scalars: { ...editorial.policy.patch.scalars, blocks: { operation: "replace", value: [] } }, objects: {}, keyedArrays: {} } } }
     expect(materializeRelease([home, { ...article, revision: { ...article.revision, sections: [empty] } }] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_EDITORIAL_SECTION_INVALID" })]))
     const blankAuthor = { ...editorial, policy: { mode: "override", patch: { scalars: { ...editorial.policy.patch.scalars, authorName: { operation: "replace", value: "   " } }, objects: {}, keyedArrays: {} } } }
