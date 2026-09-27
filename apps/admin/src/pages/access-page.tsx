@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle, Button, PageFrame, StatusBadge } f
 
 import { PageHeading } from "@admin/components/cms-ui"
 import { useAdminAuthSession } from "@admin/features/auth-session-context"
+import { crmAppBaseUrl } from "@admin/lib/crm-url"
 
 const roleLabels: Record<Role, string> = {
   admin: "Администратор", manager: "Менеджер", lead_manager: "Менеджер заявок",
@@ -28,8 +29,7 @@ const groups: { title: string; permissions: { key: keyof Capabilities; label: st
 ]
 
 function crmTeamUrl() {
-  const base = import.meta.env.VITE_CRM_URL || (import.meta.env.DEV ? "http://localhost:5173" : "/crm")
-  return `${base.replace(/\/$/, "")}/team?section=roles`
+  return `${crmAppBaseUrl}/team?section=roles`
 }
 
 export function AccessPage() {

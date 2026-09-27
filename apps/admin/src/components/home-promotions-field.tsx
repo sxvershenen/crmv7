@@ -5,8 +5,7 @@ import { Button, StatusBadge } from "@crm/ui"
 
 import { cmsRepository } from "@admin/data/cms-repository"
 import { useRepository } from "@admin/features/use-repository"
-
-const crmBase = (import.meta.env.VITE_CRM_URL || (import.meta.env.DEV ? "http://localhost:5173" : "/crm")).replace(/\/$/, "")
+import { crmAppBaseUrl } from "@admin/lib/crm-url"
 
 function availability(promotion: Promotion, now: Date) {
   const { active, startsAt, endsAt } = promotion.terms
@@ -40,7 +39,7 @@ export function HomePromotionsField({ editable, ids, onChange }: { editable: boo
   }
 
   return <section className="rounded-lg border bg-background p-4">
-    <div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className="text-sm font-semibold">Промокоды на главной</h4><p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Выберите до трёх промокодов и их порядок. Условия скидки меняются в CRM; выключенные и завершённые промокоды автоматически скрываются на сайте.</p></div><a className="inline-flex items-center gap-1 text-xs text-primary hover:underline" href={`${crmBase}/marketing?tab=promotions`}><IconExternalLink className="size-4" />Промокоды в CRM</a></div>
+    <div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className="text-sm font-semibold">Промокоды на главной</h4><p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Выберите до трёх промокодов и их порядок. Условия скидки меняются в CRM; выключенные и завершённые промокоды автоматически скрываются на сайте.</p></div><a className="inline-flex min-h-9 items-center gap-1 text-xs text-primary hover:underline" href={`${crmAppBaseUrl}/marketing?tab=promotions`}><IconExternalLink className="size-4" />Промокоды в CRM</a></div>
     {ids.length ? <div className="mt-4 space-y-2" aria-label="Выбранные промокоды">{ids.map((id, index) => {
       const promotion = byId.get(id)
       const status = promotion ? availability(promotion, now) : state.data ? "Не найден в CRM" : "Нет данных CRM"

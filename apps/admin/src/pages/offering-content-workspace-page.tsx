@@ -7,6 +7,7 @@ import { offeringEditorErrorMessage, type OfferingEditorGateway } from "@crm/off
 import { LoadingRows, PageFrame, PageState } from "@crm/ui"
 
 import { PageHeading } from "@admin/components/cms-ui"
+import { crmAppBaseUrl } from "@admin/lib/crm-url"
 import { ContentEditorPage } from "@admin/pages/content-editor-page"
 
 type EditorialDirection = "house" | "campground" | "addon"
@@ -16,8 +17,6 @@ const directionCopy = {
   campground: { empty: "Кемпинг не выбран", label: "кемпинга", list: "/content/tree", load: "Не удалось найти страницу кемпинга." },
   addon: { empty: "Дополнительная услуга не выбрана", label: "дополнительной услуги", list: "/content/tree", load: "Не удалось найти страницу дополнительной услуги." },
 } as const
-
-const crmAppBaseUrl = (import.meta.env.VITE_CRM_APP_URL ?? (import.meta.env.DEV ? "http://localhost:5173" : "/crm")).replace(/\/$/, "")
 
 export function OfferingContentWorkspacePage({ direction, gateway }: { direction: EditorialDirection; gateway: OfferingEditorGateway }) {
   const { offeringId } = useParams()
