@@ -180,6 +180,18 @@ test("only an API not-found response produces a 404", async ({ request }) => {
   }
 })
 
+test("unpublished page returns a real 404 and disappears from sitemap and legacy redirects", async ({ request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=unpublished-house")
+  const page = await request.get("/domiki/forest")
+  expect(page.status()).toBe(404)
+  expect(page.headers()["x-robots-tag"]).toBe("noindex, nofollow")
+  const legacy = await request.get("/houses/forest", { maxRedirects: 0 })
+  expect(legacy.status()).toBe(404)
+  const sitemap = await request.get("/sitemap-index.xml")
+  expect(sitemap.status()).toBe(200)
+  expect(await sitemap.text()).not.toContain("/domiki/forest")
+})
+
 for (const scenario of ["listing-outage", "listing-missing", "listing-mixed", "listing-wrong-path"]) {
   test(`does not render a partial page for ${scenario}`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)

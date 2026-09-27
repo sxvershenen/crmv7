@@ -135,7 +135,7 @@ export const CmsReleaseListResponseSchema = z.object({
 
 export const CmsReleaseOutboxEventSchema = z.object({
   eventId: IdSchema,
-  eventType: z.enum(["cms.release.built", "cms.release.published", "cms.release.rolled_back"]),
+  eventType: z.enum(["cms.release.built", "cms.release.published", "cms.release.unpublished", "cms.release.rolled_back"]),
   occurredAt: DateTimeSchema,
   actorId: IdSchema,
   requestId: z.string().min(1).max(128),

@@ -11,6 +11,7 @@ import {
   CmsHeroPolicySchema,
   CmsNodePublishResultSchema,
   CmsNodePublicationStatusSchema,
+  CmsNodeUnpublishResultSchema,
   CmsSiteSettingsStoredValueSchema,
   CmsSectionSchema,
   CmsPartnersSectionSchema,
@@ -32,7 +33,10 @@ import {
   type CmsNodePublish,
   type CmsNodePublishResult,
   type CmsNodePublicationStatus,
+  type CmsNodeUnpublish,
+  type CmsNodeUnpublishResult,
   type CmsHeroConfig,
+  type CmsSiteSettingsStoredValue,
   type PublicReleasePageContent,
   type CmsConfigPatch,
   type CmsSection,
@@ -145,9 +149,9 @@ export class CmsPublicationService {
     const active = await this.active(manager)
     const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: nodeId })
     if (!node || node.status !== "active") throw new NotFoundException({ code: "CMS_NODE_NOT_FOUND", message: "Материал не найден" })
-    const revision = await manager.getRepository(CmsNodeRevisionEntity).findOne({ where: { nodeId, state: In(["draft", "review", "approved"]) }, order: { revision: "DESC" } })
-    if (!revision) throw new ConflictException({ code: "CMS_PUBLISHABLE_DRAFT_REQUIRED", message: "Нет изменений для публикации" })
     const baseItems = active.releaseId ? await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId }) : []
+    const revision = await this.publishableRevision(manager, nodeId, baseItems)
+    if (!revision) throw new ConflictException({ code: "CMS_PUBLISHABLE_DRAFT_REQUIRED", message: "Нет изменений для публикации" })
     const revisionIds = [...new Set([...baseItems.map((item) => item.revisionId), revision.id])]
     const revisions = await manager.getRepository(CmsNodeRevisionEntity).findBy({ id: In(revisionIds) })
     const byNode = new Map(revisions.map((item) => [item.nodeId, item]))
@@ -173,10 +177,10 @@ export class CmsPublicationService {
       if (!node) throw new NotFoundException({ code: "CMS_NODE_NOT_FOUND", message: "Материал не найден" })
       if (node.status !== "active") throw new ConflictException({ code: "CMS_NODE_ARCHIVED", message: "Архивный материал нельзя опубликовать" })
       if (node.version !== input.expectedVersion) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Материал был изменён другим пользователем", details: { entityId: node.id, serverVersion: node.version } })
-      const revision = await manager.getRepository(CmsNodeRevisionEntity).findOne({ where: { nodeId, state: In(["draft", "review", "approved"]) }, order: { revision: "DESC" } })
+      const baseItems = active.releaseId ? await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId }) : []
+      const revision = await this.publishableRevision(manager, nodeId, baseItems)
       if (!revision) throw new ConflictException({ code: "CMS_PUBLISHABLE_DRAFT_REQUIRED", message: "Нет изменений для публикации" })
       if (revision.path.startsWith("/drafts/")) throw new UnprocessableEntityException({ code: "CMS_SOURCE_ROUTE_REQUIRED", message: "Перед публикацией задайте публичный URL вместо служебного /drafts/...", fieldErrors: { "route.path": ["Служебный URL черновика нельзя опубликовать"] } })
-      const baseItems = active.releaseId ? await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId }) : []
       const revisionIds = [...new Set([...baseItems.map((item) => item.revisionId), revision.id])]
       const revisions = await manager.getRepository(CmsNodeRevisionEntity).findBy({ id: In(revisionIds) })
       const byNode = new Map(revisions.map((item) => [item.nodeId, item]))
@@ -205,8 +209,10 @@ export class CmsPublicationService {
         id: randomUUID(), releaseId, path: route.content.path, nodeId: route.candidate.node.id, revisionId: route.candidate.revision.id,
         resolvedContentHash: route.resolvedContentHash, resolvedContent: route.content, dependencies: route.dependencies,
       })))
-      const moved = await manager.createQueryBuilder().update(CmsNodeRevisionEntity).set({ state: "published" }).where("id = :id AND state IN (:...states)", { id: revision.id, states: ["draft", "review", "approved"] }).execute()
-      if (moved.affected !== 1) throw this.staleRelease()
+      if (revision.state !== "published") {
+        const moved = await manager.createQueryBuilder().update(CmsNodeRevisionEntity).set({ state: "published" }).where("id = :id AND state IN (:...states)", { id: revision.id, states: ["draft", "review", "approved"] }).execute()
+        if (moved.affected !== 1) throw this.staleRelease()
+      }
       const bumped = await manager.createQueryBuilder().update(CmsNodeEntity).set({ version: () => '"version" + 1', updatedBy: actor.id, updatedAt: now }).where("id = :id AND version = :version", { id: node.id, version: input.expectedVersion }).execute()
       if (bumped.affected !== 1) throw this.staleRelease()
       const updatedActive = await this.casActive(manager, active, { ...input, baseReleaseId: active.releaseId, expectedActiveReleaseVersion: active.version }, releaseId, actor.id)
@@ -217,6 +223,53 @@ export class CmsPublicationService {
         publishedAt: now.toISOString(), publicationId: release.id, publicationVersion: updatedActive.version,
       })
       await this.record(manager, release, "published", "cms.release.published", actor.id, requestId, routes.map((route) => route.path))
+      await this.rememberValue(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+      return response
+    })
+  }
+
+  async unpublishNode(nodeId: string, input: CmsNodeUnpublish, actor: SessionUser, requestId: string): Promise<CmsNodeUnpublishResult> {
+    this.assert(actor)
+    return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+      const scope = `cms-node:${nodeId}:unpublish`
+      const requestHash = stableHash(input)
+      const replay = await this.replayValue<CmsNodeUnpublishResult>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      if (replay) return CmsNodeUnpublishResultSchema.parse(replay)
+      const active = await this.active(manager)
+      if (active.releaseId !== input.baseReleaseId || active.version !== input.expectedActiveReleaseVersion) throw this.staleRelease()
+      const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: nodeId })
+      if (!node) throw new NotFoundException({ code: "CMS_NODE_NOT_FOUND", message: "Материал не найден" })
+      if (node.version !== input.expectedVersion) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Материал был изменён другим пользователем", details: { entityId: node.id, serverVersion: node.version } })
+      const previousRelease = await this.release(manager, active.releaseId)
+      const baseItems = await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId })
+      const removed = baseItems.find((item) => item.nodeId === nodeId)
+      if (!removed) throw new ConflictException({ code: "CMS_NODE_NOT_PUBLISHED", message: "Страница уже снята с сайта; обновите редактор" })
+      if (removed.revisionId !== input.expectedPublishedRevisionId) throw this.staleRelease()
+      const remaining = baseItems.filter((item) => item.nodeId !== nodeId)
+      if (remaining.length === 0) throw new UnprocessableEntityException({ code: "CMS_UNPUBLISH_BLOCKED", message: "Нельзя снять последнюю страницу сайта" })
+      const settingsRevision = previousRelease.siteSettingsRevisionId
+        ? await manager.getRepository(CmsSiteSettingsRevisionEntity).findOneBy({ id: previousRelease.siteSettingsRevisionId })
+        : null
+      if (previousRelease.siteSettingsRevisionId && !settingsRevision) throw new ConflictException({ code: "CMS_BASE_RELEASE_INVALID", message: "Настройки активной публикации не найдены" })
+      const settings = settingsRevision ? CmsSiteSettingsStoredValueSchema.parse(settingsRevision.value) : null
+      const issues = unpublishBlockers(removed, remaining, settings)
+      if (issues.length) throw new UnprocessableEntityException({ code: "CMS_UNPUBLISH_BLOCKED", message: "Сначала уберите связи и ссылки на эту страницу из опубликованного сайта", details: { issues: issues.slice(0, 20) } })
+      const now = new Date()
+      const releaseId = randomUUID()
+      const routes = remaining.map((item) => ({ path: item.path, nodeId: item.nodeId, revisionId: item.revisionId, resolvedContentHash: item.resolvedContentHash, dependencyRefs: item.dependencies })).sort((left, right) => left.path.localeCompare(right.path))
+      const release = await manager.save(manager.create(CmsReleaseEntity, {
+        id: releaseId, sequence: await this.nextSequence(manager), state: "published", baseReleaseId: active.releaseId,
+        siteSettingsRevisionId: previousRelease.siteSettingsRevisionId,
+        manifestHash: stableHash({ baseReleaseId: active.releaseId, routes, siteSettingsRevisionId: previousRelease.siteSettingsRevisionId }),
+        createdBy: actor.id, createdAt: now, publishedAt: now,
+      }))
+      await manager.save(CmsReleaseItemEntity, remaining.map((item) => manager.create(CmsReleaseItemEntity, {
+        id: randomUUID(), releaseId, path: item.path, nodeId: item.nodeId, revisionId: item.revisionId,
+        resolvedContentHash: item.resolvedContentHash, resolvedContent: item.resolvedContent, dependencies: item.dependencies,
+      })))
+      const updatedActive = await this.casActive(manager, active, { ...input, expectedActiveReleaseVersion: active.version }, releaseId, actor.id)
+      const response = CmsNodeUnpublishResultSchema.parse({ unpublishedPath: removed.path, publicationId: release.id, publicationVersion: updatedActive.version, unpublishedAt: now.toISOString() })
+      await this.record(manager, release, "unpublished", "cms.release.unpublished", actor.id, requestId, [removed.path])
       await this.rememberValue(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
       return response
     })
@@ -325,6 +378,13 @@ export class CmsPublicationService {
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
       return response
     })
+  }
+
+  private async publishableRevision(manager: EntityManager, nodeId: string, baseItems: CmsReleaseItemEntity[]) {
+    const revisions = manager.getRepository(CmsNodeRevisionEntity)
+    const editable = await revisions.findOne({ where: { nodeId, state: In(["draft", "review", "approved"]) }, order: { revision: "DESC" } })
+    if (editable || baseItems.some((item) => item.nodeId === nodeId)) return editable
+    return revisions.findOne({ where: { nodeId, state: "published" }, order: { revision: "DESC" } })
   }
 
   private async candidates(manager: EntityManager, activeReleaseId: string | null, input: CmsReleaseBuildInput): Promise<Candidate[]> {
@@ -666,7 +726,7 @@ export class CmsPublicationService {
     await manager.save(manager.create(IdempotencyKeyEntity, { id: randomUUID(), scope, operationId, idempotencyKey, requestHash, responseStatus: 200, responseBody: response as Record<string, unknown>, createdAt: new Date() }))
   }
 
-  private async record(manager: EntityManager, release: CmsReleaseEntity, action: "built" | "published" | "rolled_back", eventType: CmsReleaseOutboxEvent["eventType"], actorId: string, requestId: string, affectedPaths: string[]) {
+  private async record(manager: EntityManager, release: CmsReleaseEntity, action: "built" | "published" | "unpublished" | "rolled_back", eventType: CmsReleaseOutboxEvent["eventType"], actorId: string, requestId: string, affectedPaths: string[]) {
     const now = new Date()
     const event = CmsReleaseOutboxEventSchema.parse({ eventId: randomUUID(), eventType, occurredAt: now.toISOString(), actorId, requestId, releaseId: release.id, baseReleaseId: release.baseReleaseId, sequence: release.sequence, affectedPaths })
     await manager.save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "cms_release", entityId: release.id, action, actorId, requestId, changes: { baseReleaseId: release.baseReleaseId, sequence: release.sequence, affectedPaths }, createdAt: now }))
@@ -683,6 +743,54 @@ export class CmsPublicationService {
 
   private staleRelease() { return new ConflictException({ code: "CMS_RELEASE_STALE", message: "Активный релиз изменился; соберите или активируйте релиз заново" }) }
   private notFound() { return new NotFoundException({ code: "CMS_RELEASE_NOT_FOUND", message: "Релиз не найден" }) }
+}
+
+export function unpublishBlockers(removed: CmsReleaseItemEntity, remaining: CmsReleaseItemEntity[], settings: CmsSiteSettingsStoredValue | null): ReleaseValidationIssue[] {
+  const path = canonicalPublicPath(removed.path)
+  const issues: ReleaseValidationIssue[] = []
+  if (path === "/") issues.push(issue("CMS_UNPUBLISH_HOME_REQUIRED", "Главную страницу нельзя снять с сайта, пока сайт активен", path))
+  const pointsToRemoved = (href: string) => {
+    const destination = href.split(/[?#]/, 1)[0]
+    return Boolean(destination?.startsWith("/") && !destination.startsWith("//") && canonicalPublicPath(destination) === path)
+  }
+  const checkNavigation = (items: CmsSiteSettingsStoredValue["headerNavigation"], location: string) => {
+    const visit = (item: CmsSiteSettingsStoredValue["headerNavigation"][number]) => {
+      if (!item.enabled) return
+      if (item.link.kind === "internal" && canonicalPublicPath(item.link.path) === path) issues.push(issue("CMS_UNPUBLISH_NAVIGATION_LINK", `Сначала уберите ссылку «${item.label}» из ${location}`, path))
+      for (const child of item.children) visit(child)
+    }
+    for (const item of items) visit(item)
+  }
+  if (settings) {
+    checkNavigation(settings.headerNavigation, "меню сайта")
+    checkNavigation(settings.mobileNavigation, "мобильного меню")
+    checkNavigation(settings.footerNavigation, "подвала")
+    if (settings.headerCta?.enabled && settings.headerCta.link.kind === "internal" && canonicalPublicPath(settings.headerCta.link.path) === path) issues.push(issue("CMS_UNPUBLISH_NAVIGATION_LINK", "Сначала уберите ссылку из кнопки в шапке сайта", path))
+  }
+  for (const item of remaining) {
+    const itemPath = canonicalPublicPath(item.path)
+    const dependencies = ReleaseDependencyRefSchema.array().safeParse(item.dependencies)
+    if (!dependencies.success) { issues.push(issue("CMS_BASE_RELEASE_INVALID", "Зависимости опубликованной страницы повреждены", itemPath)); continue }
+    if (itemPath.startsWith(`${path}/`) || dependencies.data.some((dependency) => dependency.type === "node_revision" && dependency.id === removed.revisionId)) {
+      issues.push(issue("CMS_UNPUBLISH_DEPENDENT_PAGE", `Сначала снимите зависимую страницу ${itemPath}`, itemPath))
+      continue
+    }
+    const content = PublicReleasePageContentSchema.safeParse(item.resolvedContent)
+    if (!content.success) { issues.push(issue("CMS_BASE_RELEASE_INVALID", "Опубликованная страница повреждена", itemPath)); continue }
+    if (content.data.hero?.actions.some((action) => action.enabled && pointsToRemoved(action.href)) || content.data.hero?.featureCards.some((card) => pointsToRemoved(card.href))) {
+      issues.push(issue("CMS_UNPUBLISH_INTERNAL_LINK", `Сначала уберите ссылку на ${path} со страницы ${itemPath}`, itemPath))
+    }
+    for (const section of content.data.sections) {
+      if (section.renderer === "homepage-section") {
+        const homepage = CmsHomeSectionSchema.safeParse(section)
+        if (homepage.success && homepage.data.config.action && pointsToRemoved(homepage.data.config.action.href)) issues.push(issue("CMS_UNPUBLISH_INTERNAL_LINK", `Сначала уберите ссылку на ${path} со страницы ${itemPath}`, itemPath))
+      }
+      if (section.renderer !== "editorial-content") continue
+      const editorial = PublicEditorialContentConfigSchema.safeParse(section.config)
+      if (editorial.success && editorial.data.links.some((link) => pointsToRemoved(link.href))) issues.push(issue("CMS_UNPUBLISH_INTERNAL_LINK", `Сначала уберите ссылку на ${path} со страницы ${itemPath}`, itemPath))
+    }
+  }
+  return issues
 }
 
 export function publicationPreview(

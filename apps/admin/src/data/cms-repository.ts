@@ -1,4 +1,4 @@
-import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
+import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, CmsNodeUnpublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodePublicationStatus, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
@@ -26,6 +26,7 @@ const ANALYTICS_RECENT_DAYS = 30
 export class FixtureCmsRepository implements CmsRepository {
   readonly mode = "fixtures" as const
   private editors = clone(editorFixtures)
+  private unpublished = new Set<string>()
   private navigation = clone(navigationFixture)
   private metrika: MetrikaSettingsRecord = { version: 1, status: "published", updatedLabel: "не настроено", metrika: { enabled: false, counterId: null } }
 
@@ -60,10 +61,17 @@ export class FixtureCmsRepository implements CmsRepository {
   }
   async getPublicationStatus(id: string) {
     const editor = this.editors[id]
-    const active = editor?.status === "published"
+    const active = editor?.status === "published" && !this.unpublished.has(id)
     return CmsNodePublicationStatusSchema.parse({ active, path: active ? editor.url : null, revisionId: active ? "00000000-0000-4000-8000-000000000010" : null, activeReleaseId: "00000000-0000-4000-8000-000000000020", activeReleaseVersion: 1 })
   }
-  async publish(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "published") }
+  async unpublish(id: string, expectedVersion: number, status: CmsNodePublicationStatus) {
+    await pause()
+    if (this.editors[id]?.version !== expectedVersion) throw new CmsConflictError(this.editors[id]?.version ?? 0)
+    if (!status.active) throw new Error("Страница уже снята с сайта")
+    if (this.editors[id]?.url === "/") throw new Error("Главную страницу нельзя снять с сайта, пока сайт активен")
+    this.unpublished.add(id)
+  }
+  async publish(id: string, expectedVersion: number) { const result = await this.transitionFixture(id, expectedVersion, "published"); this.unpublished.delete(id); return result }
   async getNavigation() { await pause(); return clone(this.navigation) }
   async saveNavigation(value: PublicNavigation, expectedVersion: number) {
     await pause()
@@ -191,6 +199,16 @@ export class ApiCmsRepository implements CmsRepository {
 
   async getPublicationStatus(id: string) {
     return this.client.get(`/content/nodes/${encodeURIComponent(id)}/publication-status`, CmsNodePublicationStatusSchema)
+  }
+
+  async unpublish(id: string, expectedVersion: number, status: CmsNodePublicationStatus): Promise<void> {
+    if (!status.active || !status.activeReleaseId || !status.revisionId) throw new Error("Страница уже снята с сайта; обновите редактор")
+    try {
+      await this.client.post(`/content/nodes/${encodeURIComponent(id)}/unpublish`, {
+        ...operationMeta(), expectedVersion, baseReleaseId: status.activeReleaseId,
+        expectedActiveReleaseVersion: status.activeReleaseVersion, expectedPublishedRevisionId: status.revisionId,
+      }, CmsNodeUnpublishResultSchema)
+    } catch (error) { throw mapMutationError(error) }
   }
 
   async publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord> {

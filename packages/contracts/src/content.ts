@@ -298,6 +298,22 @@ export const CmsNodePublicationStatusSchema = z.object({
 }).strict();
 export type CmsNodePublicationStatus = z.infer<typeof CmsNodePublicationStatusSchema>;
 
+/** One-click removal from the active publication; the CMS node and its history remain intact. */
+export const CmsNodeUnpublishSchema = CmsNodeTransitionSchema.extend({
+  baseReleaseId: IdSchema,
+  expectedActiveReleaseVersion: VersionSchema,
+  expectedPublishedRevisionId: IdSchema,
+}).strict();
+export type CmsNodeUnpublish = z.infer<typeof CmsNodeUnpublishSchema>;
+
+export const CmsNodeUnpublishResultSchema = z.object({
+  unpublishedPath: CmsPathSchema,
+  publicationId: IdSchema,
+  publicationVersion: VersionSchema,
+  unpublishedAt: DateTimeSchema,
+}).strict();
+export type CmsNodeUnpublishResult = z.infer<typeof CmsNodeUnpublishResultSchema>;
+
 export const CmsContentEventTypeSchema = z.enum([
   "cms.content.node.created",
   "cms.content.revision.created",

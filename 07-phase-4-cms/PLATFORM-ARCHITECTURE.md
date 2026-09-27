@@ -81,7 +81,7 @@ Revision lifecycle:
 - release manifest pins exact revisions/hashes for nodes, route topology, relations, navigation/defaults, profiles, blocks, media variants and code build;
 - activation atomically compare-and-swaps one `active_release_id` against `baseReleaseId`;
 - rollback создаёт новую release на ранее валидированные immutable artifacts;
-- unpublish требует явного 301/302/404/410 поведения;
+- CMS unpublish убирает route из active release, сохраняя node/revisions: прежний URL отдаёт настоящий 404 и выпадает из sitemap; при подходящей замене отдельный управляемый redirect может дать 301;
 - schedule хранит UTC instant + display timezone и idempotency key.
 
 Publish blockers: duplicate path, invalid canonical/schema, missing required data/alt, broken node/CRM/media dependency, unready media, failed code build, unauthorized renderer, unsafe HTML, redirect loop.

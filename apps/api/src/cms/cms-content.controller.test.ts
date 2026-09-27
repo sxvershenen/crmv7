@@ -12,6 +12,7 @@ describe("CmsContentController", () => {
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.returnToDraft)).toEqual(["canReviewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.publicationPreview)).toEqual(["canViewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.publicationStatus)).toEqual(["canViewContent"])
+    expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.unpublish)).toEqual(["canPublishContent"])
   })
 
   it("passes request identity into a mutation", async () => {

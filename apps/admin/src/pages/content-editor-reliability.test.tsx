@@ -34,6 +34,34 @@ describe("ContentEditorPage mutation recovery", () => {
     expect(screen.getByText("Публичный URL: /family")).toBeInTheDocument()
   })
 
+  it("confirms the current public URL before unpublishing and keeps an unsaved draft", async () => {
+    const user = userEvent.setup()
+    const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111", status: "published" as const }
+    let active = true
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+    vi.spyOn(cmsRepository, "getNodes").mockResolvedValue([])
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    vi.spyOn(cmsRepository, "getPublicationStatus").mockImplementation(async () => ({ active, path: active ? "/family" : null, revisionId: active ? "33333333-3333-4333-8333-333333333333" : null, activeReleaseId: "22222222-2222-4222-8222-222222222222", activeReleaseVersion: active ? 7 : 8 }))
+    const unpublish = vi.spyOn(cmsRepository, "unpublish").mockImplementation(async () => { active = false })
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+    fireEvent.change(await screen.findByLabelText("Заголовок H1"), { target: { value: "Несохранённый заголовок" } })
+    await screen.findByText("В активной публикации")
+
+    await user.click(screen.getAllByRole("button", { name: "Ещё" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "Снять с сайта" }))
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Адрес /family исчезнет из карты сайта")))
+    expect(unpublish).not.toHaveBeenCalled()
+
+    confirm.mockReturnValue(true)
+    await user.click(screen.getAllByRole("button", { name: "Ещё" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "Снять с сайта" }))
+    await waitFor(() => expect(unpublish).toHaveBeenCalledWith(initial.id, initial.version, expect.objectContaining({ active: true, activeReleaseVersion: 7 })))
+    expect(await screen.findByText("Не в активной публикации")).toBeInTheDocument()
+    expect(screen.getByLabelText("Заголовок H1")).toHaveValue("Несохранённый заголовок")
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
+  })
+
   it("asks once when closing a dirty editor through its own Back action", async () => {
     // React Router creates a Node Request in jsdom; its signal must share that realm.
     vi.stubGlobal("AbortController", transferableAbortController().constructor)

@@ -29,9 +29,30 @@ describe("FixtureCmsRepository", () => {
     await expect(repository.saveNavigation({ ...navigation, header: [{ ...navigation.header[0]!, href: "" }] }, navigation.version)).rejects.toThrow("Укажите ссылку")
     expect((await repository.getNavigation()).version).toBe(navigation.version)
   })
+
+  it("keeps a fixture page editable after unpublish and allows publishing it again", async () => {
+    const repository = new FixtureCmsRepository()
+    const editor = await repository.getEditor("houses", "category")
+    const status = await repository.getPublicationStatus("houses")
+    expect(status.active).toBe(true)
+    await repository.unpublish("houses", editor.version, status)
+    expect((await repository.getPublicationStatus("houses")).active).toBe(false)
+    await repository.publish("houses", editor.version)
+    expect((await repository.getPublicationStatus("houses")).active).toBe(true)
+  })
 })
 
 describe("ApiCmsRepository", () => {
+  it("sends an exact active-release guard when unpublishing", async () => {
+    const client = clientMock()
+    client.post.mockResolvedValue({ unpublishedPath: "/family", publicationId: ids.node2, publicationVersion: 8, unpublishedAt: "2026-09-27T10:00:00.000Z" })
+    const status = { active: true, path: "/family", revisionId: ids.node2, activeReleaseId: ids.node, activeReleaseVersion: 7 }
+    await new ApiCmsRepository(client as never).unpublish(ids.node, 3, status)
+    expect(client.post).toHaveBeenCalledWith(`/content/nodes/${ids.node}/unpublish`, expect.objectContaining({
+      expectedVersion: 3, baseReleaseId: ids.node, expectedActiveReleaseVersion: 7, expectedPublishedRevisionId: ids.node2,
+    }), expect.anything())
+  })
+
   it("maps the bounded site-wide aggregate without inventing source or page dimensions", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce({ uniqueVisitors: 7, items: [

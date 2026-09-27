@@ -44,7 +44,7 @@ export class CmsDashboardService {
           SELECT delivery.status, delivery.lease_expires_at
           FROM cms_active_release active
           JOIN outbox_events event ON event.aggregate_type = 'cms_release' AND event.aggregate_id = active.release_id
-            AND event.topic IN ('cms.release.published', 'cms.release.rolled_back')
+            AND event.topic IN ('cms.release.published', 'cms.release.unpublished', 'cms.release.rolled_back')
           JOIN outbox_deliveries delivery ON delivery.event_id = event.id
           WHERE active.singleton_key = 'public'
         )

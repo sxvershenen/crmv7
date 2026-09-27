@@ -31,6 +31,7 @@ createServer(async (request, response) => {
     return response.end()
   }
   if (url.pathname.endsWith("/pages/manifest")) {
+    const unpublishedHouse = scenario === "unpublished-house"
     return send({
       releaseId, generatedAt: asOf,
       routes: [
@@ -42,7 +43,7 @@ createServer(async (request, response) => {
         { path: "/poshadki/meadow", lastModified: asOf, schemaTypes: ["Service"] },
         { path: "/programmy/rafting", lastModified: asOf, schemaTypes: ["Service"] },
         { path: "/meropriyatiya/corporate", lastModified: asOf, schemaTypes: ["Service"] },
-      ],
+      ].filter((route) => !unpublishedHouse || route.path !== "/domiki/forest"),
       redirects: [
         { sourcePath: "/houses/forest", destinationPath: "/domiki/forest", statusCode: 301 },
         { sourcePath: "/campgrounds/pitches", destinationPath: "/kemping/pitches", statusCode: 301 },
@@ -50,7 +51,7 @@ createServer(async (request, response) => {
         { sourcePath: "/venues/meadow", destinationPath: "/poshadki/meadow", statusCode: 301 },
         { sourcePath: "/programs/rafting", destinationPath: "/programmy/rafting", statusCode: 301 },
         { sourcePath: "/events/corporate", destinationPath: "/meropriyatiya/corporate", statusCode: 301 },
-      ],
+      ].filter((redirect) => !unpublishedHouse || redirect.destinationPath !== "/domiki/forest"),
       cache: { etag: "test-routes", maxAgeSeconds: 60, staleWhileRevalidateSeconds: 300, tags: [`cms-release:${releaseId}`] },
     })
   }
@@ -347,7 +348,7 @@ createServer(async (request, response) => {
     return send(addon)
   }
   if (url.pathname.endsWith("/pages/resolve")) {
-    if (scenario === "not-found") return send({ code: "NOT_FOUND" }, 404)
+    if (scenario === "not-found" || (scenario === "unpublished-house" && ["/domiki/forest", "/houses/forest"].includes(url.searchParams.get("path")))) return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "proxy-not-found") return send({ message: "proxy route missing" }, 404)
     if (scenario === "invalid") return send({ title: "PRIVATE_DRAFT_CONTENT" })
     if (scenario === "invalid-json") { response.writeHead(200); return response.end("<html>upstream error</html>") }

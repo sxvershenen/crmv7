@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsPublicProfileEntity, CmsReleaseItemEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
+import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsPublicProfileEntity, CmsReleaseEntity, CmsReleaseItemEntity, IdempotencyKeyEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
+import { CmsSiteSettingsStoredValueSchema } from "@crm/contracts"
 
-import { CmsPublicationService, materializeRelease, publicationPreview } from "./cms-publication.service.js"
+import { CmsPublicationService, materializeRelease, publicationPreview, unpublishBlockers } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
@@ -12,6 +13,92 @@ const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
 const rootRevisionId = "33333333-3333-4333-8333-333333333333"
 const childRevisionId = "44444444-4444-4444-8444-444444444444"
+
+const publishedHome = { kind: "home", path: "/", title: "Главная", summary: null, hero: null, sections: [], seo: { title: "Главная", description: "Описание", indexPolicy: "index_follow", canonical: { mode: "self" }, structuredData: [] } }
+const familyItem = { nodeId: childId, revisionId: childRevisionId, path: "/family", resolvedContentHash: "b".repeat(64), resolvedContent: { ...publishedHome, kind: "landing", path: "/family" }, dependencies: [{ type: "node_revision", id: childRevisionId, version: "1" }] }
+const homeItem = { nodeId: rootId, revisionId: rootRevisionId, path: "/", resolvedContentHash: "a".repeat(64), resolvedContent: publishedHome, dependencies: [{ type: "node_revision", id: rootRevisionId, version: "1" }] }
+
+describe("unpublishBlockers", () => {
+  it("blocks a published child that inherits from the removed page", () => {
+    expect(unpublishBlockers(homeItem as never, [{ ...familyItem, dependencies: [...familyItem.dependencies, { type: "node_revision", id: rootRevisionId, version: "1" }] }] as never, null))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_UNPUBLISH_HOME_REQUIRED" }), expect.objectContaining({ code: "CMS_UNPUBLISH_DEPENDENT_PAGE", route: "/family" })]))
+  })
+
+  it("blocks visible navigation and editorial links, but not unrelated pages", () => {
+    const settings = CmsSiteSettingsStoredValueSchema.parse({ siteName: "Сайт", headerNavigation: [{ id: rootId, label: "Семейный отдых", link: { kind: "internal", path: "/family" }, children: [] }] })
+    const linked = { ...homeItem, resolvedContent: { ...publishedHome, sections: [{ id: rootId, key: "text", renderer: "editorial-content", rendererVersion: "1", schemaVersion: 1, order: 10, config: { heading: "Текст", lead: null, blocks: [{ type: "paragraph", text: "Узнайте больше." }], links: [{ label: "Подробнее", href: "/family" }] } }] } }
+    const issues = unpublishBlockers(familyItem as never, [linked] as never, settings)
+    expect(issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_UNPUBLISH_NAVIGATION_LINK" }), expect.objectContaining({ code: "CMS_UNPUBLISH_INTERNAL_LINK" })]))
+    expect(unpublishBlockers(familyItem as never, [homeItem] as never, null)).toEqual([])
+  })
+
+  it("blocks an action in a published homepage section", () => {
+    const linked = { ...homeItem, resolvedContent: { ...publishedHome, sections: [{ id: rootId, key: "events", renderer: "homepage-section", rendererVersion: "1", schemaVersion: 1, order: 10, config: { eyebrow: null, title: "События", description: "", action: { label: "Подробнее", href: "/family" } } }] } }
+    expect(unpublishBlockers(familyItem as never, [linked] as never, null)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_UNPUBLISH_INTERNAL_LINK", route: "/" })]))
+  })
+})
+
+describe("CmsPublicationService unpublish", () => {
+  const input = { operationId: "55555555-5555-4555-8555-555555555555", idempotencyKey: "unpublish-page-test", expectedVersion: 3, baseReleaseId: rootId, expectedActiveReleaseVersion: 7, expectedPublishedRevisionId: childRevisionId }
+  const actor = { id: "66666666-6666-4666-8666-666666666666", capabilities: { canPublishContent: true } } as never
+
+  function setup(activeVersion = 7, replay: unknown = null) {
+    const save = vi.fn().mockImplementation(async (...args: unknown[]) => args.at(-1))
+    const execute = vi.fn().mockResolvedValue({ affected: 1 })
+    const manager = {
+      getRepository: (entity: unknown) => entity === IdempotencyKeyEntity ? { findOne: vi.fn().mockResolvedValue(replay) }
+        : entity === CmsActiveReleaseEntity ? { findOneBy: vi.fn().mockResolvedValue({ releaseId: rootId, version: activeVersion }) }
+        : entity === CmsNodeEntity ? { findOneBy: vi.fn().mockResolvedValue({ id: childId, version: 3, status: "archived" }) }
+        : entity === CmsReleaseEntity ? { findOneBy: vi.fn().mockResolvedValue({ id: rootId, siteSettingsRevisionId: null }) }
+        : entity === CmsReleaseItemEntity ? { findBy: vi.fn().mockResolvedValue([homeItem, familyItem]) } : {},
+      create: (_entity: unknown, value: unknown) => value,
+      save,
+      query: vi.fn().mockResolvedValue([{ next: 10 }]),
+      createQueryBuilder: () => ({ update: () => ({ set: () => ({ where: () => ({ execute }) }) }) }),
+      findOneByOrFail: vi.fn().mockResolvedValue({ releaseId: rootId, version: 8 }),
+    }
+    const dataSource = { transaction: (_isolation: unknown, run: (manager: unknown) => Promise<unknown>) => run(manager) }
+    return { service: new CmsPublicationService(dataSource as never), save, execute }
+  }
+
+  it("publishes a new active manifest without the page, preserving node and revision history", async () => {
+    const { service, save, execute } = setup()
+    const result = await service.unpublishNode(childId, input, actor, "request-unpublish")
+    expect(result).toMatchObject({ unpublishedPath: "/family", publicationVersion: 8 })
+    expect(save).toHaveBeenCalledWith(CmsReleaseItemEntity, [expect.objectContaining({ nodeId: rootId, path: "/" })])
+    expect(save.mock.calls.find((call) => call[0] === CmsReleaseItemEntity)?.[1]).toHaveLength(1)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ topic: "cms.release.unpublished" }))
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
+  it("rejects a stale active publication before creating a release", async () => {
+    const { service, save } = setup(8)
+    await expect(service.unpublishNode(childId, input, actor, "request-unpublish")).rejects.toMatchObject({ response: { code: "CMS_RELEASE_STALE" } })
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it("replays the original result without creating a second release", async () => {
+    const first = setup()
+    const result = await first.service.unpublishNode(childId, input, actor, "request-unpublish")
+    const stored = first.save.mock.calls.map((call) => call.at(-1)).find((row) => row && typeof row === "object" && "idempotencyKey" in row)
+    const retry = setup(9, stored)
+    await expect(retry.service.unpublishNode(childId, input, actor, "request-retry")).resolves.toEqual(result)
+    expect(retry.save).not.toHaveBeenCalled()
+  })
+})
+
+describe("CmsPublicationService republish selection", () => {
+  it("reuses the last published revision only when the node is absent from the active release", async () => {
+    const findOne = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: childRevisionId, state: "published" })
+    const service = new CmsPublicationService({} as never) as unknown as { publishableRevision: (manager: unknown, nodeId: string, items: unknown[]) => Promise<unknown> }
+    const manager = { getRepository: () => ({ findOne }) }
+    await expect(service.publishableRevision(manager, childId, [])).resolves.toMatchObject({ id: childRevisionId })
+    expect(findOne).toHaveBeenCalledTimes(2)
+    findOne.mockReset().mockResolvedValue(null)
+    await expect(service.publishableRevision(manager, childId, [familyItem])).resolves.toBeNull()
+    expect(findOne).toHaveBeenCalledOnce()
+  })
+})
 
 describe("CmsPublicationService node publication status", () => {
   it.each([true, false])("reads active-release membership when present=%s, regardless of old published revisions", async (present) => {

@@ -7,6 +7,7 @@ import {
   CmsNodeListQuerySchema,
   CmsNodeMutationSchema,
   CmsNodePublishSchema,
+  CmsNodeUnpublishSchema,
   CmsNodeTransitionSchema,
   type CmsNodeArchive,
   type CmsNodeCreate,
@@ -14,6 +15,7 @@ import {
   type CmsNodeListQuery,
   type CmsNodeMutation,
   type CmsNodePublish,
+  type CmsNodeUnpublish,
   type CmsNodeTransition,
 } from "@crm/contracts"
 
@@ -96,5 +98,12 @@ export class CmsContentController {
   @RequireCapabilities("canViewContent")
   publicationStatus(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Req() request: AuthenticatedRequest) {
     return this.publication!.nodePublicationStatus(params.id, request.sessionUser!)
+  }
+
+  @Post(":id/unpublish")
+  @HttpCode(200)
+  @RequireCapabilities("canPublishContent")
+  unpublish(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Body(new ZodValidationPipe(CmsNodeUnpublishSchema)) input: CmsNodeUnpublish, @Req() request: AuthenticatedRequest) {
+    return this.publication!.unpublishNode(params.id, input, request.sessionUser!, request.requestId)
   }
 }

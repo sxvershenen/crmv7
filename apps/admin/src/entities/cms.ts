@@ -233,6 +233,7 @@ export interface CmsRepository {
   archive(id: string, expectedVersion: number): Promise<EditorRecord>
   getPublicationPreview(id: string): Promise<CmsPublicationPreview>
   getPublicationStatus(id: string): Promise<CmsNodePublicationStatus>
+  unpublish(id: string, expectedVersion: number, status: CmsNodePublicationStatus): Promise<void>
   publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord>
   getNavigation(): Promise<PublicNavigation>
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>
