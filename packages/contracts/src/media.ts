@@ -69,9 +69,10 @@ export const MediaAssetListQuerySchema = z.object({
   q: z.string().trim().min(1).max(200).optional(),
   state: MediaAssetStateSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().min(1).max(512).optional(),
 }).strict();
 
-export const MediaAssetListResponseSchema = z.object({ items: z.array(MediaAssetSchema).max(100) }).strict();
+export const MediaAssetListResponseSchema = z.object({ items: z.array(MediaAssetSchema).max(100), nextCursor: z.string().nullable() }).strict();
 
 export const MediaAssetUsageQuerySchema = z.object({
   pageId: IdSchema.optional(),

@@ -77,6 +77,17 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("requests server-filtered media pages and forwards their cursor", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({ items: [wireMediaAsset()], nextCursor: "older-page" }).mockResolvedValueOnce({ items: [], nextCursor: null })
+    const repository = new ApiCmsRepository(client as never)
+    const first = await repository.getMedia({ q: "лес", state: "ready", limit: 30 })
+    expect(first).toMatchObject({ items: [{ id: ids.node }], nextCursor: "older-page" })
+    expect(client.get).toHaveBeenCalledWith("/media/assets?limit=30&q=%D0%BB%D0%B5%D1%81&state=ready", expect.anything())
+    await expect(repository.getMedia({ q: "лес", state: "ready", cursor: first.nextCursor!, limit: 30 })).resolves.toMatchObject({ items: [], nextCursor: null })
+    expect(client.get).toHaveBeenLastCalledWith("/media/assets?limit=30&q=%D0%BB%D0%B5%D1%81&state=ready&cursor=older-page", expect.anything())
+  })
+
   it("reads a saved revision and restores it through a versioned CMS mutation", async () => {
     const client = clientMock()
     const old = { ...detail.currentRevision!, id: ids.revision2, revision: 2, title: "Старый заголовок", route: { ...detail.currentRevision!.route, path: "/old-family", slug: "old-family" } }

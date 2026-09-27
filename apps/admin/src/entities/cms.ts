@@ -179,6 +179,8 @@ export type MediaAsset = {
 }
 
 export type MediaAssetUsageQuery = { pageId?: string }
+export type MediaAssetPage = { items: MediaAsset[]; nextCursor: string | null }
+export type MediaAssetListQuery = { q?: string; state?: "ready" | "processing" | "failed"; cursor?: string; limit?: number }
 
 export type ReleaseGate = { id: string; label: string; detail: string; state: "passed" | "warning" | "blocked" | "running" }
 export type ReleaseRecord = {
@@ -253,7 +255,7 @@ export interface CmsRepository {
   getMetrikaSettings(): Promise<MetrikaSettingsRecord>
   saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number): Promise<MetrikaSettingsRecord>
   publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord>
-  getMedia(query?: { q?: string; state?: "ready" }): Promise<MediaAsset[]>
+  getMedia(query?: MediaAssetListQuery): Promise<MediaAssetPage>
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   uploadMedia(file: File): Promise<MediaAsset>
   replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>

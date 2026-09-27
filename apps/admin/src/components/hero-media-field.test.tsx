@@ -13,7 +13,7 @@ const ready = {
 
 beforeEach(() => {
   getAsset.mockReset()
-  getMedia.mockReset().mockResolvedValue([])
+  getMedia.mockReset().mockResolvedValue({ items: [], nextCursor: null })
   uploadMedia.mockReset()
 })
 
@@ -55,4 +55,18 @@ it("does not attach a file from a previous picker session", async () => {
   await act(async () => finish(ready))
   expect(onChange).not.toHaveBeenCalled()
   expect(screen.queryByRole("status")).not.toBeInTheDocument()
+})
+
+it("loads the next ready-image page inside the picker", async () => {
+  const older = { ...ready, id: "22222222-2222-4222-8222-222222222222", title: "Старый фон" }
+  getMedia.mockImplementation(async (query: { cursor?: string }) => query.cursor ? { items: [older], nextCursor: null } : { items: [ready], nextCursor: "older" })
+  const onChange = vi.fn()
+  render(<TooltipProvider><HeroMediaField assetId="" canUpload={false} editable label="Фоновое изображение" onChange={onChange} /></TooltipProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Выбрать: фоновое изображение" }))
+  expect(await screen.findByText(ready.title)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }))
+  expect(await screen.findByText(older.title)).toBeInTheDocument()
+  expect(getMedia).toHaveBeenCalledWith(expect.objectContaining({ cursor: "older", state: "ready", limit: 30 }))
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(older.title) }))
+  expect(onChange).toHaveBeenCalledWith(older.id)
 })

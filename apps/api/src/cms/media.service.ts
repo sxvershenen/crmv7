@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto"
 
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException, UnprocessableEntityException } from "@nestjs/common"
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException, UnprocessableEntityException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import sharp from "sharp"
 import { DataSource, LessThanOrEqual } from "typeorm"
@@ -11,6 +11,8 @@ import {
   MediaAssetListResponseSchema,
   MediaAssetSchema,
   MediaUploadGrantSchema,
+  DateTimeSchema,
+  IdSchema,
   type MediaAsset,
   type MediaAssetArchive,
   type MediaAssetDetail,
@@ -39,6 +41,7 @@ import { MediaStorageService } from "./media-storage.service.js"
 
 const imageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"])
 const variantWidths = [320, 640, 1280, 2400]
+const mediaCursorTimestamp = "date_trunc('milliseconds', asset.updated_at)"
 
 @Injectable()
 export class MediaService {
@@ -70,8 +73,17 @@ export class MediaService {
     const builder = this.dataSource.getRepository(MediaAssetEntity).createQueryBuilder("asset")
     if (query.state) builder.andWhere("asset.state = :state", { state: query.state })
     if (query.q) builder.andWhere("LOWER(asset.title || ' ' || asset.original_filename || ' ' || COALESCE(asset.alt, '')) LIKE :q", { q: `%${escapeLike(query.q.toLocaleLowerCase("ru-RU"))}%` })
-    const rows = await builder.orderBy("asset.updated_at", "DESC").addOrderBy("asset.id", "DESC").take(query.limit).getMany()
-    return MediaAssetListResponseSchema.parse({ items: await Promise.all(rows.map((row) => this.asset(row))) })
+    if (query.cursor) {
+      const cursor = decodeMediaCursor(query.cursor)
+      builder.andWhere(`(${mediaCursorTimestamp} < :beforeUpdatedAt OR (${mediaCursorTimestamp} = :beforeUpdatedAt AND asset.id < :beforeId))`, { beforeUpdatedAt: cursor.updatedAt, beforeId: cursor.id })
+    }
+    const rows = await builder.orderBy(mediaCursorTimestamp, "DESC").addOrderBy("asset.id", "DESC").take(query.limit + 1).getMany()
+    const page = rows.slice(0, query.limit)
+    const last = page.at(-1)
+    return MediaAssetListResponseSchema.parse({
+      items: await Promise.all(page.map((row) => this.asset(row))),
+      nextCursor: rows.length > query.limit && last ? encodeMediaCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id }) : null,
+    })
   }
 
   async get(assetId: string, query: MediaAssetUsageQuery, actor: SessionUser): Promise<MediaAssetDetail> {
@@ -524,6 +536,21 @@ export class MediaService {
 }
 function sha256(value: string | Buffer) { return createHash("sha256").update(value).digest("hex") }
 function normalizeFilename(value: string) { const normalized = value.normalize("NFKC").replace(/[\\/\0\r\n]/g, "-").replace(/\s+/g, " ").trim(); if (!normalized || normalized === "." || normalized === "..") throw new UnprocessableEntityException({ code: "MEDIA_FILENAME_INVALID", message: "Filename недействителен" }); return normalized.slice(0, 500) }
+type MediaCursor = { updatedAt: string; id: string }
+
+export function encodeMediaCursor(value: MediaCursor) { return Buffer.from(JSON.stringify(value), "utf8").toString("base64url") }
+export function decodeMediaCursor(value: string): MediaCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<MediaCursor>
+    const updatedAt = DateTimeSchema.safeParse(parsed.updatedAt)
+    const id = IdSchema.safeParse(parsed.id)
+    if (!updatedAt.success || !id.success) throw new Error("Invalid cursor")
+    return { updatedAt: updatedAt.data, id: id.data }
+  } catch {
+    throw new BadRequestException({ code: "INVALID_CURSOR", message: "Курсор медиатеки недействителен" })
+  }
+}
+
 function escapeLike(value: string) { return value.replace(/[\\%_]/g, "\\$&") }
 function assertSafeSignature(value: Buffer, declared: string) {
   const detected = value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff ? "image/jpeg"

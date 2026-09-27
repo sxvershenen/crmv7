@@ -10,6 +10,8 @@ import {
   CmsSectionPolicySchema,
   CmsSourceLinkSchema,
   ListingFilterDefinitionSchema,
+  MediaAssetListQuerySchema,
+  MediaAssetListResponseSchema,
   MediaAssetUsageQuerySchema,
   MediaReplacementUploadInitSchema,
   MediaUploadInitSchema,
@@ -24,6 +26,13 @@ const secondId = "22222222-2222-4222-8222-222222222222";
 const timestamp = "2026-08-31T12:00:00+03:00";
 
 describe("Phase 4 contracts", () => {
+  it("bounds media pages and requires an explicit next cursor", () => {
+    expect(MediaAssetListQuerySchema.parse({ limit: "30", cursor: "older" })).toMatchObject({ limit: 30, cursor: "older" });
+    expect(MediaAssetListQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
+    expect(MediaAssetListResponseSchema.parse({ items: [], nextCursor: null })).toEqual({ items: [], nextCursor: null });
+    expect(MediaAssetListResponseSchema.safeParse({ items: [] }).success).toBe(false);
+  });
+
   it("expresses explicit inheritance, disabling and bounded override patching", () => {
     expect(CmsSectionPolicySchema.parse({ mode: "inherit" })).toEqual({ mode: "inherit" });
     expect(CmsSectionPolicySchema.parse({ mode: "disabled" })).toEqual({ mode: "disabled" });

@@ -8,7 +8,7 @@ import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseLi
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
-import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
+import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetListQuery, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
@@ -174,7 +174,14 @@ export class FixtureCmsRepository implements CmsRepository {
     this.metrika = { ...this.metrika, version: expectedVersion + 1, status: "published", updatedLabel: "только что" }
     return clone(this.metrika)
   }
-  async getMedia(query?: { q?: string; state?: "ready" }) { await pause(); return clone(mediaFixtures.filter((asset) => (!query?.q || `${asset.title} ${asset.filename} ${asset.alt}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query?.state || asset.status === query.state))) }
+  async getMedia(query?: MediaAssetListQuery) {
+    await pause()
+    const filtered = mediaFixtures.filter((asset) => (!query?.q || `${asset.title} ${asset.filename} ${asset.alt}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query?.state || asset.status === ({ processing: "converting", failed: "error", ready: "ready" } as const)[query.state]))
+    const offset = query?.cursor === undefined ? 0 : Number(query.cursor)
+    if (!Number.isInteger(offset) || offset < 0) throw new Error("Курсор медиатеки недействителен")
+    const limit = Math.max(1, Math.min(100, query?.limit ?? 30))
+    return { items: clone(filtered.slice(offset, offset + limit)), nextCursor: offset + limit < filtered.length ? String(offset + limit) : null }
+  }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
   async uploadMedia(file: File) {
     await pause()
@@ -431,7 +438,7 @@ export class ApiCmsRepository implements CmsRepository {
       activity: dashboard.activity.map((item) => ({ ...item, when: formatUpdated(item.when) })),
     }
   }
-  async getMedia(query?: { q?: string; state?: "ready" }) { const search = new URLSearchParams({ limit: "100" }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return response.items.map((asset) => mediaView(asset)) }
+  async getMedia(query?: MediaAssetListQuery) { const search = new URLSearchParams({ limit: String(query?.limit ?? 30) }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); if (query?.cursor) search.set("cursor", query.cursor); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return { items: response.items.map((asset) => mediaView(asset)), nextCursor: response.nextCursor } }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)

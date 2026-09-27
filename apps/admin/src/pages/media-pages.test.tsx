@@ -17,7 +17,7 @@ const asset = {
 
 beforeEach(() => {
   getAsset.mockReset().mockResolvedValue(asset)
-  getMedia.mockReset().mockResolvedValue([])
+  getMedia.mockReset().mockResolvedValue({ items: [], nextCursor: null })
   saveMediaMetadata.mockReset().mockResolvedValue({ ...asset, version: 2 })
   uploadMedia.mockReset()
   permissions.canManageMedia = true
@@ -74,4 +74,20 @@ it("shows processing after upload when the API has not marked the file ready", a
   expect(await screen.findByRole("status")).toHaveTextContent("Файл загружен. Обработка продолжается.")
   expect(uploadMedia).toHaveBeenCalledOnce()
   expect(screen.queryByText("Файл готов")).not.toBeInTheDocument()
+})
+
+it("searches on the server and loads older media without the first-page limit", async () => {
+  const older = { ...asset, id: "asset-2", title: "Старый кадр" }
+  getMedia.mockImplementation(async (query?: { cursor?: string }) => query?.cursor ? { items: [older], nextCursor: null } : { items: [asset], nextCursor: "older" })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText(asset.title)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }))
+  expect(await screen.findByText(older.title)).toBeInTheDocument()
+  expect(getMedia).toHaveBeenCalledWith(expect.objectContaining({ cursor: "older", limit: 30 }))
+  fireEvent.change(screen.getByRole("textbox", { name: "Поиск медиа" }), { target: { value: "берёза" } })
+  await waitFor(() => expect(getMedia).toHaveBeenLastCalledWith(expect.objectContaining({ q: "берёза", limit: 30 })))
+  expect(await screen.findByText(asset.title)).toBeInTheDocument()
+  expect(screen.queryByText(older.title)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Ошибка" }))
+  await waitFor(() => expect(getMedia).toHaveBeenLastCalledWith(expect.objectContaining({ q: "берёза", state: "failed", limit: 30 })))
 })
