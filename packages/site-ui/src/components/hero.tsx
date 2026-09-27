@@ -144,7 +144,7 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoSelecte
           return (
             <button key={promo.id} type="button" onClick={() => void copyPromo(promo)} aria-label={`Скопировать промокод ${promo.code}`} className="site-promo-card site-motion-spring bg-surface rounded-xl p-3 flex items-center gap-3 text-left transition-colors hover:bg-white/95">
               <span className="icon-tile !w-12 !h-12 text-[22px]" aria-hidden="true">{promo.emoji}</span>
-              <span className="flex-1 min-w-0"><span className="site-promo-card__title block text-[22px] font-semibold tracking-[-0.8px] leading-none text-ink">{promo.amount}</span><span className="site-promo-card__description block text-[12px] text-ink-2 mt-1 line-clamp-2" title={promo.desc}>{promo.desc}</span></span>
+              <span className="flex-1 min-w-0"><span className="site-promo-card__title block text-[22px] font-semibold tracking-[-0.8px] leading-none text-ink">{promo.amount}</span><span className="site-promo-card__description text-[12px] text-ink-2 mt-1 line-clamp-1" title={promo.desc}>{promo.desc}</span></span>
               <span className={`h-9 rounded-full pl-3 pr-1.5 inline-flex items-center gap-2 text-[12px] font-semibold shrink-0 ${copied ? "bg-green text-white" : "bg-green-soft text-green-deep"}`}>
                 <Ticket size={13} /><span className="site-promo-card__code">{promo.code}</span><span className="w-6 h-6 rounded-full bg-white/70 text-green-deep inline-flex items-center justify-center">{copied ? <Check size={12} /> : <Copy size={12} />}</span>
               </span>
