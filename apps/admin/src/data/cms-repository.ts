@@ -2,7 +2,7 @@ import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublishResultSch
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
-import { CmsMetrikaSettingsDetailSchema, CmsSiteSettingsDetailSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
+import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsSiteSettingsDetailSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
@@ -63,6 +63,7 @@ export class FixtureCmsRepository implements CmsRepository {
   async saveNavigation(value: PublicNavigation, expectedVersion: number) {
     await pause()
     if (this.navigation.version !== expectedVersion) throw new CmsConflictError(this.navigation.version)
+    navigationWireArrays(value)
     this.navigation = { ...clone(value), version: expectedVersion + 1, status: "draft", updatedLabel: "только что" }
     return clone(this.navigation)
   }
@@ -617,10 +618,14 @@ function metrikaFromDetail(detail: CmsMetrikaSettingsDetail): MetrikaSettingsRec
 function navigationValues(value: PublicNavigation, detail: CmsSiteSettingsDetail): CmsSiteSettingsValue {
   const base = detail.draft?.value ?? detail.published?.value
   if (!base) throw new CmsUnavailableError("Настройки сайта")
+  return { ...base, ...navigationWireArrays(value) }
+}
+
+function navigationWireArrays(value: PublicNavigation) {
   assertNavigationLimit(value.header, 30, "Шапка")
   assertNavigationLimit(value.mobile, 30, "Мобильное меню")
   assertNavigationLimit(value.footer, 60, "Footer")
-  return { ...base, headerNavigation: value.header.map(toWireItem), mobileNavigation: value.mobile.map(toWireItem), footerNavigation: value.footer.map(toWireItem) }
+  return { headerNavigation: value.header.map(toWireItem), mobileNavigation: value.mobile.map(toWireItem), footerNavigation: value.footer.map(toWireItem) }
 }
 
 function fromWireNavigation(item: WireNavigationAny): PublicNavigationItem {
@@ -650,11 +655,21 @@ function wireBase(item: PublicNavigationItem) {
   return { id: isUuid(item.id) ? item.id : uuidForNavigation(), label: item.label, link: hrefToLink(item.href), target: item.target ?? "_self", icon, color, visibleOn: item.visibleOn ?? "all", enabled: item.visible }
 }
 function hrefToLink(href: string): WireNavigationAny["link"] {
-  if (/^https?:\/\//i.test(href)) return { kind: "external", url: href }
-  const [rawPath, rawAnchor] = href.split("#", 2)
-  const path = rawPath === "" ? "/" : rawPath?.startsWith("/") ? rawPath : null
-  if (!path) throw new Error(`Ссылка «${href}» должна начинаться с / или быть полным https:// URL`)
-  return rawAnchor ? { kind: "internal", path, anchor: rawAnchor } : { kind: "internal", path }
+  if (!href || href.trim() !== href) throw new Error("Укажите ссылку без пробелов по краям")
+  if (/^https?:\/\//i.test(href)) {
+    const parsed = CmsNavigationLinkSchema.safeParse({ kind: "external", url: href })
+    if (!parsed.success) throw new Error(`Внешняя ссылка «${href}» должна быть полным http:// или https:// URL`)
+    return parsed.data
+  }
+  const hashIndex = href.indexOf("#")
+  const rawPath = hashIndex === -1 ? href : href.slice(0, hashIndex)
+  const anchor = hashIndex === -1 ? undefined : href.slice(hashIndex + 1)
+  if (anchor !== undefined && (!anchor || anchor.includes("#"))) throw new Error(`Ссылка «${href}» содержит некорректный якорь`)
+  if (!rawPath && !anchor) throw new Error("Укажите адрес страницы или якорь")
+  if (rawPath && !rawPath.startsWith("/")) throw new Error(`Ссылка «${href}» должна начинаться с / или быть полным https:// URL`)
+  const parsed = CmsNavigationLinkSchema.safeParse({ kind: "internal", path: rawPath || "/", ...(anchor ? { anchor } : {}) })
+  if (!parsed.success) throw new Error(`Ссылка «${href}» должна содержать адрес страницы без пробелов, параметров и завершающего /; якорь — латиницей`)
+  return parsed.data
 }
 function uuidForNavigation() { return globalThis.crypto?.randomUUID?.() ?? fallbackUuid() }
 function assertNavigationLimit(items: PublicNavigationItem[], limit: number, parent: string) { if (items.length > limit) throw new Error(`В пункте «${parent}» больше ${limit} подпунктов`) }

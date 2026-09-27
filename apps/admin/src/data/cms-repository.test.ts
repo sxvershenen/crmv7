@@ -21,6 +21,14 @@ describe("FixtureCmsRepository", () => {
     await repository.saveEditor(editor, editor.version)
     await expect(repository.saveEditor(editor, editor.version)).rejects.toBeInstanceOf(CmsConflictError)
   })
+
+  it("does not show a successful demo save for an empty menu link", async () => {
+    const repository = new FixtureCmsRepository()
+    const navigation = await repository.getNavigation()
+
+    await expect(repository.saveNavigation({ ...navigation, header: [{ ...navigation.header[0]!, href: "" }] }, navigation.version)).rejects.toThrow("Укажите ссылку")
+    expect((await repository.getNavigation()).version).toBe(navigation.version)
+  })
 })
 
 describe("ApiCmsRepository", () => {
@@ -387,6 +395,30 @@ describe("ApiCmsRepository", () => {
     const tooMany = Array.from({ length: 31 }, (_, index) => ({ ...navigation.header[0]!, id: `${navigation.header[0]!.id}-${index}` }))
     await expect(repository.saveNavigation({ ...navigation, header: tooMany }, navigation.version)).rejects.toThrow("больше 30")
     expect(client.patch).toHaveBeenCalledOnce()
+  })
+
+  it.each(["", " ", "#", "/domiki#", "/domiki#faq#extra", "/domiki?view=all", "javascript:alert(1)"])("rejects invalid navigation href %j before saving", async (href) => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(siteSettingsDetail())
+    const repository = new ApiCmsRepository(client as never)
+    const navigation = await repository.getNavigation()
+
+    await expect(repository.saveNavigation({ ...navigation, header: [{ ...navigation.header[0]!, href }] }, navigation.version)).rejects.toThrow()
+
+    expect(client.patch).not.toHaveBeenCalled()
+  })
+
+  it("keeps an explicit anchor-only navigation link", async () => {
+    const settings = siteSettingsDetail()
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(settings)
+    client.patch.mockResolvedValueOnce(settings)
+    const repository = new ApiCmsRepository(client as never)
+    const navigation = await repository.getNavigation()
+
+    await repository.saveNavigation({ ...navigation, header: [{ ...navigation.header[0]!, href: "#booking" }] }, navigation.version)
+
+    expect(client.patch.mock.calls[0]?.[1].value.headerNavigation[0].link).toEqual({ kind: "internal", path: "/", anchor: "booking" })
   })
 
   it("round-trips media metadata fields which are not shown by the current form", async () => {

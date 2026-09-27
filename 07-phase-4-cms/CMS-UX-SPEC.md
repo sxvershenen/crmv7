@@ -288,7 +288,7 @@ Editor fields:
 
 `/globals/navigation`: desktop/mobile menus, nesting, external/internal links, visibility, active rules, CTA, broken-link validation. Header/footer share link registry, not copied strings.
 
-Сейчас редактор меню различает текущий черновик и факт предыдущей публикации. Автоматическая проверка ссылок ещё не подключена: интерфейс не показывает «ошибок нет» и предлагает проверить ссылки вручную до публикации. После публикации нужна доставка active release; локальный предварительный вид не подтверждает появление меню на сайте.
+Сейчас редактор меню различает текущий черновик и факт предыдущей публикации. Формат внутренних и внешних ссылок проверяется при сохранении; пустые и некорректные адреса не заменяются на `/`. Проверка существования целевой страницы ещё не подключена, поэтому интерфейс предлагает проверить доступность вручную. После публикации нужна доставка active release; локальный предварительный вид не подтверждает появление меню на сайте.
 
 `/components`: block registry and reusable instances. Each row shows key, schema version, renderer version, owner, usage, status. Editors can duplicate/configure an instance, but cannot create an unknown renderer from JSON.
 

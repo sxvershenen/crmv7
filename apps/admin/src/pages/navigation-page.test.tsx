@@ -21,7 +21,7 @@ describe("NavigationPage mutation recovery", () => {
     render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><NavigationPage /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
     const names = await screen.findAllByLabelText("Название")
     expect(screen.getByText("Меню публиковалось")).toBeInTheDocument()
-    expect(screen.getByText("Ссылки автоматически не проверяются. Перед публикацией проверьте их вручную.")).toBeInTheDocument()
+    expect(screen.getByText("Формат ссылок проверяется при сохранении. Доступность страниц проверяйте вручную.")).toBeInTheDocument()
     expect(screen.queryByText("Ошибок нет")).not.toBeInTheDocument()
     fireEvent.change(names[0]!, { target: { value: "Новое меню" } })
     fireEvent.click(screen.getByRole("button", { name: "Сохранить и опубликовать" }))
