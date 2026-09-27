@@ -3141,25 +3141,17 @@ describe.sequential("internal API + PostgreSQL", () => {
 
     const replacement = await sharp({ create: { width: 12, height: 8, channels: 4, background: { r: 22, g: 76, b: 145, alpha: 1 } } }).png().toBuffer()
     const replacementChecksum = createHash("sha256").update(replacement).digest("hex")
-    const staleGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+    const replacementGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
       expectedVersion: uploaded.body.version, filename: "hero-v2.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
+    }).expect(201)
+    const competingGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
+      expectedVersion: uploaded.body.version, filename: "hero-v2-competing.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
     }).expect(201)
     const metadataUpdate = await adminAgent.patch(`/api/admin/v1/media/assets/${assetId}`).send({
       expectedVersion: uploaded.body.version, title: "Hero retained metadata", alt: "Retained alt", caption: null,
       credit: null, license: "Own work", tags: ["hero"], focalPoint: { x: 0.25, y: 0.75 },
     }).expect(200)
     expect(metadataUpdate.body.asset.version).toBe(uploaded.body.version + 1)
-    const staleUrl = new URL(staleGrant.body.uploadUrl as string)
-    const staleReplacement = await request(app.getHttpServer()).put(`${staleUrl.pathname}${staleUrl.search}`)
-      .set("content-type", "image/png").set("x-content-sha256", replacementChecksum).send(replacement).expect(409)
-    expect(staleReplacement.body.code).toBe("MEDIA_REPLACEMENT_STALE")
-    const afterStale = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
-    expect(afterStale.body.asset).toMatchObject({ state: "ready", version: metadataUpdate.body.asset.version, title: "Hero retained metadata", width: 10, height: 10 })
-    expect(afterStale.body.asset.variants.map((variant: { id: string }) => variant.id).sort()).toEqual(uploaded.body.variants.map((variant: { id: string }) => variant.id).sort())
-
-    const replacementGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
-      expectedVersion: metadataUpdate.body.asset.version, filename: "hero-v2.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
-    }).expect(201)
     expect(replacementGrant.body.assetId).toBe(assetId)
     const replacementUrl = new URL(replacementGrant.body.uploadUrl as string)
     const replaced = await request(app.getHttpServer()).put(`${replacementUrl.pathname}${replacementUrl.search}`)
@@ -3169,6 +3161,13 @@ describe.sequential("internal API + PostgreSQL", () => {
       alt: "Retained alt", license: "Own work", tags: ["hero"], focalPoint: { x: 0.25, y: 0.75 },
       originalFilename: "hero-v2.png", mimeType: "image/png", width: 12, height: 8, usageCount: 2,
     })
+    const competingUrl = new URL(competingGrant.body.uploadUrl as string)
+    const staleReplacement = await request(app.getHttpServer()).put(`${competingUrl.pathname}${competingUrl.search}`)
+      .set("content-type", "image/png").set("x-content-sha256", replacementChecksum).send(replacement).expect(409)
+    expect(staleReplacement.body.code).toBe("MEDIA_REPLACEMENT_STALE")
+    const afterStale = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
+    expect(afterStale.body.asset).toMatchObject({ state: "ready", version: replaced.body.version, title: "Hero retained metadata", width: 12, height: 8 })
+    expect(afterStale.body.asset.variants.map((variant: { id: string }) => variant.id).sort()).toEqual(replaced.body.variants.map((variant: { id: string }) => variant.id).sort())
     expect(replaced.body.variants.map((variant: { id: string }) => variant.id)).not.toEqual(expect.arrayContaining(uploaded.body.variants.map((variant: { id: string }) => variant.id)))
     const oldPublishedVariant = await request(app.getHttpServer()).get(webp.url).expect(200).expect("content-type", "image/webp")
     expect(oldPublishedVariant.body).toEqual(delivered.body)

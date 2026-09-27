@@ -311,8 +311,8 @@ export class MediaService {
           .setLock("pessimistic_write").where("asset.id = :assetId", { assetId: upload.assetId }).getOne()
         if (!asset) throw mediaError("MEDIA_UPLOAD_STALE", "Asset was removed before media processing completed")
         if (upload.purpose === "replacement") {
-          if (asset.state !== "ready" || asset.version !== upload.expectedAssetVersion || asset.currentBlobId !== upload.baseBlobId) {
-            throw mediaError("MEDIA_REPLACEMENT_STALE", "Asset changed after the replacement upload grant was issued")
+          if (asset.state !== "ready" || asset.currentBlobId !== upload.baseBlobId) {
+            throw mediaError("MEDIA_REPLACEMENT_STALE", "Файл заменён или архивирован после начала загрузки")
           }
         } else if (asset.state !== "processing" || asset.currentBlobId !== null) {
           throw mediaError("MEDIA_UPLOAD_STALE", "Asset changed before initial upload processing completed")
@@ -336,13 +336,13 @@ export class MediaService {
           state: "ready", width, height, currentBlobId: blobId, updatedAt: new Date(), ...replacementFields,
         }).where(
           upload.purpose === "replacement"
-            ? "id = :assetId AND state = 'ready' AND version = :expectedVersion AND current_blob_id = :baseBlobId"
+            ? "id = :assetId AND state = 'ready' AND current_blob_id = :baseBlobId"
             : "id = :assetId AND state = 'processing' AND current_blob_id IS NULL",
-          { assetId: upload.assetId, expectedVersion: upload.expectedAssetVersion, baseBlobId: upload.baseBlobId },
+          { assetId: upload.assetId, baseBlobId: upload.baseBlobId },
         ).execute()
         if (switched.affected !== 1) throw mediaError(
           upload.purpose === "replacement" ? "MEDIA_REPLACEMENT_STALE" : "MEDIA_UPLOAD_STALE",
-          upload.purpose === "replacement" ? "Asset changed before replacement activation" : "Asset changed before upload activation",
+          upload.purpose === "replacement" ? "Файл заменён или архивирован во время обработки" : "Asset changed before upload activation",
         )
         await manager.getRepository(MediaUploadEntity).update({ id: upload.id, state: "processing" }, { state: "completed", stagingKey: null, completedAt: new Date() })
         await manager.getRepository(MediaProcessingJobEntity).update({ id: job.id, state: "processing" }, { state: "completed", blobId, finishedAt: new Date() })
