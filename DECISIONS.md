@@ -70,7 +70,7 @@ Resource dossier показывает одну default-цену, included/extra 
 
 ## D-082 — CRM operations, CMS editorial-only
 
-CRM business dossier: Resource для проживания/площадки, ProgramTemplate для программы, EventServiceTemplate для формата. Guided creation подготавливает hidden commercial identity/binding/canonical draft одним действием без второго справочника. Цена, availability, capacity и fulfillment остаются в CRM.
+CRM business dossier: Resource для проживания/площадки, ProgramTemplate для программы, EventServiceTemplate для формата. Каждый Resource сразу создаёт видимый CMS-черновик; guided creation подготавливает commercial identity/binding/public profile/relation внутри одного flow без второго справочника. Публичный адрес предлагается из названия и редактируется до публикации; релиз вручную собирать не нужно. Цена, availability, capacity и fulfillment остаются в CRM.
 
 CMS primary registry — `/content/tree`; editor владеет content/media/composition/SEO/publication. Старые offer routes — locator/deep links, public profiles — diagnostics. CMS не монтирует второй operational editor. Публичная цена берётся из allowlisted active backend projection, не CMS revision; недоступная цена отображается «по запросу».
 

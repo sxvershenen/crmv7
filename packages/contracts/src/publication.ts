@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { BoundedJsonValueSchema, DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
+import { CmsPageKindSchema, CmsPathSchema } from "./content.js";
+import { DateTimeSchema, IdSchema, VersionSchema } from "./primitives.js";
 
 export const ReleaseStateSchema = z.enum(["draft", "validating", "ready", "publishing", "published", "failed", "superseded"]);
 
@@ -88,7 +89,13 @@ export const CmsPublicationPreviewSchema = z.object({
   activeReleaseVersion: VersionSchema,
   previewHash: z.string().regex(/^[a-f0-9]{64}$/),
   generatedAt: DateTimeSchema,
-  renderReadyPage: z.record(z.string().min(1).max(120), BoundedJsonValueSchema).nullable(),
+  // The producer already validates the complete PublicReleasePageContent schema.
+  // Keep this response shape shallow so OpenAPI generation does not recurse through JSON values.
+  renderReadyPage: z.object({
+    kind: CmsPageKindSchema.optional(), path: CmsPathSchema, title: z.string().min(1).max(240),
+    summary: z.string().max(1000).nullable().optional(), hero: z.unknown().optional(),
+    sections: z.array(z.unknown()).max(200).optional(), seo: z.unknown().optional(),
+  }).passthrough().nullable(),
   changes: z.array(z.object({
     nodeId: IdSchema,
     change: z.enum(["added", "updated", "moved", "removed"]),

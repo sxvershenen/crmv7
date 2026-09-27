@@ -70,7 +70,7 @@ export class ResourcesService {
       })
       const saved = await manager.save(resource)
       await this.recordMutation(manager, saved, "created", actor.id, requestId, { after: this.snapshot(saved) })
-      await ensureCmsSourceDraft(manager, { sourceKind: "resource", sourceId: saved.id, sourceVersion: saved.version, title: saved.name, actorId: actor.id, requestId })
+      await ensureCmsSourceDraft(manager, { sourceKind: "resource", sourceId: saved.id, sourceVersion: saved.version, title: saved.name, resourceKind: saved.kind, actorId: actor.id, requestId })
       return toResourceDto(saved, actor, [])
     })
   }

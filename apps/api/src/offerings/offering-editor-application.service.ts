@@ -4,6 +4,7 @@ import { ConflictException, ForbiddenException, Inject, Injectable, Logger, NotF
 import { DataSource, In, IsNull, type EntityManager } from "typeorm"
 
 import {
+  canonicalPublicPath,
   InternalOfferingEditorSchema,
   AddOnOfferingCreateResultSchema,
   AddOnOfferingListResponseSchema,
@@ -424,7 +425,7 @@ export class OfferingEditorApplicationService {
       const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
       const resource = binding?.resourceId ? await manager.findOne(ResourceEntity, { where: { id: binding.resourceId, archivedAt: IsNull() } }) : null
       const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
-      if (!binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0 || !calendar || !current?.path.startsWith("/houses/")) {
+      if (!binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0 || !calendar || !current || !canonicalPublicPath(current.path).startsWith("/domiki/")) {
         blockers.push("safe_public_projection_missing")
       }
     } else if (offering.kind === "campground") {
@@ -444,7 +445,7 @@ export class OfferingEditorApplicationService {
       const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
       const termsValid = terms?.offeringKind === "campground" && terms.capacityUnit === "tent" && terms.pricingBasis === "per_night"
         && ((terms.sellableUnit === "owned_tent" && terms.inventoryMode === "discrete_inventory") || (terms.sellableUnit === "own_tent_pitch" && terms.inventoryMode === "shared_capacity"))
-      if (!termsValid || !expectedMode || !expectedRole || !binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["camping", "campground", "campground_owned_tent", "campground_own_tent_area"].includes(resource.kind) || resource.capacityMode !== expectedMode || resource.capacityTotal <= 0 || memberships.length !== 1 || !calendar || !current?.path.startsWith("/campgrounds/")) {
+      if (!termsValid || !expectedMode || !expectedRole || !binding || binding.quantityDefault !== 1 || binding.capacityImpactDefault !== 1 || !binding.availabilityRequired || !resource || !["camping", "campground", "campground_owned_tent", "campground_own_tent_area"].includes(resource.kind) || resource.capacityMode !== expectedMode || resource.capacityTotal <= 0 || memberships.length !== 1 || !calendar || !current || !canonicalPublicPath(current.path).startsWith("/kemping/")) {
         blockers.push("safe_public_projection_missing")
       }
     } else if (offering.kind === "program") {
@@ -452,7 +453,7 @@ export class OfferingEditorApplicationService {
       const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
       const template = binding?.programTemplateId ? await manager.findOne(ProgramTemplateEntity, { where: { id: binding.programTemplateId, publication: "published", archivedAt: IsNull() } }) : null
       const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
-      if (!binding || !binding.programTemplateId || !template || !calendar || !current?.path.startsWith("/programs/")) blockers.push("safe_public_projection_missing")
+      if (!binding || !binding.programTemplateId || !template || !calendar || !current || !canonicalPublicPath(current.path).startsWith("/programmy/")) blockers.push("safe_public_projection_missing")
     } else if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
     const revision = (row: CmsNodeRevisionEntity | null) => row ? {
       id: row.id, revision: row.revision, state: row.state, path: row.path, title: row.title, contentHash: row.contentHash,
@@ -942,7 +943,7 @@ export class OfferingEditorApplicationService {
       updatedBy: actorId, version: () => '"version" + 1', updatedAt: () => "now()",
     }).where("id = :id AND state IN ('draft','scheduled')", { id: book.id }).execute()
     if (transition.affected !== 1) throw conflict("PRICE_BOOK_NOT_DRAFT", "Прайс-лист уже активирован или изменён")
-    const activateOnFirstPriceBook = (offering.kind === "addon" || offering.kind === "program" || offering.kind === "event_service" || offering.kind === "venue") && offering.state === "draft"
+    const activateOnFirstPriceBook = offering.state === "draft"
     const updateResult = await manager.query(`
       UPDATE catalog_offerings
       SET active_price_book_id = $1, pricing_version = pricing_version + 1,

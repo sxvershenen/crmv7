@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto"
 
 import type { CmsPageKind, CmsSourceKind } from "@crm/contracts"
-import { CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsSourceLinkEntity, OutboxEventEntity } from "@crm/db"
+import { publicReleasePathCandidates } from "@crm/contracts"
+import { CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity, OutboxEventEntity } from "@crm/db"
 import type { EntityManager } from "typeorm"
 
 type LegacyCmsSourceKind = Exclude<CmsSourceKind, "catalog_offering">
@@ -21,10 +22,11 @@ const internalOperationalSources = new Set<CmsSourceKind>(["program_occurrence",
 /** Transactional, idempotent CRM -> CMS draft projection. It grants no public eligibility. */
 export async function ensureCmsSourceDraft(
   manager: EntityManager,
-  input: { sourceKind: LegacyCmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string },
+  input: { sourceKind: LegacyCmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; resourceKind?: string; actorId: string; requestId: string },
 ) {
   if (input.sourceKind === "event") throw new Error("Customer Event CMS drafts are not created; use catalog_offering event-service editorial drafts")
-  return createCmsSourceDraft(manager, input)
+  const suggestedPrefix = input.sourceKind === "resource" ? resourcePagePrefix(input.resourceKind) : null
+  return createCmsSourceDraft(manager, { ...input, suggestedPrefix })
 }
 
 export type LegacyCatalogOfferingPromotionReport = Readonly<{
@@ -82,7 +84,8 @@ export async function inspectLegacyProgramOfferingPromotion(manager: EntityManag
 /**
  * Transaction-aware canonical offering -> CMS locator helper. Call it inside
  * the same transaction as guided offering creation. It seeds editorial-safe
- * placeholders only and never creates a public profile or projection event.
+ * placeholders only and creates the internal profile needed for publication.
+ * It never publishes the draft or creates a public projection event.
  */
 export async function ensureCatalogOfferingEditorialDraft(
   manager: EntityManager,
@@ -110,7 +113,7 @@ export async function ensureCatalogOfferingEditorialDraft(
     const link = await createCmsSourceDraft(manager, {
       sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
       title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-      pathPart: "meropriyatiya", pageKind: "event_detail",
+      pathPart: "meropriyatiya", suggestedPrefix: "meropriyatiya", pageKind: "event_detail",
       relations: [{ kind: "catalog_offering", entityId: offering.id }],
     })
     return { status: "created", link }
@@ -133,10 +136,11 @@ export async function ensureCatalogOfferingEditorialDraft(
       }).where("id = :id AND source_kind = 'resource' AND source_id = :resourceId", { id: legacy.id, resourceId: report.resourceId }).execute()
       if (promoted.affected !== 1) throw new Error(`Legacy CMS source link ${legacy.id} changed during promotion`)
       const link = await links.findOneByOrFail({ id: legacy.id })
+      const revisionId = await bindOfferingToEditorialPage(manager, offering.id, link.nodeId, input.actorId)
       await manager.save(manager.create(ChangeLogEntity, {
         id: randomUUID(), entityType: "cms_node", entityId: link.nodeId, action: "catalog_offering_source_promoted",
         actorId: input.actorId, requestId: input.requestId,
-        changes: { previousSourceKind: "resource", previousSourceId: report.resourceId, sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version },
+        changes: { previousSourceKind: "resource", previousSourceId: report.resourceId, sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version, revisionId },
         createdAt: new Date(),
       }))
       return { status: "promoted", link }
@@ -161,10 +165,11 @@ export async function ensureCatalogOfferingEditorialDraft(
         .where("id = :id AND source_kind = 'program_template' AND source_id = :programTemplateId", { id: legacy.id, programTemplateId: report.programTemplateId }).execute()
       if (promoted.affected !== 1) throw new Error(`Legacy CMS source link ${legacy.id} changed during promotion`)
       const link = await links.findOneByOrFail({ id: legacy.id })
+      const revisionId = await bindOfferingToEditorialPage(manager, offering.id, link.nodeId, input.actorId)
       await manager.save(manager.create(ChangeLogEntity, {
         id: randomUUID(), entityType: "cms_node", entityId: link.nodeId, action: "catalog_offering_source_promoted",
         actorId: input.actorId, requestId: input.requestId,
-        changes: { previousSourceKind: "program_template", previousSourceId: report.programTemplateId, sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version }, createdAt: new Date(),
+        changes: { previousSourceKind: "program_template", previousSourceId: report.programTemplateId, sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version, revisionId }, createdAt: new Date(),
       }))
       return { status: "promoted", link }
     }
@@ -175,6 +180,7 @@ export async function ensureCatalogOfferingEditorialDraft(
     sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
     title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
     pathPart: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : "domiki",
+    suggestedPrefix: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : "domiki",
     pageKind: offering.kind === "program" ? "program_detail" : "resource_detail",
     relations: [{ kind: "catalog_offering", entityId: offering.id }],
   })
@@ -186,9 +192,55 @@ async function assertEditorialNode(manager: EntityManager, link: CmsSourceLinkEn
   if (!node || node.kind !== kind) throw new Error(`CMS source link ${link.id} does not target a ${kind} node`)
 }
 
+async function bindOfferingToEditorialPage(manager: EntityManager, offeringId: string, nodeId: string, actorId: string): Promise<string | null> {
+  await ensurePublicProfile(manager, offeringId, nodeId, actorId)
+  const revision = await manager.getRepository(CmsNodeRevisionEntity).findOne({ where: { nodeId }, order: { revision: "DESC" } })
+  if (!revision) throw new Error(`CMS node ${nodeId} has no editorial revision`)
+  const relations = revision.relations.filter((relation) => relation.kind === "catalog_offering")
+  if (relations.length > 0 && (relations.length !== 1 || relations[0]?.entityId !== offeringId)) {
+    throw new Error(`CMS node ${nodeId} has an incompatible offering relation`)
+  }
+  if (relations.length === 1) return null
+  const now = new Date()
+  const nextRelations = [...revision.relations, { kind: "catalog_offering", entityId: offeringId }]
+  const content = {
+    route: { path: revision.path, slug: revision.slug, parentNodeId: revision.parentNodeId, sortOrder: revision.sortOrder },
+    title: revision.title, summary: revision.summary, hero: revision.hero, sections: revision.sections,
+    seo: revision.seo, relations: nextRelations, schemaVersion: revision.schemaVersion,
+  }
+  const next = manager.create(CmsNodeRevisionEntity, {
+    id: randomUUID(), nodeId, revision: revision.revision + 1, state: "draft",
+    path: revision.path, slug: revision.slug, parentNodeId: revision.parentNodeId, sortOrder: revision.sortOrder,
+    title: revision.title, summary: revision.summary, hero: revision.hero, sections: revision.sections,
+    seo: revision.seo, relations: nextRelations, schemaVersion: revision.schemaVersion,
+    contentHash: hash(content), createdBy: actorId, createdAt: now,
+  })
+  if (revision.state !== "published") {
+    const superseded = await manager.getRepository(CmsNodeRevisionEntity).update({ id: revision.id, state: revision.state }, { state: "superseded" })
+    if (superseded.affected !== 1) throw new Error(`CMS node ${nodeId} changed during offering binding`)
+  }
+  await manager.save(next)
+  await manager.createQueryBuilder().update(CmsNodeEntity).set({ updatedBy: actorId, updatedAt: now, version: () => '"version" + 1' }).where("id = :nodeId", { nodeId }).execute()
+  return next.id
+}
+
+async function ensurePublicProfile(manager: EntityManager, offeringId: string, nodeId: string, actorId: string): Promise<void> {
+  const profiles = manager.getRepository(CmsPublicProfileEntity)
+  const existingProfile = await profiles.findOneBy({ nodeId })
+  if (existingProfile && (existingProfile.kind !== "catalog_offering" || existingProfile.entityId !== offeringId || existingProfile.archivedAt !== null)) {
+    throw new Error(`CMS node ${nodeId} already has an incompatible public profile`)
+  }
+  if (existingProfile) return
+  const now = new Date()
+  await manager.save(manager.create(CmsPublicProfileEntity, {
+    id: randomUUID(), kind: "catalog_offering", entityId: offeringId, nodeId,
+    createdAt: now, createdBy: actorId, updatedAt: now, updatedBy: actorId, archivedAt: null,
+  }))
+}
+
 async function createCmsSourceDraft(
   manager: EntityManager,
-  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string; pageKind?: CmsPageKind; relations?: Array<{ kind: "catalog_offering"; entityId: string }> },
+  input: { sourceKind: CmsSourceKind; sourceId: string; sourceVersion: number; title: string; summary?: string | null; actorId: string; requestId: string; pathPart?: string; suggestedPrefix?: string | null; pageKind?: CmsPageKind; relations?: Array<{ kind: "catalog_offering"; entityId: string }> },
 ) {
   const existing = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: input.sourceKind, sourceId: input.sourceId })
   if (existing) return existing
@@ -196,8 +248,10 @@ async function createCmsSourceDraft(
   const now = new Date()
   const nodeId = randomUUID()
   const revisionId = randomUUID()
-  const path = `/drafts/${input.pathPart ?? mapping.pathPart}/${input.sourceId}`
   const title = input.title.trim().slice(0, 240) || "Новый материал"
+  const suggested = input.suggestedPrefix ? await availableCmsRoute(manager, input.suggestedPrefix, title, input.sourceId) : null
+  const path = suggested?.path ?? `/drafts/${input.pathPart ?? mapping.pathPart}/${input.sourceId}`
+  const slug = suggested?.slug ?? input.sourceId
   // Occurrence/Event comments are operational notes and may contain customer
   // context or other internal details. Keep the technical CMS link/draft, but
   // never seed those notes into editorial or eventually public fields.
@@ -206,7 +260,7 @@ async function createCmsSourceDraft(
     ? "Технический черновик из CRM. Не предназначен для публикации."
     : (summary || `${title}. Черновик из CRM.`).slice(0, 320)
   const content = {
-    route: { path, slug: input.sourceId, parentNodeId: null, sortOrder: 0 }, title,
+    route: { path, slug, parentNodeId: null, sortOrder: 0 }, title,
     summary, hero: { mode: "inherit" as const }, sections: [],
     seo: { title: title.slice(0, 70), description: seoDescription, indexPolicy: "noindex_follow", canonical: { mode: "self" }, structuredData: [] },
     relations: input.relations ?? [], schemaVersion: 1,
@@ -214,13 +268,14 @@ async function createCmsSourceDraft(
   const contentHash = hash(content)
   await manager.save(manager.create(CmsNodeEntity, { id: nodeId, kind: input.pageKind ?? mapping.pageKind, status: "active", createdBy: input.actorId, updatedBy: input.actorId, archivedAt: null }))
   await manager.save(manager.create(CmsNodeRevisionEntity, {
-    id: revisionId, nodeId, revision: 1, state: "draft", path, slug: input.sourceId, parentNodeId: null, sortOrder: 0,
+    id: revisionId, nodeId, revision: 1, state: "draft", path, slug, parentNodeId: null, sortOrder: 0,
     title, summary: content.summary, hero: content.hero, sections: [], seo: content.seo, relations: content.relations, schemaVersion: 1, contentHash, createdBy: input.actorId, createdAt: now,
   }))
   const link = await manager.save(manager.create(CmsSourceLinkEntity, {
     id: randomUUID(), sourceKind: input.sourceKind, sourceId: input.sourceId, sourceVersion: input.sourceVersion,
     nodeId, syncState: "draft", createdAt: now,
   }))
+  if (input.sourceKind === "catalog_offering") await ensurePublicProfile(manager, input.sourceId, nodeId, input.actorId)
   await manager.save(manager.create(ChangeLogEntity, {
     id: randomUUID(), entityType: "cms_node", entityId: nodeId, action: "created_from_crm", actorId: input.actorId, requestId: input.requestId,
     changes: { sourceKind: input.sourceKind, sourceId: input.sourceId, sourceVersion: input.sourceVersion, revisionId }, createdAt: now,
@@ -231,6 +286,49 @@ async function createCmsSourceDraft(
     availableAt: now, processedAt: null, attempts: 0, createdAt: now,
   }))
   return link
+}
+
+function resourcePagePrefix(kind?: string): string | null {
+  if (kind === "house" || kind === "houses") return "domiki"
+  if (kind === "camping" || kind?.startsWith("campground")) return "kemping"
+  if (kind === "venue" || kind === "venues") return "poshadki"
+  if (kind === "bath") return "dopy"
+  return null
+}
+
+const cyrillic: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+}
+
+export function suggestedCmsSlug(title: string, sourceId: string): string {
+  const normalized = title.toLocaleLowerCase("ru-RU").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+  const transliterated = [...normalized].map((letter) => cyrillic[letter] ?? letter).join("")
+  return transliterated.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 160).replace(/-$/g, "") || `resource-${sourceId.slice(0, 8)}`
+}
+
+async function availableCmsRoute(manager: EntityManager, prefix: string, title: string, sourceId: string): Promise<{ path: string; slug: string }> {
+  const base = suggestedCmsSlug(title, sourceId)
+  // Resource creation runs in a transaction. Lock a proposed name so concurrent
+  // creates cannot both select the same friendly URL.
+  await manager.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`cms-draft-route:${prefix}:${base}`])
+  for (let number = 1; number <= 100; number++) {
+    const suffix = number === 1 ? "" : `-${number}`
+    const slug = `${base.slice(0, 180 - suffix.length).replace(/-$/g, "")}${suffix}`
+    const path = `/${prefix}/${slug}`
+    const occupied = await manager.query(`
+      SELECT 1 FROM cms_node_revisions revision
+      JOIN cms_nodes node ON node.id = revision.node_id AND node.status = 'active'
+      WHERE revision.id = (SELECT latest.id FROM cms_node_revisions latest WHERE latest.node_id = node.id ORDER BY latest.revision DESC LIMIT 1)
+        AND revision.path = ANY($1::text[])
+      UNION ALL
+      SELECT 1 FROM cms_release_items item
+      JOIN cms_active_release active ON active.release_id = item.release_id
+      WHERE item.path = ANY($1::text[])
+      LIMIT 1
+    `, [publicReleasePathCandidates(path)]) as Array<{ "?column?": number }>
+    if (occupied.length === 0) return { path, slug }
+  }
+  throw new Error(`No free CMS route for ${prefix}/${base}`)
 }
 
 function hash(value: unknown) {

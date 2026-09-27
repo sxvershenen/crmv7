@@ -34,4 +34,14 @@ describe("content editor route placement", () => {
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ parentNodeId: "houses", parent: "Домики", sortOrder: 30, url: "/domiki/summer" }))
   })
+
+  it("keeps the suggested commercial section when editing a root-level CRM page slug", () => {
+    const update = vi.fn()
+    const draft = { ...editorFixtures["house-lesnoy"]!, id: "draft-house", slug: "dom-u-ozera", url: "/domiki/dom-u-ozera", parentNodeId: null, hasPublishedRevision: false }
+    render(<EditorTabContent device="desktop" draft={draft} editable kind="profile" nodes={nodeFixtures} tab="content" update={update} updateSection={noopSection} />)
+
+    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "dom-u-reki" } })
+
+    expect(update).toHaveBeenCalledWith({ slug: "dom-u-reki", url: "/domiki/dom-u-reki" })
+  })
 })

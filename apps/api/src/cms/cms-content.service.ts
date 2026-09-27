@@ -389,7 +389,7 @@ export class CmsContentService {
       if (!parentRevision) throw this.invalidRoute("У родительского материала нет активной версии маршрута")
       expectedPath = parentRevision.path === "/" ? `/${route.slug}` : `${parentRevision.path}/${route.slug}`
     }
-    if (route.path !== expectedPath) throw this.invalidRoute(`URL должен соответствовать родителю и slug: ${expectedPath}`)
+    if (route.path !== expectedPath && !isUnparentedCommercialPath(route, kind)) throw this.invalidRoute(`URL должен соответствовать родителю и slug: ${expectedPath}`)
   }
 
   private async assertRouteChangeAllowed(manager: EntityManager, nodeId: string, current: CmsNodeRevision["route"], next: CmsNodeRevision["route"]) {
@@ -523,6 +523,16 @@ function samePlacement(left: CmsNodeRevision["route"], right: CmsNodeRevision["r
     && left.slug === right.slug
     && left.parentNodeId === right.parentNodeId
     && left.sortOrder === right.sortOrder
+}
+
+function isUnparentedCommercialPath(route: CmsNodeRevision["route"], kind: string): boolean {
+  if (route.parentNodeId !== null) return false
+  const prefixes: Record<string, string[]> = {
+    resource_detail: ["domiki", "kemping", "poshadki", "dopy"],
+    program_detail: ["programmy"],
+    event_detail: ["meropriyatiya"],
+  }
+  return (prefixes[kind] ?? []).some((prefix) => route.path === `/${prefix}/${route.slug}`)
 }
 
 function stableStringify(value: unknown): string {

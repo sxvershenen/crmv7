@@ -152,6 +152,23 @@ describe("CmsContentService", () => {
     expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
   })
 
+  it("lets an unpublished resource page edit its generated commercial slug", async () => {
+    const current = { ...revision, state: "draft", path: "/domiki/dom-u-ozera", slug: "dom-u-ozera" }
+    const harness = updateHarness({ current, kind: "resource_detail" })
+
+    const result = await harness.service.update(node.id, mutation({ route: { path: "/domiki/dom-u-reki", slug: "dom-u-reki", parentNodeId: null, sortOrder: 10 } }), actor, "request-resource-slug")
+
+    expect(result.currentRevision?.route).toMatchObject({ path: "/domiki/dom-u-reki", slug: "dom-u-reki", parentNodeId: null })
+    expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
+  })
+
+  it("does not allow unrelated pages to claim a commercial root path", async () => {
+    const harness = updateHarness({ current: { ...revision, state: "draft" } })
+
+    await expect(harness.service.update(node.id, mutation({ route: { path: "/domiki/dom-u-reki", slug: "dom-u-reki", parentNodeId: null, sortOrder: 10 } }), actor, "request-invalid-commercial-root")).rejects.toMatchObject({ response: { code: "CMS_ROUTE_INVALID" } })
+    expect(harness.bumpQuery.execute).not.toHaveBeenCalled()
+  })
+
   it("allows content editing when the submitted legacy technical placement is unchanged", async () => {
     const sourceId = "77777777-7777-4777-8777-777777777777"
     const route = { path: `/drafts/resources/${sourceId}`, slug: sourceId, parentNodeId: null, sortOrder: 10 }
@@ -224,7 +241,7 @@ function mutation(overrides: Record<string, unknown>) {
   } as never
 }
 
-function updateHarness(options: { current: typeof revision; published?: typeof revision | null; children?: Array<{ id: string }> }) {
+function updateHarness(options: { current: typeof revision; published?: typeof revision | null; children?: Array<{ id: string }>; kind?: string }) {
   const idempotencyRepository = { findOne: vi.fn().mockResolvedValue(null) }
   const sourceRepository = { findOneBy: vi.fn().mockResolvedValue(null) }
   const revisionFinds = options.published === undefined
@@ -247,9 +264,9 @@ function updateHarness(options: { current: typeof revision; published?: typeof r
     where: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue({ affected: 1 }),
   }
-  const updatedNode = { ...node, version: 4, updatedAt: new Date("2026-08-31T10:01:00.000Z") }
+  const updatedNode = { ...node, kind: options.kind ?? node.kind, version: 4, updatedAt: new Date("2026-08-31T10:01:00.000Z") }
   const manager = {
-    findOneBy: vi.fn().mockResolvedValue(node),
+    findOneBy: vi.fn().mockResolvedValue({ ...node, kind: options.kind ?? node.kind }),
     findOneByOrFail: vi.fn().mockResolvedValue(updatedNode),
     getRepository: vi.fn((entity) => {
       if (entity === IdempotencyKeyEntity) return idempotencyRepository

@@ -8,7 +8,9 @@ describe("event-service CMS source mapping", () => {
     const offering = { id: "11111111-1111-4111-8111-111111111111", kind: "event_service", operationalName: "Corporate", version: 1, archivedAt: null }
     const manager = {
       getRepository: (entity: { name?: string }) => ({ findOneBy: async () => entity.name === "CatalogOfferingEntity" ? offering : null }),
-      query: async () => [{ eventServiceTemplateId: "22222222-2222-4222-8222-222222222222" }],
+      query: async (sql: string) => sql.includes("FROM offering_bindings")
+        ? [{ eventServiceTemplateId: "22222222-2222-4222-8222-222222222222" }]
+        : [],
       create: (_entity: unknown, values: Record<string, unknown>) => values,
       save: async (entity: Record<string, unknown>) => { saved.push(entity); return entity },
     }
@@ -16,7 +18,7 @@ describe("event-service CMS source mapping", () => {
     expect(result.status).toBe("created")
     expect(saved).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "event_detail" }),
-      expect.objectContaining({ path: `/drafts/meropriyatiya/${offering.id}`, state: "draft" }),
+      expect.objectContaining({ path: "/meropriyatiya/corporate", state: "draft" }),
       expect.objectContaining({ relations: [{ kind: "catalog_offering", entityId: offering.id }] }),
     ]))
   })

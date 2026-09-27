@@ -137,6 +137,7 @@ export class CmsPublicationService {
     const previousRelease = active.releaseId ? await manager.getRepository(CmsReleaseEntity).findOneBy({ id: active.releaseId }) : null
     const candidates = await this.withSourceKinds(manager, nodes.map((item) => ({ node: item, revision: byNode.get(item.id)! })))
     const result = materializeRelease(candidates, await this.siteDefaults(manager, previousRelease?.siteSettingsRevisionId ?? null))
+    if (!previousRelease?.siteSettingsRevisionId) result.issues.push(issue("CMS_SITE_SETTINGS_REQUIRED", "Сначала опубликуйте «Меню и подвал» в CMS: без настроек сайт не откроет опубликованную страницу", revision.path))
     return CmsPublicationPreviewSchema.parse(publicationPreview(active, nodeId, revision.id, baseItems, result))
   }
 
@@ -165,6 +166,7 @@ export class CmsPublicationService {
       const previousRelease = active.releaseId ? await manager.getRepository(CmsReleaseEntity).findOneBy({ id: active.releaseId }) : null
       const candidates = await this.withSourceKinds(manager, nodes.map((item) => ({ node: item, revision: byNode.get(item.id)! })))
       const result = materializeRelease(candidates, await this.siteDefaults(manager, previousRelease?.siteSettingsRevisionId ?? null))
+      if (!previousRelease?.siteSettingsRevisionId) result.issues.push(issue("CMS_SITE_SETTINGS_REQUIRED", "Сначала опубликуйте «Меню и подвал» в CMS: без настроек сайт не откроет опубликованную страницу", revision.path))
       if (input.preview) {
         const preview = publicationPreview(active, nodeId, revision.id, baseItems, result)
         if (input.preview.baseReleaseId !== active.releaseId || input.preview.activeReleaseVersion !== active.version || input.preview.previewHash !== preview.previewHash) throw this.staleRelease()
