@@ -43,6 +43,19 @@ it("shows asset metadata but disables mutations without media management rights"
   expect(screen.getByRole("button", { name: "Заменить" })).toBeDisabled()
 })
 
+it("shows published usage locations and narrows them by a page address", async () => {
+  getAsset.mockResolvedValue({ ...asset, usageCount: 3, publishedUsage: true, usageTotal: 3, usagesTruncated: true, usages: [{ ownerType: "cms_revision", ownerId: "revision-1", pageId: "page-1", path: "/family", pointer: "/hero/config/background/assetId", published: true }] })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1?tab=usage"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+
+  expect(await screen.findByText("Где используется · 3")).toBeInTheDocument()
+  expect(screen.getByText(/Показаны первые 1 из 3 ссылок/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Открыть страницу" })).toHaveAttribute("href", "/content/tree?selected=page-1")
+  expect(screen.getByRole("button", { name: "Архивировать" })).toBeDisabled()
+  fireEvent.change(screen.getByLabelText("Адрес страницы"), { target: { value: "/family" } })
+  fireEvent.click(screen.getByRole("button", { name: "Найти" }))
+  await waitFor(() => expect(getAsset).toHaveBeenLastCalledWith("asset-1", { path: "/family" }))
+})
+
 it("keeps metadata edits after a failed save", async () => {
   saveMediaMetadata.mockRejectedValueOnce(new Error("Сервер не сохранил изменения"))
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)

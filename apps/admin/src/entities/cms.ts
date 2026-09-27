@@ -179,9 +179,11 @@ export type MediaAsset = {
   previewUrl?: string
   variants?: { id: string; format: "webp" | "avif" | "original"; width: number | null; height: number | null; byteSize: number; url: string }[]
   usages?: { ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }[]
+  usageTotal?: number
+  usagesTruncated?: boolean
 }
 
-export type MediaAssetUsageQuery = { pageId?: string }
+export type MediaAssetUsageQuery = { pageId?: string; path?: string }
 export type MediaAssetPage = { items: MediaAsset[]; nextCursor: string | null }
 export type MediaAssetListQuery = { q?: string; state?: "ready" | "processing" | "failed"; cursor?: string; limit?: number }
 

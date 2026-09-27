@@ -10,6 +10,14 @@ import { createHomepageSectionEditorSection, homepageSectionPolicy } from "@admi
 import { createEditorialSection, editorialPolicy } from "@admin/data/editorial-section"
 
 describe("FixtureCmsRepository", () => {
+  it("filters media usage by the page identity or address", async () => {
+    const repository = new FixtureCmsRepository()
+    const all = await repository.getAsset("asset-mobile-ready")
+    expect(all.usages).toHaveLength(1)
+    expect((await repository.getAsset("asset-mobile-ready", { pageId: "landing-family" })).usageTotal).toBe(1)
+    expect((await repository.getAsset("asset-mobile-ready", { path: "/other" })).usageTotal).toBe(0)
+  })
+
   it("shows only real fixture revisions created by saves", async () => {
     const repository = new FixtureCmsRepository()
     const editor = await repository.getEditor("landing-family", "landing")
@@ -77,6 +85,17 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("preserves media usage totals and sends the page path to the server", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValue({ asset: wireMediaAsset(), usages: [], usageTotal: 12, usagesTruncated: true })
+    const repository = new ApiCmsRepository(client as never)
+
+    const result = await repository.getAsset(ids.node, { path: "/family" })
+
+    expect(result).toMatchObject({ usageTotal: 12, usagesTruncated: true })
+    expect(client.get).toHaveBeenCalledWith(`/media/assets/${ids.node}?path=%2Ffamily`, expect.anything())
+  })
+
   it("uses current SEO fields from the node list without reading every page", async () => {
     const client = clientMock()
     client.get.mockResolvedValue({ items: [listItem(detail)], nextCursor: null })

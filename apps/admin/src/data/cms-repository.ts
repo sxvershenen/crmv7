@@ -442,7 +442,7 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
   async getMedia(query?: MediaAssetListQuery) { const search = new URLSearchParams({ limit: String(query?.limit ?? 30) }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); if (query?.cursor) search.set("cursor", query.cursor); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return { items: response.items.map((asset) => mediaView(asset)), nextCursor: response.nextCursor } }
-  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
+  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated) }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
     return uploadGrantedMedia(grant, file)
@@ -782,12 +782,13 @@ async function uploadGrantedMedia(grant: import("@crm/contracts").MediaUploadGra
 
 function filterMediaUsages(asset: import("@admin/entities/cms").MediaAsset, query?: MediaAssetUsageQuery) {
   const pageId = query?.pageId
-  if (!pageId || !asset.usages) return asset
-  const usages = asset.usages.filter((usage) => usage.ownerId === pageId || usage.pointer.includes(pageId))
-  return { ...asset, usages, usageCount: usages.length, publishedUsage: usages.some((usage) => usage.published) }
+  const path = query?.path
+  if ((!pageId && !path) || !asset.usages) return { ...asset, usageTotal: asset.usageTotal ?? asset.usageCount, usagesTruncated: asset.usagesTruncated ?? (asset.usages?.length ?? 0) < asset.usageCount }
+  const usages = asset.usages.filter((usage) => (!pageId || usage.pageId === pageId) && (!path || usage.path === path))
+  return { ...asset, usages, usageTotal: usages.length, usagesTruncated: false }
 }
 
-function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }> = []): import("@admin/entities/cms").MediaAsset {
+function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }> = [], usageTotal?: number, usagesTruncated?: boolean): import("@admin/entities/cms").MediaAsset {
   const status = asset.state === "failed" ? "error" : asset.state === "processing" ? "converting" : asset.state
   const preview = asset.variants.filter((variant) => variant.format === "webp").sort((left, right) => (left.width ?? 0) - (right.width ?? 0))[0]
   return {
@@ -796,7 +797,7 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
     usageCount: asset.usageCount, publishedUsage: asset.publishedUsage, alt: asset.alt ?? "", license: asset.license ?? "Не указана",
     sourceMetadata: { alt: asset.alt, caption: asset.caption, credit: asset.credit, license: asset.license },
     caption: asset.caption ?? "", credit: asset.credit ?? "", tags: [...asset.tags], focalPoint: { ...asset.focalPoint },
-    dominant: "#66705a", ...(preview ? { previewUrl: preview.url } : {}), variants: asset.variants, usages,
+    dominant: "#66705a", ...(preview ? { previewUrl: preview.url } : {}), variants: asset.variants, usages, ...(usageTotal === undefined ? {} : { usageTotal }), ...(usagesTruncated === undefined ? {} : { usagesTruncated }),
   }
 }
 function mapMutationError(error: unknown) { if (error instanceof AdminApiError && error.rawCode === "VERSION_CONFLICT") return new CmsConflictError(Number(error.details.serverVersion ?? 0), error.requestId); return error }
