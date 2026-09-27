@@ -1,4 +1,4 @@
-import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
+import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
@@ -57,6 +57,11 @@ export class FixtureCmsRepository implements CmsRepository {
     const editor = this.editors[id]
     if (!editor) throw new Error("Запись не найдена")
     return CmsPublicationPreviewSchema.parse({ nodeId: "00000000-0000-4000-8000-000000000030", revisionId: "00000000-0000-4000-8000-000000000010", baseReleaseId: "00000000-0000-4000-8000-000000000020", activeReleaseVersion: 1, previewHash: "a".repeat(64), generatedAt: new Date().toISOString(), renderReadyPage: { path: editor.url, title: editor.publicTitle }, changes: [{ nodeId: "00000000-0000-4000-8000-000000000030", change: "updated", beforePath: editor.url, afterPath: editor.url, beforeHash: "b".repeat(64), afterHash: "c".repeat(64) }], affectedPaths: [editor.url], cacheTags: [`cms-path:${editor.url}`], dependencies: [], issues: [], canPublish: true })
+  }
+  async getPublicationStatus(id: string) {
+    const editor = this.editors[id]
+    const active = editor?.status === "published"
+    return CmsNodePublicationStatusSchema.parse({ active, path: active ? editor.url : null, revisionId: active ? "00000000-0000-4000-8000-000000000010" : null, activeReleaseId: "00000000-0000-4000-8000-000000000020", activeReleaseVersion: 1 })
   }
   async publish(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "published") }
   async getNavigation() { await pause(); return clone(this.navigation) }
@@ -182,6 +187,10 @@ export class ApiCmsRepository implements CmsRepository {
 
   async getPublicationPreview(id: string): Promise<CmsPublicationPreview> {
     return this.client.get(`/content/nodes/${encodeURIComponent(id)}/publication-preview`, CmsPublicationPreviewSchema)
+  }
+
+  async getPublicationStatus(id: string) {
+    return this.client.get(`/content/nodes/${encodeURIComponent(id)}/publication-status`, CmsNodePublicationStatusSchema)
   }
 
   async publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord> {

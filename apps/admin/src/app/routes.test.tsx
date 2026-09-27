@@ -45,7 +45,8 @@ describe("CMS route screens", () => {
   it("labels the editor workflow and previous publication separately", async () => {
     renderWithRouter(<ContentEditorPage kind="profile" />, "/content/public-profiles/resource/house-lesnoy", "/content/public-profiles/resource/:nodeId")
     expect(await screen.findByText("Редакция 11 публиковалась")).toBeInTheDocument()
-    expect(screen.getByText("Наличие страницы на сайте определяет активная публикация.")).toBeInTheDocument()
+    expect(await screen.findByText("Не в активной публикации")).toBeInTheDocument()
+    expect(screen.getByText("Статус показывает состав активной публикации; доставка до сайта проверяется отдельно.")).toBeInTheDocument()
     expect(screen.getByText("/domiki/lesnoy · Редакция 12")).toBeInTheDocument()
   })
 

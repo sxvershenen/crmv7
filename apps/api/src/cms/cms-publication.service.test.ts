@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsPublicProfileEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
+import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsPublicProfileEntity, CmsReleaseItemEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
 
 import { CmsPublicationService, materializeRelease, publicationPreview } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
@@ -12,6 +12,21 @@ const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
 const rootRevisionId = "33333333-3333-4333-8333-333333333333"
 const childRevisionId = "44444444-4444-4444-8444-444444444444"
+
+describe("CmsPublicationService node publication status", () => {
+  it.each([true, false])("reads active-release membership when present=%s, regardless of old published revisions", async (present) => {
+    const item = present ? { path: "/family", revisionId: rootRevisionId } : null
+    const nodeLookup = vi.fn().mockResolvedValue({ id: rootId, status: "archived" })
+    const itemLookup = vi.fn().mockResolvedValue(item)
+    const manager = { getRepository: (entity: unknown) => entity === CmsNodeEntity ? { findOneBy: nodeLookup }
+      : entity === CmsActiveReleaseEntity ? { findOneBy: vi.fn().mockResolvedValue({ releaseId: childId, version: 7 }) }
+      : entity === CmsReleaseItemEntity ? { findOneBy: itemLookup } : {} }
+    const service = new CmsPublicationService({ manager } as never)
+    const result = await service.nodePublicationStatus(rootId, { capabilities: { canViewContent: true } } as never)
+    expect(result).toEqual({ active: present, path: present ? "/family" : null, revisionId: present ? rootRevisionId : null, activeReleaseId: childId, activeReleaseVersion: 7 })
+    expect(itemLookup).toHaveBeenCalledWith({ releaseId: childId, nodeId: rootId })
+  })
+})
 
 describe("CmsPublicationService archived Resource dependencies", () => {
   it.each([

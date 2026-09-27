@@ -9,6 +9,7 @@ import {
   CmsNodeListQuerySchema,
   CmsNodeListResponseSchema,
   CmsNodeMutationSchema,
+  CmsNodePublicationStatusSchema,
   CmsNodePublishResultSchema,
   CmsNodePublishSchema,
   CmsNodeTransitionSchema,
@@ -104,6 +105,7 @@ const cmsTransition = adminRegister("CmsNodeTransition", CmsNodeTransitionSchema
 const cmsArchive = adminRegister("CmsNodeArchive", CmsNodeArchiveSchema);
 const cmsPublish = adminRegister("CmsNodePublish", CmsNodePublishSchema);
 const cmsPublishResult = adminRegister("CmsNodePublishResult", CmsNodePublishResultSchema);
+const cmsPublicationStatus = adminRegister("CmsNodePublicationStatus", CmsNodePublicationStatusSchema);
 const cmsPublicationPreview = adminRegister("CmsPublicationPreview", CmsPublicationPreviewSchema);
 const cmsReleaseList = adminRegister("CmsReleaseListResponse", CmsReleaseListResponseSchema);
 const siteSettingsDetail = adminRegister("CmsSiteSettingsDetail", CmsSiteSettingsDetailSchema);
@@ -226,6 +228,7 @@ adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/return-t
 adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/archive", ...adminPrivate, tags: ["Content"], summary: "Archive a CMS node", request: { params: idParams, body: { required: true, content: json(cmsArchive) } }, responses: { 200: { description: "Archived CMS node", content: json(cmsDetail) }, 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Version conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/publish", ...adminPrivate, tags: ["Content"], summary: "Publish this page directly; immutable publication journal stays internal", request: { params: idParams, body: { required: true, content: json(cmsPublish) } }, responses: { 200: { description: "Published page", content: json(cmsPublishResult) }, 403: errorResponse("Publication capability denied", adminError), 409: errorResponse("Version or concurrent publication conflict", adminError), 422: errorResponse("Page validation failed", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}/publication-preview", ...adminPrivate, tags: ["Content", "Publication"], summary: "Materialize render-ready before/after, dependency and cache blast-radius without changing production", request: { params: idParams }, responses: { 200: { description: "Guarded publication preview", content: json(cmsPublicationPreview) }, 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Node not found", adminError), 409: errorResponse("No publishable draft or invalid active release", adminError) } });
+adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}/publication-status", ...adminPrivate, tags: ["Content", "Publication"], summary: "Read this page's membership and URL in the active publication", request: { params: idParams }, responses: { 200: { description: "Active publication status", content: json(cmsPublicationStatus) }, 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Node not found", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/site-settings", ...adminPrivate, tags: ["Site settings"], summary: "Read draft and published navigation/site settings", responses: { 200: { description: "Versioned site settings", content: json(siteSettingsDetail) }, 403: errorResponse("Content view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "patch", path: "/site-settings", ...adminPrivate, tags: ["Site settings"], summary: "Save navigation and global site settings as a draft", request: { body: { required: true, content: json(siteSettingsMutation) } }, responses: { 200: { description: "Saved settings draft", content: json(siteSettingsDetail) }, 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Version conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/site-settings/publish", ...adminPrivate, tags: ["Site settings"], summary: "Publish navigation and site settings directly", request: { body: { required: true, content: json(siteSettingsPublish) } }, responses: { 200: { description: "Published settings", content: json(siteSettingsDetail) }, 403: errorResponse("Publication capability denied", adminError), 409: errorResponse("Version or concurrent publication conflict", adminError) } });

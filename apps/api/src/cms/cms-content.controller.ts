@@ -91,4 +91,10 @@ export class CmsContentController {
   publicationPreview(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Req() request: AuthenticatedRequest) {
     return this.publication!.previewNodePublication(params.id, request.sessionUser!)
   }
+
+  @Get(":id/publication-status")
+  @RequireCapabilities("canViewContent")
+  publicationStatus(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Req() request: AuthenticatedRequest) {
+    return this.publication!.nodePublicationStatus(params.id, request.sessionUser!)
+  }
 }

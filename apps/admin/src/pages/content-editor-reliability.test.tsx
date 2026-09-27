@@ -13,6 +13,27 @@ import { ContentEditorPage } from "./content-editor-page"
 describe("ContentEditorPage mutation recovery", () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
+  it("shows active publication separately from an earlier published revision", async () => {
+    const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111", hasPublishedRevision: true }
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+    vi.spyOn(cmsRepository, "getNodes").mockResolvedValue([])
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    vi.spyOn(cmsRepository, "getPublicationStatus").mockResolvedValue({ active: false, path: null, revisionId: null, activeReleaseId: "22222222-2222-4222-8222-222222222222", activeReleaseVersion: 7 })
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+    expect(await screen.findByText("Не в активной публикации")).toBeInTheDocument()
+  })
+
+  it("shows the actual published URL when it differs from the draft URL", async () => {
+    const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111", url: "/family-new" }
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+    vi.spyOn(cmsRepository, "getNodes").mockResolvedValue([])
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    vi.spyOn(cmsRepository, "getPublicationStatus").mockResolvedValue({ active: true, path: "/family", revisionId: "33333333-3333-4333-8333-333333333333", activeReleaseId: "22222222-2222-4222-8222-222222222222", activeReleaseVersion: 7 })
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+    expect(await screen.findByText("В активной публикации")).toBeInTheDocument()
+    expect(screen.getByText("Публичный URL: /family")).toBeInTheDocument()
+  })
+
   it("asks once when closing a dirty editor through its own Back action", async () => {
     // React Router creates a Node Request in jsdom; its signal must share that realm.
     vi.stubGlobal("AbortController", transferableAbortController().constructor)

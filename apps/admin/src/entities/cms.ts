@@ -1,6 +1,7 @@
 import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
 import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
+import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -231,6 +232,7 @@ export interface CmsRepository {
   approve(id: string, expectedVersion: number): Promise<EditorRecord>
   archive(id: string, expectedVersion: number): Promise<EditorRecord>
   getPublicationPreview(id: string): Promise<CmsPublicationPreview>
+  getPublicationStatus(id: string): Promise<CmsNodePublicationStatus>
   publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord>
   getNavigation(): Promise<PublicNavigation>
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>

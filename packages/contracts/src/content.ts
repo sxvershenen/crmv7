@@ -288,6 +288,16 @@ export const CmsNodePublishResultSchema = z.object({
 }).strict();
 export type CmsNodePublishResult = z.infer<typeof CmsNodePublishResultSchema>;
 
+/** Active-release membership; historical published revisions are not evidence of a live route. */
+export const CmsNodePublicationStatusSchema = z.object({
+  active: z.boolean(),
+  path: CmsPathSchema.nullable(),
+  revisionId: IdSchema.nullable(),
+  activeReleaseId: IdSchema.nullable(),
+  activeReleaseVersion: VersionSchema,
+}).strict();
+export type CmsNodePublicationStatus = z.infer<typeof CmsNodePublicationStatusSchema>;
+
 export const CmsContentEventTypeSchema = z.enum([
   "cms.content.node.created",
   "cms.content.revision.created",

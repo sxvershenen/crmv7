@@ -10,6 +10,7 @@ import {
   CmsReleaseOutboxEventSchema,
   CmsHeroPolicySchema,
   CmsNodePublishResultSchema,
+  CmsNodePublicationStatusSchema,
   CmsSiteSettingsStoredValueSchema,
   CmsSectionSchema,
   CmsPartnersSectionSchema,
@@ -30,6 +31,7 @@ import {
   type CmsReleaseOutboxEvent,
   type CmsNodePublish,
   type CmsNodePublishResult,
+  type CmsNodePublicationStatus,
   type CmsHeroConfig,
   type PublicReleasePageContent,
   type CmsConfigPatch,
@@ -117,6 +119,24 @@ export class CmsPublicationService {
       })
     }
     return CmsReleaseListResponseSchema.parse({ items, activeReleaseId: active.releaseId, activeReleaseVersion: active.version })
+  }
+
+  async nodePublicationStatus(nodeId: string, actor: SessionUser): Promise<CmsNodePublicationStatus> {
+    this.assertView(actor)
+    const manager = this.dataSource.manager
+    const node = await manager.getRepository(CmsNodeEntity).findOneBy({ id: nodeId })
+    if (!node) throw new NotFoundException({ code: "CMS_NODE_NOT_FOUND", message: "Материал не найден" })
+    const active = await this.active(manager)
+    const item = active.releaseId
+      ? await manager.getRepository(CmsReleaseItemEntity).findOneBy({ releaseId: active.releaseId, nodeId })
+      : null
+    return CmsNodePublicationStatusSchema.parse({
+      active: item !== null,
+      path: item?.path ?? null,
+      revisionId: item?.revisionId ?? null,
+      activeReleaseId: active.releaseId,
+      activeReleaseVersion: active.version,
+    })
   }
 
   async previewNodePublication(nodeId: string, actor: SessionUser): Promise<CmsPublicationPreview> {
