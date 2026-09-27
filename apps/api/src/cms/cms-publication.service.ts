@@ -428,7 +428,7 @@ export class CmsPublicationService {
     if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
     const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
     if (bindings.length !== 1 || !bindings[0]!.resourceId) return null
-    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId, archivedAt: IsNull() })
+    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId })
     if (!resource || !["house", "houses"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) return null
     const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
     if (!calendar) return null
@@ -450,8 +450,8 @@ export class CmsPublicationService {
     if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
     const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
     if (bindings.length !== 1 || !bindings[0]!.resourceId) return null
-    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId, archivedAt: IsNull() })
-    if (!resource || resource.archivedAt !== null || !["venue", "venues"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) return null
+    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId })
+    if (!resource || !["venue", "venues"].includes(resource.kind) || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) return null
     const calendar = await manager.getRepository(BusinessCalendarEntity).findOneBy({ id: offering.businessCalendarId, state: "active", archivedAt: IsNull() })
     const priceBook = offering.activePriceBookId ? await manager.getRepository(PriceBookEntity).findOneBy({ id: offering.activePriceBookId, offeringId: offering.id, state: "active", archivedAt: IsNull() }) : null
     if (!calendar || !priceBook) return null
@@ -520,7 +520,7 @@ export class CmsPublicationService {
     if (!expectedMode || !expectedRole || (terms.sellableUnit === "owned_tent" ? terms.inventoryMode !== "discrete_inventory" : terms.inventoryMode !== "shared_capacity")) return null
     const bindings = await manager.getRepository(OfferingBindingEntity).find({ where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
     if (bindings.length !== 1 || !bindings[0]!.resourceId || bindings[0]!.quantityDefault !== 1 || bindings[0]!.capacityImpactDefault !== 1 || !bindings[0]!.availabilityRequired) return null
-    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId, archivedAt: IsNull() })
+    const resource = await manager.getRepository(ResourceEntity).findOneBy({ id: bindings[0]!.resourceId })
     if (!resource || !["camping", "campground", "campground_owned_tent", "campground_own_tent_area"].includes(resource.kind) || resource.capacityMode !== expectedMode || resource.capacityTotal <= 0) return null
     const memberships = await manager.query(`
       SELECT member.id

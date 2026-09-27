@@ -11,7 +11,7 @@ const price = venue.price.mode === "request" ? null : new Intl.NumberFormat("ru-
 const priceLabel = venue.price.mode === "exact" ? "стоимость" : "стоимость от"
 const capacityLabel = venue.fulfillment.capacityTotal > 0 ? `до ${venue.fulfillment.capacityTotal} гостей` : "Вместимость уточняется"
 const spaceLabel = venue.fulfillment.spaceType === "outdoor" ? "На природе" : venue.fulfillment.spaceType === "indoor" ? "В помещении" : venue.fulfillment.spaceType === "mixed" ? "В помещении и на природе" : "Формат уточняется"
-const readinessLabel = venue.readiness === "ready" ? "Можно забронировать" : venue.readiness === "temporarily_unavailable" ? "Временно недоступна" : "Уточним доступность"
+const readinessLabel = venue.readiness === "ready" ? "Можно забронировать" : venue.readiness === "archived" ? "Архив" : venue.readiness === "temporarily_unavailable" ? "Временно недоступна" : "Уточним доступность"
 ---
 
 <section class="site-section site-section--compact" data-section-key="venue-detail" data-route-kind="venue">
@@ -32,7 +32,7 @@ const readinessLabel = venue.readiness === "ready" ? "Можно заброни�
       <div class="mt-4 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{price ? priceLabel : "стоимость"}</div>
       <div class="mt-1 text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] text-[var(--site-color-brand-700)]">{price ?? "По запросу"}</div>
       {venue.priceBasisLabel && <div class="mt-1 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{venue.priceBasisLabel}</div>}
-      <button data-site-action="booking" data-site-item={`Площадка: ${venue.title}`} class="site-button site-button--primary mt-5 w-full">Оставить заявку <ArrowRight className="h-4 w-4" /></button>
+      {venue.requestAvailable && <button data-site-action="booking" data-site-item={`Площадка: ${venue.title}`} class="site-button site-button--primary mt-5 w-full">Оставить заявку <ArrowRight className="h-4 w-4" /></button>}
     </aside>
   </div>
 </section>

@@ -10,7 +10,7 @@ const { campground } = Astro.props
 const ownedTent = campground.fulfillment.salesUnit === "owned_tent"
 const capacityLabel = ownedTent ? `до ${campground.fulfillment.guestCapacityTotal} гостей` : `до ${campground.fulfillment.capacityTotal} палаточных мест`
 const price = campground.price.mode === "request" ? null : new Intl.NumberFormat("ru-RU", { style: "currency", currency: campground.price.amount.currency, maximumFractionDigits: 0 }).format(campground.price.amount.amountMinor / 100)
-const readinessLabel = campground.readiness === "ready" ? "Можно забронировать" : campground.readiness === "temporarily_unavailable" ? "Временно недоступен" : "Уточним доступность"
+const readinessLabel = campground.readiness === "ready" ? "Можно забронировать" : campground.readiness === "archived" ? "Архив" : campground.readiness === "temporarily_unavailable" ? "Временно недоступен" : "Уточним доступность"
 ---
 
 <section class="site-section site-section--compact" data-section-key="campground-detail" data-route-kind="campground">
@@ -31,7 +31,7 @@ const readinessLabel = campground.readiness === "ready" ? "Можно забро
       <div class="mt-4 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">стоимость от</div>
       <div class="mt-1 text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] text-[var(--site-color-brand-700)]">{price ?? "По запросу"}</div>
       {campground.priceBasisLabel && <div class="mt-1 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{campground.priceBasisLabel}</div>}
-      <button data-site-action="booking" data-site-item={`Кемпинг: ${campground.title}`} class="site-button site-button--primary mt-5 w-full">Оставить заявку <ArrowRight className="h-4 w-4" /></button>
+      {campground.requestAvailable && <button data-site-action="booking" data-site-item={`Кемпинг: ${campground.title}`} class="site-button site-button--primary mt-5 w-full">Оставить заявку <ArrowRight className="h-4 w-4" /></button>}
     </aside>
   </div>
 </section>

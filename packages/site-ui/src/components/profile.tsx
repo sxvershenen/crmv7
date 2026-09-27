@@ -7,9 +7,10 @@ export interface PublicProfileIntroProps {
   summary?: string | null
   bookingLabel?: string
   bookingItem?: string
+  bookingAvailable?: boolean
 }
 
 /** Safe CMS-first profile fallback; operational availability and prices are never inferred here. */
-export function PublicProfileIntro({ bookingItem, bookingLabel = "Оставить заявку", kindLabel, summary, title }: PublicProfileIntroProps) {
-  return <section className="site-section site-section--compact"><Card className="site-profile-intro"><Stack gap="var(--site-space-5)"><Badge tone="brand">{kindLabel}</Badge><SectionHeading level={1} title={title} description={summary} /><div><Button type="button" data-site-action="booking" data-site-item={bookingItem ?? title}>{bookingLabel}<ArrowRight size={16} /></Button></div></Stack></Card></section>
+export function PublicProfileIntro({ bookingItem, bookingLabel = "Оставить заявку", bookingAvailable = true, kindLabel, summary, title }: PublicProfileIntroProps) {
+  return <section className="site-section site-section--compact"><Card className="site-profile-intro"><Stack gap="var(--site-space-5)"><Badge tone="brand">{kindLabel}</Badge><SectionHeading level={1} title={title} description={summary} />{bookingAvailable && <div><Button type="button" data-site-action="booking" data-site-item={bookingItem ?? title}>{bookingLabel}<ArrowRight size={16} /></Button></div>}</Stack></Card></section>
 }

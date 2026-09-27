@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto"
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
 import { DataSource, type EntityManager, type FindOptionsWhere } from "typeorm"
 
-import { IdSchema, type EventAllocationReplace, type SessionUser } from "@crm/contracts"
-import { ChangeLogEntity, EventEntity, IdempotencyKeyEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
+import { IdSchema, OfferingConfigurationOutboxEventSchema, type EventAllocationReplace, type SessionUser } from "@crm/contracts"
+import { ChangeLogEntity, EventEntity, IdempotencyKeyEntity, OutboxDeliveryEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 import { assertAvailable, checkAvailability, type AvailabilityAllocation } from "@crm/domain"
 
 import { toResourceDto } from "./resource.mapper.js"
@@ -25,6 +25,7 @@ import type {
   ResourceUpdate,
 } from "./resources.contracts.js"
 import { ensureCmsSourceDraft } from "../cms/cms-source-draft.js"
+import { canonicalSha256 } from "../offerings/offering-mutation-support.js"
 
 @Injectable()
 export class ResourcesService {
@@ -95,6 +96,7 @@ export class ResourcesService {
       if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: current.id }))
       const saved = await manager.findOneByOrFail(ResourceEntity, { id: current.id })
       await this.recordMutation(manager, saved, "updated", actor.id, requestId, { before, after: this.snapshot(saved) })
+      await this.invalidateBoundOfferings(manager, saved, actor.id, requestId)
       return toResourceDto(saved, actor, await this.resourceAllocations(saved.id))
     })
   }
@@ -112,6 +114,7 @@ export class ResourcesService {
       if (result.affected !== 1) throw this.versionConflict(await manager.findOneByOrFail(ResourceEntity, { id: current.id }))
       const saved = await manager.findOneByOrFail(ResourceEntity, { id: current.id })
       await this.recordMutation(manager, saved, "archived", actor.id, requestId, { archivedAt: archivedAt.toISOString() })
+      await this.invalidateBoundOfferings(manager, saved, actor.id, requestId)
       return toResourceDto(saved, actor, await this.resourceAllocations(saved.id))
     })
   }
@@ -120,6 +123,7 @@ export class ResourcesService {
     this.assertCapability(actor, "canView")
     const resource = await this.dataSource.getRepository(ResourceEntity).findOneBy({ id: input.resourceId })
     if (!resource) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
+    if (resource.archivedAt || resource.settings?.active === false) return { available: false, conflicts: [] }
     const allocations = await this.overlappingAllocations(this.dataSource.manager, input)
     const availabilityRequest = {
       resourceId: resource.id,
@@ -212,6 +216,7 @@ export class ResourcesService {
     })
     if (!resource) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
     if (resource.archivedAt) throw new ConflictException({ code: "RESOURCE_ARCHIVED", message: "Архивный ресурс недоступен" })
+    if (resource.settings?.active === false) throw new ConflictException({ code: "RESOURCE_INACTIVE", message: "Ресурс временно недоступен для бронирования" })
     if (resource.version !== input.expectedVersion) throw this.versionConflict(resource)
     const allocations = await this.overlappingAllocations(manager, {
       resourceId: input.resourceId, startAt: input.startAt, endAt: input.endAt,
@@ -409,5 +414,33 @@ export class ResourcesService {
     const now = new Date()
     await manager.getRepository(ChangeLogEntity).save(manager.create(ChangeLogEntity, { id: randomUUID(), entityType: "resource", entityId: resource.id, action, actorId, requestId, changes, createdAt: now }))
     await manager.getRepository(OutboxEventEntity).save(manager.create(OutboxEventEntity, { id: randomUUID(), topic: `resource.${action}`, aggregateType: "resource", aggregateId: resource.id, payload: { resourceId: resource.id, code: resource.code, version: resource.version }, availableAt: now, processedAt: null, attempts: 0, createdAt: now }))
+  }
+
+  private async invalidateBoundOfferings(manager: EntityManager, resource: ResourceEntity, actorId: string, requestId: string) {
+    const offerings = await manager.query(`
+      SELECT DISTINCT offering.id, offering.subject_version AS "subjectVersion"
+      FROM catalog_offerings offering
+      JOIN offering_bindings binding ON binding.offering_id = offering.id
+        AND binding.role = 'primary' AND binding.resource_id = $1 AND binding.archived_at IS NULL
+      WHERE offering.state = 'active' AND offering.archived_at IS NULL
+    `, [resource.id]) as Array<{ id: string; subjectVersion: number }>
+    const now = new Date()
+    for (const offering of offerings) {
+      const event = OfferingConfigurationOutboxEventSchema.parse({
+        eventId: randomUUID(), eventType: "public.offering_projection.invalidated", occurredAt: now.toISOString(),
+        actorId, requestId, operationId: randomUUID(), entrySurface: "internal",
+        aggregate: { type: "catalog_offering", id: offering.id },
+        versions: { calendar: null, subject: offering.subjectVersion, addOns: null },
+        configurationHash: canonicalSha256({ resourceId: resource.id, resourceVersion: resource.version, offeringId: offering.id }),
+      })
+      await manager.save(manager.create(OutboxEventEntity, {
+        id: event.eventId, topic: event.eventType, aggregateType: "catalog_offering", aggregateId: offering.id,
+        payload: event as unknown as Record<string, unknown>, availableAt: now, processedAt: null, attempts: 0, createdAt: now,
+      }))
+      await manager.save(["sse", "public_projection"].map((consumer) => manager.create(OutboxDeliveryEntity, {
+        eventId: event.eventId, consumer, status: "pending", attempts: 0, availableAt: now,
+        processedAt: null, lastError: null, createdAt: now, updatedAt: now,
+      })))
+    }
   }
 }

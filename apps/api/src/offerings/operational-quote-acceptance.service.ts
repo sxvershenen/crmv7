@@ -228,7 +228,7 @@ export class OperationalQuoteAcceptanceService {
     if (!offering || offering.kind !== "house" || offering.archivedAt !== null) throw failure("QUOTE_TARGET_UNSUPPORTED", "Расчёт не относится к доступному house offering")
     const binding = bindings.get(offering.id)
     const resource = resources.get(context.primaryResourceId)
-    if (!binding?.resourceId || binding.resourceId !== context.primaryResourceId || !resource || resource.archivedAt !== null || resource.version !== context.primaryResourceVersion || offering.subjectVersion !== context.subjectVersion) throw failure("QUOTE_CONTEXT_MISMATCH", "Условия исполнения предложения изменились после расчёта")
+    if (!binding?.resourceId || binding.resourceId !== context.primaryResourceId || !resource || resource.archivedAt !== null || resource.settings?.active === false || resource.version !== context.primaryResourceVersion || offering.subjectVersion !== context.subjectVersion) throw failure("QUOTE_CONTEXT_MISMATCH", "Условия исполнения предложения изменились после расчёта")
     if (item.type !== "accommodation" || item.resourceId !== context.primaryResourceId) throw failure("QUOTE_ITEM_MISMATCH", "Расчёт не соответствует позиции бронирования")
     if (item.currency !== result.currency || item.priceAmount !== result.total.amountMinor || item.discountAmount !== 0) throw failure("QUOTE_AMOUNT_MISMATCH", "Сумма или валюта позиции не соответствует расчёту")
     const arrival = localDate(item.startAt, offering.timezone), departure = localDate(item.endAt, offering.timezone)

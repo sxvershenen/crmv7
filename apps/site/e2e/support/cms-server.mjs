@@ -98,6 +98,11 @@ createServer(async (request, response) => {
       house.readiness = "request_only"
       house.fulfillment.availabilityMode = "request_only"
     }
+    if (scenario === "house-unavailable" || scenario === "house-archived") {
+      house.requestAvailable = false
+      house.readiness = scenario === "house-archived" ? "archived" : "temporarily_unavailable"
+      house.fulfillment.availabilityMode = "request_only"
+    }
     if (scenario === "house-private") house.internalNotes = "PRIVATE_BACKEND_DETAIL"
     if (scenario === "house-invalid") delete house.fulfillment
     if (scenario === "house-version") {
@@ -143,6 +148,12 @@ createServer(async (request, response) => {
       campground.readiness = "request_only"
       campground.fulfillment.availabilityMode = "request_only"
     }
+    if (scenario === "campground-unavailable" || scenario === "campground-archived") {
+      campground.requestAvailable = false
+      campground.readiness = scenario === "campground-archived" ? "archived" : "temporarily_unavailable"
+      campground.capacity.available = null
+      campground.fulfillment.availabilityMode = "request_only"
+    }
     if (scenario === "campground-private") campground.internalNotes = "PRIVATE_BACKEND_DETAIL"
     if (scenario === "campground-invalid") delete campground.fulfillment
     if (scenario === "campground-version") {
@@ -178,6 +189,11 @@ createServer(async (request, response) => {
       venue.price = { mode: "request" }
       venue.priceBasisLabel = null
       venue.readiness = "request_only"
+      venue.fulfillment.availabilityMode = "request_only"
+    }
+    if (scenario === "venue-unavailable" || scenario === "venue-archived") {
+      venue.requestAvailable = false
+      venue.readiness = scenario === "venue-archived" ? "archived" : "temporarily_unavailable"
       venue.fulfillment.availabilityMode = "request_only"
     }
     if (scenario === "venue-private") venue.internalNotes = "PRIVATE_BACKEND_DETAIL"

@@ -54,6 +54,8 @@ function row(overrides: Record<string, unknown> = {}) {
     capacityTotal: 4,
     spaceType: "mixed",
     resourceActive: true,
+    resourceArchivedAt: null,
+    resourceUpdatedAt: new Date("2026-09-02T08:11:00.000Z"),
     titleKey: "домик «лесной»",
     ...overrides,
   }
@@ -105,5 +107,15 @@ describe("PublicHouseOfferingService", () => {
     await test.service.detail({ path: "/houses/forest" })
     expect(test.query.mock.calls[0]?.[0]).toContain("SELECT COUNT(*) FROM offering_bindings primary_binding")
     expect(test.query.mock.calls[0]?.[0]).toContain("primary_binding.archived_at IS NULL) = 1")
+  })
+
+  it.each([
+    [{ resourceActive: false }, "temporarily_unavailable"],
+    [{ resourceActive: false, resourceArchivedAt: new Date("2026-09-03T08:00:00.000Z") }, "archived"],
+  ] as const)("keeps a published URL when the CRM resource is unavailable: %s", async (overrides, readiness) => {
+    const test = subject([row(overrides)])
+    const result = await test.service.detail({ path: "/houses/forest" })
+    expect(result.data).toMatchObject({ path: "/domiki/forest", readiness, requestAvailable: false })
+    expect(test.query.mock.calls[0]?.[0]).not.toContain("resource.archived_at IS NULL")
   })
 })

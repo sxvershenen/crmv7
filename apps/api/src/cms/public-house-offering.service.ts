@@ -52,6 +52,8 @@ type ProjectionRow = {
   capacityTotal: number
   spaceType: "outdoor" | "indoor" | "mixed" | null
   resourceActive: boolean
+  resourceArchivedAt: Date | null
+  resourceUpdatedAt: Date
   titleKey: string
 }
 
@@ -108,6 +110,7 @@ export class PublicHouseOfferingService {
         price_book.updated_at AS "priceBookUpdatedAt", resource.capacity_total AS "capacityTotal",
         NULLIF(resource.settings->>'spaceType', '') AS "spaceType",
         (resource.settings->>'active' IS DISTINCT FROM 'false') AS "resourceActive",
+        resource.archived_at AS "resourceArchivedAt", resource.updated_at AS "resourceUpdatedAt",
         LOWER(COALESCE(item.resolved_content->>'title', '')) AS "titleKey"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
@@ -123,7 +126,7 @@ export class PublicHouseOfferingService {
         AND binding.archived_at IS NULL AND binding.quantity_default = 1
         AND binding.capacity_impact_default = 1 AND binding.availability_required = true
       JOIN resources resource ON resource.id = binding.resource_id AND resource.kind IN ('house', 'houses')
-        AND resource.capacity_mode = 'fixed' AND resource.capacity_total > 0 AND resource.archived_at IS NULL
+        AND resource.capacity_mode = 'fixed' AND resource.capacity_total > 0
       JOIN business_calendars calendar ON calendar.id = offering.business_calendar_id
         AND calendar.state = 'active' AND calendar.archived_at IS NULL
       LEFT JOIN price_books price_book ON price_book.id = offering.active_price_book_id
@@ -178,8 +181,9 @@ export class PublicHouseOfferingService {
       : row.priceDisplayMode === "from" && uniqueAmounts.length > 0
         ? { mode: "from" as const, amount: { amountMinor: uniqueAmounts[0]!, currency: row.currency } }
         : { mode: "request" as const }
-    const ready = row.resourceActive && price.mode !== "request" && row.salesMode !== "request_only"
-    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
+    const available = row.resourceArchivedAt === null && row.resourceActive
+    const ready = available && price.mode !== "request" && row.salesMode !== "request_only"
+    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.resourceUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
     return PublicHouseSummarySchema.parse({
       offeringId: row.offeringId,
       kind: "house",
@@ -190,9 +194,9 @@ export class PublicHouseOfferingService {
       price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_night" ? "за ночь" : plans[0]?.pricingBasis === "per_person" ? "за гостя" : null,
       quoteAvailable: false,
-      requestAvailable: true,
+      requestAvailable: available,
       capacity: null,
-      readiness: !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
+      readiness: row.resourceArchivedAt !== null ? "archived" : !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
       timezone: row.timezone,
       currency: row.currency,
       sourceVersions: {

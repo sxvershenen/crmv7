@@ -451,6 +451,7 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
     for (const resourceId of resourceIds) {
       const resource = await manager.getRepository(ResourceEntity).findOne({ where: { id: resourceId }, lock: { mode: "pessimistic_write" } })
       if (!resource || resource.archivedAt) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
+      if (resource.settings?.active === false) throw new ConflictException({ code: "RESOURCE_INACTIVE", message: "Ресурс временно недоступен для бронирования" })
       resources.set(resource.id, resource)
     }
     for (const item of items) {

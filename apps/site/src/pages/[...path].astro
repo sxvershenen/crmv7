@@ -64,8 +64,16 @@ if (failure) {
 const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSettings) : undefined
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
 const effectiveHero = page?.hero
-const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
 const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : page?.kind === "event_detail" ? "Мероприятие" : null
+const resourceReadiness = house?.readiness ?? campground?.readiness ?? venue?.readiness
+const resourceRequestAvailable = house?.requestAvailable ?? campground?.requestAvailable ?? venue?.requestAvailable ?? true
+const resourceStatus = resourceReadiness === "archived" ? "Архив" : resourceReadiness === "temporarily_unavailable" ? "Временно недоступно" : null
+const originalHero = effectiveHero ? toSiteHero(effectiveHero) : undefined
+const hero = originalHero && !resourceRequestAvailable ? {
+  ...originalHero,
+  primaryCta: originalHero.primaryCta.action === "booking" ? { ...originalHero.primaryCta, enabled: false } : originalHero.primaryCta,
+  secondaryCta: originalHero.secondaryCta.action === "booking" ? { ...originalHero.secondaryCta, enabled: false } : originalHero.secondaryCta,
+} : originalHero
 const robots = !page
   ? "noindex_nofollow"
   : listing?.robots ?? (page.seo.indexPolicy === "noindex_follow" ? "noindex_follow" : page.seo.indexPolicy === "noindex_nofollow" ? "noindex_nofollow" : "index_follow")
@@ -89,7 +97,8 @@ const failureTitle = failure === "not_found" ? "Страница не найде
   <SitePageShell>
     {page ? <SitePageFrame>
       {hero && <HeroIsland {hero} client:load />}
-      {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} />}
+      {resourceStatus && <div class="site-section site-section--compact" role="status"><div class="site-alert"><div><strong>{resourceStatus}</strong><p>{resourceReadiness === "archived" ? "Этот вариант больше не доступен для бронирования." : "Сейчас этот вариант нельзя забронировать. Проверьте доступность позже."}</p></div></div></div>}
+      {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} bookingAvailable={resourceRequestAvailable} />}
       {!profileKind && !hero && !listing && <header class="site-section"><h1 class="site-type-h1">{page.title}</h1>{page.summary && <p class="site-type-body mt-3 max-w-3xl text-[var(--site-color-text-muted)]">{page.summary}</p>}</header>}
       {listing && <ListingIsland listing={listing} title={hero ? undefined : page.title} description={page.summary} client:load />}
       {house && <HouseDetail house={house} />}

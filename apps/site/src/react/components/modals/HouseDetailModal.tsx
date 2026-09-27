@@ -87,6 +87,8 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
             <p className="text-[14px] text-[#6b7280] mt-1">
               {house.undertitle}
             </p>
+            {house.publicOffering?.readiness === "archived" && <p className="mt-2 text-[13px] font-medium text-[#6b7280]">Архив · бронирование недоступно</p>}
+            {house.publicOffering?.readiness === "temporarily_unavailable" && <p className="mt-2 text-[13px] font-medium text-[#6b7280]">Временно недоступно · бронирование приостановлено</p>}
           </div>
 
           <div className="shrink-0 text-left md:text-right">
@@ -157,8 +159,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
         }
         {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-neutral-100">
-          <button
-            disabled={house.publicOffering ? !house.publicOffering.requestAvailable : false}
+          {(house.publicOffering?.requestAvailable ?? true) ? <button
             onClick={() => {
               onClose();
               onBook(house.title);
@@ -169,7 +170,7 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({
             <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center group-hover:-rotate-45 transition-transform">
               <ArrowRight className="w-3.5 h-3.5" />
             </span>
-          </button>
+          </button> : <p className="w-full sm:flex-1 text-[13px] font-medium text-[#6b7280]">{house.publicOffering?.readiness === "archived" ? "Архив: заявки на этот домик закрыты" : "Домик временно недоступен для заявки"}</p>}
           
           <button
             onClick={onClose}

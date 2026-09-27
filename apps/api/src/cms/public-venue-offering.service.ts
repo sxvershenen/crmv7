@@ -47,6 +47,8 @@ type ProjectionRow = {
   capacityTotal: number
   spaceType: "outdoor" | "indoor" | "mixed" | null
   resourceActive: boolean
+  resourceArchivedAt: Date | null
+  resourceUpdatedAt: Date
   titleKey: string
 }
 
@@ -96,6 +98,7 @@ export class PublicVenueOfferingService {
         price_book.updated_at AS "priceBookUpdatedAt", resource.capacity_total AS "capacityTotal",
         NULLIF(resource.settings->>'spaceType', '') AS "spaceType",
         COALESCE((resource.settings->>'active')::boolean, true) AS "resourceActive",
+        resource.archived_at AS "resourceArchivedAt", resource.updated_at AS "resourceUpdatedAt",
         LOWER(COALESCE(item.resolved_content->>'title', '')) AS "titleKey"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
@@ -105,7 +108,7 @@ export class PublicVenueOfferingService {
       JOIN cms_public_profiles profile ON profile.node_id = item.node_id AND profile.kind = 'catalog_offering' AND profile.entity_id = source.source_id AND profile.archived_at IS NULL
       JOIN catalog_offerings offering ON offering.id = source.source_id AND offering.kind = 'venue' AND offering.state = 'active' AND offering.archived_at IS NULL
       JOIN offering_bindings binding ON binding.offering_id = offering.id AND binding.role = 'primary' AND binding.archived_at IS NULL AND binding.quantity_default = 1 AND binding.capacity_impact_default = 1 AND binding.availability_required = true
-      JOIN resources resource ON resource.id = binding.resource_id AND resource.kind IN ('venue', 'venues') AND resource.capacity_mode = 'fixed' AND resource.capacity_total > 0 AND resource.archived_at IS NULL
+      JOIN resources resource ON resource.id = binding.resource_id AND resource.kind IN ('venue', 'venues') AND resource.capacity_mode = 'fixed' AND resource.capacity_total > 0
       JOIN business_calendars calendar ON calendar.id = offering.business_calendar_id AND calendar.state = 'active' AND calendar.archived_at IS NULL
       LEFT JOIN price_books price_book ON price_book.id = offering.active_price_book_id AND price_book.offering_id = offering.id AND price_book.state = 'active' AND price_book.archived_at IS NULL
       WHERE active.singleton_key = 'public'
@@ -140,13 +143,14 @@ export class PublicVenueOfferingService {
     const amounts = activeBook ? plans.flatMap((plan) => [plan.baseAmountMinor, ...(rulesByPlan.get(plan.id) ?? []).flatMap((rule) => rule.amountMinor === null ? [] : [rule.amountMinor])]) : []
     const uniqueAmounts = [...new Set(amounts)].sort((left, right) => left - right)
     const price = row.priceDisplayMode === "exact" && uniqueAmounts.length === 1 ? { mode: "exact" as const, amount: { amountMinor: uniqueAmounts[0]!, currency: row.currency } } : row.priceDisplayMode === "from" && uniqueAmounts.length > 0 ? { mode: "from" as const, amount: { amountMinor: uniqueAmounts[0]!, currency: row.currency } } : { mode: "request" as const }
-    const ready = row.resourceActive && price.mode !== "request" && row.salesMode !== "request_only"
-    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
+    const available = row.resourceArchivedAt === null && row.resourceActive
+    const ready = available && price.mode !== "request" && row.salesMode !== "request_only"
+    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.resourceUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
     return PublicVenueSummarySchema.parse({
       offeringId: row.offeringId, kind: "venue", title: content.data.title, summary: content.data.summary, price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_hour" ? "за час" : plans[0]?.pricingBasis === "per_slot" ? "за слот" : plans[0]?.pricingBasis === "per_day" ? "за день" : plans[0]?.pricingBasis === "flat_package" ? "за пакет" : null,
-      quoteAvailable: false, requestAvailable: true, capacity: null,
-      readiness: !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
+      quoteAvailable: false, requestAvailable: available, capacity: null,
+      readiness: row.resourceArchivedAt !== null ? "archived" : !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
       timezone: row.timezone, currency: row.currency,
       sourceVersions: { offering: row.offeringVersion, pricing: row.pricingVersion, priceBook: activeBook ? row.priceBookRevision : null, calendar: row.calendarVersion, contentReleaseId: row.releaseId, profileRevisionId: row.revisionId },
       asOf,

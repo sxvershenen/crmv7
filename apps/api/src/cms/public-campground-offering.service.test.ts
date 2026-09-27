@@ -55,6 +55,8 @@ function row(overrides: Record<string, unknown> = {}) {
     inventoryMode: "shared_capacity",
     capacityTotal: 15,
     resourceActive: true,
+    resourceArchivedAt: null,
+    resourceUpdatedAt: new Date("2026-09-02T08:11:00.000Z"),
     titleKey: "кемпинг «своя палатка»",
     ...overrides,
   }
@@ -103,6 +105,16 @@ describe("PublicCampgroundOfferingService", () => {
 
     expect(result.data).toMatchObject({ releaseId, nextCursor: null, items: [{ price: { mode: "request" }, readiness: "request_only" }] })
     expect(test.query.mock.calls[0]?.[1]).toEqual([null, null, null, 26])
+  })
+
+  it.each([
+    [{ resourceActive: false }, "temporarily_unavailable"],
+    [{ resourceActive: false, resourceArchivedAt: new Date("2026-09-03T08:00:00.000Z") }, "archived"],
+  ] as const)("keeps a published campground when the CRM resource is unavailable: %s", async (overrides, readiness) => {
+    const test = subject([row(overrides)])
+    const result = await test.service.detail({ path: "/campgrounds/pitches" })
+    expect(result.data).toMatchObject({ path: "/kemping/pitches", readiness, requestAvailable: false, capacity: { available: null } })
+    expect(test.query.mock.calls[0]?.[0]).not.toContain("resource.archived_at IS NULL")
   })
 
   it("fails closed when the release dependency hash is stale", async () => {

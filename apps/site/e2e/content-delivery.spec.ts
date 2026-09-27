@@ -291,6 +291,21 @@ test("keeps a valid house route request-only when price authority is absent", as
   await expect(page.locator('[data-route-kind="house"]')).toContainText("Уточним доступность")
 })
 
+for (const [kind, path] of [["house", "/domiki/forest"], ["campground", "/kemping/pitches"], ["venue", "/poshadki/meadow"]] as const) {
+  for (const [state, label] of [["unavailable", "Временно недоступно"], ["archived", "Архив"]] as const) {
+    test(`keeps ${kind} indexed but closes requests when its CRM resource is ${state}`, async ({ page, request }) => {
+      await request.post(`http://127.0.0.1:4398/__scenario?name=${kind}-${state}`)
+      const response = await page.goto(path)
+      expect(response?.status()).toBe(200)
+      await expect(page.getByRole("status").filter({ hasText: label })).toBeVisible()
+      await expect(page.locator(`[data-route-kind="${kind}"] [data-site-action="booking"]`)).toHaveCount(0)
+      await expect(page.locator('meta[name="robots"]')).toHaveCount(0)
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `https://svistoplyasovo.ru${path}`)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    })
+  }
+}
+
 for (const scenario of ["house-missing", "house-outage", "house-private", "house-invalid", "house-version", "house-wrong-path"]) {
   test(`fails closed for ${scenario} house delivery`, async ({ request }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=${scenario}`)

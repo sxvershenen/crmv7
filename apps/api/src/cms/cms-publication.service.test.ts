@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import { materializeRelease, publicationPreview } from "./cms-publication.service.js"
+import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsPublicProfileEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
+
+import { CmsPublicationService, materializeRelease, publicationPreview } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
 import { createPublicCampgroundProjectionDependency } from "../offerings/public-campground-projection.js"
 import { createPublicProgramProjectionDependency } from "../offerings/public-program-projection.js"
@@ -10,6 +12,38 @@ const rootId = "11111111-1111-4111-8111-111111111111"
 const childId = "22222222-2222-4222-8222-222222222222"
 const rootRevisionId = "33333333-3333-4333-8333-333333333333"
 const childRevisionId = "44444444-4444-4444-8444-444444444444"
+
+describe("CmsPublicationService archived Resource dependencies", () => {
+  it.each([
+    ["house", "/domiki/forest", "house", "safeHouseProjectionDependency"],
+    ["campground", "/kemping/pitches", "camping", "safeCampgroundProjectionDependency"],
+    ["venue", "/poshadki/meadow", "venue", "safeVenueProjectionDependency"],
+  ] as const)("keeps %s publishable when its CRM Resource is archived", async (kind, path, resourceKind, method) => {
+    const offeringId = "55555555-5555-4555-8555-555555555555"
+    const resourceId = "66666666-6666-4666-8666-666666666666"
+    const resourceLookup = vi.fn().mockResolvedValue({ id: resourceId, kind: resourceKind, capacityMode: kind === "campground" ? "shared" : "fixed", capacityTotal: 4, archivedAt: new Date() })
+    const rows = new Map<unknown, unknown>([
+      [CatalogOfferingEntity, { id: offeringId, kind, state: "active", archivedAt: null, businessCalendarId: rootId, activePriceBookId: childId }],
+      [CmsPublicProfileEntity, { nodeId: rootId, kind: "catalog_offering", entityId: offeringId, archivedAt: null }],
+      [BusinessCalendarEntity, { id: rootId, state: "active", archivedAt: null }],
+      [PriceBookEntity, { id: childId, state: "active", archivedAt: null }],
+      [CampgroundOfferingTermsEntity, { offeringId, offeringKind: "campground", capacityUnit: "tent", pricingBasis: "per_night", sellableUnit: "own_tent_pitch", inventoryMode: "shared_capacity" }],
+    ])
+    const manager = {
+      getRepository: (entity: unknown) => entity === ResourceEntity ? { findOneBy: resourceLookup }
+        : entity === OfferingBindingEntity ? { find: vi.fn().mockResolvedValue([{ resourceId, quantityDefault: 1, capacityImpactDefault: 1, availabilityRequired: true }]) }
+        : { findOneBy: vi.fn().mockResolvedValue(rows.get(entity)) },
+      query: vi.fn().mockResolvedValue([{ id: childId }]),
+    }
+    const service = new CmsPublicationService({} as never) as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
+    const result = await service[method]!(manager, {
+      node: { id: rootId, kind: "resource_detail", status: "active", archivedAt: null },
+      revision: { id: rootRevisionId, path, relations: [{ kind: "catalog_offering", entityId: offeringId }] },
+    }, { sourceId: offeringId })
+    expect(result).toMatchObject({ type: "crm_projection", id: offeringId })
+    expect(resourceLookup).toHaveBeenCalledWith({ id: resourceId })
+  })
+})
 
 function candidate(input: { nodeId: string; revisionId: string; kind: string; path: string; slug: string; parentNodeId?: string | null; sections: unknown[]; relations?: unknown[]; sourceKind?: string | null; safeProjectionDependency?: unknown }) {
   return {

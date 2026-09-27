@@ -9,7 +9,7 @@ interface Props {
 const { house } = Astro.props
 const price = house.price.mode === "request" ? null : new Intl.NumberFormat("ru-RU", { style: "currency", currency: house.price.amount.currency, maximumFractionDigits: 0 }).format(house.price.amount.amountMinor / 100)
 const priceLabel = house.price.mode === "exact" ? "стоимость" : "стоимость от"
-const readinessLabel = house.readiness === "ready" ? "Можно забронировать" : house.readiness === "temporarily_unavailable" ? "Временно недоступен" : "Уточним доступность"
+const readinessLabel = house.readiness === "ready" ? "Можно забронировать" : house.readiness === "archived" ? "Архив" : house.readiness === "temporarily_unavailable" ? "Временно недоступен" : "Уточним доступность"
 ---
 
 <section class="site-section site-section--compact" data-section-key="house-detail" data-route-kind="house">
@@ -30,7 +30,7 @@ const readinessLabel = house.readiness === "ready" ? "Можно заброни�
       <div class="mt-1 text-[length:var(--site-text-price)] font-[var(--site-weight-semibold)] tracking-[-.6px] text-[var(--site-color-brand-700)]">{price ?? "По запросу"}</div>
       {house.priceBasisLabel && <div class="mt-1 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]">{house.priceBasisLabel}</div>}
       <div class="mt-6 rounded-[var(--site-radius-lg)] border border-[var(--site-color-border)] p-3 text-[length:var(--site-text-caption)] text-[var(--site-color-text-muted)]"><Check className="mr-1 inline h-4 w-4 text-[var(--site-color-brand-600)]" />{readinessLabel}</div>
-      <button data-site-action="booking" data-site-item={`Дом: ${house.title}`} class="site-button site-button--primary mt-5 w-full">Забронировать <ArrowRight className="h-4 w-4" /></button>
+      {house.requestAvailable && <button data-site-action="booking" data-site-item={`Дом: ${house.title}`} class="site-button site-button--primary mt-5 w-full">Забронировать <ArrowRight className="h-4 w-4" /></button>}
     </aside>
   </div>
 </section>

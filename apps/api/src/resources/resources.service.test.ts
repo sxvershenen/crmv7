@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import type { SessionUser } from "@crm/contracts"
-import { ResourceAllocationEntity, ResourceEntity } from "@crm/db"
+import { OfferingConfigurationOutboxEventSchema, type SessionUser } from "@crm/contracts"
+import { IdempotencyKeyEntity, OutboxDeliveryEntity, OutboxEventEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 
 import { ResourcesService } from "./resources.service.js"
 
@@ -79,5 +79,57 @@ describe("ResourcesService availability", () => {
     expect(result.available).toBe(false)
     expect(result.conflicts).toHaveLength(2)
     expect(result.conflicts.every((conflict) => conflict.reason === "capacity")).toBe(true)
+  })
+
+  it("reports an inactive resource as unavailable even without calendar conflicts", async () => {
+    const inactive = resource("fixed", 1)
+    inactive.settings = { active: false }
+    const result = await serviceFor(inactive, []).availability({ resourceId: inactive.id, startAt: "2026-09-01T10:00:00Z", endAt: "2026-09-01T11:00:00Z", quantity: 1 }, actor)
+    expect(result).toEqual({ available: false, conflicts: [] })
+  })
+
+  it("rejects a new allocation on an inactive resource before conflict override", async () => {
+    const inactive = resource("fixed", 1)
+    inactive.settings = { active: false }
+    const manager = { getRepository: (entity: unknown) => entity === IdempotencyKeyEntity
+      ? { findOneBy: vi.fn().mockResolvedValue(null) }
+      : entity === ResourceEntity ? { findOne: vi.fn().mockResolvedValue(inactive) } : undefined }
+    const service = new ResourcesService({} as never)
+    await expect(service.createAllocationInTransaction(manager as never, {
+      resourceId: inactive.id, sourceType: "booking_item", sourceId: "33333333-3333-4333-8333-333333333333",
+      startAt: "2026-09-01T10:00:00.000Z", endAt: "2026-09-01T11:00:00.000Z",
+      quantity: 1, capacityImpact: 1, status: "tentative", operationId: "44444444-4444-4444-8444-444444444444",
+      expectedVersion: inactive.version, overrideConflict: true,
+    }, actor, "request-1")).rejects.toMatchObject({ response: { code: "RESOURCE_INACTIVE" } })
+  })
+})
+
+describe("ResourcesService public projection invalidation", () => {
+  it("enqueues a valid offering invalidation and both deliveries for a CRM resource change", async () => {
+    const offeringId = "33333333-3333-4333-8333-333333333333"
+    const saved: Array<{ entity: unknown; value: Record<string, unknown> | Array<Record<string, unknown>> }> = []
+    const manager = {
+      query: vi.fn().mockResolvedValue([{ id: offeringId, subjectVersion: 2 }]),
+      create: (entity: unknown, value: Record<string, unknown>) => ({ ...value, __entity: entity }),
+      save: vi.fn(async (value: Record<string, unknown> | Array<Record<string, unknown>>) => {
+        saved.push({ entity: Array.isArray(value) ? OutboxDeliveryEntity : value.__entity, value })
+        return value
+      }),
+    }
+    const service = new ResourcesService({} as never) as unknown as {
+      invalidateBoundOfferings(manager: unknown, resource: ResourceEntity, actorId: string, requestId: string): Promise<void>
+    }
+    const changed = resource("fixed", 4)
+    changed.version = 3
+    await service.invalidateBoundOfferings(manager, changed, actor.id, "request-1")
+
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining("binding.resource_id = $1"), [changed.id])
+    const event = saved.find((entry) => entry.entity === OutboxEventEntity)?.value as Record<string, unknown>
+    const payload = OfferingConfigurationOutboxEventSchema.parse(event.payload)
+    expect(payload).toMatchObject({ eventType: "public.offering_projection.invalidated", aggregate: { type: "catalog_offering", id: offeringId }, versions: { subject: 2 } })
+    expect(saved.find((entry) => entry.entity === OutboxDeliveryEntity)?.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "public_projection", eventId: payload.eventId }),
+      expect.objectContaining({ consumer: "sse", eventId: payload.eventId }),
+    ]))
   })
 })

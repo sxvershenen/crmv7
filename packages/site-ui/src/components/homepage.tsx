@@ -172,12 +172,13 @@ export interface SiteResourceFeatureCardProps {
   priceBasisLabel?: ReactNode
   perks: Array<{ icon: ReactNode; text: ReactNode }>
   price: ReactNode
+  status?: ReactNode
   onSelect: () => void
 }
 
-export function SiteResourceFeatureCard({ capacity, description, media, onSelect, perks, price, priceBasisLabel = "за ночь от", title }: SiteResourceFeatureCardProps) {
+export function SiteResourceFeatureCard({ capacity, description, media, onSelect, perks, price, priceBasisLabel = "за ночь от", status, title }: SiteResourceFeatureCardProps) {
   const action = <span className="btn btn-soft group-hover/card:bg-green-soft group-hover/card:text-green-deep"><span>Подробнее</span><span className="btn-arrow"><ArrowRight size={15} /></span></span>
-  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div>{media}<div className="px-2 pt-4 pb-2 flex flex-col gap-3"><div className="flex items-center justify-between gap-3"><h3 className="text-[20px] leading-[1.2] font-semibold tracking-[-.5px]">{title}</h3><SiteMetaChip className="!h-7 !px-2.5 !bg-bg !text-ink" icon={<Users size={12} className="text-green" />}>{capacity}</SiteMetaChip></div><p className="text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="flex flex-wrap gap-1.5">{perks.map((perk, index) => <span key={index} className="chip"><span>{perk.icon}</span><span>{perk.text}</span></span>)}</div><div className="mt-auto pt-2 flex items-end justify-between gap-3"><div><div className="text-[11px] text-ink-3 mb-1">{priceBasisLabel}</div><div className="text-[28px] leading-none font-semibold tracking-[-1px]">{price}</div></div>{action}</div></div></div></div>
+  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div>{media}<div className="px-2 pt-4 pb-2 flex flex-col gap-3"><div className="flex items-center justify-between gap-3"><h3 className="text-[20px] leading-[1.2] font-semibold tracking-[-.5px]">{title}</h3><SiteMetaChip className="!h-7 !px-2.5 !bg-bg !text-ink" icon={<Users size={12} className="text-green" />}>{capacity}</SiteMetaChip></div>{status && <span className="chip self-start" role="status">{status}</span>}<p className="text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="flex flex-wrap gap-1.5">{perks.map((perk, index) => <span key={index} className="chip"><span>{perk.icon}</span><span>{perk.text}</span></span>)}</div><div className="mt-auto pt-2 flex items-end justify-between gap-3"><div><div className="text-[11px] text-ink-3 mb-1">{priceBasisLabel}</div><div className="text-[28px] leading-none font-semibold tracking-[-1px]">{price}</div></div>{action}</div></div></div></div>
 }
 
 export interface SiteSpaFeatureCardProps {

@@ -16,7 +16,7 @@ const content = { kind: "resource_detail", path: "/venues/meadow", title: "По�
 const dependency = createPublicVenueProjectionDependency({ offeringId, nodeId, profileRevisionId: revisionId })
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { releaseId, releaseCreatedAt: new Date("2026-09-02T08:00:00.000Z"), releasePublishedAt: new Date("2026-09-02T08:05:00.000Z"), nodeId, revisionId, resolvedContent: content, resolvedContentHash: resolvedContentHash(content), dependencies: [{ type: "node_revision", id: revisionId, version: "2", contentHash: "a".repeat(64) }, dependency], offeringId, offeringVersion: 3, offeringUpdatedAt: new Date("2026-09-02T08:10:00.000Z"), pricingVersion: 4, salesMode: "selectable", priceDisplayMode: "from", currency: "RUB", timezone: "Europe/Moscow", calendarVersion: 2, calendarUpdatedAt: new Date("2026-09-01T08:00:00.000Z"), priceBookId, priceBookRevision: 2, priceBookState: "active", priceBookValidFrom: "2026-01-01", priceBookValidToExclusive: "2027-01-01", priceBookUpdatedAt: new Date("2026-09-02T08:09:00.000Z"), capacityTotal: 40, spaceType: "outdoor", resourceActive: true, titleKey: "поляна", ...overrides }
+  return { releaseId, releaseCreatedAt: new Date("2026-09-02T08:00:00.000Z"), releasePublishedAt: new Date("2026-09-02T08:05:00.000Z"), nodeId, revisionId, resolvedContent: content, resolvedContentHash: resolvedContentHash(content), dependencies: [{ type: "node_revision", id: revisionId, version: "2", contentHash: "a".repeat(64) }, dependency], offeringId, offeringVersion: 3, offeringUpdatedAt: new Date("2026-09-02T08:10:00.000Z"), pricingVersion: 4, salesMode: "selectable", priceDisplayMode: "from", currency: "RUB", timezone: "Europe/Moscow", calendarVersion: 2, calendarUpdatedAt: new Date("2026-09-01T08:00:00.000Z"), priceBookId, priceBookRevision: 2, priceBookState: "active", priceBookValidFrom: "2026-01-01", priceBookValidToExclusive: "2027-01-01", priceBookUpdatedAt: new Date("2026-09-02T08:09:00.000Z"), capacityTotal: 40, spaceType: "outdoor", resourceActive: true, resourceArchivedAt: null, resourceUpdatedAt: new Date("2026-09-02T08:11:00.000Z"), titleKey: "поляна", ...overrides }
 }
 
 function subject(projectionRows = [row()]) {
@@ -44,5 +44,15 @@ describe("PublicVenueOfferingService", () => {
     await service.detail(offeringId)
     expect(query.mock.calls[0]?.[0]).toContain("SELECT COUNT(*) FROM offering_bindings primary_binding")
     expect(query.mock.calls[0]?.[0]).toContain("primary_binding.archived_at IS NULL) = 1")
+  })
+
+  it.each([
+    [{ resourceActive: false }, "temporarily_unavailable"],
+    [{ resourceActive: false, resourceArchivedAt: new Date("2026-09-03T08:00:00.000Z") }, "archived"],
+  ] as const)("keeps a published venue when the CRM resource is unavailable: %s", async (overrides, readiness) => {
+    const test = subject([row(overrides)])
+    const result = await test.service.detail(offeringId)
+    expect(result.data).toMatchObject({ readiness, requestAvailable: false })
+    expect(test.query.mock.calls[0]?.[0]).not.toContain("resource.archived_at IS NULL")
   })
 })

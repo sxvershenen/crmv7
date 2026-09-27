@@ -425,7 +425,7 @@ For AI generation the agent receives field schemas and fixtures, not database cr
 - identical mutation through CRM and CMS produces one authoritative version/audit history;
 - stale version in either app returns common conflict shape;
 - published profile without eligible active offering and required price/capacity is blocked;
-- archived/paused source gives typed hide/unpublish/fallback behavior;
+- inactive/archived Resource keeps an already-published house/campground/venue page and its CMS-controlled indexation; public projection exposes `temporarily_unavailable`/`archived` and disables requests, while only CMS unpublishes the page;
 - public contracts contain no drafts/internal status/PII;
 - SSR/card/detail/quote mobile, keyboard, loading/error/stale states;
 - route/canonical/sitemap and cache invalidation remain release-consistent.

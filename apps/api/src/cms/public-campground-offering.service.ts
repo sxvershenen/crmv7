@@ -53,6 +53,8 @@ type ProjectionRow = {
   inventoryMode: "discrete_inventory" | "shared_capacity"
   capacityTotal: number
   resourceActive: boolean
+  resourceArchivedAt: Date | null
+  resourceUpdatedAt: Date
   titleKey: string
 }
 
@@ -109,6 +111,7 @@ export class PublicCampgroundOfferingService {
         price_book.updated_at AS "priceBookUpdatedAt", terms.sellable_unit AS "sellableUnit",
         terms.inventory_mode AS "inventoryMode", resource.capacity_total AS "capacityTotal",
         (resource.settings->>'active' IS DISTINCT FROM 'false') AS "resourceActive",
+        resource.archived_at AS "resourceArchivedAt", resource.updated_at AS "resourceUpdatedAt",
         LOWER(COALESCE(item.resolved_content->>'title', '')) AS "titleKey"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
@@ -127,7 +130,7 @@ export class PublicCampgroundOfferingService {
         AND binding.capacity_impact_default = 1 AND binding.availability_required = true
       JOIN resources resource ON resource.id = binding.resource_id
         AND resource.kind IN ('camping', 'campground', 'campground_owned_tent', 'campground_own_tent_area')
-        AND resource.archived_at IS NULL AND resource.capacity_total > 0
+        AND resource.capacity_total > 0
         AND resource.capacity_mode = CASE WHEN terms.sellable_unit = 'owned_tent' THEN 'fixed' ELSE 'shared' END
       JOIN resource_group_members member ON member.resource_id = resource.id
         AND member.archived_at IS NULL
@@ -193,9 +196,10 @@ export class PublicCampgroundOfferingService {
       : row.priceDisplayMode === "from" && uniqueAmounts.length > 0
         ? { mode: "from" as const, amount: { amountMinor: uniqueAmounts[0]!, currency: row.currency } }
         : { mode: "request" as const }
-    const ready = row.resourceActive && price.mode !== "request" && row.salesMode !== "request_only"
+    const available = row.resourceArchivedAt === null && row.resourceActive
+    const ready = available && price.mode !== "request" && row.salesMode !== "request_only"
     const ownedTent = row.sellableUnit === "owned_tent"
-    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
+    const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.resourceUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
     return PublicCampgroundSummarySchema.parse({
       offeringId: row.offeringId,
       kind: "campground",
@@ -206,9 +210,9 @@ export class PublicCampgroundOfferingService {
       price,
       priceBasisLabel: "за ночь",
       quoteAvailable: false,
-      requestAvailable: true,
-      capacity: { unit: ownedTent ? "guests" : "tent", available: row.capacityTotal },
-      readiness: !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
+      requestAvailable: available,
+      capacity: { unit: ownedTent ? "guests" : "tent", available: available ? row.capacityTotal : null },
+      readiness: row.resourceArchivedAt !== null ? "archived" : !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",
       timezone: row.timezone,
       currency: row.currency,
       sourceVersions: {

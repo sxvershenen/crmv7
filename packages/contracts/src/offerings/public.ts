@@ -24,7 +24,7 @@ export const PublicOfferingSummarySchema = z.object({
     unit: z.enum(["guests", "participants", "tent", "unit"]),
     available: z.number().int().nonnegative().nullable(),
   }).strict().nullable(),
-  readiness: z.enum(["ready", "request_only", "temporarily_unavailable"]),
+  readiness: z.enum(["ready", "request_only", "temporarily_unavailable", "archived"]),
   timezone: z.string().min(1).max(100),
   currency: CurrencySchema,
   sourceVersions: z.object({

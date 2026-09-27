@@ -72,8 +72,10 @@ test("does not offer a request when the public projection disables it", async ({
   const card = page.locator("#houses").getByRole("button").first()
   await card.scrollIntoViewIfNeeded()
   await expect(page.locator('astro-island[component-url*="HousesIsland"]')).not.toHaveAttribute("ssr", "")
+  await expect(card).toContainText("Временно недоступно")
   await card.click()
-  await expect(page.getByRole("dialog", { name: "Домик из CMS" }).getByRole("button", { name: "Отправить заявку: Домик из CMS" })).toBeDisabled()
+  await expect(page.getByRole("dialog", { name: "Домик из CMS" })).toContainText("бронирование приостановлено")
+  await expect(page.getByRole("dialog", { name: "Домик из CMS" }).getByRole("button", { name: "Отправить заявку: Домик из CMS" })).toHaveCount(0)
 })
 
 test("does not attach fixture promotions to a published hero", async ({ request, page }) => {
