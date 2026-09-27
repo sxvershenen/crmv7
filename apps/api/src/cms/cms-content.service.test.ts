@@ -43,6 +43,19 @@ const revision = {
 }
 
 describe("CmsContentService", () => {
+  it("returns SEO of the current editorial revision in the node list", async () => {
+    const query = { orderBy: vi.fn().mockReturnThis(), addOrderBy: vi.fn().mockReturnThis(), take: vi.fn().mockReturnThis(), getMany: vi.fn().mockResolvedValue([node]) }
+    const revisions = { findOne: vi.fn().mockResolvedValueOnce(revision).mockResolvedValueOnce(null) }
+    const source = { findOneBy: vi.fn().mockResolvedValue(null) }
+    const manager = { getRepository: vi.fn((entity) => entity === CmsNodeRevisionEntity ? revisions : entity === CmsSourceLinkEntity ? source : null) }
+    const service = new CmsContentService({ manager, getRepository: vi.fn().mockReturnValue({ createQueryBuilder: vi.fn().mockReturnValue(query) }) } as never)
+
+    const result = await service.list({ limit: 25 }, actor)
+
+    expect(result.items[0]).toMatchObject({ currentRevision: { id: revision.id }, currentSeo: { title: "Свадьбы", description: "Площадки и сценарии для свадьбы." } })
+    expect(result.items[0]?.latestPublished).toBeNull()
+  })
+
   it("lists only this node's immutable revisions with a stable older-page cursor", async () => {
     const find = vi.fn().mockResolvedValue([
       { ...revision, id: "44444444-4444-4444-8444-444444444444", revision: 4 },

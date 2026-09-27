@@ -41,7 +41,10 @@ export class FixtureCmsRepository implements CmsRepository {
 
   async getAccess() { return fixtureAccess }
   async getDashboard() { await pause(); return clone(dashboardFixture) }
-  async getNodes(query: CmsNodeQuery = {}) { await pause(); return clone(nodeFixtures).filter((node) => (!query.q || `${node.title} ${node.path}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query.status || (query.status === "archived" ? node.status === "archived" : node.status !== "archived"))) }
+  async getNodes(query: CmsNodeQuery = {}) { await pause(); return clone(nodeFixtures).filter((node) => (!query.q || `${node.title} ${node.path}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query.status || (query.status === "archived" ? node.status === "archived" : node.status !== "archived"))).map((node) => {
+    const editor = this.editors[node.id]
+    return { ...node, seo: editor ? { title: editor.seoTitle, description: editor.seoDescription, indexPolicy: editor.indexPolicy, canonical: { mode: "self" as const } } : null }
+  }) }
   async getEditor(id: string, kind: EditorRecord["kind"]) {
     await pause()
     if (id === "new") return clone(blankEditor(kind))
@@ -549,7 +552,7 @@ export class ApiCmsRepository implements CmsRepository {
       id: item.node.id, title: revision?.title ?? "Без названия", path: revision?.route.path ?? "—", type: localNodeType(item.node.kind), status, hasPublishedRevision: item.latestPublished !== null,
       pageKind: item.node.kind, sortOrder: revision?.route.sortOrder ?? 0, quality: status === "draft" || status === "review" ? "warning" : "ok", parentId: revision?.route.parentNodeId ?? null, children: [],
       owner: importedDraft ? "Синхронизация CRM" : revision?.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", updatedLabel: formatUpdated(item.node.updatedAt), updatedAt: item.node.updatedAt, inboundLinks: null, mediaCount: null,
-      source: importedDraft ? "CRM" : "CMS", ...(item.source ? { sourceKind: item.source.sourceKind } : {}), importedDraft,
+      source: importedDraft ? "CRM" : "CMS", ...(item.source ? { sourceKind: item.source.sourceKind } : {}), importedDraft, seo: item.currentSeo,
     }
   }
 

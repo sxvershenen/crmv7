@@ -349,6 +349,8 @@ Actions: create draft workspace, edit, format, save draft, validate, typecheck/l
 
 ## 16. SEO, marketing и redirects UI
 
+Текущий `/seo` читает `currentSeo` списка content nodes: число рабочих страниц, title/description warnings, index policy и canonical. `/seo/pages/:nodeId` раскрывает проверку и ведёт в canonical editor `?tab=seo`. Это отчёт по рабочей редакции, а не по active release или поисковой выдаче; остальные проверки ниже остаются scope C10.
+
 SEO dashboard tabs: Overview, Pages, Indexing, Metadata, Schema, Internal links, Images, Sitemap/robots, Redirects, Content freshness.
 
 Page SEO fields:

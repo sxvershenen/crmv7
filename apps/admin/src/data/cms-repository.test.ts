@@ -77,6 +77,17 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("uses current SEO fields from the node list without reading every page", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValue({ items: [listItem(detail)], nextCursor: null })
+    const repository = new ApiCmsRepository(client as never)
+
+    const nodes = await repository.getNodes()
+
+    expect(nodes[0]?.seo).toMatchObject({ title: detail.currentRevision?.seo.title, description: detail.currentRevision?.seo.description })
+    expect(client.get).toHaveBeenCalledOnce()
+  })
+
   it("requests server-filtered media pages and forwards their cursor", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce({ items: [wireMediaAsset()], nextCursor: "older-page" }).mockResolvedValueOnce({ items: [], nextCursor: null })
@@ -681,7 +692,7 @@ const detail: CmsNodeDetail = {
 
 function listItem(value: CmsNodeDetail) {
   const revision = value.currentRevision!
-  return { node: value.node, currentRevision: { id: revision.id, nodeId: revision.nodeId, revision: revision.revision, state: revision.state, route: revision.route, title: revision.title, contentHash: revision.contentHash, createdBy: revision.createdBy, createdAt: revision.createdAt }, latestPublished: value.latestPublished, source: value.source }
+  return { node: value.node, currentRevision: { id: revision.id, nodeId: revision.nodeId, revision: revision.revision, state: revision.state, route: revision.route, title: revision.title, contentHash: revision.contentHash, createdBy: revision.createdBy, createdAt: revision.createdAt }, currentSeo: { title: revision.seo.title, description: revision.seo.description, indexPolicy: revision.seo.indexPolicy, canonical: revision.seo.canonical }, latestPublished: value.latestPublished, source: value.source }
 }
 
 function responseDetail({ state = "draft", title = detail.currentRevision!.title, revision = detail.currentRevision!.revision, version = detail.node.version }: { state?: "draft" | "review" | "approved"; title?: string; revision?: number; version?: number }) {

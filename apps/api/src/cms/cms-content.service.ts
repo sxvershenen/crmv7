@@ -59,12 +59,17 @@ export class CmsContentService {
     }
     const rows = await builder.orderBy("node.updated_at", "DESC").addOrderBy("node.id", "DESC").take(query.limit + 1).getMany()
     const page = rows.slice(0, query.limit)
-    const items = await Promise.all(page.map(async (node) => ({
-      node: this.node(node),
-      currentRevision: this.metadata(await this.findCurrentRevision(this.dataSource.manager, node.id)),
-      latestPublished: this.metadata(await this.findLatestPublished(this.dataSource.manager, node.id)),
-      source: await this.source(this.dataSource.manager, node.id),
-    })))
+    const items = await Promise.all(page.map(async (node) => {
+      const current = await this.findCurrentRevision(this.dataSource.manager, node.id)
+      const seo = current ? this.revision(current).seo : null
+      return {
+        node: this.node(node),
+        currentRevision: this.metadata(current),
+        currentSeo: seo ? { title: seo.title, description: seo.description, indexPolicy: seo.indexPolicy, canonical: seo.canonical } : null,
+        latestPublished: this.metadata(await this.findLatestPublished(this.dataSource.manager, node.id)),
+        source: await this.source(this.dataSource.manager, node.id),
+      }
+    }))
     return {
       items,
       nextCursor: rows.length > query.limit && page.length > 0

@@ -273,6 +273,7 @@ export type CmsNodeDetail = z.infer<typeof CmsNodeDetailSchema>;
 export const CmsNodeListItemSchema = z.object({
   node: CmsNodeIdentitySchema,
   currentRevision: CmsNodeRevisionMetadataSchema.nullable(),
+  currentSeo: SeoMetadataSchema.pick({ title: true, description: true, indexPolicy: true, canonical: true }).strict().nullable(),
   latestPublished: CmsNodeRevisionMetadataSchema.nullable(),
   source: CmsSourceLinkSchema.nullable(),
 }).strict();

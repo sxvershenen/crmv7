@@ -21,6 +21,7 @@ import { MobileMenuPage } from "@admin/pages/mobile-menu-page"
 import { NavigationPage } from "@admin/pages/navigation-page"
 import { NotFoundPage } from "@admin/pages/not-found-page"
 import { ReleaseDetailPage, ReleasesPage } from "@admin/pages/release-pages"
+import { SeoPage } from "@admin/pages/seo-page"
 import { SiteSettingsPage } from "@admin/pages/site-settings-page"
 import { AccessPage } from "@admin/pages/access-page"
 
@@ -65,8 +66,8 @@ function AdminRoutes() {
     <Route path="code" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
     <Route path="code/new" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
     <Route path="code/:artifactId" element={<CapabilityRoute capability="canManageSiteCode"><CodePage /></CapabilityRoute>} />
-    <Route path="seo" element={<ManagementPage />} />
-    <Route path="seo/pages/:nodeId" element={<ManagementPage mode="seo-page" />} />
+    <Route path="seo" element={<SeoPage />} />
+    <Route path="seo/pages/:nodeId" element={<SeoPage />} />
     <Route path="marketing/campaigns" element={<ManagementPage />} />
     <Route path="redirects" element={<CapabilityRoute capability="canManageRedirects"><ManagementPage /></CapabilityRoute>} />
     <Route path="analytics/*" element={<CapabilityRoute capability="canViewAnalytics"><AnalyticsPage /></CapabilityRoute>} />

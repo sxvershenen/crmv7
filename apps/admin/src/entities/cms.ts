@@ -2,6 +2,7 @@ import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/c
 import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetail, CmsWhyUsSectionDraft, PublicEditorialContentConfig } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
+import type { SeoMetadata } from "@crm/contracts/seo"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -33,6 +34,8 @@ export type ContentNode = {
   /** Exact source-link kind when this editorial draft is CRM-originated. */
   sourceKind?: CmsSourceKind
   importedDraft?: boolean
+  /** SEO fields of the current editorial revision, not necessarily the active public page. */
+  seo?: Pick<SeoMetadata, "title" | "description" | "indexPolicy" | "canonical"> | null
 }
 
 export type DashboardMetric = { id: string; label: string; value: string; detail: string; trend?: string }
