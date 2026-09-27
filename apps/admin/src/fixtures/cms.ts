@@ -74,10 +74,10 @@ export const navigationFixture: PublicNavigation = {
 }
 
 export const mediaFixtures: MediaAsset[] = [
-  { id: "asset-hero", title: "Hero · зимний лес", filename: "hero-winter.jpg", status: "ready", progress: 100, dimensions: "2400×1600", size: "384 KB WebP", usageCount: 4, publishedUsage: true, alt: "Домики в зимнем лесу", license: "Собственное фото", dominant: "#66705a" },
-  { id: "asset-mobile", title: "Hero mobile", filename: "hero-mobile.jpg", status: "converting", progress: 72, dimensions: "1280×1600", size: "3.8 MB original", usageCount: 1, publishedUsage: false, alt: "", license: "Собственное фото", dominant: "#8c7a62" },
-  { id: "asset-map", title: "Схема территории", filename: "base-map.png", status: "ready", progress: 100, dimensions: "1800×1200", size: "218 KB WebP", usageCount: 18, publishedUsage: true, alt: "Карта базы отдыха", license: "Автор: Алексей П.", dominant: "#d5d0b8" },
-  { id: "asset-broken", title: "Галерея бани", filename: "bath-gallery.tiff", status: "error", progress: 43, dimensions: "—", size: "18.6 MB", usageCount: 0, publishedUsage: false, alt: "Баня с террасой", license: "Не указана", dominant: "#955f42" },
+  { id: "asset-hero", title: "Hero · зимний лес", filename: "hero-winter.jpg", status: "ready", dimensions: "2400×1600", size: "384 KB WebP", usageCount: 4, publishedUsage: true, alt: "Домики в зимнем лесу", license: "Собственное фото", dominant: "#66705a" },
+  { id: "asset-mobile", title: "Hero mobile", filename: "hero-mobile.jpg", status: "converting", dimensions: "1280×1600", size: "3.8 MB original", usageCount: 1, publishedUsage: false, alt: "", license: "Собственное фото", dominant: "#8c7a62" },
+  { id: "asset-map", title: "Схема территории", filename: "base-map.png", status: "ready", dimensions: "1800×1200", size: "218 KB WebP", usageCount: 18, publishedUsage: true, alt: "Карта базы отдыха", license: "Автор: Алексей П.", dominant: "#d5d0b8" },
+  { id: "asset-broken", title: "Галерея бани", filename: "bath-gallery.tiff", status: "error", dimensions: "—", size: "18.6 MB", usageCount: 0, publishedUsage: false, alt: "Баня с террасой", license: "Не указана", dominant: "#955f42" },
 ]
 
 export const releaseFixtures: ReleaseRecord[] = [

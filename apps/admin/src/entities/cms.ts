@@ -151,7 +151,6 @@ export type MediaAsset = {
   title: string
   filename: string
   status: "ready" | "uploading" | "scanning" | "converting" | "error" | "archived"
-  progress: number
   dimensions: string
   size: string
   usageCount: number

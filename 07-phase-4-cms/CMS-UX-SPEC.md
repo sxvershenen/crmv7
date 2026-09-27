@@ -303,8 +303,8 @@ Asset page tabs:
 - Preview + metadata;
 - Variants (dimensions/size/WebP status);
 - Used on (page/revision/section/code line);
-- Versions;
-- Technical log.
+
+Версии и технический журнал показывать только после подключения серверной истории. Пока её нет, эти вкладки отсутствуют; интерфейс не генерирует временные метки, проверки или проценты обработки.
 
 Archive is blocked for published usage until replace/unlink. Original may remain private; delivery UI presents public WebP URLs/variants, not storage secrets.
 

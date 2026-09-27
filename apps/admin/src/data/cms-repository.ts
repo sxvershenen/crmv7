@@ -87,8 +87,8 @@ export class FixtureCmsRepository implements CmsRepository {
   }
   async getMedia() { await pause(); return clone(mediaFixtures) }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
-  async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, progress: 100, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
-  async replaceMedia(id: string, file: File, expectedVersion: number) { await pause(); const asset = await this.getAsset(id); if ((asset.version ?? 1) !== expectedVersion) throw new Error("Asset уже изменён в другой сессии"); const replaced = { ...asset, version: expectedVersion + 1, filename: file.name, title: file.name.replace(/\.[^.]+$/, ""), status: "ready" as const, progress: 100, size: formatBytes(file.size) }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = replaced; return clone(replaced) }
+  async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
+  async replaceMedia(id: string, file: File, expectedVersion: number) { await pause(); const asset = await this.getAsset(id); if ((asset.version ?? 1) !== expectedVersion) throw new Error("Asset уже изменён в другой сессии"); const replaced = { ...asset, version: expectedVersion + 1, filename: file.name, title: file.name.replace(/\.[^.]+$/, ""), status: "ready" as const, size: formatBytes(file.size) }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = replaced; return clone(replaced) }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) { const index = mediaFixtures.findIndex((item) => item.id === asset.id); if (index >= 0) mediaFixtures[index] = clone(asset); return clone(asset) }
   async archiveMedia(id: string) { const asset = await this.getAsset(id); const archived = { ...asset, status: "archived" as const, version: (asset.version ?? 1) + 1 }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = archived; return clone(archived) }
   async getReleases() { await pause(); return clone(releaseFixtures) }
@@ -575,7 +575,6 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
   const preview = asset.variants.filter((variant) => variant.format === "webp").sort((left, right) => (left.width ?? 0) - (right.width ?? 0))[0]
   return {
     id: asset.id, version: asset.version, title: asset.title, filename: asset.originalFilename, status,
-    progress: status === "ready" || status === "archived" ? 100 : status === "error" ? 0 : 55,
     dimensions: asset.width && asset.height ? `${asset.width}×${asset.height}` : "—", size: formatBytes(asset.byteSize),
     usageCount: asset.usageCount, publishedUsage: asset.publishedUsage, alt: asset.alt ?? "", license: asset.license ?? "Не указана",
     sourceMetadata: { alt: asset.alt, caption: asset.caption, credit: asset.credit, license: asset.license },
