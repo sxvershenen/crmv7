@@ -13,6 +13,32 @@ import { ContentEditorPage } from "./content-editor-page"
 describe("ContentEditorPage mutation recovery", () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
+  it("saves local changes before opening the signed public preview", async () => {
+    const originalMode = cmsRepository.mode
+    Object.assign(cmsRepository, { mode: "api" })
+    try {
+      const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111" }
+      const saved = { ...initial, version: initial.version + 1, revision: (initial.revision ?? initial.version) + 1, publicTitle: "Новый H1" }
+      vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+      vi.spyOn(cmsRepository, "getNodes").mockResolvedValue([])
+      vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+      const save = vi.spyOn(cmsRepository, "saveEditor").mockResolvedValue(saved)
+      const token = vi.spyOn(cmsRepository, "getPreviewToken").mockResolvedValue({ token: "p".repeat(40), expiresAt: "2026-09-27T18:00:00.000Z", previewPath: "/family" })
+      const replace = vi.fn()
+      vi.spyOn(window, "open").mockReturnValue({ opener: window, location: { replace }, close: vi.fn() } as never)
+      render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter initialEntries={[`/content/pages/${initial.id}`]}><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+      fireEvent.change(await screen.findByLabelText("Заголовок H1"), { target: { value: "Новый H1" } })
+      fireEvent.click(screen.getByRole("button", { name: "Предпросмотр" }))
+
+      await waitFor(() => expect(replace).toHaveBeenCalledWith(`http://localhost:4321/family?__cms_preview=${"p".repeat(40)}`))
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ publicTitle: "Новый H1" }), initial.version)
+      expect(token).toHaveBeenCalledWith(saved.id, saved.version)
+      expect(save.mock.invocationCallOrder[0]).toBeLessThan(token.mock.invocationCallOrder[0]!)
+    } finally {
+      Object.assign(cmsRepository, { mode: originalMode })
+    }
+  })
+
   it("shows active publication separately from an earlier published revision", async () => {
     const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111", hasPublishedRevision: true }
     vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)

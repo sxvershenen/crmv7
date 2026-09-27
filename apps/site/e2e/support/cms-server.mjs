@@ -347,6 +347,15 @@ createServer(async (request, response) => {
     }
     return send(addon)
   }
+  if (url.pathname.endsWith("/pages/preview")) {
+    if (scenario !== "preview-draft" || url.searchParams.get("token") !== "p".repeat(40)) return send({ code: "NOT_FOUND" }, 404)
+    return send({
+      nodeId: id, revisionId: nextReleaseId, kind: "resource_detail", path: "/domiki/new",
+      page: { kind: "resource_detail", path: "/domiki/new", title: "Новый черновик домика", summary: "Редакционное описание до настройки цены в CRM.", hero: null, sections: [],
+        seo: { title: "Черновик домика", description: "Описание черновика", indexPolicy: "noindex_nofollow", canonical: { mode: "self" }, structuredData: [] } },
+      renderable: true, blockingIssues: ["CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED"], generatedAt: asOf,
+    })
+  }
   if (url.pathname.endsWith("/pages/resolve")) {
     if (scenario === "not-found" || (scenario === "unpublished-house" && ["/domiki/forest", "/houses/forest"].includes(url.searchParams.get("path")))) return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "proxy-not-found") return send({ message: "proxy route missing" }, 404)

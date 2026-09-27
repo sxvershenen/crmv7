@@ -12,6 +12,28 @@ test("fixture content requires an explicit development flag", () => {
   expect(usesFixtureContent({ DEV: true, SITE_CONTENT_SOURCE: "fixture" })).toBe(true)
 })
 
+test("renders a signed draft with the public renderer without exposing CRM actions", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=preview-draft")
+  const token = "p".repeat(40)
+  const preview = await request.get(`/domiki/new?__cms_preview=${token}`)
+  expect(preview.status()).toBe(200)
+  expect(preview.headers()["cache-control"]).toBe("no-store")
+  expect(preview.headers()["x-robots-tag"]).toBe("noindex, nofollow, noarchive")
+  expect(preview.headers()["referrer-policy"]).toBe("no-referrer")
+  const html = await preview.text()
+  expect(html).toContain("Новый черновик домика")
+  expect(html).toContain("Предпросмотр черновика")
+  expect(html).not.toContain("PRIVATE_BACKEND_DETAIL")
+  expect(html).not.toContain("ModalHub")
+  expect(html).not.toContain("Яндекс.Метрика")
+  await page.goto(`/domiki/new?__cms_preview=${token}`)
+  await expect(page.locator("h1")).toHaveText("Новый черновик домика")
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow")
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await request.get("/domiki/new?__cms_preview=invalid-token-with-forty-characters-000000"))?.status()).toBe(404)
+  expect((await request.get(`/cms-test?__cms_preview=${token}`))?.status()).toBe(404)
+})
+
 test("serves one-hop legacy redirects and release-derived crawl controls", async ({ request }) => {
   const redirect = await request.get("/houses/forest", { maxRedirects: 0 })
   expect(redirect.status()).toBe(301)

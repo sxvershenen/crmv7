@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common"
 
 import { PublicContentController } from "./public-content.controller.js"
 import { PublicContentService } from "./public-content.service.js"
+import { CmsPublicationService } from "./cms-publication.service.js"
 import { CmsSiteSettingsService } from "./cms-site-settings.service.js"
 import { PublicSiteSettingsController } from "./public-site-settings.controller.js"
 import { PublicMediaController } from "./public-media.controller.js"
@@ -30,5 +31,5 @@ import { PublicIntakeController } from "../public-intake/public-intake.controlle
 import { PublicIntakeRateLimiter } from "../public-intake/public-intake-rate-limiter.service.js"
 import { PublicIntakeService } from "../public-intake/public-intake.service.js"
 
-@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController, PublicIntakeController, PublicAnalyticsController], providers: [PublicContentService, CmsSiteSettingsService, MediaService, MediaMetricsService, MediaScannerService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService, PublicIntakeRateLimiter, PublicIntakeService, AnalyticsIdentityService, PublicAnalyticsService] })
+@Module({ controllers: [PublicContentController, PublicSiteSettingsController, PublicMediaController, PublicListingController, PublicAddonOfferingController, PublicVenueOfferingController, PublicHouseOfferingController, PublicCampgroundOfferingController, PublicProgramOfferingController, PublicEventServiceOfferingController, PublicIntakeController, PublicAnalyticsController], providers: [PublicContentService, CmsPublicationService, CmsSiteSettingsService, MediaService, MediaMetricsService, MediaScannerService, MediaStorageService, PublicListingService, PublicAddonOfferingService, PublicVenueOfferingService, PublicHouseOfferingService, PublicCampgroundOfferingService, PublicProgramOfferingService, PublicEventServiceOfferingService, PublicIntakeRateLimiter, PublicIntakeService, AnalyticsIdentityService, PublicAnalyticsService] })
 export class PublicApiModule {}

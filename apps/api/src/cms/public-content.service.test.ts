@@ -54,11 +54,13 @@ function service(overrides: Partial<Record<string, unknown>> = {}) {
     getRepository: vi.fn((entity) => repositories.get(entity)),
   }
   const config = { get: vi.fn().mockReturnValue(secret) }
+  const publication = { materializePreviewRevision: vi.fn().mockResolvedValue({ content: null, issues: [{ severity: "error", code: "CMS_INHERITANCE_NOT_MATERIALIZED", message: "Нет собранной страницы" }] }) }
   return {
-    service: new PublicContentService(dataSource as never, config as never),
+    service: new PublicContentService(dataSource as never, config as never, publication as never),
     repositories,
     dataSource,
     config,
+    publication,
     ...overrides,
   }
 }
@@ -106,6 +108,16 @@ describe("PublicContentService", () => {
     const page = await subject.service.preview({ token })
     expect(page).toMatchObject({ revisionId, renderable: false, seo: { indexPolicy: "noindex_nofollow" } })
     expect(page.blockingIssues).toEqual(["CMS_INHERITANCE_NOT_MATERIALIZED"])
+  })
+
+  it("returns a materialized noindex page while CRM facts are not ready", async () => {
+    const subject = service()
+    subject.repositories.get(CmsNodeRevisionEntity)!.findOneBy!.mockResolvedValue({ ...revision, state: "draft" })
+    subject.publication.materializePreviewRevision.mockResolvedValue({ content: resolvedContent, issues: [{ severity: "error", code: "CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED", message: "Предложение ещё не готово", route: revision.path }] })
+    const token = signPreviewToken({ version: 1, revisionId, contentHash: hash, expiresAt: Date.now() + 60_000 }, secret)
+    const page = await subject.service.preview({ token })
+    expect(page).toMatchObject({ renderable: true, path: "/svadby", page: { path: "/svadby", seo: { indexPolicy: "noindex_nofollow" } }, blockingIssues: ["CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED"] })
+    expect(page).not.toHaveProperty("relations")
   })
 
   it("rejects an invalid preview token before looking up a revision", async () => {

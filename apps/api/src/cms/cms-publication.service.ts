@@ -165,6 +165,39 @@ export class CmsPublicationService {
     return CmsPublicationPreviewSchema.parse(publicationPreview(active, nodeId, revision.id, baseItems, result))
   }
 
+  /** Materialize one signed revision for private rendering without writing a release. */
+  async materializePreviewRevision(node: CmsNodeEntity, revision: CmsNodeRevisionEntity): Promise<{ content: PublicReleasePageContent | null; issues: ReleaseValidationIssue[] }> {
+    const manager = this.dataSource.manager
+    const active = await this.active(manager)
+    const baseItems = active.releaseId ? await manager.getRepository(CmsReleaseItemEntity).findBy({ releaseId: active.releaseId }) : []
+    const publishedRevisionIds = new Map(baseItems.map((item) => [item.nodeId, item.revisionId]))
+    const byNode = new Map([[node.id, revision]])
+    const ancestorPaths = new Set([revision.path])
+    let parentId = revision.parentNodeId
+    for (let depth = 0; parentId && !byNode.has(parentId) && depth < 20; depth += 1) {
+      const publishedRevisionId = publishedRevisionIds.get(parentId)
+      const parent = publishedRevisionId
+        ? await manager.getRepository(CmsNodeRevisionEntity).findOneBy({ id: publishedRevisionId })
+        : await manager.getRepository(CmsNodeRevisionEntity).findOne({
+          where: { nodeId: parentId, state: In(["draft", "review", "approved", "scheduled", "published"]) },
+          order: { revision: "DESC" },
+        })
+      if (!parent) break
+      byNode.set(parentId, parent)
+      ancestorPaths.add(parent.path)
+      parentId = parent.parentNodeId
+    }
+    const nodes = await manager.getRepository(CmsNodeEntity).findBy({ id: In([...byNode.keys()]) })
+    if (nodes.length !== byNode.size) throw new ConflictException({ code: "CMS_PREVIEW_BASE_INVALID", message: "Основа предпросмотра недоступна" })
+    const release = active.releaseId ? await manager.getRepository(CmsReleaseEntity).findOneBy({ id: active.releaseId }) : null
+    const candidates = await this.withSourceKinds(manager, nodes.map((item) => ({ node: item, revision: byNode.get(item.id)! })))
+    const result = materializeRelease(candidates, await this.siteDefaults(manager, release?.siteSettingsRevisionId ?? null))
+    return {
+      content: result.routes.find((route) => route.candidate.node.id === node.id)?.content ?? null,
+      issues: result.issues.filter((item) => !item.route || ancestorPaths.has(item.route)),
+    }
+  }
+
   async publishNode(nodeId: string, input: CmsNodePublish, actor: SessionUser, requestId: string): Promise<CmsNodePublishResult> {
     this.assert(actor)
     return this.dataSource.transaction("SERIALIZABLE", async (manager) => {

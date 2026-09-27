@@ -2,7 +2,7 @@ import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodeRevisionListResp
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
-import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsSiteSettingsDetailSchema, CmsSiteSettingsValueSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
+import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsPreviewTokenResponseSchema, CmsSiteSettingsDetailSchema, CmsSiteSettingsValueSchema, type CmsMetrikaSettingsDetail, type CmsPreviewTokenResponse, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
@@ -81,6 +81,7 @@ export class FixtureCmsRepository implements CmsRepository {
     this.revisionHistory.set(savedId, [{ id: `fixture-${savedId}-${saved.revision}`, revision: saved.revision!, state: "draft", title: saved.publicTitle, path: saved.url, createdAt: new Date().toISOString(), createdBy: null }, ...(this.revisionHistory.get(savedId) ?? []).map((entry, index) => index === 0 && entry.state === "draft" ? { ...entry, state: "superseded" as const } : entry)])
     return clone(saved)
   }
+  async getPreviewToken(): Promise<CmsPreviewTokenResponse> { throw new CmsUnavailableError("Предпросмотр доступен только с подключённым API") }
   async submitReview(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "review") }
   async returnToDraft(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "draft") }
   async approve(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "approved") }
@@ -272,6 +273,14 @@ export class ApiCmsRepository implements CmsRepository {
       this.details.set(detail.node.id, detail)
       return this.editor(detail)
     } catch (error) { throw mapMutationError(error) }
+  }
+
+  async getPreviewToken(id: string, expectedVersion: number): Promise<CmsPreviewTokenResponse> {
+    const detail = await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
+    if (detail.node.version !== expectedVersion) throw new CmsConflictError(detail.node.version)
+    this.details.set(id, detail)
+    if (!detail.currentRevision) throw new CmsUnavailableError("Сохранённая редакция не найдена")
+    return this.client.post(`/content/revisions/${encodeURIComponent(detail.currentRevision.id)}/preview-token`, { ttlSeconds: 900 }, CmsPreviewTokenResponseSchema)
   }
 
   private async resolvedHeroPolicy(hero: HeroConfig): Promise<CmsHeroPolicy> {

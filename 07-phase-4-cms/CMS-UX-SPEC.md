@@ -200,7 +200,7 @@ Bottom bar: dirty/saving/saved/error/conflict, «Закрыть», «Preview», 
 - alignment, max text width и safe-area preview;
 - structured data bindings where relevant.
 
-В редакторе страницы фон и отдельный фон для телефона выбираются из готовых изображений медиатеки без перехода со страницы и потери черновика. Пользователь с `canManageMedia` может загрузить файл прямо в picker: готовый файл выбирается сразу, обрабатываемый — только после явной проверки готовности. Сохранение закрепляет ID, alt и публичные WebP/AVIF варианты; произвольный путь в поле не вводится. При отсутствии мобильного фона используется основной. Старое `foreground` читается и сохраняется без изменений, но не подменяет мобильный фон. Публикация блокируется, если выбранное изображение не имеет готового публичного варианта. Визуальный макет в форме остаётся упрощённым; C8 требует preview через реальный public renderer.
+В редакторе страницы фон и отдельный фон для телефона выбираются из готовых изображений медиатеки без перехода со страницы и потери черновика. Пользователь с `canManageMedia` может загрузить файл прямо в picker: готовый файл выбирается сразу, обрабатываемый — только после явной проверки готовности. Сохранение закрепляет ID, alt и публичные WebP/AVIF варианты; произвольный путь в поле не вводится. При отсутствии мобильного фона используется основной. Старое `foreground` читается и сохраняется без изменений, но не подменяет мобильный фон. Публикация блокируется, если выбранное изображение не имеет готового публичного варианта. Визуальный макет в форме остаётся упрощённым; кнопка «Предпросмотр» открывает сохранённую редакцию через public renderer.
 
 ### Нижние секции
 
@@ -292,7 +292,7 @@ Editor fields:
 - citations/source notes where applicable;
 - common SEO/schema/media/analytics/versions.
 
-Первый рабочий текстовый блок в редакторе страницы использует `editorial-content`: абзацы, H2/H3, списки и внутренние ссылки редактируются в «Текст и блоки», сохраняются в редакции страницы и проходят обычный preview/publish. Пустые блоки допускаются только в черновике; перед публикацией нужен хотя бы один заполненный блок. Неподдерживаемые сложные patches форма оставляет без изменений. Авторские поля, изображения в теле статьи и полноценный визуальный preview остаются в C5/C8/C9.
+Первый рабочий текстовый блок в редакторе страницы использует `editorial-content`: абзацы, H2/H3, списки и внутренние ссылки редактируются в «Текст и блоки», сохраняются в редакции страницы и проходят обычный preview/publish. Пустые блоки допускаются только в черновике; перед публикацией нужен хотя бы один заполненный блок. Неподдерживаемые сложные patches форма оставляет без изменений. Авторские поля и изображения в теле статьи остаются в C5/C9; сохранённая редакция уже открывается в public preview.
 
 ## 13. Глобальные секции, navigation и components
 
@@ -368,7 +368,7 @@ Marketing: campaigns, UTM builder/allowlist, campaign landings/CTA, active dates
 
 Обычный editor использует двухшаговую direct publication: server-side preflight, затем guarded confirmation. Internal build/activation не нужны для page flow; `/releases` — readonly operational journal с capability-gated recovery actions.
 
-Page editor before publish shows effective before/after diff, affected routes/dependencies/cache tags, gates, reviewer, schedule/timezone and stale preview state. The primary command is `Опубликовать страницу` or `Запустить на сайте` for a coordinated first offer launch.
+Page editor before publish shows effective before/after diff, affected routes/dependencies/cache tags, gates, reviewer, schedule/timezone and stale preview state. The primary command is `Опубликовать страницу` or `Запустить на сайте` for a coordinated first offer launch. «Предпросмотр» сначала сохраняет локальные правки, проверяет актуальность редакции, затем открывает короткоживущую ссылку в новой вкладке. Если браузер блокирует окно, редактор показывает явную ссылку. Публичный renderer показывает плашку черновика; CRM-цены, доступность, заявки и аналитику в этом режиме не включает. Сломанный/чужой URL и токен закрываются 404.
 
 `/releases` is a readonly operational journal: immutable manifest, affected paths, validation и public API/CDN delivery outcome. Detail использует существующий CAS replay для failed/dead-letter consumer и создаёт новый immutable release при rollback; произвольное редактирование manifest отсутствует.
 

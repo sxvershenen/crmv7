@@ -7,7 +7,7 @@ import {
   type CmsHomeSectionKey,
   type CmsPartnersSectionConfig,
   type CmsWhyUsSectionConfig,
-  type PublicPage,
+  type PublicReleasePageContent,
 } from "@crm/contracts"
 import {
   DEFAULT_HOMEPAGE_SECTION_CONFIGS,
@@ -22,7 +22,7 @@ export type HomepageSectionBinding =
   | { key: "why-us"; config: CmsWhyUsSectionConfig }
   | { key: "partners"; config: CmsPartnersSectionConfig }
 
-export function getHomepageSections(page: PublicPage | null, fixture: boolean): HomepageSectionBinding[] {
+export function getHomepageSections(page: Pick<PublicReleasePageContent, "sections"> | null, fixture: boolean): HomepageSectionBinding[] {
   if (fixture) return DEFAULT_HOMEPAGE_SECTION_ORDER.flatMap((key) => defaultBinding(key))
   const result: HomepageSectionBinding[] = []
   let locationRendered = false

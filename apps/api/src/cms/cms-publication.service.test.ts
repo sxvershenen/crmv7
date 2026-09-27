@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsPublicProfileEntity, CmsReleaseEntity, CmsReleaseItemEntity, IdempotencyKeyEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
+import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsReleaseEntity, CmsReleaseItemEntity, CmsSourceLinkEntity, IdempotencyKeyEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
 import { CmsHeroPolicySchema, CmsSiteSettingsStoredValueSchema } from "@crm/contracts"
 
 import { CmsPublicationService, materializeRelease, publicationPreview, unpublishBlockers } from "./cms-publication.service.js"
@@ -112,6 +112,29 @@ describe("CmsPublicationService node publication status", () => {
     const result = await service.nodePublicationStatus(rootId, { capabilities: { canViewContent: true } } as never)
     expect(result).toEqual({ active: present, path: present ? "/family" : null, revisionId: present ? rootRevisionId : null, activeReleaseId: childId, activeReleaseVersion: 7 })
     expect(itemLookup).toHaveBeenCalledWith({ releaseId: childId, nodeId: rootId })
+  })
+})
+
+describe("CmsPublicationService signed draft materialization", () => {
+  it("renders a saved CRM draft before the first release without writing publication state", async () => {
+    const node = { id: childId, kind: "resource_detail", status: "active" }
+    const revision = { id: childRevisionId, nodeId: childId, revision: 1, state: "draft", path: "/drafts/new", slug: "new", parentNodeId: null,
+      title: "Новый домик", summary: "Редакционный черновик", hero: { mode: "disabled" }, sections: [],
+      seo: { title: "Новый домик", description: "Описание домика" }, relations: [], contentHash: "a".repeat(64) }
+    const save = vi.fn()
+    const manager = { getRepository: (entity: unknown) => entity === CmsActiveReleaseEntity ? { findOneBy: vi.fn().mockResolvedValue({ releaseId: null, version: 1 }) }
+      : entity === CmsNodeRevisionEntity ? { findBy: vi.fn().mockResolvedValue([revision]) }
+      : entity === CmsNodeEntity ? { findBy: vi.fn().mockResolvedValue([node]) }
+      : entity === CmsSourceLinkEntity ? { findBy: vi.fn().mockResolvedValue([{ nodeId: childId, sourceKind: "resource", sourceId: rootId }]) } : {}, save }
+    const service = new CmsPublicationService({ manager } as never)
+
+    const result = await service.materializePreviewRevision(node as never, revision as never)
+    expect(result.content).toMatchObject({ path: "/drafts/new", title: "Новый домик" })
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "CMS_SOURCE_ROUTE_REQUIRED" }),
+      expect.objectContaining({ code: "CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED" }),
+    ]))
+    expect(save).not.toHaveBeenCalled()
   })
 })
 

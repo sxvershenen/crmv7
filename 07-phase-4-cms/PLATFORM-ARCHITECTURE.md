@@ -77,7 +77,7 @@ Revision lifecycle:
 
 - draft update использует `expectedVersion`;
 - published revision immutable;
-- preview token short-lived, scoped, private/noindex, не входит в public cache;
+- Сохранённая редакция получает короткоживущий подписанный token через `canViewContent`; public `/pages/preview` собирает effective content из редакции, активной публикации и доступных родителей без записи release. Astro показывает её по целевому URL с `__cms_preview`, `no-store`, `noindex/nofollow` и `no-referrer`; token и draft не входят в sitemap/public cache. В этом режиме CRM price/availability, заявки и аналитика не показываются. Ошибки подготовки публикации видны как ограничения предпросмотра, но не превращаются в вымышленные данные;
 - release manifest pins exact revisions/hashes for nodes, route topology, relations, navigation/defaults, profiles, blocks, media variants and code build;
 - activation atomically compare-and-swaps one `active_release_id` against `baseReleaseId`;
 - rollback создаёт новую release на ранее валидированные immutable artifacts;

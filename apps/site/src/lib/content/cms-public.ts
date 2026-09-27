@@ -30,6 +30,10 @@ export function getPublishedRoute(pathname: string, searchParams = new URLSearch
   return resolvePublishedRoute(createPublicContentSource(publicApiBaseUrl()), pathname, searchParams)
 }
 
+export function getDraftPreview(token: string) {
+  return createPublicContentSource(publicApiBaseUrl()).preview(token)
+}
+
 export function getPublishedRouteManifest() {
   if (fixtureContentEnabled) return Promise.resolve({
     status: "published" as const,

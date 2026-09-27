@@ -126,8 +126,7 @@ export const PublicPageSchema = z.object({
 }).strict().superRefine((value, context) => requireValidEditorialSections(value.sections, context));
 export type PublicPage = z.infer<typeof PublicPageSchema>;
 
-/** Signed authoring snapshot. It is intentionally not a render-ready public page until inheritance is materialised. */
-export const CmsPreviewDocumentSchema = z.object({
+const CmsBlockedPreviewDocumentSchema = z.object({
   nodeId: IdSchema,
   revisionId: IdSchema,
   kind: CmsPageKindSchema,
@@ -138,9 +137,23 @@ export const CmsPreviewDocumentSchema = z.object({
   sections: z.array(CmsSectionSchema).max(200),
   seo: SeoMetadataSchema,
   renderable: z.literal(false),
-  blockingIssues: z.array(z.literal("CMS_INHERITANCE_NOT_MATERIALIZED")).min(1).max(10),
+  blockingIssues: z.array(z.string().min(1).max(120)).min(1).max(30),
   generatedAt: DateTimeSchema,
 }).strict();
+
+/** A short-lived materialized page for private noindex rendering, never a public release. */
+const CmsRenderablePreviewDocumentSchema = z.object({
+  nodeId: IdSchema,
+  revisionId: IdSchema,
+  kind: CmsPageKindSchema,
+  path: CmsPathSchema,
+  page: PublicReleasePageContentSchema,
+  renderable: z.literal(true),
+  blockingIssues: z.array(z.string().min(1).max(120)).max(30),
+  generatedAt: DateTimeSchema,
+}).strict();
+
+export const CmsPreviewDocumentSchema = z.discriminatedUnion("renderable", [CmsBlockedPreviewDocumentSchema, CmsRenderablePreviewDocumentSchema]);
 export type CmsPreviewDocument = z.infer<typeof CmsPreviewDocumentSchema>;
 
 export const PublicPageResolveQuerySchema = z.object({

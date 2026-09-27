@@ -29,31 +29,41 @@ import { siteIdentity } from "../lib/content"
 import { PublicEditorialContentConfigSchema } from "@crm/contracts"
 import { PublicProfileIntro } from "@crm/site-ui"
 import ContentFailure from "../components/ContentFailure.astro"
-import { getPublishedRedirect, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import { getDraftPreview, getPublishedRedirect, getPublishedRoute, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
 import { getHomepageSections } from "../lib/content/homepage-sections"
 
 const path = `/${Astro.params.path ?? ""}`.replace(/\/$/, "") || "/"
-const redirect = await getPublishedRedirect(path)
-if (redirect.status === "published") return Astro.redirect(redirect.value.destinationPath, redirect.value.statusCode)
-const result = await getPublishedRoute(path, Astro.url.searchParams)
-const page = result.status === "published" ? result.value.page : null
+const previewRequested = Astro.url.searchParams.has("__cms_preview")
+const previewToken = Astro.url.searchParams.get("__cms_preview") ?? ""
+if (!previewRequested) {
+  const redirect = await getPublishedRedirect(path)
+  if (redirect.status === "published") return Astro.redirect(redirect.value.destinationPath, redirect.value.statusCode)
+}
+const preview = previewRequested && previewToken.length >= 32 ? await getDraftPreview(previewToken) : null
+const result = previewRequested ? null : await getPublishedRoute(path, Astro.url.searchParams)
+const previewPage = preview?.status === "published" && preview.value.renderable && preview.value.path === path && preview.value.page.path === path ? preview.value.page : null
+const page = previewRequested ? previewPage : (result?.status === "published" ? result.value.page : null)
 const homepageSections = getHomepageSections(page, false)
-const commerce = result.status === "published" ? result.value.commerce : undefined
+const commerce = result?.status === "published" ? result.value.commerce : undefined
 Astro.response.headers.set("Cache-Control", "no-store")
-const publishedSiteSettings = result.status === "published" ? result.value.settings : null
-const listing = result.status === "published" ? result.value.listing : null
-const house = result.status === "published" ? result.value.house : null
-const campground = result.status === "published" ? result.value.campground : null
-const addon = result.status === "published" ? result.value.addon : null
-const venue = result.status === "published" ? result.value.venue : null
-const program = result.status === "published" ? result.value.program : null
-const eventService = result.status === "published" ? result.value.eventService : null
+if (previewRequested) {
+  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive")
+  Astro.response.headers.set("Referrer-Policy", "no-referrer")
+}
+const publishedSiteSettings = previewRequested ? await getPublishedSiteSettings() : result?.status === "published" ? result.value.settings : null
+const listing = result?.status === "published" ? result.value.listing : null
+const house = result?.status === "published" ? result.value.house : null
+const campground = result?.status === "published" ? result.value.campground : null
+const addon = result?.status === "published" ? result.value.addon : null
+const venue = result?.status === "published" ? result.value.venue : null
+const program = result?.status === "published" ? result.value.program : null
+const eventService = result?.status === "published" ? result.value.eventService : null
 const editorialSections = page?.sections.flatMap((section) => {
   if (section.renderer !== "editorial-content") return []
   const parsed = PublicEditorialContentConfigSchema.safeParse(section.config)
   return parsed.success ? [{ section, config: parsed.data }] : []
 }) ?? []
-const failure = result.status !== "published" ? result.status : null
+const failure = previewRequested ? (previewPage ? null : "not_found") : result?.status !== "published" ? result?.status ?? "unavailable" : null
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
   Astro.response.statusText = failure === "not_found" ? "Not Found" : "Service Unavailable"
@@ -66,7 +76,7 @@ const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSit
 const effectiveHero = page?.hero
 const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : page?.kind === "event_detail" ? "Мероприятие" : null
 const resourceReadiness = house?.readiness ?? campground?.readiness ?? venue?.readiness
-const resourceRequestAvailable = house?.requestAvailable ?? campground?.requestAvailable ?? venue?.requestAvailable ?? true
+const resourceRequestAvailable = previewRequested ? false : house?.requestAvailable ?? campground?.requestAvailable ?? venue?.requestAvailable ?? true
 const resourceStatus = resourceReadiness === "archived" ? "Архив" : resourceReadiness === "temporarily_unavailable" ? "Временно недоступно" : null
 const originalHero = effectiveHero ? toSiteHero(effectiveHero) : undefined
 const hero = originalHero && !resourceRequestAvailable ? {
@@ -74,7 +84,7 @@ const hero = originalHero && !resourceRequestAvailable ? {
   primaryCta: originalHero.primaryCta.action === "booking" ? { ...originalHero.primaryCta, enabled: false } : originalHero.primaryCta,
   secondaryCta: originalHero.secondaryCta.action === "booking" ? { ...originalHero.secondaryCta, enabled: false } : originalHero.secondaryCta,
 } : originalHero
-const robots = !page
+const robots = previewRequested || !page
   ? "noindex_nofollow"
   : listing?.robots ?? (page.seo.indexPolicy === "noindex_follow" ? "noindex_follow" : page.seo.indexPolicy === "noindex_nofollow" ? "noindex_nofollow" : "index_follow")
 const canonical = page?.seo.canonical.mode === "custom"
@@ -86,16 +96,17 @@ const failureTitle = failure === "not_found" ? "Страница не найде
 <BaseLayout
   title={page?.seo.title ?? `${failureTitle} — ${siteIdentity.name}`}
   description={page?.seo.description ?? "Попробуйте открыть страницу позже."}
-  contentAvailable={Boolean(page)}
+  contentAvailable={!previewRequested && Boolean(page)}
   canonical={canonical}
   robots={robots}
   social={page?.seo.social}
-  structuredData={page ? toSiteStructuredData(page.seo.structuredData) : []}
-  {...(publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
+  structuredData={!previewRequested && page ? toSiteStructuredData(page.seo.structuredData) : []}
+  {...(!previewRequested && publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
 >
-  {page && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
+  {page && (!previewRequested || navigation) && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
   <SitePageShell>
     {page ? <SitePageFrame>
+      {previewRequested && <div class="site-section site-section--compact" role="status"><div class="site-alert"><div><strong>Предпросмотр черновика</strong><p>Страница ещё не опубликована. Цены, доступность, заявки и подборки CRM здесь не показываются.</p></div></div></div>}
       {hero && <HeroIsland {hero} client:load />}
       {resourceStatus && <div class="site-section site-section--compact" role="status"><div class="site-alert"><div><strong>{resourceStatus}</strong><p>{resourceReadiness === "archived" ? "Этот вариант больше не доступен для бронирования." : "Сейчас этот вариант нельзя забронировать. Проверьте доступность позже."}</p></div></div></div>}
       {profileKind && !hero && <PublicProfileIntro kindLabel={profileKind} title={page.title} summary={page.summary} bookingItem={`${profileKind}: ${page.title}`} bookingAvailable={resourceRequestAvailable} />}
@@ -118,12 +129,12 @@ const failureTitle = failure === "not_found" ? "Страница не найде
         if (section.key === "reviews") return <ReviewsIsland config={section.config} fixture={false} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
         if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
-        if (section.key === "calculator") return <BookingQuizIsland config={section.config} commerce={commerce} fixture={false} client:visible />
+        if (section.key === "calculator") return previewRequested ? null : <BookingQuizIsland config={section.config} commerce={commerce} fixture={false} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}
     </SitePageFrame> : <ContentFailure status={failure!} />}
-    {page && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {page && (!previewRequested || footerNavigation) && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
   </SitePageShell>
-  {page && <FloatingHelperIsland client:idle />}
+  {page && !previewRequested && <FloatingHelperIsland client:idle />}
 </BaseLayout>

@@ -27,6 +27,7 @@ import {
   CmsNodeEntity,
   CmsNodeRevisionEntity,
 } from "@crm/db"
+import { CmsPublicationService } from "./cms-publication.service.js"
 
 type PreviewClaims = {
   version: 1
@@ -36,6 +37,11 @@ type PreviewClaims = {
 }
 
 const PREVIEWABLE_STATES = new Set(["draft", "review", "approved", "scheduled", "published"])
+const PREVIEW_ONLY_ISSUES = new Set([
+  "CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED", "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED", "CRM_PROJECTION_UNRESOLVED",
+  "CMS_SOURCE_ROUTE_REQUIRED", "CMS_HERO_BASE_MISSING", "CMS_INHERITANCE_BASE_MISSING", "CMS_PARENT_NOT_IN_RELEASE",
+  "CMS_ROUTE_PARENT_MISMATCH", "CMS_INTERNAL_LINK_BROKEN", "CMS_SEO_INVALID", "CMS_SITE_SETTINGS_REQUIRED",
+])
 
 type PublishedPageRow = {
   releaseId: string
@@ -59,6 +65,7 @@ export class PublicContentService {
   constructor(
     @Inject(DataSource) private readonly dataSource: DataSource,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(CmsPublicationService) private readonly publication: CmsPublicationService,
   ) {}
 
   async resolve(query: PublicPageResolveQuery): Promise<PublicPage> {
@@ -175,6 +182,15 @@ export class PublicContentService {
     if (!claims) throw this.notFound()
     const { node, revision } = await this.revisionWithNode(claims.revisionId)
     if (node.status !== "active" || node.archivedAt || !PREVIEWABLE_STATES.has(revision.state) || revision.contentHash !== claims.contentHash) throw this.notFound()
+    const materialized = await this.publication.materializePreviewRevision(node, revision)
+    const issues = [...new Set(materialized.issues.map((issue) => issue.code))].slice(0, 30)
+    if (materialized.content && materialized.issues.every((issue) => PREVIEW_ONLY_ISSUES.has(issue.code))) {
+      return CmsPreviewDocumentSchema.parse({
+        nodeId: node.id, revisionId: revision.id, kind: node.kind, path: revision.path,
+        page: { ...materialized.content, seo: { ...materialized.content.seo, indexPolicy: "noindex_nofollow" } },
+        renderable: true, blockingIssues: issues, generatedAt: new Date().toISOString(),
+      })
+    }
     return CmsPreviewDocumentSchema.parse({
       nodeId: node.id,
       revisionId: revision.id,
@@ -186,7 +202,7 @@ export class PublicContentService {
       sections: revision.sections.map((section) => CmsSectionSchema.parse(section)).sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)),
       seo: { ...revision.seo, indexPolicy: "noindex_nofollow" },
       renderable: false,
-      blockingIssues: ["CMS_INHERITANCE_NOT_MATERIALIZED"],
+      blockingIssues: issues.length ? issues : ["CMS_INHERITANCE_NOT_MATERIALIZED"],
       generatedAt: new Date().toISOString(),
     })
   }

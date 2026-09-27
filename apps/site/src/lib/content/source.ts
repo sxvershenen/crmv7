@@ -13,6 +13,7 @@ import {
   CmsWhyUsSectionSchema,
   isCmsHomeSectionKey,
   PublicPageSchema,
+  CmsPreviewDocumentSchema,
   PublicRouteManifestSchema,
   PublicSiteSettingsSchema,
   type PublicListingResult,
@@ -23,6 +24,7 @@ import {
   type PublicProgramSummary,
   type PublicEventServiceSummary,
   type PublicPage,
+  type CmsPreviewDocument,
   type PublicRouteManifest,
   type PublicSiteSettings,
 } from "@crm/contracts"
@@ -40,6 +42,7 @@ export interface ContentSource {
   venues(): Promise<ContentResult<PublicVenueListResponse>>
   addons(): Promise<ContentResult<PublicAddOnListResponse>>
   page(path: string): Promise<ContentResult<PublicPage>>
+  preview(token: string): Promise<ContentResult<CmsPreviewDocument>>
   manifest(): Promise<ContentResult<PublicRouteManifest>>
   settings(): Promise<ContentResult<PublicSiteSettings>>
   listing(path: string, searchParams: URLSearchParams): Promise<ContentResult<PublicListingResult>>
@@ -85,6 +88,9 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     page(path) {
       const query = new URLSearchParams({ path, locale: "ru-RU" })
       return document(`/pages/resolve?${query}`, (value) => PublicPageSchema.parse(value))
+    },
+    preview(token) {
+      return document(`/pages/preview?${new URLSearchParams({ token })}`, (value) => CmsPreviewDocumentSchema.parse(value))
     },
     manifest() {
       return document("/pages/manifest", (value) => PublicRouteManifestSchema.parse(value))

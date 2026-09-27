@@ -65,6 +65,25 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("issues a preview token for the saved current revision", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValue(detail)
+    const issued = { token: "p".repeat(40), expiresAt: "2026-09-27T18:00:00.000Z", previewPath: "/family" }
+    client.post.mockResolvedValue(issued)
+    const repository = new ApiCmsRepository(client as never)
+    await expect(repository.getPreviewToken(ids.node, detail.node.version)).resolves.toEqual(issued)
+    expect(client.post).toHaveBeenCalledWith(`/content/revisions/${detail.currentRevision!.id}/preview-token`, { ttlSeconds: 900 }, expect.anything())
+    expect(client.get).toHaveBeenCalledOnce()
+  })
+
+  it("rejects a stale editor instead of previewing another author's revision", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValue({ ...detail, node: { ...detail.node, version: detail.node.version + 1 } })
+    const repository = new ApiCmsRepository(client as never)
+    await expect(repository.getPreviewToken(ids.node, detail.node.version)).rejects.toBeInstanceOf(CmsConflictError)
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
   it("binds ready desktop and mobile media with public variants before saving", async () => {
     const desktopId = ids.node2
     const mobileId = ids.revision2
