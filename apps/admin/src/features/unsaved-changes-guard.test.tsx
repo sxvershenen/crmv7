@@ -26,6 +26,16 @@ describe("UnsavedChangesGuard", () => {
     expect(screen.getByText("Редактор")).toBeInTheDocument()
   })
 
+  it("can guard media tab changes made with replace navigation", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    const router = createMemoryRouter([{ path: "/edit", element: <><UnsavedChangesGuard includeSearch when /><Link replace to="/edit?tab=usage">Где используется</Link></> }], { initialEntries: ["/edit?tab=preview"] })
+    render(<RouterProvider router={router} />)
+
+    fireEvent.click(screen.getByRole("link", { name: "Где используется" }))
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce())
+    expect(router.state.location.search).toBe("?tab=preview")
+  })
+
   it("exposes the same confirmation to non-router actions such as logout", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
     render(<MemoryRouter><UnsavedChangesGuard when /></MemoryRouter>)

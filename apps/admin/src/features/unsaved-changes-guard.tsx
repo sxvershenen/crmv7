@@ -5,7 +5,7 @@ import { registerUnsavedChanges } from "./unsaved-changes-registry"
 
 const DEFAULT_MESSAGE = "Есть несохранённые изменения. Покинуть страницу?"
 
-export function UnsavedChangesGuard({ message = DEFAULT_MESSAGE, when }: { message?: string; when: boolean }) {
+export function UnsavedChangesGuard({ includeSearch = false, message = DEFAULT_MESSAGE, when }: { includeSearch?: boolean; message?: string; when: boolean }) {
   const dataRouter = useContext(UNSAFE_DataRouterContext)
 
   useEffect(() => {
@@ -23,11 +23,11 @@ export function UnsavedChangesGuard({ message = DEFAULT_MESSAGE, when }: { messa
     return () => window.removeEventListener("beforeunload", handler)
   }, [when])
 
-  return dataRouter ? <DataRouterGuard message={message} when={when} /> : null
+  return dataRouter ? <DataRouterGuard includeSearch={includeSearch} message={message} when={when} /> : null
 }
 
-function DataRouterGuard({ message, when }: { message: string; when: boolean }) {
-  const blocker = useBlocker(({ currentLocation, historyAction, nextLocation }) => when && historyAction !== "REPLACE" && currentLocation.pathname !== nextLocation.pathname)
+function DataRouterGuard({ includeSearch, message, when }: { includeSearch: boolean; message: string; when: boolean }) {
+  const blocker = useBlocker(({ currentLocation, historyAction, nextLocation }) => when && (includeSearch || historyAction !== "REPLACE") && (currentLocation.pathname !== nextLocation.pathname || (includeSearch && currentLocation.search !== nextLocation.search)))
 
   useEffect(() => {
     if (blocker.state !== "blocked") return

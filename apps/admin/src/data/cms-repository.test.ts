@@ -10,6 +10,15 @@ import { createHomepageSectionEditorSection, homepageSectionPolicy } from "@admi
 import { createEditorialSection, editorialPolicy } from "@admin/data/editorial-section"
 
 describe("FixtureCmsRepository", () => {
+  it("versions media metadata and rejects a stale fixture save", async () => {
+    const repository = new FixtureCmsRepository()
+    const original = await repository.getAsset("asset-hero")
+    const saved = await repository.saveMediaMetadata({ ...original, caption: "Зимний лес" })
+    expect(saved.version).toBe((original.version ?? 1) + 1)
+    expect((await repository.getAsset(original.id)).caption).toBe("Зимний лес")
+    await expect(repository.saveMediaMetadata(original)).rejects.toBeInstanceOf(CmsConflictError)
+  })
+
   it("keeps fixtures behind a typed repository and increments versions", async () => {
     const repository = new FixtureCmsRepository(); const editor = await repository.getEditor("landing-family", "landing")
     const saved = await repository.saveEditor({ ...editor, publicTitle: "Новый H1" }, editor.version)
