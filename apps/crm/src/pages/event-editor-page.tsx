@@ -1002,6 +1002,7 @@ function EventScenario({
   const [name, setName] = useState("");
   const [duration, setDuration] = useState("30");
   const [comment, setComment] = useState("");
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
   const add = () => {
     if (!name.trim()) return;
     setStages((stages) => [
@@ -1086,9 +1087,7 @@ function EventScenario({
         {draft.scenarioStages.length ? (
           <OrderedStageList
             onChange={change}
-            onDelete={(id) =>
-              setStages((stages) => stages.filter((stage) => stage.id !== id))
-            }
+            onDelete={setStageToDelete}
             onDuplicate={(stage) =>
               setStages((stages) => [
                 ...stages,
@@ -1118,6 +1117,14 @@ function EventScenario({
           </PageState>
         )}
       </EditorSection>
+      <ConfirmationDialog
+        confirmLabel="Удалить этап"
+        description="Удалить этап из сценария мероприятия? После сохранения он исчезнет из описания. Если не уверены, посоветуйтесь с техническим администратором."
+        onConfirm={() => { if (stageToDelete) setStages((stages) => stages.filter((stage) => stage.id !== stageToDelete)); setStageToDelete(null); }}
+        onOpenChange={(open) => { if (!open) setStageToDelete(null); }}
+        open={stageToDelete !== null}
+        title="Удалить этап?"
+      />
     </div>
   );
 }

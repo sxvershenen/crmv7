@@ -85,6 +85,19 @@ describe("EventEditorPage", () => {
     expect(screen.getAllByDisplayValue(/Ужин/)).toHaveLength(2)
   })
 
+  it("confirms deleting a scenario stage", async () => {
+    const user = userEvent.setup(); renderEditor("/events/E-3108?tab=scenario")
+    const remove = await screen.findByRole("button", { name: "Удалить этап 1" })
+    await user.click(remove)
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect(remove).toBeInTheDocument()
+    await user.click(remove)
+    await user.click(screen.getByRole("button", { name: "Удалить этап" }))
+    expect(screen.getAllByRole("button", { name: /^Удалить этап \d+$/ })).toHaveLength(2)
+    expect(screen.getByText("Есть изменения")).toBeInTheDocument()
+  })
+
   it("adds internal comments and creates a draft in a requested category", async () => {
     const user = userEvent.setup(); const view = renderEditor("/events/E-3108?tab=communications")
     await screen.findByText("Добавить коммуникацию")
