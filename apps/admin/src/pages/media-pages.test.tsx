@@ -44,6 +44,16 @@ it("shows asset metadata but disables mutations without media management rights"
   expect(screen.getByRole("button", { name: "Заменить" })).toBeDisabled()
 })
 
+it("keeps the media library readable when an upload link is opened without upload rights", async () => {
+  permissions.canManageMedia = false
+  getMedia.mockResolvedValue({ items: [asset], nextCursor: null })
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText(asset.title)).toBeInTheDocument()
+  expect(screen.getByText("Нет права загружать файлы. Библиотека доступна для просмотра.")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Загрузить" })).toBeDisabled()
+  expect(view.container.querySelector('input[type="file"]')).toBeNull()
+})
+
 it("shows published usage locations and narrows them by a page address", async () => {
   getAsset.mockResolvedValue({ ...asset, usageCount: 3, publishedUsage: true, usageTotal: 3, usagesTruncated: true, usages: [{ ownerType: "cms_revision", ownerId: "revision-1", pageId: "page-1", path: "/family", pointer: "/hero/config/background/assetId", published: true }] })
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1?tab=usage"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
