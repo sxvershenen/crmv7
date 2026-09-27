@@ -10,7 +10,7 @@ import {
   CmsReleaseOutboxEventSchema,
   CmsHeroPolicySchema,
   CmsNodePublishResultSchema,
-  CmsSiteSettingsValueSchema,
+  CmsSiteSettingsStoredValueSchema,
   CmsSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
@@ -352,6 +352,9 @@ export class CmsPublicationService {
     if (sourceLinks.some((link) => blockedOperationalSourceKinds.has(link.sourceKind))) {
       throw new ConflictException({ code: "CMS_RELEASE_INVALID", message: "Релиз содержит operational Event/ProgramOccurrence без разрешённой публичной проекции" })
     }
+    if (sourceLinks.some((link) => link.sourceKind === "resource")) {
+      throw new ConflictException({ code: "CMS_RELEASE_INVALID", message: "Релиз содержит Resource без предложения и безопасной публичной проекции" })
+    }
     const nodes = await manager.getRepository(CmsNodeEntity).findBy({ id: In(items.map((item) => item.nodeId)) })
     const nodeById = new Map(nodes.map((node) => [node.id, node]))
     if (items.some((item) => nodeById.get(item.nodeId)?.kind === "event_detail" && sourceLinks.find((link) => link.nodeId === item.nodeId)?.sourceKind !== "catalog_offering")) {
@@ -605,7 +608,7 @@ export class CmsPublicationService {
     if (!revisionId) return undefined
     const revision = await manager.getRepository(CmsSiteSettingsRevisionEntity).findOneBy({ id: revisionId })
     if (!revision) throw new ConflictException({ code: "CMS_BASE_RELEASE_INVALID", message: "Базовые настройки публикации не найдены" })
-    const value = CmsSiteSettingsValueSchema.parse(revision.value)
+    const value = CmsSiteSettingsStoredValueSchema.parse(revision.value)
     return { hero: value.heroDefault, sections: value.sectionDefaults }
   }
 
@@ -722,6 +725,8 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
     const blockedOperationalSource = candidate.sourceKind !== null && candidate.sourceKind !== undefined && blockedOperationalSourceKinds.has(candidate.sourceKind)
     if (blockedOperationalSource) {
       issues.push(issue("CMS_OPERATIONAL_SOURCE_PUBLIC_PROFILE_REQUIRED", "Operational Event/ProgramOccurrence нельзя публиковать до появления явной allowlisted public offering/profile projection", candidate.revision.path))
+    } else if (candidate.sourceKind === "resource") {
+      issues.push(issue("CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED", "Чтобы опубликовать ресурс, настройте для него предложение в CRM", candidate.revision.path))
     } else if (candidate.node.kind === "event_detail" && candidate.sourceKind !== blockedCatalogSourceKind) {
       issues.push(issue("CMS_EVENT_SERVICE_PUBLIC_PROJECTION_REQUIRED", "event_detail нельзя публиковать без явной event-service CatalogOffering и safe public projection", candidate.revision.path))
     } else if (candidate.sourceKind === blockedCatalogSourceKind) {

@@ -411,7 +411,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect((await adminAgent.get(`/api/internal/v1/offerings/${offeringId}/editor`).expect(200)).body).toMatchObject({
       offering: { id: offeringId, kind: "program" },
       bindings: [{ role: "primary", target: { type: "program_template", id: templateId } }],
-      editorial: { node: { id: nodeId, kind: "program_detail" }, publication: { eligible: false, blockers: expect.arrayContaining(["safe_public_projection_missing"]) } },
+      editorial: { node: { id: nodeId, kind: "program_detail" }, publication: { eligible: false, blockers: ["offering_not_active"] } },
     })
     expect(await dataSource.getRepository(CatalogOfferingEntity).countBy({ id: offeringId, kind: "program" })).toBe(1)
     expect(await dataSource.getRepository(OfferingBindingEntity).countBy({ offeringId, programTemplateId: templateId, role: "primary" })).toBe(1)
@@ -558,7 +558,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect((await adminAgent.get("/api/internal/v1/offerings/binding-targets?targetType=resource&q=bound-resource").expect(200)).body).toEqual({ items: [], nextCursor: null })
   })
 
-  it("promotes only an exact legacy house locator and exposes a safe fail-closed editorial summary", async () => {
+  it("promotes only an exact legacy house locator and reports its public readiness", async () => {
     const calendarId = randomUUID()
     const resourceId = randomUUID()
     const offeringId = randomUUID()
@@ -634,7 +634,7 @@ describe.sequential("internal API + PostgreSQL", () => {
       source: { sourceKind: "catalog_offering", sourceId: offeringId },
       node: { id: nodeId, kind: "resource_detail", status: "active" },
       currentRevision: { id: revisionId, state: "approved", path: "/houses/sosna", title: "Дом Сосна" },
-      publication: { eligible: false, blockers: ["public_profile_missing", "safe_public_projection_missing"] },
+      publication: { eligible: true, blockers: [] },
     })
     expect(internalEditor.body.ownerVersions.editorial).toMatchObject({ nodeId, draftRevisionId: revisionId })
     expect(JSON.stringify(internalEditor.body.editorial)).not.toContain("must-not-leak")
@@ -642,7 +642,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     const publish = await adminAgent.post(`/api/admin/v1/content/nodes/${nodeId}/publish`).send({
       operationId: randomUUID(), idempotencyKey: `publish-catalog-${randomUUID()}`, expectedVersion: 1,
     }).expect(422)
-    expect(publish.body).toMatchObject({ code: "CMS_PUBLICATION_VALIDATION_FAILED", details: { issues: [expect.objectContaining({ code: "CMS_CATALOG_OFFERING_SAFE_PROJECTION_REQUIRED" })] } })
+    expect(publish.body).toMatchObject({ code: "CMS_PUBLICATION_VALIDATION_FAILED", details: { issues: [expect.objectContaining({ code: "CMS_SITE_SETTINGS_REQUIRED" })] } })
   })
 
   it("hydrates assigned reusable and offering-specific add-on catalog summaries without leaking internal fields", async () => {
@@ -777,7 +777,7 @@ describe.sequential("internal API + PostgreSQL", () => {
       id: nodeId, kind: "addon_detail", status: "active", createdBy: adminId, updatedBy: adminId, archivedAt: null,
     })
     const content = {
-      route: { path: "/services/breakfast", slug: "breakfast", parentNodeId: null, sortOrder: 10 },
+      route: { path: "/dopy/breakfast", slug: "breakfast", parentNodeId: null, sortOrder: 10 },
       title: "Завтрак из фермерских продуктов", summary: "Готовим утром и приносим к домику.",
       hero: { mode: "disabled" as const }, sections: [],
       seo: { title: "Завтрак в Свистоплясово", description: "Фермерский завтрак для гостей базы отдыха", indexPolicy: "index_follow" as const, canonical: { mode: "self" as const }, structuredData: [] },
@@ -811,7 +811,8 @@ describe.sequential("internal API + PostgreSQL", () => {
     const built = await adminAgent.post("/api/admin/v1/releases/build").send({
       operationId: randomUUID(), idempotencyKey: `addon-release-build-${randomUUID()}`,
       revisionIds: [revisionId], removeNodeIds: [],
-    }).expect(201)
+    })
+    expect(built.status, JSON.stringify(built.body)).toBe(201)
     const releaseId = built.body.manifest.id as string
     expect(built.body.manifest.routes[0].dependencyRefs).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "crm_projection", id: offeringId, version: "public.addon-summary.v1", contentHash: expect.stringMatching(/^[a-f0-9]{64}$/) }),
@@ -1348,9 +1349,9 @@ describe.sequential("internal API + PostgreSQL", () => {
       [occurrence.body.id, "program_occurrence"], [eventCategory.body.id, "event_category"],
     ])
     const rows = await dataSource.query(`SELECT link.source_id AS "sourceId", link.source_kind AS "sourceKind", link.sync_state AS "syncState", link.node_id AS "nodeId", revision.state,
-        revision.summary, revision.sections, revision.seo
+        revision.path, revision.summary, revision.sections, revision.seo
       FROM cms_source_links link JOIN cms_node_revisions revision ON revision.node_id = link.node_id AND revision.revision = 1
-      WHERE link.source_id = ANY($1::uuid[])`, [[...expected.keys()]]) as Array<{ sourceId: string; sourceKind: string; syncState: string; nodeId: string; state: string; summary: string | null; sections: unknown[]; seo: unknown }>
+      WHERE link.source_id = ANY($1::uuid[])`, [[...expected.keys()]]) as Array<{ sourceId: string; sourceKind: string; syncState: string; nodeId: string; state: string; path: string; summary: string | null; sections: unknown[]; seo: unknown }>
     expect(rows).toHaveLength(5)
     for (const row of rows) expect(row).toMatchObject({ sourceKind: expected.get(row.sourceId), syncState: "draft", state: "draft" })
     const cmsList = await adminAgent.get("/api/admin/v1/content/nodes?limit=20").expect(200)
@@ -1365,7 +1366,11 @@ describe.sequential("internal API + PostgreSQL", () => {
     }
     const resourceDraft = rows.find((row) => row.sourceKind === "resource")!
     const blocked = await adminAgent.post(`/api/admin/v1/content/nodes/${resourceDraft.nodeId}/publish`).send({ operationId: randomUUID(), idempotencyKey: `source-route-publish-${randomUUID()}`, expectedVersion: 1 }).expect(422)
-    expect(blocked.body).toMatchObject({ code: "CMS_SOURCE_ROUTE_REQUIRED", fieldErrors: { "route.path": expect.any(Array) } })
+    expect(resourceDraft).toMatchObject({ sourceKind: "resource", state: "draft", path: expect.stringMatching(/^\/domiki\//) })
+    expect(blocked.body).toMatchObject({ code: "CMS_PUBLICATION_VALIDATION_FAILED", details: { issues: expect.arrayContaining([
+      expect.objectContaining({ code: "CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED" }),
+      expect.objectContaining({ code: "CMS_SITE_SETTINGS_REQUIRED" }),
+    ]) } })
 
     for (const sourceKind of ["program_occurrence"] as const) {
       const technicalDraft = rows.find((row) => row.sourceKind === sourceKind)!
@@ -1394,7 +1399,7 @@ describe.sequential("internal API + PostgreSQL", () => {
         siteName: "Свистоплясово",
         headerNavigation: [{ id: randomUUID(), label: "Домики", link: { kind: "internal", path: "/", anchor: "houses" }, icon: "home", color: "forest", children: [] }],
         heroDefault: null,
-        sectionDefaults: ["map", "faq", "directions", "calculator", "footer"].map((key, index) => ({ id: randomUUID(), key, renderer: key, rendererVersion: "1", schemaVersion: 1, order: 100 + index, config: {} })),
+        sectionDefaults: ["map", "faq", "directions", "calculator", "footer"].map((key, index) => ({ id: randomUUID(), key, renderer: key === "footer" ? key : "homepage-section", rendererVersion: "1", schemaVersion: 1, order: 100 + index, config: key === "footer" ? {} : { eyebrow: null, title: key, description: "", action: null } })),
       },
     }).expect(200)
     const publishedSettings = await adminAgent.post("/api/admin/v1/site-settings/publish").send({
@@ -1413,7 +1418,8 @@ describe.sequential("internal API + PostgreSQL", () => {
     const nodeId = created.body.node.id as string
     const firstPublication = await adminAgent.post(`/api/admin/v1/content/nodes/${nodeId}/publish`).send({
       operationId: randomUUID(), idempotencyKey: `direct-page-publish-${randomUUID()}`, expectedVersion: created.body.node.version,
-    }).expect(200)
+    })
+    expect(firstPublication.status, JSON.stringify(firstPublication.body)).toBe(200)
     expect(firstPublication.body).toMatchObject({ node: { version: 2 }, publishedRevision: { state: "published" } })
     expect((await adminAgent.get(`/api/admin/v1/content/nodes/${nodeId}`).expect(200)).body.currentRevision).toMatchObject({ state: "published" })
     const firstPage = (await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/simple" }).expect(200)).body
@@ -2915,11 +2921,15 @@ describe.sequential("internal API + PostgreSQL", () => {
       .toMatchObject({ generation: 1, lastInvalidationEventId: firstEventId })
     expect(await dataSource.getRepository(PublicOfferingProjectionInvalidationReceiptEntity).findOneByOrFail({ eventId: firstEventId }))
       .toMatchObject({ generation: 1, cacheTags: [`public-offering:${offeringId}`, "public-offering-kind:house", "public-offering-collection"], effect: "applied", effectAttempts: 1 })
-    // The summary event remains open until the independent SSE checkpoint succeeds.
+    // The summary event remains open until SSE and analytics checkpoints succeed.
     expect((await dataSource.getRepository(OutboxEventEntity).findOneByOrFail({ id: firstEventId })).processedAt).toBeNull()
     const firstSseClaim = await store.claim("sse", "integration-sse", 1)
     expect(firstSseClaim).toHaveLength(1)
     expect(await store.succeed(firstSseClaim[0]!)).toBe(true)
+    expect((await dataSource.getRepository(OutboxEventEntity).findOneByOrFail({ id: firstEventId })).processedAt).toBeNull()
+    const firstAnalyticsClaim = await store.claim("analytics", "integration-analytics", 1)
+    expect(firstAnalyticsClaim).toHaveLength(1)
+    expect(await store.succeed(firstAnalyticsClaim[0]!)).toBe(true)
     expect((await dataSource.getRepository(OutboxEventEntity).findOneByOrFail({ id: firstEventId })).processedAt).not.toBeNull()
 
     // Insert the next event with an older timestamp; receipt order is delivery

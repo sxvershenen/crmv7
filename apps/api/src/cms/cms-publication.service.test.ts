@@ -192,6 +192,16 @@ describe("materializeRelease", () => {
     ])
   })
 
+  it("keeps an unpromoted CRM Resource draft out of a public release", () => {
+    const resource = candidate({
+      nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/domiki/forest", slug: "forest",
+      sections: [heroOverride], sourceKind: "resource",
+    })
+    expect(materializeRelease([resource] as never).issues).toEqual([
+      expect.objectContaining({ code: "CMS_RESOURCE_PUBLIC_PROJECTION_REQUIRED", route: "/domiki/forest" }),
+    ])
+  })
+
   it("fails closed for catalog offering nodes even when the revision has a matching relation", () => {
     const house = candidate({
       nodeId: rootId, revisionId: rootRevisionId, kind: "resource_detail", path: "/houses/sosna", slug: "sosna",
