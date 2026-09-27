@@ -103,7 +103,6 @@ export function createDraftPriceBookForm(source: PriceBook | null, validFrom: st
     return {
       ...priceBookToDraftForm(source),
       changeReason: "",
-      name: `${source.name} — черновик`,
     }
   }
 

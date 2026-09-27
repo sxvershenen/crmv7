@@ -44,6 +44,8 @@ describe("event category shared workspace", () => {
     const pricing = renderToStaticMarkup(workspace("pricing"))
     const preview = renderToStaticMarkup(workspace("preview"))
     expect(pricing).toContain("flat_package")
+    expect(pricing).toContain('value="Стандарт"')
+    expect(pricing).not.toContain("Стандарт — черновик")
     expect(pricing).toContain("Гостей включено")
     expect(preview).toContain("Цена рассчитана отдельно от доступности и брони")
     expect(preview).toContain("Доступность, ресурсы, бронь и подтверждение не выполняются")

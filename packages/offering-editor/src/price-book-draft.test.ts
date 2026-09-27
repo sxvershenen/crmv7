@@ -82,6 +82,11 @@ describe("price-book draft conversion", () => {
     expect(createDraftPriceBookForm(draft, "2026-10-01")).toEqual(priceBookToDraftForm(draft))
   })
 
+  it("keeps the human price-book name when starting the next draft", () => {
+    expect(createDraftPriceBookForm(priceBook, "2026-10-01")).toMatchObject({ name: "Сезон 2026", changeReason: "" })
+    expect(createDraftPriceBookForm({ ...priceBook, name: "Сезон 2026 — черновик" }, "2026-10-01").name).toBe("Сезон 2026 — черновик")
+  })
+
   it("copies every existing date rule into an editable draft without widening its selector", () => {
     const form = priceBookToDraftForm(priceBook)
 
