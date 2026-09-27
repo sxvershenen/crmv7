@@ -64,6 +64,26 @@ describe("CmsContentService", () => {
     expect(manager.findOneBy).not.toHaveBeenCalled()
   })
 
+  it("reads a full revision only when it belongs to the requested page", async () => {
+    const findOneBy = vi.fn().mockResolvedValue(revision)
+    const manager = { findOneBy: vi.fn().mockResolvedValue(node) }
+    const service = new CmsContentService({ manager, getRepository: vi.fn().mockReturnValue({ findOneBy }) } as never)
+    await expect(service.getRevision(node.id, revision.id, actor)).resolves.toMatchObject({ id: revision.id, title: "Свадьбы" })
+    expect(findOneBy).toHaveBeenCalledWith({ id: revision.id, nodeId: node.id })
+    findOneBy.mockResolvedValue(null)
+    await expect(service.getRevision(node.id, revision.id, actor)).rejects.toMatchObject({ response: { code: "CMS_REVISION_NOT_FOUND" } })
+  })
+
+  it("denies revision reads and restores before touching persistence", async () => {
+    const manager = { findOneBy: vi.fn() }
+    const service = new CmsContentService({ manager, transaction: vi.fn() } as never)
+    const deniedView = { ...actor, capabilities: { ...actor.capabilities, canViewContent: false } }
+    const deniedEdit = { ...actor, capabilities: { ...actor.capabilities, canEditContent: false } }
+    await expect(service.getRevision(node.id, revision.id, deniedView)).rejects.toMatchObject({ response: { code: "PERMISSION_DENIED" } })
+    await expect(service.restoreRevision(node.id, revision.id, { operationId: actor.id, idempotencyKey: "restore-denied", expectedVersion: node.version }, deniedEdit, "restore-denied")).rejects.toMatchObject({ response: { code: "PERMISSION_DENIED" } })
+    expect(manager.findOneBy).not.toHaveBeenCalled()
+  })
+
   it("reads a node through a mocked persistence boundary", async () => {
     const findOne = vi.fn().mockResolvedValueOnce(revision).mockResolvedValueOnce(null)
     const manager = { findOneBy: vi.fn().mockResolvedValue(node), getRepository: vi.fn().mockReturnValue({ findOne }) }
@@ -173,6 +193,36 @@ describe("CmsContentService", () => {
     expect(harness.bumpQuery.execute).toHaveBeenCalledOnce()
   })
 
+  it("restores editorial content as a new draft but keeps current route and CRM relations", async () => {
+    const source = { ...revision, id: "77777777-7777-4777-8777-777777777777", revision: 1, path: "/old-path", slug: "old-path", title: "Прежний заголовок", summary: "Прежний текст", relations: [] }
+    const current = { ...revision, state: "draft", path: "/current-path", slug: "current-path", relations: [{ kind: "resource", entityId: actor.id }] }
+    const harness = updateHarness({ current, source })
+
+    const result = await harness.service.restoreRevision(node.id, source.id, { operationId: actor.id, idempotencyKey: "restore-editorial-1", expectedVersion: node.version }, actor, "request-restore")
+
+    expect(result.currentRevision).toMatchObject({ revision: 3, state: "draft", title: "Прежний заголовок", summary: "Прежний текст", route: { path: "/current-path", slug: "current-path" }, relations: current.relations })
+    expect(harness.revisionRepository.update).toHaveBeenCalledWith({ id: current.id, state: "draft" }, { state: "superseded" })
+    expect(harness.manager.create).toHaveBeenCalledWith(ChangeLogEntity, expect.objectContaining({ action: "revision_restored", changes: expect.objectContaining({ sourceRevisionId: source.id, routePreserved: true, crmRelationsPreserved: true }) }))
+    expect(harness.manager.create).toHaveBeenCalledWith(OutboxEventEntity, expect.objectContaining({ topic: "cms.content.revision.created" }))
+    expect(harness.dataSource.transaction).toHaveBeenCalledWith("SERIALIZABLE", expect.any(Function))
+  })
+
+  it("rejects stale, foreign and reviewed restores before creating another revision", async () => {
+    const current = { ...revision, state: "draft" }
+    const source = { ...revision, id: "77777777-7777-4777-8777-777777777777", revision: 1 }
+    const stale = updateHarness({ current, source })
+    await expect(stale.service.restoreRevision(node.id, source.id, { operationId: actor.id, idempotencyKey: "restore-stale", expectedVersion: 2 }, actor, "restore-stale")).rejects.toMatchObject({ response: { code: "VERSION_CONFLICT" } })
+    expect(stale.bumpQuery.execute).not.toHaveBeenCalled()
+
+    const foreign = updateHarness({ current })
+    await expect(foreign.service.restoreRevision(node.id, source.id, { operationId: actor.id, idempotencyKey: "restore-foreign", expectedVersion: 3 }, actor, "restore-foreign")).rejects.toMatchObject({ response: { code: "CMS_REVISION_NOT_FOUND" } })
+    expect(foreign.bumpQuery.execute).not.toHaveBeenCalled()
+
+    const reviewed = updateHarness({ current: { ...current, state: "review" }, source })
+    await expect(reviewed.service.restoreRevision(node.id, source.id, { operationId: actor.id, idempotencyKey: "restore-reviewed", expectedVersion: 3 }, actor, "restore-reviewed")).rejects.toMatchObject({ response: { code: "CMS_DRAFT_REQUIRED" } })
+    expect(reviewed.bumpQuery.execute).not.toHaveBeenCalled()
+  })
+
   it("lets an unpublished resource page edit its generated commercial slug", async () => {
     const current = { ...revision, state: "draft", path: "/domiki/dom-u-ozera", slug: "dom-u-ozera" }
     const harness = updateHarness({ current, kind: "resource_detail" })
@@ -262,7 +312,13 @@ function mutation(overrides: Record<string, unknown>) {
   } as never
 }
 
-function updateHarness(options: { current: typeof revision; published?: typeof revision | null; children?: Array<{ id: string }>; kind?: string }) {
+type RevisionFixture = Omit<typeof revision, "summary" | "sections" | "relations"> & {
+  summary: string | null
+  sections: unknown[]
+  relations: Array<{ kind: string; entityId: string }>
+}
+
+function updateHarness(options: { current: RevisionFixture; published?: RevisionFixture | null; source?: RevisionFixture; children?: Array<{ id: string }>; kind?: string }) {
   const idempotencyRepository = { findOne: vi.fn().mockResolvedValue(null) }
   const sourceRepository = { findOneBy: vi.fn().mockResolvedValue(null) }
   const revisionFinds = options.published === undefined
@@ -276,6 +332,7 @@ function updateHarness(options: { current: typeof revision; published?: typeof r
   const revisionRepository = {
     findOne: vi.fn()
       .mockImplementation(() => Promise.resolve(revisionFinds.shift() ?? null)),
+    findOneBy: vi.fn().mockImplementation(async (where: { id: string; nodeId: string }) => where.nodeId === node.id && where.id === options.source?.id ? options.source : null),
     update: vi.fn().mockResolvedValue({ affected: 1 }),
     createQueryBuilder: vi.fn().mockReturnValue(revisionQuery),
   }

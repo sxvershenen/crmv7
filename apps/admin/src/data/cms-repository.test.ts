@@ -22,6 +22,18 @@ describe("FixtureCmsRepository", () => {
     expect(after.items[1]).toMatchObject({ title: editor.publicTitle, state: "superseded" })
   })
 
+  it("restores saved fixture content into a new draft without rolling back its URL", async () => {
+    const repository = new FixtureCmsRepository()
+    const original = await repository.getEditor("landing-family", "landing")
+    const changed = await repository.saveEditor({ ...original, publicTitle: "Новое название", url: "/new-family", slug: "new-family" }, original.version)
+    const oldEntry = (await repository.getRevisionHistory(original.id)).items[1]!
+    expect((await repository.getRevisionEditor(original.id, oldEntry.id)).publicTitle).toBe(original.publicTitle)
+    const restored = await repository.restoreRevision(original.id, oldEntry.id, changed.version)
+    expect(restored).toMatchObject({ publicTitle: original.publicTitle, url: "/new-family", slug: "new-family", status: "draft", revisionState: "draft", version: changed.version + 1 })
+    expect((await repository.getRevisionHistory(original.id)).items[0]).toMatchObject({ revision: restored.revision, state: "draft" })
+    await expect(repository.restoreRevision(original.id, oldEntry.id, changed.version)).rejects.toBeInstanceOf(CmsConflictError)
+  })
+
   it("versions media metadata and rejects a stale fixture save", async () => {
     const repository = new FixtureCmsRepository()
     const original = await repository.getAsset("asset-hero")
@@ -65,6 +77,21 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("reads a saved revision and restores it through a versioned CMS mutation", async () => {
+    const client = clientMock()
+    const old = { ...detail.currentRevision!, id: ids.revision2, revision: 2, title: "Старый заголовок", route: { ...detail.currentRevision!.route, path: "/old-family", slug: "old-family" } }
+    const restored = { ...detail, node: { ...detail.node, version: 8 }, currentRevision: { ...detail.currentRevision!, id: ids.revision2, revision: 5, title: old.title } }
+    client.get.mockImplementation(async (path: string) => path.endsWith(`/revisions/${ids.revision2}`) ? old : detail)
+    client.post.mockResolvedValue(restored)
+    const repository = new ApiCmsRepository(client as never)
+    const comparison = await repository.getRevisionEditor(ids.node, ids.revision2)
+    expect(comparison).toMatchObject({ publicTitle: old.title, url: "/old-family" })
+    expect(client.get).toHaveBeenCalledWith(`/content/nodes/${ids.node}/revisions/${ids.revision2}`, expect.anything())
+    const result = await repository.restoreRevision(ids.node, ids.revision2, detail.node.version)
+    expect(result).toMatchObject({ publicTitle: old.title, url: "/family", version: 8, revision: 5 })
+    expect(client.post).toHaveBeenCalledWith(`/content/nodes/${ids.node}/revisions/${ids.revision2}/restore`, expect.objectContaining({ expectedVersion: 7 }), expect.anything())
+  })
+
   it("issues a preview token for the saved current revision", async () => {
     const client = clientMock()
     client.get.mockResolvedValue(detail)

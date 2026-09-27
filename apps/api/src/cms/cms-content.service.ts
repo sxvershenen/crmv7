@@ -93,6 +93,14 @@ export class CmsContentService {
     })
   }
 
+  async getRevision(id: string, revisionId: string, actor: SessionUser): Promise<CmsNodeRevision> {
+    this.assert(actor, "canViewContent")
+    await this.findNode(this.dataSource.manager, id)
+    const revision = await this.dataSource.getRepository(CmsNodeRevisionEntity).findOneBy({ id: revisionId, nodeId: id })
+    if (!revision) throw new NotFoundException({ code: "CMS_REVISION_NOT_FOUND", message: "Редакция этой страницы не найдена" })
+    return this.revision(revision)
+  }
+
   async create(input: CmsNodeCreate, actor: SessionUser, requestId: string): Promise<CmsNodeDetail> {
     this.assert(actor, "canEditContent")
     return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
@@ -176,6 +184,55 @@ export class CmsContentService {
         supersededRevisionId: current.id,
         beforeContentHash: current.contentHash,
         afterContentHash: revision.contentHash,
+      })
+      await this.remember(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
+      return response
+    })
+  }
+
+  async restoreRevision(id: string, revisionId: string, input: CmsNodeTransition, actor: SessionUser, requestId: string): Promise<CmsNodeDetail> {
+    this.assert(actor, "canEditContent")
+    return this.dataSource.transaction("SERIALIZABLE", async (manager) => {
+      const scope = `cms-node:${id}:restore`
+      const requestHash = mutationHash({ revisionId, input })
+      const replay = await this.replay(manager, scope, input.operationId, input.idempotencyKey, requestHash)
+      if (replay) return replay
+      const currentNode = await this.findNode(manager, id)
+      this.assertActive(currentNode)
+      if (currentNode.version !== input.expectedVersion) throw this.versionConflict(currentNode)
+      const repository = manager.getRepository(CmsNodeRevisionEntity)
+      const source = await repository.findOneBy({ id: revisionId, nodeId: id })
+      if (!source) throw new NotFoundException({ code: "CMS_REVISION_NOT_FOUND", message: "Редакция этой страницы не найдена" })
+      const current = await this.findCurrentRevision(manager, id)
+      if (!current || (current.state !== "draft" && current.state !== "published")) throw new ConflictException({ code: "CMS_DRAFT_REQUIRED", message: "Сначала верните материал в черновик" })
+      if (source.id === current.id) throw new ConflictException({ code: "CMS_RESTORE_CURRENT", message: "Эта редакция уже открыта" })
+      if (source.schemaVersion !== 1 || current.schemaVersion !== 1) throw new ConflictException({ code: "CMS_SCHEMA_UNSUPPORTED", message: "Формат редакции не поддерживает восстановление" })
+      const previous = this.revision(current)
+      const selected = this.revision(source)
+      const content: RevisionContent = {
+        route: previous.route,
+        relations: previous.relations,
+        title: selected.title,
+        summary: selected.summary,
+        hero: selected.hero,
+        sections: selected.sections,
+        seo: selected.seo,
+        schemaVersion: previous.schemaVersion,
+      }
+      const updatedNode = await this.bumpNode(manager, currentNode, input.expectedVersion, actor.id)
+      if (current.state === "draft") {
+        const superseded = await repository.update({ id: current.id, state: "draft" }, { state: "superseded" })
+        if (superseded.affected !== 1) throw this.versionConflict(currentNode)
+      }
+      const revision = await this.saveRevision(manager, id, await this.nextRevision(manager, id), "draft", content, actor.id, new Date())
+      const response = await this.detail(manager, updatedNode, revision)
+      await this.recordMutation(manager, updatedNode, revision, "revision_restored", "cms.content.revision.created", actor.id, requestId, {
+        sourceRevisionId: source.id,
+        previousRevisionId: current.id,
+        beforeContentHash: current.contentHash,
+        afterContentHash: revision.contentHash,
+        routePreserved: true,
+        crmRelationsPreserved: true,
       })
       await this.remember(manager, scope, input.operationId, input.idempotencyKey, requestHash, response)
       return response

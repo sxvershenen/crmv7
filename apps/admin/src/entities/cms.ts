@@ -232,6 +232,8 @@ export interface CmsRepository {
   getNodes(query?: CmsNodeQuery): Promise<ContentNode[]>
   getEditor(id: string, kind: EditorRecord["kind"]): Promise<EditorRecord>
   getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage>
+  getRevisionEditor(id: string, revisionId: string): Promise<EditorRecord>
+  restoreRevision(id: string, revisionId: string, expectedVersion: number): Promise<EditorRecord>
   saveEditor(record: EditorRecord, expectedVersion: number): Promise<EditorRecord>
   getPreviewToken(id: string, expectedVersion: number): Promise<import("@crm/contracts").CmsPreviewTokenResponse>
   submitReview(id: string, expectedVersion: number): Promise<EditorRecord>

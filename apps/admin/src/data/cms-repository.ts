@@ -1,4 +1,4 @@
-import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodeRevisionListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, CmsNodeUnpublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodePublicationStatus, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
+import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodeRevisionListResponseSchema, CmsNodeRevisionSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, CmsNodeUnpublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodePublicationStatus, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
@@ -28,6 +28,7 @@ export class FixtureCmsRepository implements CmsRepository {
   readonly mode = "fixtures" as const
   private editors = clone(editorFixtures)
   private revisionHistory = new Map<string, CmsRevisionHistoryEntry[]>()
+  private revisionSnapshots = new Map<string, Map<string, EditorRecord>>()
   private unpublished = new Set<string>()
   private navigation = clone(navigationFixture)
   private siteSettings: CmsSiteSettingsDetail = CmsSiteSettingsDetailSchema.parse({
@@ -47,7 +48,9 @@ export class FixtureCmsRepository implements CmsRepository {
     const fallbackId = kind === "home" ? "home" : kind === "category" ? "houses" : kind === "profile" ? "house-lesnoy" : "landing-family"
     const record = this.editors[id] ?? this.editors[fallbackId]
     if (!record) throw new Error("Запись не найдена")
-    return { ...clone(record), id, revision: this.revisionHistory.get(id)?.[0]?.revision ?? record.revision ?? record.version, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
+    const presented = { ...clone(record), id, revision: this.revisionHistory.get(id)?.[0]?.revision ?? record.revision ?? record.version, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
+    this.historyFor(id, presented)
+    return presented
   }
   async getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage> {
     await pause()
@@ -67,6 +70,7 @@ export class FixtureCmsRepository implements CmsRepository {
     if (!history) {
       history = [{ id: `fixture-${id}-${current.revision ?? current.version}`, revision: current.revision ?? current.version, state: fixtureRevisionState(current), title: current.publicTitle, path: current.url, createdAt: nodeFixtures.find((node) => node.id === id)?.updatedAt ?? null, createdBy: null }]
       this.revisionHistory.set(id, history)
+      this.revisionSnapshots.set(id, new Map([[history[0]!.id, clone(current)]]))
     }
     return history
   }
@@ -79,7 +83,26 @@ export class FixtureCmsRepository implements CmsRepository {
     const saved = { ...clone(record), id: savedId, version: expectedVersion + 1, revision: (record.revision ?? expectedVersion) + 1, updatedLabel: "только что" }
     this.editors[savedId] = saved
     this.revisionHistory.set(savedId, [{ id: `fixture-${savedId}-${saved.revision}`, revision: saved.revision!, state: "draft", title: saved.publicTitle, path: saved.url, createdAt: new Date().toISOString(), createdBy: null }, ...(this.revisionHistory.get(savedId) ?? []).map((entry, index) => index === 0 && entry.state === "draft" ? { ...entry, state: "superseded" as const } : entry)])
+    const snapshots = this.revisionSnapshots.get(savedId) ?? new Map<string, EditorRecord>()
+    snapshots.set(`fixture-${savedId}-${saved.revision}`, clone(saved))
+    this.revisionSnapshots.set(savedId, snapshots)
     return clone(saved)
+  }
+  async getRevisionEditor(id: string, revisionId: string): Promise<EditorRecord> {
+    const snapshot = this.revisionSnapshots.get(id)?.get(revisionId)
+    if (!snapshot) throw new Error("Редакция не найдена")
+    return clone(snapshot)
+  }
+  async restoreRevision(id: string, revisionId: string, expectedVersion: number): Promise<EditorRecord> {
+    const current = this.editors[id]
+    const source = this.revisionSnapshots.get(id)?.get(revisionId)
+    if (!current || !source) throw new Error("Редакция не найдена")
+    if (current.version !== expectedVersion) throw new CmsConflictError(current.version)
+    if (current.status === "archived") throw new Error("Архивную страницу нельзя восстановить")
+    if (current.revisionState && current.revisionState !== "draft" && current.revisionState !== "published") throw new Error("Сначала верните материал в черновик")
+    if (this.revisionHistory.get(id)?.[0]?.id === revisionId) throw new Error("Эта редакция уже открыта")
+    if ((source.schemaVersion !== undefined && source.schemaVersion !== 1) || (current.schemaVersion !== undefined && current.schemaVersion !== 1)) throw new Error("Формат редакции не поддерживает восстановление")
+    return this.saveEditor({ ...current, status: "draft", revisionState: "draft", publicTitle: source.publicTitle, description: source.description, seoTitle: source.seoTitle, seoDescription: source.seoDescription, indexPolicy: source.indexPolicy, hero: clone(source.hero), sections: clone(source.sections) }, expectedVersion)
   }
   async getPreviewToken(): Promise<CmsPreviewTokenResponse> { throw new CmsUnavailableError("Предпросмотр доступен только с подключённым API") }
   async submitReview(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "review") }
@@ -230,6 +253,21 @@ export class ApiCmsRepository implements CmsRepository {
     if (before !== undefined) query.set("before", String(before))
     const response = await this.client.get(`/content/nodes/${encodeURIComponent(id)}/revisions?${query}`, CmsNodeRevisionListResponseSchema)
     return { items: response.items.map((item) => ({ id: item.id, revision: item.revision, state: item.state, title: item.title, path: item.route.path, createdAt: item.createdAt, createdBy: item.createdBy })), nextBefore: response.nextBefore }
+  }
+
+  async getRevisionEditor(id: string, revisionId: string): Promise<EditorRecord> {
+    const detail = this.details.get(id) ?? await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
+    const revision = await this.client.get(`/content/nodes/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}`, CmsNodeRevisionSchema)
+    if (revision.nodeId !== id) throw new Error("Редакция относится к другой странице")
+    return this.editor({ ...detail, currentRevision: revision })
+  }
+
+  async restoreRevision(id: string, revisionId: string, expectedVersion: number): Promise<EditorRecord> {
+    try {
+      const detail = await this.client.post(`/content/nodes/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/restore`, { ...operationMeta(), expectedVersion }, CmsNodeDetailSchema)
+      this.details.set(id, detail)
+      return this.editor(detail)
+    } catch (error) { throw mapMutationError(error) }
   }
 
   async getEditor(id: string, kind: EditorRecord["kind"]): Promise<EditorRecord> {

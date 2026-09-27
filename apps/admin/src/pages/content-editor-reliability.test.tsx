@@ -60,6 +60,30 @@ describe("ContentEditorPage mutation recovery", () => {
     expect(screen.getByText("Публичный URL: /family")).toBeInTheDocument()
   })
 
+  it("confirms a restore and replaces the saved editor with a new draft", async () => {
+    const user = userEvent.setup()
+    const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111" }
+    const old = { ...initial, publicTitle: "Прежний заголовок" }
+    const restored = { ...old, version: initial.version + 1, revision: (initial.revision ?? initial.version) + 1 }
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue(initial)
+    vi.spyOn(cmsRepository, "getNodes").mockResolvedValue([])
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    vi.spyOn(cmsRepository, "getRevisionHistory").mockResolvedValue({ items: [{ id: "old-revision", revision: 1, state: "published", title: old.publicTitle, path: initial.url, createdAt: null, createdBy: null }], nextBefore: null })
+    vi.spyOn(cmsRepository, "getRevisionEditor").mockResolvedValue(old)
+    const restore = vi.spyOn(cmsRepository, "restoreRevision").mockResolvedValue(restored)
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter initialEntries={[`/content/pages/${initial.id}?tab=versions`]}><ContentEditorPage kind="landing" nodeId={initial.id} /></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+    await user.click(await screen.findByRole("button", { name: "Сравнить редакцию 1" }))
+    await user.click(await screen.findByRole("button", { name: "Вернуть в новый черновик" }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Текущий URL и связи с CRM сохранятся"))
+    expect(restore).not.toHaveBeenCalled()
+    confirm.mockReturnValue(true)
+    await user.click(screen.getByRole("button", { name: "Вернуть в новый черновик" }))
+    await waitFor(() => expect(restore).toHaveBeenCalledWith(initial.id, "old-revision", initial.version))
+    await user.click(screen.getByRole("tab", { name: "Содержимое" }))
+    expect(await screen.findByLabelText("Заголовок H1")).toHaveValue("Прежний заголовок")
+  })
+
   it("confirms the current public URL before unpublishing and keeps an unsaved draft", async () => {
     const user = userEvent.setup()
     const initial = { ...structuredClone(editorFixtures["landing-family"]!), id: "11111111-1111-4111-8111-111111111111", status: "published" as const }

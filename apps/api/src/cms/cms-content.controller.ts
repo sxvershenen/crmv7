@@ -6,6 +6,7 @@ import {
   CmsNodeIdParamsSchema,
   CmsNodeListQuerySchema,
   CmsNodeRevisionListQuerySchema,
+  CmsNodeRevisionParamsSchema,
   CmsNodeMutationSchema,
   CmsNodePublishSchema,
   CmsNodeUnpublishSchema,
@@ -15,6 +16,7 @@ import {
   type CmsNodeIdParams,
   type CmsNodeListQuery,
   type CmsNodeRevisionListQuery,
+  type CmsNodeRevisionParams,
   type CmsNodeMutation,
   type CmsNodePublish,
   type CmsNodeUnpublish,
@@ -53,6 +55,19 @@ export class CmsContentController {
   @RequireCapabilities("canViewContent")
   revisions(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Query(new ZodValidationPipe(CmsNodeRevisionListQuerySchema)) query: CmsNodeRevisionListQuery, @Req() request: AuthenticatedRequest) {
     return this.content.revisions(params.id, query, request.sessionUser!)
+  }
+
+  @Get(":id/revisions/:revisionId")
+  @RequireCapabilities("canViewContent")
+  revision(@Param(new ZodValidationPipe(CmsNodeRevisionParamsSchema)) params: CmsNodeRevisionParams, @Req() request: AuthenticatedRequest) {
+    return this.content.getRevision(params.id, params.revisionId, request.sessionUser!)
+  }
+
+  @Post(":id/revisions/:revisionId/restore")
+  @HttpCode(200)
+  @RequireCapabilities("canEditContent")
+  restore(@Param(new ZodValidationPipe(CmsNodeRevisionParamsSchema)) params: CmsNodeRevisionParams, @Body(new ZodValidationPipe(CmsNodeTransitionSchema)) input: CmsNodeTransition, @Req() request: AuthenticatedRequest) {
+    return this.content.restoreRevision(params.id, params.revisionId, input, request.sessionUser!, request.requestId)
   }
 
   @Patch(":id")

@@ -234,6 +234,8 @@ export type CmsNodeListQuery = z.infer<typeof CmsNodeListQuerySchema>;
 
 export const CmsNodeIdParamsSchema = z.object({ id: IdSchema }).strict();
 export type CmsNodeIdParams = z.infer<typeof CmsNodeIdParamsSchema>;
+export const CmsNodeRevisionParamsSchema = CmsNodeIdParamsSchema.extend({ revisionId: IdSchema }).strict();
+export type CmsNodeRevisionParams = z.infer<typeof CmsNodeRevisionParamsSchema>;
 
 export const CmsNodeRevisionMetadataSchema = CmsNodeRevisionSchema.pick({
   id: true,
