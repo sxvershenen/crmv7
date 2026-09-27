@@ -30,7 +30,7 @@ export function HeroMediaField({ assetId, canUpload, editable, label, onChange }
     if (!openRef.current || generation !== pickerGeneration.current) return
     if (readyImageUrl(asset)) { onChange(asset.id); changeOpen(false); return }
     setUploadedId(asset.id)
-    setUploadStatus(asset.status === "error" ? "Обработка файла завершилась ошибкой. Проверьте его в медиатеке." : "Файл загружен и обрабатывается. Проверьте готовность, не закрывая страницу.")
+    setUploadStatus(asset.status === "error" ? "Обработка файла завершилась ошибкой. Проверьте его в медиатеке." : asset.processing?.state === "queued" ? "Файл принят. Сервер повторит обработку автоматически. Проверьте готовность здесь." : "Файл загружен и обрабатывается. Проверьте готовность, не закрывая страницу.")
   }
   const upload = async (file: File) => {
     const generation = pickerGeneration.current

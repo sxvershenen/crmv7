@@ -5,9 +5,9 @@ import { TooltipProvider } from "@crm/ui"
 
 import { AssetPage, MediaLibraryPage } from "./media-pages"
 
-const { getAsset, getMedia, permissions, saveMediaMetadata, uploadMedia } = vi.hoisted(() => ({ getAsset: vi.fn(), getMedia: vi.fn(), permissions: { canManageMedia: true }, saveMediaMetadata: vi.fn(), uploadMedia: vi.fn() }))
+const { getAsset, getMedia, permissions, replaceMedia, saveMediaMetadata, uploadMedia } = vi.hoisted(() => ({ getAsset: vi.fn(), getMedia: vi.fn(), permissions: { canManageMedia: true }, replaceMedia: vi.fn(), saveMediaMetadata: vi.fn(), uploadMedia: vi.fn() }))
 
-vi.mock("@admin/data/cms-repository", () => ({ cmsRepository: { getAsset, getMedia, saveMediaMetadata, uploadMedia } }))
+vi.mock("@admin/data/cms-repository", () => ({ cmsRepository: { getAsset, getMedia, replaceMedia, saveMediaMetadata, uploadMedia } }))
 vi.mock("@admin/features/auth-session-context", () => ({ useAdminAuthSession: () => ({ user: { capabilities: permissions } }) }))
 
 const asset = {
@@ -20,6 +20,7 @@ beforeEach(() => {
   getMedia.mockReset().mockResolvedValue({ items: [], nextCursor: null })
   saveMediaMetadata.mockReset().mockResolvedValue({ ...asset, version: 2 })
   uploadMedia.mockReset()
+  replaceMedia.mockReset()
   permissions.canManageMedia = true
 })
 
@@ -105,6 +106,25 @@ it("shows processing after upload when the API has not marked the file ready", a
   expect(await screen.findByRole("status")).toHaveTextContent("Файл загружен. Обработка продолжается.")
   expect(uploadMedia).toHaveBeenCalledOnce()
   expect(screen.queryByText("Файл готов")).not.toBeInTheDocument()
+})
+
+it("treats a queued upload as accepted and refreshes the library", async () => {
+  uploadMedia.mockResolvedValue({ ...asset, status: "converting", processing: { state: "queued", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["image"], "sosna.jpg", { type: "image/jpeg" })] } })
+  expect(await screen.findByRole("status")).toHaveTextContent("Файл принят. Сервер повторит обработку автоматически.")
+  await waitFor(() => expect(getMedia).toHaveBeenCalledTimes(2))
+  expect(screen.queryByText("Не удалось загрузить файл")).not.toBeInTheDocument()
+})
+
+it("opens the queued replacement status after the server accepted its file", async () => {
+  getAsset.mockResolvedValueOnce(asset).mockResolvedValue({ ...asset, processing: { state: "queued", purpose: "replacement", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+  replaceMedia.mockResolvedValue({ ...asset, processing: { state: "queued", purpose: "replacement", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Заменить" }))
+  fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["image"], "new.jpg", { type: "image/jpeg" })] } })
+  expect(await screen.findByText("Ожидает повторной обработки")).toBeInTheDocument()
+  expect(getAsset).toHaveBeenCalledTimes(2)
 })
 
 it("searches on the server and loads older media without the first-page limit", async () => {

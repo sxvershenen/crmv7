@@ -85,6 +85,20 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("reads an accepted queued upload back through its grant asset ID", async () => {
+    const client = clientMock()
+    client.post.mockResolvedValue({ uploadId: ids.revision, assetId: ids.node, uploadUrl: "http://localhost/upload", method: "PUT", requiredHeaders: {}, expiresAt: "2026-09-27T12:00:00.000Z", maxByteSize: 10 })
+    client.get.mockResolvedValue({ asset: { ...wireMediaAsset(), state: "processing" }, usages: [], usageTotal: 0, usagesTruncated: false, processing: { state: "queued", purpose: "initial", attempts: 1, nextAttemptAt: "2026-09-27T12:00:00.000Z", errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+    vi.stubGlobal("crypto", { subtle: { digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer) } })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, headers: new Headers(), json: async () => ({ code: "MEDIA_PROCESSING_QUEUED", message: "Файл принят и ожидает повторной обработки" }) }))
+    const file = new File(["image"], "image.png", { type: "image/png" })
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("image").buffer })
+    try {
+      await expect(new ApiCmsRepository(client as never).uploadMedia(file)).resolves.toMatchObject({ status: "converting", processing: { state: "queued", purpose: "initial" } })
+      expect(client.get).toHaveBeenCalledWith(`/media/assets/${ids.node}`, expect.anything())
+    } finally { vi.unstubAllGlobals() }
+  })
+
   it("preserves a custom canonical when changing the index policy", async () => {
     const client = clientMock()
     const canonical = { mode: "custom" as const, url: "https://example.org/family" }

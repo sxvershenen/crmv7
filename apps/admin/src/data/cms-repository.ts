@@ -11,7 +11,7 @@ import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema,
 import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetListQuery, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
-import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
+import { AdminApiError, createAdminApiClient, parseAdminApiError, type AdminApiClient } from "@admin/lib/api-client"
 import { cmsDataMode } from "@admin/lib/data-mode"
 import { isPartnersRenderer, partnersDraft, partnersPolicy } from "./partners-section"
 import { isWhyUsRenderer, whyUsDraft, whyUsPolicy } from "./why-us-section"
@@ -445,11 +445,11 @@ export class ApiCmsRepository implements CmsRepository {
   async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated), processing: response.processing } }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
-    return uploadGrantedMedia(grant, file)
+    return uploadGrantedMedia(grant, file, () => this.getAsset(grant.assetId))
   }
   async replaceMedia(id: string, file: File, expectedVersion: number) {
     const grant = await this.client.post(`/media/assets/${encodeURIComponent(id)}/replacements`, { expectedVersion, ...await mediaUploadInput(file) }, MediaUploadGrantSchema)
-    return uploadGrantedMedia(grant, file)
+    return uploadGrantedMedia(grant, file, () => this.getAsset(grant.assetId))
   }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) {
     const response = await this.client.patch(`/media/assets/${encodeURIComponent(asset.id)}`, {
@@ -773,10 +773,14 @@ async function mediaUploadInput(file: File) {
   return { filename: file.name, mimeType: file.type || "application/octet-stream", byteSize: file.size, checksumSha256 }
 }
 
-async function uploadGrantedMedia(grant: import("@crm/contracts").MediaUploadGrant, file: File) {
+async function uploadGrantedMedia(grant: import("@crm/contracts").MediaUploadGrant, file: File, onQueued: () => Promise<import("@admin/entities/cms").MediaAsset>) {
   const response = await fetch(grant.uploadUrl, { method: grant.method, headers: grant.requiredHeaders, body: file })
-  const payload = await response.json() as unknown
-  if (!response.ok) throw new Error(payload && typeof payload === "object" && "message" in payload ? String(payload.message) : "Media upload failed")
+  const payload = await response.json().catch(() => null) as unknown
+  if (!response.ok) {
+    const error = parseAdminApiError(payload, response.status, response.headers.get("x-request-id"))
+    if (error.rawCode === "MEDIA_PROCESSING_QUEUED") return onQueued()
+    throw error
+  }
   return mediaView(MediaAssetSchema.parse(payload))
 }
 

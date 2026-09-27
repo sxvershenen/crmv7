@@ -14,6 +14,7 @@ import {
   MediaAssetListResponseSchema,
   MediaAssetUsageQuerySchema,
   MediaReplacementUploadInitSchema,
+  MediaUploadGrantSchema,
   MediaUploadInitSchema,
   PublicPageSchema,
   PublicLeadIntakeSchema,
@@ -68,6 +69,12 @@ describe("Phase 4 contracts", () => {
 
   it("rejects unsafe media sizes before an upload grant is issued", () => {
     expect(MediaUploadInitSchema.safeParse({ filename: "bomb.png", mimeType: "image/png", byteSize: 100_000_001, checksumSha256: "a".repeat(64) }).success).toBe(false);
+  });
+
+  it("identifies the asset created by an upload grant for queued-status lookup", () => {
+    const grant = { uploadId: id, assetId: secondId, uploadUrl: "https://example.org/upload", method: "PUT", expiresAt: timestamp, requiredHeaders: {}, maxByteSize: 1024 };
+    expect(MediaUploadGrantSchema.parse(grant).assetId).toBe(secondId);
+    expect(MediaUploadGrantSchema.safeParse({ ...grant, assetId: undefined }).success).toBe(false);
   });
 
   it("keeps replacement uploads versioned and usage filters bounded and strict", () => {

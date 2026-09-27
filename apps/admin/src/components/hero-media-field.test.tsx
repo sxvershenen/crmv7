@@ -33,6 +33,19 @@ it("keeps the picker open during processing and attaches an upload only when rea
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
 })
 
+it("keeps a queued upload available for a later readiness check", async () => {
+  const onChange = vi.fn()
+  uploadMedia.mockResolvedValue({ ...ready, status: "converting", variants: [], processing: { state: "queued", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
+  getAsset.mockResolvedValue(ready)
+  render(<TooltipProvider><HeroMediaField assetId="" canUpload editable label="Фоновое изображение" onChange={onChange} /></TooltipProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Выбрать: фоновое изображение" }))
+  fireEvent.change(screen.getByLabelText("Загрузить новое изображение"), { target: { files: [new File(["image"], "forest.jpg", { type: "image/jpeg" })] } })
+  expect(await screen.findByRole("status")).toHaveTextContent("Файл принят. Сервер повторит обработку автоматически.")
+  expect(onChange).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Проверить готовность" }))
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith(ready.id))
+})
+
 it("hides upload from an editor without media management rights", async () => {
   render(<TooltipProvider><HeroMediaField assetId="" canUpload={false} editable label="Фоновое изображение" onChange={vi.fn()} /></TooltipProvider>)
   fireEvent.click(screen.getByRole("button", { name: "Выбрать: фоновое изображение" }))

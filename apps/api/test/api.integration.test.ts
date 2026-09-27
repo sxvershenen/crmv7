@@ -3083,6 +3083,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     const grant = await adminAgent.post("/api/admin/v1/media/uploads").send({
       filename: "hero.png", mimeType: "image/png", byteSize: image.byteLength, checksumSha256: checksum,
     }).expect(201)
+    expect(grant.body.assetId).toMatch(/^[0-9a-f-]{36}$/)
     const uploadUrl = new URL(grant.body.uploadUrl as string)
     const uploaded = await request(app.getHttpServer()).put(`${uploadUrl.pathname}${uploadUrl.search}`)
       .set("content-type", "image/png").set("x-content-sha256", checksum).send(image).expect(200)
@@ -3095,6 +3096,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect(Buffer.isBuffer(delivered.body)).toBe(true)
 
     const assetId = uploaded.body.id as string
+    expect(grant.body.assetId).toBe(assetId)
     const nodeId = randomUUID()
     const revisionId = randomUUID()
     const mediaHero = CmsHeroPolicySchema.parse({
@@ -3158,6 +3160,7 @@ describe.sequential("internal API + PostgreSQL", () => {
     const replacementGrant = await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/replacements`).send({
       expectedVersion: metadataUpdate.body.asset.version, filename: "hero-v2.png", mimeType: "image/png", byteSize: replacement.byteLength, checksumSha256: replacementChecksum,
     }).expect(201)
+    expect(replacementGrant.body.assetId).toBe(assetId)
     const replacementUrl = new URL(replacementGrant.body.uploadUrl as string)
     const replaced = await request(app.getHttpServer()).put(`${replacementUrl.pathname}${replacementUrl.search}`)
       .set("content-type", "image/png").set("x-content-sha256", replacementChecksum).send(replacement).expect(200)

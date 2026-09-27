@@ -60,7 +60,7 @@ function UploadPanel({ onClose, onUploaded }: { onClose: () => void; onUploaded:
     setStatus("Загружаем файл")
     try {
       const uploaded = await cmsRepository.uploadMedia(next)
-      setStatus(uploaded.status === "ready" ? "Файл готов" : uploaded.status === "error" ? "Обработка файла завершилась ошибкой" : "Файл загружен. Обработка продолжается.")
+      setStatus(uploaded.processing?.state === "queued" ? "Файл принят. Сервер повторит обработку автоматически." : uploaded.status === "ready" ? "Файл готов" : uploaded.status === "error" ? "Обработка файла завершилась ошибкой" : "Файл загружен. Обработка продолжается.")
       onUploaded()
     } catch (reason) {
       setStatus("Не удалось загрузить файл")

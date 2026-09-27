@@ -154,7 +154,7 @@ export class MediaService {
     })
     const origin = new URL(requestOrigin).origin
     return MediaUploadGrantSchema.parse({
-      uploadId,
+      uploadId, assetId,
       uploadUrl: `${origin}/api/admin/v1/media/uploads/${uploadId}/content?token=${encodeURIComponent(token)}`,
       method: "PUT",
       expiresAt: expiresAt.toISOString(),
@@ -194,7 +194,7 @@ export class MediaService {
     })
     const origin = new URL(requestOrigin).origin
     return MediaUploadGrantSchema.parse({
-      uploadId,
+      uploadId, assetId,
       uploadUrl: `${origin}/api/admin/v1/media/uploads/${uploadId}/content?token=${encodeURIComponent(token)}`,
       method: "PUT",
       expiresAt: expiresAt.toISOString(),

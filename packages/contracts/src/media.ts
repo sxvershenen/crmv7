@@ -54,6 +54,7 @@ export const MediaReplacementUploadInitSchema = MediaUploadInitSchema.extend({
 
 export const MediaUploadGrantSchema = z.object({
   uploadId: IdSchema,
+  assetId: IdSchema,
   uploadUrl: z.string().url().max(4096),
   method: z.literal("PUT"),
   expiresAt: DateTimeSchema,
