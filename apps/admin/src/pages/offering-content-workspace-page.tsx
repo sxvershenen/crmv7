@@ -50,7 +50,8 @@ export function OfferingContentWorkspacePage({ direction, gateway }: { direction
   if (loading) return <div aria-label={`Загрузка страницы ${copy.label}`} className="p-4" role="status"><LoadingRows count={7} /></div>
   if (!editor) return <PageFrame><PageState icon={IconFileText} title="Страница не найдена">Возможно, ресурс удалён или у вас больше нет доступа.</PageState></PageFrame>
   if (!editor.editorial) return <PageFrame><PageState icon={IconFileText} title="Черновик страницы не подготовлен">Создайте или пересохраните ресурс в CRM — система подготовит связанную страницу автоматически.</PageState></PageFrame>
-  if (direction === "addon" && editor.editorial.node.kind !== "addon_detail") return <PageFrame><PageState icon={IconAlertTriangle} title="Связана страница другого типа" tone="danger">Редактор не открыл материал, чтобы не изменить чужую страницу.</PageState></PageFrame>
+  const expectedNodeKind = direction === "addon" ? "addon_detail" : "resource_detail"
+  if (editor.editorial.node.kind !== expectedNodeKind) return <PageFrame><PageState icon={IconAlertTriangle} title="Связана страница другого типа" tone="danger">Редактор не открыл материал, чтобы не изменить чужую страницу.</PageState></PageFrame>
 
   const crmHref = direction === "house"
     ? `${crmAppBaseUrl}/offers/houses/${encodeURIComponent(offeringId)}`

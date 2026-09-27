@@ -38,6 +38,16 @@ describe("CMS house page compatibility route", () => {
 
     expect(await screen.findByText("Черновик страницы не подготовлен")).toBeInTheDocument()
   })
+
+  it("rejects a house locator pointing to an add-on page", async () => {
+    const base = houseEditor()
+    const editor = InternalOfferingEditorSchema.parse({ ...base, editorial: { ...base.editorial!, node: { ...base.editorial!.node, kind: "addon_detail" } } })
+    const gateway = { getHouseEditor: vi.fn().mockResolvedValue(editor) } as unknown as OfferingEditorGateway
+
+    renderWorkspace(gateway, `/offers/houses/${editor.offering.id}`)
+
+    expect(await screen.findByText("Связана страница другого типа")).toBeInTheDocument()
+  })
 })
 
 function renderWorkspace(gateway: OfferingEditorGateway, entry: string) {

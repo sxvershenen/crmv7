@@ -38,7 +38,7 @@ export class FixtureCmsRepository implements CmsRepository {
     const fallbackId = kind === "home" ? "home" : kind === "category" ? "houses" : kind === "profile" ? "house-lesnoy" : "landing-family"
     const record = this.editors[id] ?? this.editors[fallbackId]
     if (!record) throw new Error("Запись не найдена")
-    return { ...clone(record), id, kind, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
+    return { ...clone(record), id, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
   }
   async saveEditor(record: EditorRecord, expectedVersion: number) {
     await pause()
@@ -141,7 +141,7 @@ export class ApiCmsRepository implements CmsRepository {
     }
     const detail = await this.client.get(`/content/nodes/${encodeURIComponent(nodeId)}`, CmsNodeDetailSchema)
     this.details.set(detail.node.id, detail)
-    return this.editor(detail, kind)
+    return this.editor(detail)
   }
 
   async saveEditor(record: EditorRecord, expectedVersion: number): Promise<EditorRecord> {
@@ -155,12 +155,12 @@ export class ApiCmsRepository implements CmsRepository {
           relations: [], schemaVersion: 1,
         }, CmsNodeDetailSchema)
         this.details.set(detail.node.id, detail)
-        return this.editor(detail, record.kind)
+        return this.editor(detail)
       }
       const current = this.details.get(record.id) ?? await this.client.get(`/content/nodes/${encodeURIComponent(record.id)}`, CmsNodeDetailSchema)
       const revision = editableRevision(current)
       const route = { path: record.url, slug: record.kind === "home" ? "home" : record.slug, parentNodeId: record.parentNodeId ?? null, sortOrder: record.sortOrder ?? 10 }
-      const baseline = this.editor(current, record.kind)
+      const baseline = this.editor(current)
       const contentChanged = !sameEditorContent(record, baseline)
       const detail = await this.client.patch(`/content/nodes/${encodeURIComponent(record.id)}`, contentChanged ? {
         ...operationMeta(), expectedVersion, route,
@@ -170,7 +170,7 @@ export class ApiCmsRepository implements CmsRepository {
         relations: revision.relations,
       } : { ...operationMeta(), expectedVersion, route }, CmsNodeDetailSchema)
       this.details.set(detail.node.id, detail)
-      return this.editor(detail, record.kind)
+      return this.editor(detail)
     } catch (error) { throw mapMutationError(error) }
   }
 
@@ -185,11 +185,10 @@ export class ApiCmsRepository implements CmsRepository {
 
   async publish(id: string, expectedVersion: number, preview?: CmsPublicationPreview): Promise<EditorRecord> {
     try {
-      const current = this.details.get(id) ?? await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
       await this.client.post(`/content/nodes/${encodeURIComponent(id)}/publish`, { ...operationMeta(), expectedVersion, ...(preview ? { preview: { baseReleaseId: preview.baseReleaseId, activeReleaseVersion: preview.activeReleaseVersion, previewHash: preview.previewHash } } : {}) }, CmsNodePublishResultSchema)
       const detail = await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
       this.details.set(id, detail)
-      return this.editor(detail, localKind(current.node.kind))
+      return this.editor(detail)
     } catch (error) { throw mapMutationError(error) }
   }
 
@@ -313,10 +312,9 @@ export class ApiCmsRepository implements CmsRepository {
 
   private async transition(id: string, expectedVersion: number, action: "submit-review" | "return-to-draft" | "approve" | "archive") {
     try {
-      const current = this.details.get(id) ?? await this.client.get(`/content/nodes/${encodeURIComponent(id)}`, CmsNodeDetailSchema)
       const detail = await this.client.post(`/content/nodes/${encodeURIComponent(id)}/${action}`, { ...operationMeta(), expectedVersion }, CmsNodeDetailSchema)
       this.details.set(id, detail)
-      return this.editor(detail, localKind(current.node.kind))
+      return this.editor(detail)
     } catch (error) { throw mapMutationError(error) }
   }
 
@@ -353,9 +351,9 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
 
-  private editor(detail: CmsNodeDetail, requestedKind?: EditorRecord["kind"]): EditorRecord {
+  private editor(detail: CmsNodeDetail): EditorRecord {
     const revision = editableRevision(detail)
-    const kind = requestedKind ?? localKind(detail.node.kind)
+    const kind = localKind(detail.node.kind)
     return {
       id: detail.node.id, kind, internalName: revision.title, publicTitle: revision.title, slug: revision.route.path === "/" ? "" : revision.route.slug,
       parent: revision.route.parentNodeId ? `Node ${revision.route.parentNodeId.slice(0, 8)}` : "Корень сайта", parentNodeId: revision.route.parentNodeId, sortOrder: revision.route.sortOrder, hasPublishedRevision: detail.latestPublished !== null, url: revision.route.path,

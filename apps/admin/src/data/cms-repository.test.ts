@@ -187,6 +187,13 @@ describe("ApiCmsRepository", () => {
     await expect(repository.getEditor(ids.node, "landing")).resolves.toMatchObject({ status: "draft", reviewLabel: "Редакция 3 публиковалась" })
   })
 
+  it("uses the server page kind even when the requested editor route says landing", async () => {
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({ ...detail, node: { ...detail.node, kind: "resource_detail" } })
+
+    await expect(new ApiCmsRepository(client as never).getEditor(ids.node, "landing")).resolves.toMatchObject({ id: ids.node, kind: "profile" })
+  })
+
   it("updates by immutable revision with expectedVersion and preserved server fields", async () => {
     const client = clientMock()
     client.get.mockResolvedValueOnce(detail)

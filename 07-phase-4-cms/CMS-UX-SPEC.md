@@ -110,6 +110,8 @@ List/view/filter state хранится в URL: `q`, `status`, `type`, `owner`, 
 
 `/content/categories` и `/content/public-profiles` остаются technical/reporting routes для taxonomy/profile diagnostics и миграции. Основной CRUD коммерческого контента идёт через единый `/content/tree`; `/offers/*` — только canonical locator/deep link к CMS node. Operational editor открывается в CRM, а CMS хранит и редактирует только editorial revision.
 
+Для существующего node тип редактора определяется `node.kind` из API; несовпадающий URL переводит на канонический адрес с сохранением вкладки. CRM offering locator с несовместимым видом CMS node не открывает редактор. Для нового несохранённого материала тип задаёт маршрут создания.
+
 ## 4. Обзор CMS
 
 Секции без лишних card-in-card:

@@ -22,9 +22,9 @@ describe("ContentEditorPage mutation recovery", () => {
     vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true)
     const router = createMemoryRouter([
-      { path: "/edit", element: <ContentEditorPage kind="landing" nodeId={initial.id} returnTo="/list" /> },
+      { path: "/content/pages/:nodeId", element: <ContentEditorPage kind="landing" nodeId={initial.id} returnTo="/list" /> },
       { path: "/list", element: <h1>Список страниц</h1> },
-    ], { initialEntries: ["/edit"] })
+    ], { initialEntries: [`/content/pages/${initial.id}`] })
     render(<TooltipProvider><AdminAuthSessionProvider><RouterProvider router={router} /></AdminAuthSessionProvider></TooltipProvider>)
     fireEvent.change(await screen.findByLabelText("Заголовок H1"), { target: { value: "Мой заголовок" } })
     fireEvent.click(screen.getAllByRole("button", { name: "Закрыть" })[0]!)

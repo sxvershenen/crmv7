@@ -49,6 +49,16 @@ describe("CMS route screens", () => {
     expect(screen.getByText("/domiki/lesnoy · Редакция 12")).toBeInTheDocument()
   })
 
+  it("redirects an existing profile opened through the landing URL to its canonical editor", async () => {
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter initialEntries={["/content/pages/house-lesnoy?tab=seo"]}><Routes>
+      <Route element={<ContentEditorPage kind="landing" />} path="/content/pages/:nodeId" />
+      <Route element={<><p>Канонический профиль</p><ContentEditorPage kind="profile" /></>} path="/content/public-profiles/resource/:entityId" />
+    </Routes></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+
+    expect(await screen.findByText("Канонический профиль")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Metadata" })).toBeInTheDocument()
+  })
+
   it("collapses and restores profiles beneath the houses group", async () => {
     renderWithRouter(<ContentTreePage />, "/content/tree")
     const collapse = await screen.findByRole("button", { name: "Свернуть Домики" })
