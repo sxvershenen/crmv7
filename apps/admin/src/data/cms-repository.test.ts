@@ -352,6 +352,7 @@ describe("ApiCmsRepository", () => {
     client.patch.mockResolvedValueOnce({ ...settings, version: 4, draft: { ...settings.draft!, revision: 3, value: { ...settings.draft!.value, headerNavigation: [] } } })
     const repository = new ApiCmsRepository(client as never)
     const navigation = await repository.getNavigation()
+    expect(navigation.hasPublishedRevision).toBe(false)
 
     const saved = await repository.saveNavigation({ ...navigation, header: [] }, navigation.version)
 
@@ -360,6 +361,14 @@ describe("ApiCmsRepository", () => {
       expectedVersion: 3,
       value: expect.objectContaining({ siteName: "Свистоплясово", headerNavigation: [], footerNavigation: expect.any(Array) }),
     }), expect.anything())
+  })
+
+  it("reports previous navigation publication separately from the current draft", async () => {
+    const settings = siteSettingsDetail()
+    const client = clientMock()
+    client.get.mockResolvedValueOnce({ ...settings, published: { ...settings.draft!, state: "published", id: ids.revision, revision: 1 } })
+
+    await expect(new ApiCmsRepository(client as never).getNavigation()).resolves.toMatchObject({ status: "draft", hasPublishedRevision: true })
   })
 
   it("preserves navigation target and device visibility and rejects silent truncation", async () => {

@@ -60,7 +60,7 @@ export const editorFixtures: Record<string, EditorRecord> = {
 }
 
 export const navigationFixture: PublicNavigation = {
-  version: 3, status: "published", updatedLabel: "Сегодня, 10:42",
+  version: 3, status: "published", hasPublishedRevision: true, updatedLabel: "Сегодня, 10:42",
   header: [
     { id: "stay", label: "Проживание", href: "/domiki", icon: "home", color: "#2f6b4f", visible: true, children: [{ id: "houses", label: "Домики", href: "/domiki", icon: "building-cottage", color: "#2f6b4f", visible: true, children: [] }] },
     { id: "programs", label: "Программы", href: "/programmy", icon: "sparkles", color: "#8a5b2d", visible: true, children: [] },

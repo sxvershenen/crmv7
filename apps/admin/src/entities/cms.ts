@@ -98,6 +98,7 @@ export type PublicNavigationItem = {
 export type PublicNavigation = {
   version: number
   status: "draft" | "published"
+  hasPublishedRevision?: boolean
   updatedLabel: string
   header: PublicNavigationItem[]
   mobile: PublicNavigationItem[]

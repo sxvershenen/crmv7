@@ -597,7 +597,7 @@ function navigationFromDetail(detail: CmsSiteSettingsDetail): PublicNavigation {
   const revision = detail.draft ?? detail.published
   if (!revision) throw new CmsUnavailableError("Настройки сайта")
   return {
-    version: detail.version, status: detail.draft ? "draft" : "published", updatedLabel: formatUpdated(revision.createdAt),
+    version: detail.version, status: detail.draft ? "draft" : "published", hasPublishedRevision: detail.published !== null, updatedLabel: formatUpdated(revision.createdAt),
     header: revision.value.headerNavigation.map(fromWireNavigation), mobile: revision.value.mobileNavigation.map(fromWireNavigation),
     footer: revision.value.footerNavigation.map(fromWireNavigation),
   }
