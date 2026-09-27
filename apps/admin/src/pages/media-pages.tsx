@@ -50,16 +50,19 @@ export function MediaLibraryPage() {
 
 function UploadPanel({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => void }) {
   const [file, setFile] = useState<File>()
+  const [uploadedAssetId, setUploadedAssetId] = useState<string>()
   const [status, setStatus] = useState("Выберите JPEG, PNG, WebP или AVIF")
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const upload = async (next: File) => {
     setFile(next)
+    setUploadedAssetId(undefined)
     setError(undefined)
     setBusy(true)
     setStatus("Загружаем файл")
     try {
       const uploaded = await cmsRepository.uploadMedia(next)
+      setUploadedAssetId(uploaded.id)
       setStatus(uploaded.processing?.state === "queued" ? "Файл принят. Сервер повторит обработку автоматически." : uploaded.status === "ready" ? "Файл готов" : uploaded.status === "error" ? "Обработка файла завершилась ошибкой" : "Файл загружен. Обработка продолжается.")
       onUploaded()
     } catch (reason) {
@@ -69,7 +72,7 @@ function UploadPanel({ onClose, onUploaded }: { onClose: () => void; onUploaded:
       setBusy(false)
     }
   }
-  return <EditorSection actions={<Button onClick={onClose} size="xs" variant="ghost">Закрыть</Button>} className="mb-3" subtitle="Исходный файл хранится приватно; публичная версия появляется после проверки." title="Загрузка файла"><label className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-xs hover:bg-muted/30"><IconFileUpload className="size-5" /><span>{file?.name ?? "Выбрать файл"}</span><Input accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" disabled={busy} onChange={(event) => { const next = event.target.files?.[0]; if (next) void upload(next) }} type="file" /></label>{file ? <p className="mt-3 text-xs" role="status">{status}</p> : null}{error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}</EditorSection>
+  return <EditorSection actions={<Button onClick={onClose} size="xs" variant="ghost">Закрыть</Button>} className="mb-3" subtitle="Исходный файл хранится приватно; публичная версия появляется после проверки." title="Загрузка файла"><label className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-xs hover:bg-muted/30"><IconFileUpload className="size-5" /><span>{file?.name ?? "Выбрать файл"}</span><Input accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" disabled={busy} onChange={(event) => { const next = event.target.files?.[0]; event.target.value = ""; if (next) void upload(next) }} type="file" /></label>{file ? <p className="mt-3 text-xs" role="status">{status}</p> : null}{uploadedAssetId ? <Link className="mt-2 inline-block text-xs text-primary underline underline-offset-2" to={`/media/${encodeURIComponent(uploadedAssetId)}`}>Открыть файл и проверить статус</Link> : null}{error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}</EditorSection>
 }
 
 function MediaCard({ asset, onOpen }: { asset: MediaAsset; onOpen: () => void }) { return <ClickableCard className="overflow-hidden" onClick={onOpen}><MediaPreview asset={asset} className="aspect-[4/3] w-full rounded-none" /><div className="p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{asset.title}</p><p className="truncate text-[10px] text-muted-foreground">{asset.filename}</p></div><StatusBadge tone={mediaStatus[asset.status].tone}>{mediaStatus[asset.status].label}</StatusBadge></div><div className="mt-3 flex justify-between text-[10px] text-muted-foreground"><span>{asset.dimensions}</span><span>{asset.usageCount} usages</span></div></div></ClickableCard> }

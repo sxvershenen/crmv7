@@ -110,11 +110,28 @@ it("shows processing after upload when the API has not marked the file ready", a
 
 it("treats a queued upload as accepted and refreshes the library", async () => {
   uploadMedia.mockResolvedValue({ ...asset, status: "converting", processing: { state: "queued", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_STORAGE_UNAVAILABLE" } })
-  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
   fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["image"], "sosna.jpg", { type: "image/jpeg" })] } })
   expect(await screen.findByRole("status")).toHaveTextContent("Файл принят. Сервер повторит обработку автоматически.")
+  expect(screen.getByRole("link", { name: "Открыть файл и проверить статус" })).toHaveAttribute("href", "/media/asset-1")
   await waitFor(() => expect(getMedia).toHaveBeenCalledTimes(2))
   expect(screen.queryByText("Не удалось загрузить файл")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("link", { name: "Открыть файл и проверить статус" }))
+  await waitFor(() => expect(getAsset).toHaveBeenCalledWith(asset.id, undefined))
+})
+
+it("clears a previous upload link and lets the same file be selected after a failed attempt", async () => {
+  uploadMedia.mockResolvedValueOnce(asset).mockRejectedValueOnce(new Error("Соединение прервалось"))
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  const input = view.container.querySelector('input[type="file"]')!
+  const file = new File(["image"], "sosna.jpg", { type: "image/jpeg" })
+  fireEvent.change(input, { target: { files: [file] } })
+  expect(await screen.findByRole("link", { name: "Открыть файл и проверить статус" })).toBeInTheDocument()
+  expect(input).toHaveValue("")
+  fireEvent.change(input, { target: { files: [file] } })
+  expect(await screen.findByText("Соединение прервалось")).toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "Открыть файл и проверить статус" })).not.toBeInTheDocument()
+  expect(uploadMedia).toHaveBeenCalledTimes(2)
 })
 
 it("opens the queued replacement status after the server accepted its file", async () => {
