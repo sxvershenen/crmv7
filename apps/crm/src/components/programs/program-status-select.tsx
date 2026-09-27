@@ -11,8 +11,8 @@ import type { ProgramRegistrationStatus, ProgramRunStatus } from "@app/entities/
 import { programRegistrationStatuses, programRegistrationStatusMeta, programRunStatuses, programRunStatusMeta } from "@app/entities/programs"
 
 type ProgramStatusSelectProps =
-  | { kind: "run"; label: string; onChange: (status: ProgramRunStatus) => void; value: ProgramRunStatus }
-  | { kind: "registration"; label: string; onChange: (status: ProgramRegistrationStatus) => void; value: ProgramRegistrationStatus }
+  | { kind: "run"; disabled?: boolean; label: string; onChange: (status: ProgramRunStatus) => void; value: ProgramRunStatus }
+  | { kind: "registration"; disabled?: boolean; label: string; onChange: (status: ProgramRegistrationStatus) => void; value: ProgramRegistrationStatus }
 
 export function ProgramStatusSelect(props: ProgramStatusSelectProps) {
   const statuses = props.kind === "run" ? programRunStatuses : programRegistrationStatuses
@@ -24,7 +24,7 @@ export function ProgramStatusSelect(props: ProgramStatusSelectProps) {
   }
 
   return (
-    <Select onValueChange={onChange} value={props.value}>
+    <Select disabled={props.disabled} onValueChange={onChange} value={props.value}>
       <SelectTrigger aria-label={props.label} className="h-7 min-w-0 border-0 bg-transparent px-1.5 py-0 shadow-none hover:bg-muted" onClick={(event) => event.stopPropagation()}>
         <SelectValue><StatusBadge tone={meta.tone}>{meta.label}</StatusBadge></SelectValue>
       </SelectTrigger>

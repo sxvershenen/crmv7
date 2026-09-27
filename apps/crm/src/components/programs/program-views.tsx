@@ -99,7 +99,7 @@ function ProgramRunTable({ items, onAssign, onSort, onStatusChange, sortDirectio
           <MainSecondaryCell main={formatProgramDateTime(item.startsAt)} secondary={`${formatProgramTime(item.startsAt)}–${formatProgramTime(item.endsAt)}`} />
           <MainSecondaryCell><Capacity value={item.participantCount} limit={item.participantLimit} label="Участников" /></MainSecondaryCell>
           <MainSecondaryCell><Capacity value={item.registrationCount} limit={item.registrationLimit} label="Регистраций" /></MainSecondaryCell>
-          <MainSecondaryCell onClick={(event) => event.stopPropagation()}><AssigneeStatusRow assignLabel={`Назначить ответственного проведению ${item.name}`} onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect kind="run" label={`Статус проведения #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow></MainSecondaryCell>
+          <MainSecondaryCell onClick={(event) => event.stopPropagation()}><AssigneeStatusRow assignLabel={`Назначить ответственного проведению ${item.name}`} onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect disabled={Boolean(item.archived)} kind="run" label={`Статус проведения #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow></MainSecondaryCell>
           <MainSecondaryCell><PaymentProgress className="w-full min-w-0" paid={item.paid} total={item.revenue} /></MainSecondaryCell>
           <RowActions onClick={(event) => event.stopPropagation()}><ItemActions editLabel="Открыть проведение" onOpen={() => navigate(`/programs/runs/${item.id}`)} /></RowActions>
         </tr>
@@ -116,7 +116,7 @@ function ProgramRunCards({ items, onAssign, onStatusChange }: { items: ProgramRu
         <ActionableCard key={item.id} onOpen={() => navigate(`/programs/runs/${item.id}`)} openLabel={`Открыть проведение ${item.name}`}>
           <ProgramIdentity className="[&_p]:line-clamp-2 [&_p]:whitespace-normal" icon={item.categoryIcon} secondary={`#${item.id}`} title={item.name} tone={item.categoryTone} />
           <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3 border-t pt-2"><Capacity value={item.registrationCount} limit={item.registrationLimit} label="Регистраций" /><div className="text-right"><p className="text-[10px] text-muted-foreground">Начало</p><p className="tabular-nums">{formatProgramTime(item.startsAt)}</p></div></div>
-          <AssigneeStatusRow assignLabel={`Назначить ответственного проведению ${item.name}`} className="mt-2 border-t pt-2" onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect kind="run" label={`Статус проведения #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow>
+          <AssigneeStatusRow assignLabel={`Назначить ответственного проведению ${item.name}`} className="mt-2 border-t pt-2" onAssign={() => onAssign(item.id)} people={item.assignees}><ProgramStatusSelect disabled={Boolean(item.archived)} kind="run" label={`Статус проведения #${item.id}`} onChange={(status) => onStatusChange(item.id, status)} value={item.status} /></AssigneeStatusRow>
         </ActionableCard>
       ))}
     </section>

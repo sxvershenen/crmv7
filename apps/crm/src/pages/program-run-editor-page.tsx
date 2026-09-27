@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconAlertTriangle,
+  IconArchive,
   IconCalendarEvent,
   IconDotsVertical,
   IconExternalLink,
@@ -16,6 +17,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AssigneePicker,
   Button,
+  ConfirmationDialog,
   DateTimeRangePicker,
   DropdownMenu,
   DropdownMenuContent,
@@ -137,6 +139,9 @@ export function ProgramRunEditorPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorSaveState>("saved");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -193,8 +198,8 @@ export function ProgramRunEditorPage({
     [update],
   );
   const setStatus = useCallback(
-    (status: ProgramRunStatus) => update("status", status),
-    [update],
+    (status: ProgramRunStatus) => { if (!draft?.archived) update("status", status) },
+    [draft?.archived, update],
   );
   const setTemplate = useCallback(
     (templateId: string) => {
@@ -278,29 +283,6 @@ export function ProgramRunEditorPage({
     },
     [],
   );
-  const deleteRegistration = useCallback((registrationId: string) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const removed = current.registrations.find(
-        (item) => item.id === registrationId,
-      );
-      if (!removed) return current;
-      return {
-        ...current,
-        paid: Math.max(0, current.paid - removed.paid),
-        participantCount: Math.max(
-          0,
-          current.participantCount - (removed.participantCount ?? 0),
-        ),
-        registrationCount: Math.max(0, current.registrationCount - 1),
-        registrations: current.registrations.filter(
-          (item) => item.id !== registrationId,
-        ),
-        revenue: Math.max(0, current.revenue - removed.total),
-      };
-    });
-    setSaveState("dirty");
-  }, []);
   const addResourceBooking = useCallback(
     (booking: Omit<ProgramRunResourceBooking, "id" | "resourceName">) => {
       const resource = resources.find((item) => item.id === booking.resourceId);
@@ -347,6 +329,20 @@ export function ProgramRunEditorPage({
       setSaveState("conflict");
     }
   };
+  const archive = async () => {
+    if (!draft || draft.id === "new" || draft.archived || saveState !== "saved" || archiving) return;
+    setArchiving(true);
+    setArchiveError(null);
+    try {
+      await repository.archiveRun(draft.id);
+      const date = draft.startsAt.slice(0, 10);
+      navigate(`/programs?section=runs&archived=true&date=${date}&to=${date}`, { replace: true });
+    } catch (reason) {
+      setArchiveError(reason instanceof Error ? reason.message : "Не удалось архивировать проведение");
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   const draftStatus = draft?.status;
   const statusControl = useMemo(
@@ -356,11 +352,11 @@ export function ProgramRunEditorPage({
           className="w-32 max-w-32 sm:w-40 sm:max-w-40"
           label="Статус проведения"
           onValueChange={(value) => setStatus(value as ProgramRunStatus)}
-          options={statusOptions}
+          options={draft?.archived ? statusOptions.map((option) => ({ ...option, disabled: true })) : statusOptions}
           value={draftStatus}
         />
       ) : undefined,
-    [draftStatus, setStatus],
+    [draft?.archived, draftStatus, setStatus],
   );
   const title = draft?.name ?? "Проведение";
   const editorChrome = useMemo(
@@ -407,7 +403,9 @@ export function ProgramRunEditorPage({
               people={draft.assignees}
             />
             <RunOverflow
+              canArchive={draft.id !== "new" && !draft.archived && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving}
               cancelled={draft.status === "cancelled"}
+              onArchive={() => setArchiveOpen(true)}
               onCancel={() => setStatus("cancelled")}
               onOpenTemplate={openTemplate}
             />
@@ -431,7 +429,9 @@ export function ProgramRunEditorPage({
       mobileActions={
         draft ? (
           <RunMobileActions
+            canArchive={draft.id !== "new" && !draft.archived && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving}
             cancelled={draft.status === "cancelled"}
+            onArchive={() => setArchiveOpen(true)}
             onAssigneeChange={setAssignee}
             onCancel={() => setStatus("cancelled")}
             onOpenTemplate={openTemplate}
@@ -465,6 +465,8 @@ export function ProgramRunEditorPage({
           </PageState>
         </div>
       ) : null}
+      {archiveError ? <p className="text-xs text-danger" role="alert">{archiveError}</p> : null}
+      <ConfirmationDialog confirmLabel="Архивировать" description={`Архивировать проведение «${draft?.name ?? ""}»? Регистрации и оплаты останутся в истории. Если не уверены, посоветуйтесь с техническим администратором.`} onConfirm={() => { void archive() }} onOpenChange={setArchiveOpen} open={archiveOpen} title="Архивировать проведение?" />
       {draft && tab === "main" ? (
         <ProgramRunMain
           draft={draft}
@@ -477,7 +479,6 @@ export function ProgramRunEditorPage({
         <ProgramRunRegistrations
           draft={draft}
           onAdd={addRegistration}
-          onDelete={deleteRegistration}
           onStatusChange={updateRegistrationStatus}
         />
       ) : null}
@@ -503,11 +504,15 @@ export function ProgramRunEditorPage({
 }
 
 function RunOverflow({
+  canArchive,
   cancelled,
+  onArchive,
   onCancel,
   onOpenTemplate,
 }: {
+  canArchive: boolean;
   cancelled: boolean;
+  onArchive: () => void;
   onCancel: () => void;
   onOpenTemplate: () => void;
 }) {
@@ -534,17 +539,22 @@ function RunOverflow({
           <IconAlertTriangle aria-hidden="true" />
           {cancelled ? "Проведение отменено" : "Отменить проведение"}
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 function RunMobileActions({
+  canArchive,
   cancelled,
+  onArchive,
   onAssigneeChange,
   onCancel,
   onOpenTemplate,
 }: {
+  canArchive: boolean;
   cancelled: boolean;
+  onArchive: () => void;
   onAssigneeChange: (person: Assignee | null) => void;
   onCancel: () => void;
   onOpenTemplate: () => void;
@@ -586,6 +596,7 @@ function RunMobileActions({
           <IconAlertTriangle aria-hidden="true" />
           {cancelled ? "Проведение отменено" : "Отменить проведение"}
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -719,12 +730,10 @@ type RegistrationDraft = Omit<
 function ProgramRunRegistrations({
   draft,
   onAdd,
-  onDelete,
   onStatusChange,
 }: {
   draft: ProgramRunEditorRecord;
   onAdd: (registration: RegistrationDraft) => void;
-  onDelete: (id: string) => void;
   onStatusChange: (
     id: string,
     status: ProgramRunEditorRegistration["status"],
@@ -992,7 +1001,6 @@ function ProgramRunRegistrations({
             {draft.registrations.map((registration) => (
               <RegistrationRow
                 key={registration.id}
-                onDelete={() => onDelete(registration.id)}
                 onOpen={() =>
                   navigate(`/programs/registrations/${registration.id}`)
                 }
@@ -1014,12 +1022,10 @@ function ProgramRunRegistrations({
 }
 
 function RegistrationRow({
-  onDelete,
   onOpen,
   onStatusChange,
   registration,
 }: {
-  onDelete: () => void;
   onOpen: () => void;
   onStatusChange: (status: ProgramRunEditorRegistration["status"]) => void;
   registration: ProgramRunEditorRegistration;
@@ -1068,21 +1074,6 @@ function RegistrationRow({
             <IconExternalLink aria-hidden="true" />
           </TooltipTrigger>
           <TooltipContent>Открыть регистрацию</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-label={`Удалить регистрацию ${registration.clientName}`}
-                onClick={onDelete}
-                size="icon-sm"
-                variant="ghost"
-              />
-            }
-          >
-            <IconTrash aria-hidden="true" />
-          </TooltipTrigger>
-          <TooltipContent>Удалить регистрацию</TooltipContent>
         </Tooltip>
       </div>
     </article>
@@ -1178,6 +1169,7 @@ function ProgramRunResources({
   const [startAt, setStartAt] = useState(editorDateTime(draft.startsAt));
   const [endAt, setEndAt] = useState(editorDateTime(draft.endsAt));
   const [guestCount, setGuestCount] = useState(String(draft.participantLimit));
+  const [removingBooking, setRemovingBooking] = useState<ProgramRunResourceBooking | null>(null);
   useEffect(() => {
     if (!resourceId && resources[0]) setResourceId(resources[0].id);
   }, [resourceId, resources]);
@@ -1285,8 +1277,8 @@ function ProgramRunResources({
                   <TooltipTrigger
                     render={
                       <Button
-                        aria-label={`Удалить бронь ${booking.resourceName}`}
-                        onClick={() => onDelete(booking.id)}
+                        aria-label={`Снять бронь ${booking.resourceName}`}
+                        onClick={() => setRemovingBooking(booking)}
                         size="icon-sm"
                         variant="ghost"
                       />
@@ -1294,7 +1286,7 @@ function ProgramRunResources({
                   >
                     <IconTrash aria-hidden="true" />
                   </TooltipTrigger>
-                  <TooltipContent>Удалить связь</TooltipContent>
+                  <TooltipContent>Снять бронь ресурса</TooltipContent>
                 </Tooltip>
               </article>
             ))}
@@ -1305,6 +1297,15 @@ function ProgramRunResources({
           </PageState>
         )}
       </EditorSection>
+      <ConfirmationDialog
+        confirmLabel="Снять бронь"
+        description={`Снять бронь ресурса «${removingBooking?.resourceName ?? ""}» после сохранения? История останется, но ресурс освободится. Если не уверены, посоветуйтесь с техническим администратором.`}
+        destructive
+        onConfirm={() => { if (removingBooking) onDelete(removingBooking.id); setRemovingBooking(null); }}
+        onOpenChange={(open) => { if (!open) setRemovingBooking(null); }}
+        open={removingBooking !== null}
+        title="Снять бронь ресурса?"
+      />
     </div>
   );
 }

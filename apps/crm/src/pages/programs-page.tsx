@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { IconAlertTriangle, IconFilter } from "@tabler/icons-react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 
-import { PageFrame, PageState } from "@crm/ui"
+import { Button, PageFrame, PageState } from "@crm/ui"
 
 import { ProgramsControls, ProgramsNav } from "@app/components/programs/program-controls"
 import { shiftIso } from "@app/components/programs/program-format"
@@ -33,6 +33,7 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
   const [defaultDate] = useState(() => defaultBusinessDate(FIXTURE_DEFAULT_DATE, fixtureDefaults))
   const defaultRangeEnd = fixtureDefaults ? FIXTURE_DEFAULT_RANGE_END : shiftIso(defaultDate, 6)
   const section = oneOf(searchParams.get("section"), programSections, "templates")
+  const archived = section !== "registrations" && searchParams.get("archived") === "true"
   const view = oneOf(searchParams.get("view"), programRunViews, "table")
   const period = oneOf(searchParams.get("period"), programPeriods, "3days")
   const category = searchParams.get("category") ?? "all"
@@ -44,7 +45,7 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
   const fallbackSort: ProgramSortKey = section === "templates" ? "name" : section === "runs" ? "date" : "program"
   const sortKey = oneOf(searchParams.get("sort"), allowedSortKeys, fallbackSort)
   const sortDirection = oneOf(searchParams.get("order"), ["asc", "desc"] as const, "asc")
-  const query = useMemo<ProgramQuery>(() => ({ category, date, rangeEnd, section, sort: { direction: sortDirection, key: sortKey }, status }), [category, date, rangeEnd, section, sortDirection, sortKey, status])
+  const query = useMemo<ProgramQuery>(() => ({ archived, category, date, rangeEnd, section, sort: { direction: sortDirection, key: sortKey }, status }), [archived, category, date, rangeEnd, section, sortDirection, sortKey, status])
   const { assignRegistration, assignRun, assignTemplate, retry, state, updateRegistrationStatus, updateRunStatus } = usePrograms(query, repository)
   const [announcement, setAnnouncement] = useState("")
 
@@ -54,6 +55,7 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
     else next.set(name, value)
     if (name === "section") {
       for (const key of ["status", "sort", "order", "view", "period"]) next.delete(key)
+      if (value === "registrations") next.delete("archived")
     }
     return next
   })
@@ -111,6 +113,7 @@ export function ProgramsPage({ repository = programsRepository }: { repository?:
   return (
     <PageFrame className="space-y-3" width="full">
       <ProgramsNav onChange={(next) => setParam("section", next, "templates")} value={section} />
+      {section !== "registrations" ? <div className="flex justify-end"><Button onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); if (archived) next.delete("archived"); else next.set("archived", "true"); return next })} size="sm" variant="outline">{archived ? "Действующие программы" : "Архив программ"}</Button></div> : null}
       <ProgramsControls
         activeFilters={Number(category !== "all") + Number(status !== "all")}
         categories={state.status === "ready" ? state.data.categories : []}

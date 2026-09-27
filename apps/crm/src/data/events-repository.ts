@@ -63,6 +63,7 @@ export interface EventsRepository {
 
 export interface EventEditorRepository {
   get(id: string): Promise<EventEditorRecord | null>
+  archive(id: string): Promise<void>
   listCategories(): Promise<EventCategory[]>
   listResources(): Promise<EventResourceOption[]>
   listCommercialOfferings?(): Promise<EventServiceTemplateRegistryResponse>
@@ -201,6 +202,10 @@ export class FixtureEventsRepository implements EventsRepository, EventEditorRep
     const editor = toEditorRecord(event)
     this.editorData.set(id, editor)
     return Promise.resolve(structuredClone(editor))
+  }
+
+  async archive(id: string): Promise<void> {
+    await this.updateStatus(id, "archived")
   }
 
   async listCategories() { return Promise.resolve(structuredClone(this.categories)) }
@@ -374,7 +379,7 @@ function mapEvent(dto: ReturnType<typeof EventDtoSchema.parse>, category?: Event
     id: dto.id, version: dto.version, name: dto.name, categoryId: dto.categoryId ?? "uncategorized", categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "heart", categoryTone: category?.tone ?? "rose", commercialOfferingId: dto.commercialOfferingId, pricingMode: dto.pricingMode, ratePlanKey: dto.ratePlanKey, addOnSelections: dto.addOnSelections, resourceSelections: dto.resourceSelections, acceptedQuote: dto.acceptedQuote,
     clientName: dto.customerId ?? "Без клиента", phone: dto.phone, startsAt: dto.startsAt, endsAt: dto.endsAt, guestCount: dto.guestCount,
     status: dto.archived ? "archived" : eventStatusFromApi[dto.status], total: dto.total.amountMinor / 100, paid: dto.paid.amountMinor / 100,
-    requiresAction: dto.requiresAction, hasConflict: dto.hasConflict, assignees: dto.assigneeIds.map(assigneeFromId),
+    requiresAction: dto.requiresAction, hasConflict: dto.hasConflict, assignees: dto.assigneeIds.map(assigneeFromId), capabilities: dto.capabilities,
   }
 }
 
@@ -444,6 +449,12 @@ export class ApiEventsRepository implements EventsRepository, EventEditorReposit
     })
     if (!dto) return null
     return toApiEditorRecord(dto, await this.listResourceBookings(dto.id), await this.listPayments(dto.id))
+  }
+
+  async archive(id: string): Promise<void> {
+    const current = await this.refreshDto(id)
+    const updated = await this.client.post(`/events/${encodeURIComponent(id)}/archive`, { version: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`event-archive-${id}`) }, EventDtoSchema)
+    this.records.set(updated.id, updated)
   }
 
   async listCategories(): Promise<EventCategory[]> {

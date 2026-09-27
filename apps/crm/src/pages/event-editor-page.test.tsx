@@ -43,6 +43,35 @@ describe("EventEditorPage", () => {
     expect(screen.getAllByRole("button", { name: /Дом «Сосна»/ }).length).toBeGreaterThan(0)
   })
 
+  it("asks before removing a booked resource", async () => {
+    const user = userEvent.setup(); renderEditor("/events/E-3108?tab=resources")
+    const remove = (await screen.findAllByRole("button", { name: /Снять бронь/ }))[0]!
+    await user.click(remove)
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect(remove).toBeInTheDocument()
+    await user.click(remove)
+    await user.click(screen.getByRole("button", { name: /^Снять бронь$/ }))
+    expect(remove).not.toBeInTheDocument()
+    expect(screen.getByText("Есть изменения")).toBeInTheDocument()
+  })
+
+  it("archives a saved event only after confirmation", async () => {
+    const user = userEvent.setup(); const repository = new FixtureEventsRepository()
+    render(<MemoryRouter initialEntries={["/events/E-3108"]}><TooltipProvider><Routes><Route element={<EventEditorPage repository={repository} />} path="events/:id" /><Route element={<LocationProbe />} path="events" /></Routes></TooltipProvider></MemoryRouter>)
+    await screen.findByDisplayValue("Свадьба Анны и Михаила")
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия мероприятия" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect((await repository.get("E-3108"))?.status).not.toBe("archived")
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия мероприятия" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    await user.click(screen.getByRole("button", { name: "Архивировать" }))
+    expect(await screen.findByLabelText("Текущий URL")).toHaveTextContent("/events?status=archived")
+    expect((await repository.get("E-3108"))?.status).toBe("archived")
+  })
+
   it("builds, duplicates and reorders a scenario through the shared list", async () => {
     const user = userEvent.setup(); renderEditor("/events/E-3108?tab=scenario")
     await screen.findByText("Сценарий мероприятия")

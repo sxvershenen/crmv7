@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconAlertTriangle,
+  IconArchive,
   IconCalendarEvent,
   IconDotsVertical,
   IconExternalLink,
@@ -92,6 +93,7 @@ const tabItems = [
 const statusOptions = eventStatuses.map((value) => ({
   value,
   label: eventStatusMeta[value].label,
+  disabled: value === "archived",
 }));
 const money = new Intl.NumberFormat("ru-RU", {
   currency: "RUB",
@@ -145,6 +147,9 @@ export function EventEditorPage({
   const [quote, setQuote] = useState<EventOrderQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -344,6 +349,20 @@ export function EventEditorPage({
       setSaveState("conflict");
     }
   };
+  const archive = async () => {
+    if (!draft || draft.id === "new" || draft.status === "archived" || saveState !== "saved" || archiving) return;
+    setArchiving(true);
+    setArchiveError(null);
+    try {
+      await repository.archive(draft.id);
+      const date = draft.startsAt.slice(0, 10);
+      navigate(`/events?status=archived&date=${date}&to=${date}`, { replace: true });
+    } catch (reason) {
+      setArchiveError(reason instanceof Error ? reason.message : "Не удалось архивировать мероприятие");
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   const draftStatus = draft?.status;
   const statusControl = useMemo(
@@ -353,7 +372,7 @@ export function EventEditorPage({
           className="w-32 max-w-32 sm:w-40 sm:max-w-40"
           label="Статус мероприятия"
           onValueChange={(value) => setStatus(value as EventStatus)}
-          options={statusOptions}
+          options={draftStatus === "archived" ? statusOptions.map((option) => ({ ...option, disabled: true })) : statusOptions}
           value={draftStatus}
         />
       ) : undefined,
@@ -389,7 +408,9 @@ export function EventEditorPage({
   const cancel = () => setStatus("cancelled");
   const overflow = (
     <EventOverflow
+      canArchive={Boolean(draft && draft.id !== "new" && draft.status !== "archived" && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving)}
       cancelled={draft?.status === "cancelled"}
+      onArchive={() => setArchiveOpen(true)}
       onCancel={cancel}
       onCategories={() => navigate("/events/categories")}
     />
@@ -429,7 +450,9 @@ export function EventEditorPage({
       mobileActions={
         draft ? (
           <EventMobileActions
+            canArchive={draft.id !== "new" && draft.status !== "archived" && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving}
             cancelled={draft.status === "cancelled"}
+            onArchive={() => setArchiveOpen(true)}
             onAssigneeChange={setAssignee}
             onCancel={cancel}
             onCategories={() => navigate("/events/categories")}
@@ -462,6 +485,8 @@ export function EventEditorPage({
           </PageState>
         </div>
       ) : null}
+      {archiveError ? <p className="text-xs text-danger" role="alert">{archiveError}</p> : null}
+      <ConfirmationDialog confirmLabel="Архивировать" description={`Архивировать мероприятие «${draft?.name ?? ""}»? История броней и оплат сохранится. Если не уверены, посоветуйтесь с техническим администратором.`} onConfirm={() => { void archive() }} onOpenChange={setArchiveOpen} open={archiveOpen} title="Архивировать мероприятие?" />
       {draft && tab === "main" ? (
         <EventMain
           categories={categories}
@@ -504,11 +529,15 @@ export function EventEditorPage({
 }
 
 function EventOverflow({
+  canArchive,
   cancelled,
+  onArchive,
   onCancel,
   onCategories,
 }: {
+  canArchive: boolean;
   cancelled: boolean;
+  onArchive: () => void;
   onCancel: () => void;
   onCategories: () => void;
 }) {
@@ -535,17 +564,22 @@ function EventOverflow({
           <IconAlertTriangle aria-hidden="true" />
           {cancelled ? "Мероприятие отменено" : "Отменить мероприятие"}
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 function EventMobileActions({
+  canArchive,
   cancelled,
+  onArchive,
   onAssigneeChange,
   onCancel,
   onCategories,
 }: {
+  canArchive: boolean;
   cancelled: boolean;
+  onArchive: () => void;
   onAssigneeChange: (person: Assignee | null) => void;
   onCancel: () => void;
   onCategories: () => void;
@@ -587,6 +621,7 @@ function EventMobileActions({
           <IconAlertTriangle aria-hidden="true" />
           {cancelled ? "Мероприятие отменено" : "Отменить мероприятие"}
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -835,6 +870,7 @@ function EventResources({
   const [startsAt, setStartsAt] = useState(editorDateTime(draft.startsAt));
   const [endsAt, setEndsAt] = useState(editorDateTime(draft.endsAt));
   const [guests, setGuests] = useState(String(draft.guestCount));
+  const [removingBooking, setRemovingBooking] = useState<EventResourceBooking | null>(null);
   useEffect(() => {
     if (!resourceId && resources[0]) setResourceId(resources[0].id);
   }, [resourceId, resources]);
@@ -929,8 +965,8 @@ function EventResources({
                 </Button>
                 <IconAction
                   icon={IconTrash}
-                  label={`Удалить бронь ${booking.resourceName}`}
-                  onClick={() => onDelete(booking.id)}
+                  label={`Снять бронь ${booking.resourceName}`}
+                  onClick={() => setRemovingBooking(booking)}
                 />
               </article>
             ))}
@@ -941,6 +977,15 @@ function EventResources({
           </PageState>
         )}
       </EditorSection>
+      <ConfirmationDialog
+        confirmLabel="Снять бронь"
+        description={`Снять бронь ресурса «${removingBooking?.resourceName ?? ""}» после сохранения? История останется, но ресурс освободится. Если не уверены, посоветуйтесь с техническим администратором.`}
+        destructive
+        onConfirm={() => { if (removingBooking) onDelete(removingBooking.id); setRemovingBooking(null); }}
+        onOpenChange={(open) => { if (!open) setRemovingBooking(null); }}
+        open={removingBooking !== null}
+        title="Снять бронь ресурса?"
+      />
     </div>
   );
 }

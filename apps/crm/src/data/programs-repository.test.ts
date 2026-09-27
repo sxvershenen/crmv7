@@ -84,6 +84,17 @@ describe("ProgramsRepository fixture adapter", () => {
     expect((await repository.list({ ...baseQuery, section: "runs", sort: { direction: "asc", key: "date" } })).runs.find((item) => item.id === "24081")?.name).toBe("Семейный день — тест")
   })
 
+  it("separates archived templates and runs without deleting their records", async () => {
+    const repository = new FixtureProgramsRepository()
+    await repository.archiveTemplate("forest-family")
+    await repository.archiveRun("24081")
+    expect((await repository.list(baseQuery)).templates.some((item) => item.id === "forest-family")).toBe(false)
+    expect((await repository.list({ ...baseQuery, archived: true })).templates.some((item) => item.id === "forest-family")).toBe(true)
+    expect((await repository.list({ ...baseQuery, section: "runs" })).runs.some((item) => item.id === "24081")).toBe(false)
+    expect((await repository.list({ ...baseQuery, section: "runs", archived: true })).runs.some((item) => item.id === "24081")).toBe(true)
+    expect((await repository.getRun("24081"))?.registrations.length).toBeGreaterThan(0)
+  })
+
   it("persists registration details and payments without flattening them into list data", async () => {
     const repository = new FixtureProgramsRepository()
     const registration = await repository.getRegistration("5011")
@@ -128,7 +139,7 @@ describe("ProgramsRepository API adapter", () => {
     const post = vi.fn(async (_path: string, _body: unknown, schema: unknown) => schema === undefined ? occurrence : occurrence)
     const client = {
       get: vi.fn(async (path: string) => path === "/auth/session" ? { user: { id: "manager-1", name: "Manager", role: "manager", capabilities } } : occurrence),
-      getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("templates") ? { items: [template], nextCursor: null } : path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [registration], nextCursor: null }, headers: new Headers(), status: 200 })),
+      getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("templates") ? { items: path.includes("archived=true") ? [] : [template], nextCursor: null } : path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [registration], nextCursor: null }, headers: new Headers(), status: 200 })),
       patch: vi.fn(async () => template),
       post,
     }

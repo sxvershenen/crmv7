@@ -3,7 +3,7 @@ import { resourcesFixture } from "@app/fixtures/resources"
 import { apiClient, type ApiClientError } from "@app/lib/api-client"
 import { useFixtureData } from "@app/lib/data-mode"
 import { businessDateTimeToIso, toBusinessDateTimeInput } from "@app/lib/business-datetime"
-import { ResourceAllocationDtoSchema, ResourceBlockDtoSchema, ResourceDtoSchema, ResourceCreateSchema, ResourceUpdateSchema } from "@crm/contracts"
+import { ResourceAllocationDtoSchema, ResourceBlockDtoSchema, ResourceDtoSchema, ResourceCreateSchema, ResourceUpdateSchema, ResourceArchiveSchema } from "@crm/contracts"
 
 const defaultResourceColors = { bath: "orange", camping: "green", houses: "blue", venues: "violet" } as const
 
@@ -14,6 +14,7 @@ export interface ResourceRepository {
 export interface ResourceEditorRepository {
   get(id: string): Promise<ResourceEditorRecord | null>
   save(resource: ResourceEditorRecord): Promise<ResourceEditorRecord>
+  archive(id: string): Promise<void>
 }
 
 export type ApiResourceRepositoryOptions = { client?: Pick<typeof apiClient, "get" | "patch" | "post"> }
@@ -21,6 +22,7 @@ export type ApiResourceRepositoryOptions = { client?: Pick<typeof apiClient, "ge
 export function selectResources(data: Resource[], query: ResourceQuery): Resource[] {
   return data.filter((resource) => {
     if (resource.kind !== query.kind) return false
+    if (Boolean(resource.archived) !== Boolean(query.archived)) return false
     if (query.block === "active" && !resource.hasActiveBlock) return false
     if (query.block === "none" && resource.hasActiveBlock) return false
     if (query.warning === "with" && resource.warning === null) return false
@@ -55,6 +57,15 @@ export class FixtureResourceRepository implements ResourceRepository, ResourceEd
     if (index >= 0) this.data[index] = flat
     else this.data.unshift(flat)
     return Promise.resolve(structuredClone(next))
+  }
+
+  async archive(id: string): Promise<void> {
+    const current = await this.get(id)
+    if (!current) throw new Error("Ресурс не найден")
+    const next = { ...current, active: false, archived: true }
+    this.editorData.set(id, next)
+    const index = this.data.findIndex((item) => item.id === id)
+    if (index >= 0) this.data[index] = toListResource(next)
   }
 }
 
@@ -148,7 +159,7 @@ function mapResource(dto: ReturnType<typeof ResourceDtoSchema.parse>): Versioned
     id: dto.id, kind, name: dto.name, secondaryType: dto.secondaryType, iconKey: dto.iconKey,
     capacity: dto.capacity.mode === "shared" ? { mode: "shared", occupied: dto.capacity.occupied ?? 0, total: dto.capacity.total } : { mode: "fixed", total: dto.capacity.total },
     nextBookingAt: dto.nextBookingAt, nextAvailableFrom: dto.nextAvailableFrom, hasActiveBlock: dto.hasActiveBlock,
-    futureBookingCount: dto.futureBookingCount, warning: dto.warning, permissions: dto.permissions,
+    futureBookingCount: dto.futureBookingCount, warning: dto.warning, permissions: { ...dto.permissions, canArchive: dto.capabilities.canArchive }, archived: dto.archived,
     active: dto.active, blocks: dto.blocks.map(mapBlock), cmsId: dto.cmsId, colorKey: dto.colorKey,
     customIconDataUrl: dto.customIconDataUrl, customIconName: dto.customIconName, description: dto.description,
     monthlyLoadPercent: dto.monthlyLoadPercent, rules: dto.rules, showOnSite: dto.showOnSite,
@@ -174,7 +185,7 @@ export class ApiResourceRepository implements ResourceRepository, ResourceEditor
   constructor(options: ApiResourceRepositoryOptions = {}) { this.client = options.client ?? apiClient }
 
   async list(query: ResourceQuery): Promise<ResourceDataset> {
-    const params = new URLSearchParams({ kind: kindToApi(query.kind), archived: "false" })
+    const params = new URLSearchParams({ kind: kindToApi(query.kind), archived: String(Boolean(query.archived)) })
     const rows = await this.client.get(`/resources?${params}`, ResourceDtoSchema.array())
     return { resources: selectResources(rows.map((row) => this.remember(mapResource(row))), query) }
   }
@@ -229,6 +240,16 @@ export class ApiResourceRepository implements ResourceRepository, ResourceEditor
     }
     this.editors.set(current.id, structuredClone(current))
     return structuredClone(current)
+  }
+
+  async archive(id: string): Promise<void> {
+    const current = await this.get(id)
+    if (!current) throw new Error("Ресурс не найден")
+    const version = this.versions.get(id)
+    if (version === undefined) throw new Error("Версия ресурса неизвестна. Обновите редактор.")
+    const saved = await this.client.post(`/resources/${encodeURIComponent(this.codes.get(id) ?? id)}/archive`, ResourceArchiveSchema.parse({ version }), ResourceDtoSchema)
+    const mapped = this.remember(mapResource(saved))
+    this.editors.set(id, structuredClone(mapped))
   }
 
   private remember(resource: VersionedEditor) {

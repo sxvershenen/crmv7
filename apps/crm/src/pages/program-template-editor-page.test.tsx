@@ -36,6 +36,23 @@ describe("ProgramTemplateEditorPage", () => {
     expect(await screen.findByText("Сохранено")).toBeInTheDocument()
   })
 
+  it("archives a template with confirmation while keeping the record", async () => {
+    const user = userEvent.setup()
+    const repository = new FixtureProgramsRepository()
+    render(<MemoryRouter initialEntries={["/programs/forest-family"]}><TooltipProvider><Routes><Route element={<ProgramTemplateEditorPage repository={repository} />} path="programs/:id" /><Route element={<LocationProbe />} path="programs" /></Routes></TooltipProvider></MemoryRouter>)
+    await screen.findByDisplayValue("Семейный день в лесу")
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия программы" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect((await repository.getTemplate("forest-family"))?.archived).not.toBe(true)
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия программы" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    await user.click(screen.getByRole("button", { name: "Архивировать" }))
+    expect(await screen.findByLabelText("Текущий URL")).toHaveTextContent("/programs?archived=true")
+    expect((await repository.getTemplate("forest-family"))?.archived).toBe(true)
+  })
+
   it("adds, duplicates and reorders stages on the URL-backed content tab", async () => {
     const user = userEvent.setup()
     renderEditor("/programs/forest-family?tab=content")
@@ -49,6 +66,20 @@ describe("ProgramTemplateEditorPage", () => {
     await user.click(screen.getByRole("button", { name: "Поднять этап 5" }))
     expect(screen.getByLabelText("Название этапа 4")).toHaveValue("Знакомство — копия")
     expect(screen.getByLabelText("Текущий URL")).toHaveTextContent("?tab=content")
+  })
+
+  it("confirms deleting a program stage", async () => {
+    const user = userEvent.setup()
+    renderEditor("/programs/forest-family?tab=content")
+    const remove = await screen.findByRole("button", { name: "Удалить этап 1" })
+    await user.click(remove)
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect(remove).toBeInTheDocument()
+    await user.click(remove)
+    await user.click(screen.getByRole("button", { name: "Удалить этап" }))
+    expect(screen.getAllByRole("button", { name: /^Удалить этап \d+$/ })).toHaveLength(2)
+    expect(screen.getByText("Есть изменения")).toBeInTheDocument()
   })
 
   it("shows related runs and supports the new template route", async () => {

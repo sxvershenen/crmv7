@@ -1,5 +1,24 @@
 import { expect, test } from "@playwright/test"
 
+test("program template and run archive keep their records reachable", async ({ page }) => {
+  await page.goto("/programs/forest-family")
+  await page.getByRole("button", { name: "Дополнительные действия программы" }).click()
+  await page.getByRole("menuitem", { name: "В архив" }).click()
+  await expect(page.getByRole("dialog")).toContainText("Проведения, регистрации и оплаты останутся в истории")
+  await page.getByRole("button", { name: "Архивировать" }).click()
+  await expect(page).toHaveURL(/archived=true/)
+  await expect(page.getByText("Семейный день в лесу").first()).toBeVisible()
+
+  await page.goto("/programs/runs/24081")
+  await page.getByRole("button", { name: "Дополнительные действия проведения" }).click()
+  await page.getByRole("menuitem", { name: "В архив" }).click()
+  await expect(page.getByRole("dialog")).toContainText("Регистрации и оплаты останутся в истории")
+  await page.getByRole("button", { name: "Архивировать" }).click()
+  await expect(page).toHaveURL(/section=runs&archived=true/)
+  await expect(page.getByText("Семейный день в лесу").first()).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test("desktop programs switch template, run and date-centric scheduler views", async ({ page, isMobile }) => {
   test.skip(isMobile, "desktop representation")
   await page.goto("/programs")

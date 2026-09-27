@@ -28,10 +28,12 @@ export type ResourceWarning = {
 export type ResourcePermissions = {
   canEdit: boolean
   canManageBlocks: boolean
+  canArchive?: boolean
 }
 
 export type Resource = {
   id: string
+  archived?: boolean
   kind: ResourceKind
   name: string
   secondaryType: string
@@ -49,6 +51,7 @@ export type ResourceQuery = {
   kind: ResourceKind
   block: ResourceBlockFilter
   warning: ResourceWarningFilter
+  archived?: boolean
 }
 
 export type ResourceDataset = {

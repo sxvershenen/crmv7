@@ -91,22 +91,37 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
   constructor(private readonly client: ApiProgramsClient = apiClient) {}
 
   async list(query: ProgramQuery): Promise<ProgramsDataset> {
-    const [templates, occurrences, registrations, categories] = await Promise.all([
+    const archived = query.archived === true
+    const [activeTemplates, archivedTemplates, occurrences, registrations, categories] = await Promise.all([
       this.listAll("/programs/templates?archived=false&limit=100", templatePageSchema),
-      this.listAll(`/programs/occurrences?archived=false&from=${encodeURIComponent(dateTimeStart(query.date))}&to=${encodeURIComponent(dateTimeEnd(query.rangeEnd))}&limit=100`, occurrencePageSchema),
+      this.listAll("/programs/templates?archived=true&limit=100", templatePageSchema),
+      this.listAll(`/programs/occurrences?archived=${archived}&from=${encodeURIComponent(dateTimeStart(query.date))}&to=${encodeURIComponent(dateTimeEnd(query.rangeEnd))}&limit=100`, occurrencePageSchema),
       this.listAll(`/programs/registrations?archived=false&limit=100`, registrationPageSchema),
       this.listCategories(),
     ])
-    for (const dto of templates) this.templates.set(dto.id, dto)
+    for (const dto of [...activeTemplates, ...archivedTemplates]) this.templates.set(dto.id, dto)
     for (const dto of occurrences) this.occurrences.set(dto.id, dto)
     for (const dto of registrations) this.registrations.set(dto.id, dto)
     const categoryById = new Map(categories.map((category) => [category.id, category]))
-    const templateModels = templates.map((dto) => mapTemplate(dto, categoryById.get(dto.categoryId ?? "")))
-    const templateById = new Map(templateModels.map((template) => [template.id, template]))
+    const allTemplateModels = [...activeTemplates, ...archivedTemplates].map((dto) => mapTemplate(dto, categoryById.get(dto.categoryId ?? "")))
+    const templateModels = allTemplateModels.filter((template) => Boolean(template.archived) === archived)
+    const templateById = new Map(allTemplateModels.map((template) => [template.id, template]))
     const runModels = occurrences.map((dto) => mapRun(dto, templateById.get(dto.templateId)))
     const runById = new Map(runModels.map((run) => [run.id, run]))
     const registrationModels = registrations.map((dto) => mapRegistration(dto, runById.get(dto.occurrenceId)))
     return selectPrograms({ categories, templates: templateModels, runs: runModels, registrations: registrationModels }, query)
+  }
+
+  async archiveTemplate(id: string): Promise<void> {
+    const current = await this.templateDto(id)
+    const updated = await this.client.post(`/programs/templates/${encodeURIComponent(id)}/archive`, { version: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-template-archive-${id}`) }, ProgramTemplateDtoSchema)
+    this.templates.set(updated.id, updated)
+  }
+
+  async archiveRun(id: string): Promise<void> {
+    const current = await this.occurrenceDto(id)
+    const updated = await this.client.post(`/programs/occurrences/${encodeURIComponent(id)}/archive`, { version: current.version, operationId: operationId(), idempotencyKey: idempotencyKey(`program-occurrence-archive-${id}`) }, ProgramOccurrenceDtoSchema)
+    this.occurrences.set(updated.id, updated)
   }
 
   async assignTemplate(id: string) {

@@ -6,6 +6,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AssigneePicker,
   Button,
+  ConfirmationDialog,
   EditorFrame,
   FilterSelect,
   PageNav,
@@ -92,6 +93,7 @@ export function BookingEditorPage({
     | { status: "error"; message: string }
   >({ status: "idle" });
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [positionToDelete, setPositionToDelete] = useState<string | null>(null);
   const currentDraft = useRef(draft);
   currentDraft.current = draft;
 
@@ -550,6 +552,14 @@ export function BookingEditorPage({
     >
       {loading ? <BookingEditorLoading /> : null}
       {mutationError ? <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{mutationError}</p> : null}
+      <ConfirmationDialog
+        confirmLabel="Удалить позицию"
+        description="Удалить позицию из бронирования? После сохранения состав и доступность изменятся. История уже сохранённых данных останется в базе. Если не уверены, посоветуйтесь с техническим администратором."
+        onConfirm={() => { if (positionToDelete) deletePosition(positionToDelete); setPositionToDelete(null); }}
+        onOpenChange={(open) => { if (!open) setPositionToDelete(null); }}
+        open={positionToDelete !== null}
+        title="Удалить позицию?"
+      />
       {error ? (
         <div className="rounded-xl border bg-background">
           <PageState
@@ -575,7 +585,7 @@ export function BookingEditorPage({
           autoPrice={id === "new"}
           draft={draft}
           onAdd={addPosition}
-          onDelete={deletePosition}
+          onDelete={setPositionToDelete}
           onDuplicate={duplicatePosition}
           onResourceChange={changeResource}
           pricingGateway={pricingGateway}

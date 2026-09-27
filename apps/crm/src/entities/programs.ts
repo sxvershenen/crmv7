@@ -36,6 +36,7 @@ export type ProgramCategoryEditorRecord = ProgramCategory & { relatedTemplates: 
 
 export type ProgramTemplate = {
   id: string
+  archived?: boolean
   name: string
   version: number
   updatedAt: string
@@ -75,6 +76,8 @@ export type ProgramTemplateEditorRecord = ProgramTemplate & {
 
 export type ProgramRun = {
   id: string
+  archived?: boolean
+  capabilities?: { canArchive: boolean }
   version?: number
   currency?: string
   templateId: string
@@ -214,6 +217,7 @@ export type ProgramRegistrationAcceptedQuote = {
 
 export type ProgramQuery = {
   section: ProgramSection
+  archived?: boolean
   category: string
   status: string
   date: string

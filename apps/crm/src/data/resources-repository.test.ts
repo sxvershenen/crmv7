@@ -35,4 +35,12 @@ describe("ResourceRepository fixture adapter", () => {
     expect((await repository.get("house-pine"))?.rules.bookingStepMinutes).toBe("30")
     expect((await repository.list({ block: "active", kind: "houses", warning: "all" })).resources.some((item) => item.id === "house-pine")).toBe(true)
   })
+
+  it("keeps an archived resource retrievable while excluding it from active lists", async () => {
+    const repository = new FixtureResourceRepository()
+    await repository.archive("house-pine")
+    expect(await repository.get("house-pine")).toMatchObject({ archived: true, active: false })
+    expect((await repository.list({ block: "all", kind: "houses", warning: "all" })).resources.some((item) => item.id === "house-pine")).toBe(false)
+    expect((await repository.list({ block: "all", kind: "houses", warning: "all", archived: true })).resources.some((item) => item.id === "house-pine")).toBe(true)
+  })
 })

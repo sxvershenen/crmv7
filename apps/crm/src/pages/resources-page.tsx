@@ -2,7 +2,7 @@ import { useMemo } from "react"
 import { IconAlertTriangle, IconFilter } from "@tabler/icons-react"
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
-import { LoadingRows, PageFrame, PageState } from "@crm/ui"
+import { Button, LoadingRows, PageFrame, PageState } from "@crm/ui"
 
 import { ResourceCategoryNav } from "@app/components/resources/resource-category-nav"
 import { ResourceControls } from "@app/components/resources/resource-controls"
@@ -29,7 +29,8 @@ function ResourcesScreen({ kind, repository }: { kind: ResourceQuery["kind"]; re
   const navigate = useNavigate()
   const block = oneOf(searchParams.get("block"), resourceBlockFilters, "all")
   const warning = oneOf(searchParams.get("warning"), resourceWarningFilters, "all")
-  const query = useMemo<ResourceQuery>(() => ({ block, kind, warning }), [block, kind, warning])
+  const archived = searchParams.get("archived") === "true"
+  const query = useMemo<ResourceQuery>(() => ({ block, kind, warning, archived }), [block, kind, warning, archived])
   const { retry, state } = useResources(query, repository)
 
   const setFilter = (name: "block" | "warning", value: string) => {
@@ -44,6 +45,7 @@ function ResourcesScreen({ kind, repository }: { kind: ResourceQuery["kind"]; re
     const next = new URLSearchParams(current)
     next.delete("block")
     next.delete("warning")
+    next.delete("archived")
     return next
   })
   const openResource = (resource: Resource) => navigate(`/resources/${resource.kind}/${resource.id}`)
@@ -52,6 +54,7 @@ function ResourcesScreen({ kind, repository }: { kind: ResourceQuery["kind"]; re
   return (
     <PageFrame className="space-y-3" width="wide">
       <ResourceCategoryNav value={kind} />
+      <div className="flex justify-end"><Button onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); if (archived) next.delete("archived"); else next.set("archived", "true"); return next })} size="sm" variant="outline">{archived ? "Действующие ресурсы" : "Архив ресурсов"}</Button></div>
       <ResourceControls
         block={block}
         onBlockChange={(value: ResourceBlockFilter) => setFilter("block", value)}
@@ -67,7 +70,7 @@ function ResourcesScreen({ kind, repository }: { kind: ResourceQuery["kind"]; re
       ) : null}
       {state.status === "ready" && state.data.resources.length === 0 ? (
         <div className="rounded-xl border bg-surface-raised">
-          <PageState actionLabel="Сбросить фильтры" icon={IconFilter} onAction={resetFilters} title="Ресурсы не найдены">Измените состояние блокировки или фильтр предупреждений.</PageState>
+          <PageState actionLabel="Сбросить фильтры" icon={IconFilter} onAction={resetFilters} title={archived ? "В архиве пока пусто" : "Ресурсы не найдены"}>Измените состояние блокировки или фильтр предупреждений.</PageState>
         </div>
       ) : null}
       {state.status === "ready" && state.data.resources.length > 0 ? <ResourcesGrid onBlock={blockResource} onOpen={openResource} resources={state.data.resources} /> : null}

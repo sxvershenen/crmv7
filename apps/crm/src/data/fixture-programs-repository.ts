@@ -64,6 +64,22 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
     return Promise.resolve(selectPrograms(structuredClone(this.data), query))
   }
 
+  async archiveTemplate(id: string): Promise<void> {
+    const template = this.data.templates.find((item) => item.id === id)
+    if (!template) throw new Error("Шаблон программы не найден")
+    template.archived = true
+    const editor = this.templateEditorData.get(id)
+    if (editor) editor.archived = true
+  }
+
+  async archiveRun(id: string): Promise<void> {
+    const run = this.data.runs.find((item) => item.id === id)
+    if (!run) throw new Error("Проведение программы не найдено")
+    run.archived = true
+    const editor = this.runEditorData.get(id)
+    if (editor) editor.archived = true
+  }
+
   async assignTemplate(id: string): Promise<ProgramTemplate> {
     const template = this.data.templates.find((item) => item.id === id)
     if (!template) throw new Error("Шаблон не найден")

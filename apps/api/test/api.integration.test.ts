@@ -30,6 +30,7 @@ import {
   EventServiceTemplateEntity,
   OutboxEventEntity,
   OutboxDeliveryEntity,
+  PaymentEntity,
   OfferingAddonAssignmentEntity,
   OfferingBindingEntity,
   OfferingQuoteSnapshotEntity,
@@ -1228,6 +1229,42 @@ describe.sequential("internal API + PostgreSQL", () => {
     const registrationCharge = await adminAgent.post("/api/internal/v1/payments").send({ target: { type: "program_registration", id: registrationId }, operationId: randomUUID(), idempotencyKey: "registration-payment-target-0002", expectedVersion: 1, type: "charge", amount: { amountMinor: 2_000, currency: "RUB" }, method: "cash", reason: null, sourcePaymentId: null }).expect(201)
     expect(registrationCharge.body).toMatchObject({ target: { type: "program_registration", id: registrationId } })
     expect((await registrations.findOneByOrFail({ id: registrationId })).paidAmount).toBe(2_000)
+  })
+
+  it("archives resources, events and programs without deleting bookings or payments", async () => {
+    const resourceId = randomUUID(), eventId = randomUUID(), templateId = randomUUID(), occurrenceId = randomUUID(), registrationId = randomUUID()
+    const startAt = new Date("2026-10-21T10:00:00.000Z"), endAt = new Date("2026-10-21T12:00:00.000Z")
+    await dataSource.getRepository(ResourceEntity).save({ id: resourceId, code: "R-ARCH-HISTORY", kind: "house", name: "Дом с историей", capacityMode: "fixed", capacityTotal: 1, settings: { active: true }, createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(EventEntity).save({ id: eventId, code: "E-ARCH-HISTORY", name: "Событие с оплатой", categoryId: null, customerId: null, phone: "", startsAt: startAt, endsAt: endAt, guestCount: 1, totalAmount: 5_000, paidAmount: 2_000, currency: "RUB", status: "planning", comment: "", requiresAction: false, assigneeIds: [], scenario: [], createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(ProgramTemplateEntity).save({ id: templateId, code: "PT-ARCH-HISTORY", name: "Программа с историей", categoryId: null, durationMinutes: 120, minimumParticipants: 1, participantLimit: 10, registrationCloseHours: null, basePriceAmount: 5_000, currency: "RUB", description: "", publication: "draft", assigneeIds: [], stages: [], createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(ProgramOccurrenceEntity).save({ id: occurrenceId, code: "PO-ARCH-HISTORY", templateId, name: "Проведение с историей", startsAt: startAt, endsAt: endAt, participantLimit: 10, registrationLimit: 10, status: "open", currency: "RUB", comment: "", assigneeIds: [], createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(ProgramRegistrationEntity).save({ id: registrationId, code: "PR-ARCH-HISTORY", occurrenceId, customerId: null, phone: "", participantCount: 1, participantNames: "", totalAmount: 5_000, discountAmount: 0, paidAmount: 1_000, currency: "RUB", status: "new", promo: "", source: "", comment: "", createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    const allocationId = randomUUID(), eventPaymentId = randomUUID(), programPaymentId = randomUUID()
+    await dataSource.getRepository(ResourceAllocationEntity).save({ id: allocationId, resourceId, sourceType: "event", sourceId: eventId, startAt, endAt, quantity: 1, capacityImpact: 1, exclusive: true, status: "active", createdBy: adminId, updatedBy: adminId, archivedAt: null })
+    await dataSource.getRepository(PaymentEntity).save([
+      { id: eventPaymentId, operationId: randomUUID(), bookingId: null, eventId, programRegistrationId: null, kind: "charge", amount: 2_000, currency: "RUB", method: "card", sourcePaymentId: null, reason: "", createdAt: new Date(), createdBy: adminId },
+      { id: programPaymentId, operationId: randomUUID(), bookingId: null, eventId: null, programRegistrationId: registrationId, kind: "charge", amount: 1_000, currency: "RUB", method: "cash", sourcePaymentId: null, reason: "", createdAt: new Date(), createdBy: adminId },
+    ])
+
+    const command = () => ({ version: 1, operationId: randomUUID(), idempotencyKey: randomUUID() })
+    await adminAgent.post("/api/internal/v1/resources/R-ARCH-HISTORY/archive").send({ version: 1 }).expect(201)
+    await adminAgent.post(`/api/internal/v1/events/${eventId}/archive`).send(command()).expect(201)
+    await adminAgent.post(`/api/internal/v1/programs/templates/${templateId}/archive`).send(command()).expect(201)
+    const newRegistration = { occurrenceId, participantCount: 1, total: { amountMinor: 5_000, currency: "RUB" }, operationId: randomUUID(), idempotencyKey: randomUUID() }
+    const blockedByTemplate = await adminAgent.post("/api/internal/v1/programs/registrations").send(newRegistration).expect(409)
+    expect(blockedByTemplate.body.code).toBe("PROGRAM_TEMPLATE_ARCHIVED")
+    await adminAgent.post(`/api/internal/v1/programs/occurrences/${occurrenceId}/archive`).send(command()).expect(201)
+    const blockedByOccurrence = await adminAgent.post("/api/internal/v1/programs/registrations").send({ ...newRegistration, operationId: randomUUID(), idempotencyKey: randomUUID() }).expect(409)
+    expect(blockedByOccurrence.body.code).toBe("PROGRAM_OCCURRENCE_ARCHIVED")
+
+    expect((await adminAgent.get("/api/internal/v1/resources/R-ARCH-HISTORY").expect(200)).body).toMatchObject({ archived: true, active: false })
+    expect((await adminAgent.get(`/api/internal/v1/events/${eventId}`).expect(200)).body).toMatchObject({ archived: true, paid: { amountMinor: 2_000, currency: "RUB" } })
+    expect((await adminAgent.get(`/api/internal/v1/programs/templates/${templateId}`).expect(200)).body.archived).toBe(true)
+    expect((await adminAgent.get(`/api/internal/v1/programs/occurrences/${occurrenceId}`).expect(200)).body.archived).toBe(true)
+    expect((await adminAgent.get(`/api/internal/v1/programs/registrations/${registrationId}`).expect(200)).body.paid.amountMinor).toBe(1_000)
+    expect(await dataSource.getRepository(ResourceAllocationEntity).countBy({ id: allocationId })).toBe(1)
+    expect(await dataSource.getRepository(PaymentEntity).countBy({ id: eventPaymentId })).toBe(1)
+    expect(await dataSource.getRepository(PaymentEntity).countBy({ id: programPaymentId })).toBe(1)
   })
 
   it("keeps program and event categories authoritative, versioned and nullable on delete", async () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconAlertTriangle,
+  IconArchive,
   IconCalendarEvent,
   IconCategory,
   IconClock,
@@ -16,6 +17,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AssigneePicker,
   Button,
+  ConfirmationDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -114,6 +116,10 @@ export function ProgramTemplateEditorPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorSaveState>("saved");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const [offering, setOffering] = useState<ProgramOfferingResolution | null>(null);
   const [offeringLoading, setOfferingLoading] = useState(id !== "new");
   const [commercialBusy, setCommercialBusy] = useState<string | null>(null);
@@ -302,6 +308,19 @@ export function ProgramTemplateEditorPage({
       setSaveState("conflict");
     }
   };
+  const archive = async () => {
+    if (!draft || draft.id === "new" || draft.archived || saveState !== "saved" || archiving) return;
+    setArchiving(true);
+    setArchiveError(null);
+    try {
+      await repository.archiveTemplate(draft.id);
+      navigate("/programs?archived=true", { replace: true });
+    } catch (reason) {
+      setArchiveError(errorMessage(reason, "Не удалось архивировать программу"));
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   const prepared = offering?.resolution === "linked";
   const published = draft?.published;
@@ -347,7 +366,7 @@ export function ProgramTemplateEditorPage({
   );
   const openCategories = () => navigate("/programs/categories");
   const overflow = draft ? (
-    <ProgramOverflow onOpenCategories={openCategories} />
+    <ProgramOverflow canArchive={draft.id !== "new" && !draft.archived && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving} onArchive={() => setArchiveOpen(true)} onOpenCategories={openCategories} />
   ) : null;
   const refreshOffering = useCallback(async () => {
     if (!draft || draft.id === "new") return;
@@ -399,6 +418,8 @@ export function ProgramTemplateEditorPage({
       mobileActions={
         draft ? (
           <ProgramMobileActions
+            canArchive={draft.id !== "new" && !draft.archived && draft.capabilities?.canArchive !== false && saveState === "saved" && !archiving}
+            onArchive={() => setArchiveOpen(true)}
             onAssigneeChange={setAssignee}
             onOpenCategories={openCategories}
           />
@@ -430,6 +451,9 @@ export function ProgramTemplateEditorPage({
           </PageState>
         </div>
       ) : null}
+      {archiveError ? <p className="text-xs text-danger" role="alert">{archiveError}</p> : null}
+      <ConfirmationDialog confirmLabel="Архивировать" description={`Архивировать программу «${draft?.name ?? ""}»? Проведения, регистрации и оплаты останутся в истории. Если не уверены, посоветуйтесь с техническим администратором.`} onConfirm={() => { void archive() }} onOpenChange={setArchiveOpen} open={archiveOpen} title="Архивировать программу?" />
+      <ConfirmationDialog confirmLabel="Удалить этап" description="Удалить этап из программы? После сохранения он исчезнет из описания. Если не уверены, посоветуйтесь с техническим администратором." onConfirm={() => { if (stageToDelete) deleteStage(stageToDelete); setStageToDelete(null) }} onOpenChange={(open) => { if (!open) setStageToDelete(null) }} open={stageToDelete !== null} title="Удалить этап?" />
       {draft && tab === "main" ? (
         <ProgramMain
           categories={categories}
@@ -444,7 +468,7 @@ export function ProgramTemplateEditorPage({
         <ProgramContent
           draft={draft}
           onAdd={addStage}
-          onDelete={deleteStage}
+          onDelete={setStageToDelete}
           onDuplicate={duplicateStage}
           onMove={moveStage}
           updateStage={updateStage}
@@ -492,8 +516,12 @@ export function ProgramTemplateEditorPage({
 }
 
 function ProgramOverflow({
+  canArchive,
+  onArchive,
   onOpenCategories,
 }: {
+  canArchive: boolean;
+  onArchive: () => void;
   onOpenCategories: () => void;
 }) {
   return (
@@ -514,14 +542,19 @@ function ProgramOverflow({
           <IconCategory aria-hidden="true" />
           Категории программ
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 function ProgramMobileActions({
+  canArchive,
+  onArchive,
   onAssigneeChange,
   onOpenCategories,
 }: {
+  canArchive: boolean;
+  onArchive: () => void;
   onAssigneeChange: (person: Assignee | null) => void;
   onOpenCategories: () => void;
 }) {
@@ -557,6 +590,7 @@ function ProgramMobileActions({
           <IconCategory aria-hidden="true" />
           Категории программ
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canArchive} onClick={onArchive}><IconArchive aria-hidden="true" />В архив</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

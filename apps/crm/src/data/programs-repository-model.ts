@@ -47,6 +47,7 @@ export interface ProgramsRepository {
 
 export interface ProgramTemplateEditorRepository {
   getTemplate(id: string): Promise<ProgramTemplateEditorRecord | null>
+  archiveTemplate(id: string): Promise<void>
   listCategories(): Promise<ProgramCategory[]>
   saveTemplate(template: ProgramTemplateEditorRecord): Promise<ProgramTemplateEditorRecord>
   resolveProgramOffering(programTemplateId: string): Promise<ProgramOfferingResolution>
@@ -71,6 +72,7 @@ export type ProgramQuotePreviewInput = {
 
 export interface ProgramRunEditorRepository {
   getRun(id: string): Promise<ProgramRunEditorRecord | null>
+  archiveRun(id: string): Promise<void>
   listRunResources(): Promise<ProgramRunResourceOption[]>
   listRunTemplates(): Promise<ProgramTemplate[]>
   saveRun(run: ProgramRunEditorRecord): Promise<ProgramRunEditorRecord>
@@ -142,8 +144,9 @@ function sortBy<T>(items: T[], value: (item: T) => string | number, direction: P
 }
 
 export function selectPrograms(data: ProgramsDataset, query: ProgramQuery): ProgramsDataset {
-  const templates = data.templates.filter((item) => query.category === "all" || item.categoryId === query.category)
+  const templates = data.templates.filter((item) => Boolean(item.archived) === Boolean(query.archived) && (query.category === "all" || item.categoryId === query.category))
   const runs = data.runs.filter((item) => {
+    if (Boolean(item.archived) !== Boolean(query.archived)) return false
     if (query.category !== "all" && item.categoryId !== query.category) return false
     if (query.status !== "all" && item.status !== query.status) return false
     const date = item.startsAt.slice(0, 10)
@@ -176,7 +179,7 @@ function assigneeFromId(id: string) {
 
 export function mapTemplate(dto: ReturnType<typeof ProgramTemplateDtoSchema.parse>, category?: ProgramCategory): ProgramTemplate {
   return {
-    id: dto.id, name: dto.name, version: dto.version, updatedAt: dto.updatedAt, categoryId: dto.categoryId ?? "uncategorized",
+    id: dto.id, archived: dto.archived, name: dto.name, version: dto.version, updatedAt: dto.updatedAt, categoryId: dto.categoryId ?? "uncategorized",
     categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "sparkles", categoryTone: category?.tone ?? "violet", durationMinutes: dto.durationMinutes,
     participantLimit: dto.participantLimit, basePrice: dto.basePrice.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId), published: dto.published,
     nextRun: dto.nextOccurrence ? { id: dto.nextOccurrence.id, startsAt: dto.nextOccurrence.startsAt } : null, capabilities: dto.capabilities,
@@ -193,10 +196,10 @@ export function mapCategoryDetail(dto: ReturnType<typeof ProgramCategoryDetailSc
 
 export function mapRun(dto: ReturnType<typeof ProgramOccurrenceDtoSchema.parse>, template?: ProgramTemplate): ProgramRun {
   return {
-    id: dto.id, version: dto.version, currency: dto.revenue.currency, templateId: dto.templateId, name: dto.name, categoryId: template?.categoryId ?? "uncategorized", categoryIcon: template?.categoryIcon ?? "sparkles",
+    id: dto.id, archived: dto.archived, version: dto.version, currency: dto.revenue.currency, templateId: dto.templateId, name: dto.name, categoryId: template?.categoryId ?? "uncategorized", categoryIcon: template?.categoryIcon ?? "sparkles",
     categoryTone: template?.categoryTone ?? "violet", startsAt: dto.startsAt, endsAt: dto.endsAt, participantCount: dto.participantCount, participantLimit: dto.participantLimit,
     registrationCount: dto.registrationCount, registrationLimit: dto.registrationLimit, status: runStatusFromApi[dto.status], revenue: dto.revenue.amountMinor / 100,
-    paid: dto.paid.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId),
+    paid: dto.paid.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId), capabilities: dto.capabilities,
   }
 }
 

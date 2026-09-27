@@ -65,6 +65,40 @@ describe("ProgramRunEditorPage", () => {
     expect(screen.getByLabelText("Текущий URL")).toHaveTextContent("/bookings/new?resource=house-pine")
   })
 
+  it("keeps registrations visible and confirms removal of a resource allocation", async () => {
+    const user = userEvent.setup()
+    renderEditor("/programs/runs/24081?tab=registrations")
+    await screen.findByText("Новая регистрация")
+    expect(screen.queryByRole("button", { name: /Удалить регистрацию/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("tab", { name: "Ресурсы" }))
+    const remove = screen.getAllByRole("button", { name: /Снять бронь/ })[0]!
+    await user.click(remove)
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect(remove).toBeInTheDocument()
+    await user.click(remove)
+    await user.click(screen.getByRole("button", { name: /^Снять бронь$/ }))
+    expect(remove).not.toBeInTheDocument()
+    expect(screen.getByText("Есть изменения")).toBeInTheDocument()
+  })
+
+  it("archives a run with confirmation while keeping registrations", async () => {
+    const user = userEvent.setup()
+    const repository = new FixtureProgramsRepository()
+    render(<DirectoryRepositoryProvider repository={new FixtureDirectoryRepository()}><MemoryRouter initialEntries={["/programs/runs/24081"]}><TooltipProvider><Routes><Route element={<ProgramRunEditorPage repository={repository} />} path="programs/runs/:id" /><Route element={<LocationProbe />} path="programs" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>)
+    await screen.findByDisplayValue("Семейный день в лесу")
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия проведения" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect((await repository.getRun("24081"))?.archived).not.toBe(true)
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия проведения" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    await user.click(screen.getByRole("button", { name: "Архивировать" }))
+    expect(await screen.findByLabelText("Текущий URL")).toHaveTextContent("archived=true")
+    expect(await repository.getRun("24081")).toMatchObject({ archived: true, registrations: expect.arrayContaining([expect.any(Object)]) })
+  })
+
   it("supports a new draft run through the same route", async () => {
     renderEditor("/programs/runs/new")
     expect(await screen.findByDisplayValue("Семейный день в лесу")).toBeInTheDocument()

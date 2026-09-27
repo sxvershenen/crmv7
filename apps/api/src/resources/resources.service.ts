@@ -82,6 +82,7 @@ export class ResourcesService {
       const current = await manager.getRepository(ResourceEntity).findOne({ where: this.resourceIdentityWhere(code) })
       if (!current) throw this.notFound()
       if (current.version !== input.version) throw this.versionConflict(current)
+      if (current.archivedAt && input.settings?.active === true) throw new ConflictException({ code: "RESOURCE_ARCHIVED", message: "Архивный ресурс нельзя включить для бронирования" })
       const before = this.snapshot(current)
       const result = await manager.createQueryBuilder().update(ResourceEntity).set({
         ...(input.kind === undefined ? {} : { kind: input.kind }),

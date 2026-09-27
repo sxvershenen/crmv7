@@ -19,6 +19,21 @@ function LocationProbe() { const location = useLocation(); return <output aria-l
 function renderEditor(entry = "/bookings/2048") { return render(<DirectoryRepositoryProvider repository={new FixtureDirectoryRepository()}><MemoryRouter initialEntries={[entry]}><TooltipProvider><Routes><Route element={<><BookingEditorPage repository={new FixtureBookingRepository()} /><LocationProbe /></>} path="bookings/:id" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>) }
 
 describe("BookingEditorPage", () => {
+  it("confirms removing a booking position before changing the draft", async () => {
+    const user = userEvent.setup()
+    renderEditor("/bookings/2048?tab=composition")
+    await screen.findByLabelText("Стоимость, ₽")
+    const remove = screen.getByRole("button", { name: "Удалить позицию 1" })
+    await user.click(remove)
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect(remove).toBeInTheDocument()
+    await user.click(remove)
+    await user.click(screen.getByRole("button", { name: "Удалить позицию" }))
+    expect(remove).not.toBeInTheDocument()
+    expect(screen.getByText("Есть изменения")).toBeInTheDocument()
+  })
+
   it("preserves a saved composite quote on opening the composition tab", async () => {
     const fixture = new FixtureBookingRepository()
     const saved = (await fixture.get("2048"))!

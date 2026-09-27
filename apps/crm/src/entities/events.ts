@@ -33,6 +33,7 @@ export type EventCategoryEditorRecord = EventCategory & { relatedEvents: CrmEven
 export type CrmEvent = {
   id: string
   version?: number
+  capabilities?: { canArchive: boolean }
   name: string
   categoryId: string
   categoryName: string

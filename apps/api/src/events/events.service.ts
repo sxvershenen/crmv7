@@ -98,6 +98,7 @@ export class EventsService {
       if (replay) return replay
       const current = await this.findForUpdate(manager, resolved.id)
       this.assertVersion(current, input.version)
+      if (current.archivedAt) throw new ConflictException({ code: "EVENT_ARCHIVED", message: "Архивное мероприятие нельзя переводить в другой статус" })
       const allowed: Record<string, string[]> = { inquiry: ["planning", "cancelled"], planning: ["booked", "cancelled"], booked: ["completed", "cancelled"], completed: [], cancelled: [] }
       if (!allowed[current.status]?.includes(input.status)) throw new ConflictException({ code: "INVALID_STATE_TRANSITION", message: `Нельзя перевести мероприятие из ${current.status} в ${input.status}` })
       if (current.pricingMode === "quote_required" && input.status === "booked" && !input.quoteAcceptance) throw new UnprocessableEntityException({ code: "EVENT_QUOTE_ACCEPTANCE_REQUIRED", message: "Для рассчитанного мероприятия нужно принять quote" })

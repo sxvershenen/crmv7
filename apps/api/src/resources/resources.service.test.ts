@@ -49,6 +49,14 @@ function serviceFor(current: ResourceEntity, allocations: ResourceAllocationEnti
 }
 
 describe("ResourcesService availability", () => {
+  it("rejects reactivation of an archived resource", async () => {
+    const archived = resource("fixed", 1)
+    archived.archivedAt = new Date("2026-09-01T00:00:00Z")
+    const manager = { getRepository: () => ({ findOne: vi.fn().mockResolvedValue(archived) }) }
+    const service = new ResourcesService({ transaction: async (callback: (value: unknown) => Promise<unknown>) => callback(manager) } as never)
+    await expect(service.update(archived.code, { version: archived.version, settings: { active: true } }, actor, "request-1")).rejects.toMatchObject({ response: { code: "RESOURCE_ARCHIVED" } })
+  })
+
   it("treats concrete campground inventory kinds as one CRM camping direction", async () => {
     let kinds: string[] = []
     const builder = {

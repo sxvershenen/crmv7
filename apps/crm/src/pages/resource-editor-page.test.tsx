@@ -42,6 +42,23 @@ describe("ResourceEditorPage", () => {
     expect(await screen.findByText("Сохранено")).toBeInTheDocument()
   })
 
+  it("confirms resource archiving and preserves its record", async () => {
+    const user = userEvent.setup()
+    const repository = new FixtureResourceRepository()
+    render(<MemoryRouter initialEntries={["/resources/houses/house-pine"]}><TooltipProvider><Routes><Route element={<ResourceEditorPage repository={repository} />} path="resources/:kind/:resourceId" /><Route element={<LocationProbe />} path="resources/:kind" /></Routes></TooltipProvider></MemoryRouter>)
+    await screen.findByDisplayValue("Дом «Сосна»")
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия ресурса" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    expect(screen.getByRole("dialog")).toHaveTextContent("техническим администратором")
+    await user.click(screen.getByRole("button", { name: "Отмена" }))
+    expect((await repository.get("house-pine"))?.archived).not.toBe(true)
+    await user.click(screen.getAllByRole("button", { name: "Дополнительные действия ресурса" })[0]!)
+    await user.click(await screen.findByRole("menuitem", { name: "В архив" }))
+    await user.click(screen.getByRole("button", { name: "Архивировать" }))
+    expect(await screen.findByLabelText("Текущий URL")).toHaveTextContent("/resources/houses?archived=true")
+    expect(await repository.get("house-pine")).toMatchObject({ archived: true, active: false })
+  })
+
   it("creates and cancels a block on the URL-backed tab", async () => {
     const user = userEvent.setup()
     renderEditor("/resources/houses/house-pine?tab=blocks")
@@ -79,6 +96,7 @@ describe("ResourceEditorPage", () => {
         return resource ? { ...resource, permissions: { ...resource.permissions, canEdit: false } } : null
       },
       save: vi.fn(async (resource) => resource),
+      archive: vi.fn(async () => {}),
     }
     render(<MemoryRouter initialEntries={["/resources/houses/house-pine"]}><TooltipProvider><Routes><Route element={<ResourceEditorPage repository={repository} />} path="resources/:kind/:resourceId" /></Routes></TooltipProvider></MemoryRouter>)
 
@@ -95,6 +113,7 @@ describe("ResourceEditorPage", () => {
         return resource ? { ...resource, permissions: { ...resource.permissions, canManageBlocks: false } } : null
       },
       save: vi.fn(async (resource) => resource),
+      archive: vi.fn(async () => {}),
     }
     render(<MemoryRouter initialEntries={["/resources/houses/house-lake?tab=blocks"]}><TooltipProvider><Routes><Route element={<ResourceEditorPage repository={repository} />} path="resources/:kind/:resourceId" /></Routes></TooltipProvider></MemoryRouter>)
 
@@ -206,6 +225,7 @@ describe("ResourceEditorPage", () => {
         savedRecord = saved
         return saved
       }),
+      archive: vi.fn(async () => {}),
     }
     const gateway = {
       createStayOffering: vi.fn().mockResolvedValue({ offeringId: "11111111-1111-4111-8111-111111111111", kind: "house", code: "HOUSE-NEW", operationalName: "Новый ресурс", state: "draft" }),

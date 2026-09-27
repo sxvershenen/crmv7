@@ -1,5 +1,20 @@
 import { expect, test } from "@playwright/test"
 
+test("paid event moves to archive only after confirmation", async ({ page }) => {
+  await page.goto("/events/E-3108")
+  await page.getByRole("button", { name: "Дополнительные действия мероприятия" }).click()
+  await page.getByRole("menuitem", { name: "В архив" }).click()
+  await expect(page.getByRole("dialog")).toContainText("История броней и оплат сохранится")
+  await page.getByRole("button", { name: "Отмена" }).click()
+  await expect(page).toHaveURL(/\/events\/E-3108$/)
+  await page.getByRole("button", { name: "Дополнительные действия мероприятия" }).click()
+  await page.getByRole("menuitem", { name: "В архив" }).click()
+  await page.getByRole("button", { name: "Архивировать" }).click()
+  await expect(page).toHaveURL(/status=archived/)
+  await expect(page.getByText("Свадьба Анны и Михаила").first()).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test("desktop events table, scheduler, assignment and categories stay operational", async ({ page, isMobile }) => {
   test.skip(isMobile, "desktop representation")
   await page.goto("/events")
