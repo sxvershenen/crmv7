@@ -1469,6 +1469,48 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect((await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/simple" }).expect(200)).body).toMatchObject({ title: "Вторая версия" })
   })
 
+  it("publishes the first homepage with chosen CRM promotions and refreshes their terms without another CMS release", async () => {
+    await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/" }).expect(404)
+    const terms = (code: string, value: number) => ({ code, name: `Промокод ${code}`, active: true, discountType: "percent", value, minimumAmountMinor: 0, startsAt: null, endsAt: null, scope: "all", resourceIds: [], offeringIds: [] })
+    const first = await adminAgent.post("/api/internal/v1/marketing/promotions").send({ terms: terms("FIRST10", 10), operationId: randomUUID(), idempotencyKey: `first-home-promo-${randomUUID()}` }).expect(201)
+    const second = await adminAgent.post("/api/internal/v1/marketing/promotions").send({ terms: terms("SECOND15", 15), operationId: randomUUID(), idempotencyKey: `second-home-promo-${randomUUID()}` }).expect(201)
+
+    const settings = await adminAgent.get("/api/admin/v1/site-settings").expect(200)
+    const savedSettings = await adminAgent.patch("/api/admin/v1/site-settings").send({
+      operationId: randomUUID(), idempotencyKey: `first-home-settings-save-${randomUUID()}`, expectedVersion: settings.body.version,
+      value: { siteName: "Свистоплясово", headerNavigation: [], heroDefault: null, sectionDefaults: [] },
+    }).expect(200)
+    await adminAgent.post("/api/admin/v1/site-settings/publish").send({
+      operationId: randomUUID(), idempotencyKey: `first-home-settings-publish-${randomUUID()}`, expectedVersion: savedSettings.body.version,
+    }).expect(200)
+
+    const home = await adminAgent.post("/api/admin/v1/content/nodes").send({
+      operationId: randomUUID(), idempotencyKey: `first-home-create-${randomUUID()}`, kind: "home",
+      route: { path: "/", slug: "home", parentNodeId: null, sortOrder: 0 }, title: "Главная", summary: null,
+      hero: { mode: "override", config: { title: "Главная", promotionIds: [second.body.id, first.body.id] } },
+      sections: [], seo: { title: "Главная", description: "Отдых за городом" }, relations: [], schemaVersion: 1,
+    }).expect(201)
+    await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/" }).expect(404)
+    const published = await adminAgent.post(`/api/admin/v1/content/nodes/${home.body.node.id}/publish`).send({
+      operationId: randomUUID(), idempotencyKey: `first-home-publish-${randomUUID()}`, expectedVersion: home.body.node.version,
+    }).expect(200)
+    const firstPublic = await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/" }).expect(200)
+    expect(firstPublic.body).toMatchObject({ releaseId: published.body.publicationId, featuredPromotions: [
+      { id: second.body.id, code: "SECOND15", value: 15 }, { id: first.body.id, code: "FIRST10", value: 10 },
+    ], cache: { maxAgeSeconds: 0 } })
+    const releaseCount = await dataSource.query("SELECT count(*)::int AS count FROM cms_releases")
+    expect(releaseCount).toEqual([{ count: 2 }])
+
+    await adminAgent.patch(`/api/internal/v1/marketing/promotions/${second.body.id}`).send({
+      terms: { ...second.body.terms, active: false }, expectedVersion: second.body.version,
+      operationId: randomUUID(), idempotencyKey: `first-home-promo-disable-${randomUUID()}`,
+    }).expect(200)
+    const updatedPublic = await request(app.getHttpServer()).get("/api/public/v1/pages/resolve").query({ path: "/" }).expect(200)
+    expect(updatedPublic.body).toMatchObject({ releaseId: published.body.publicationId, featuredPromotions: [{ id: first.body.id, code: "FIRST10", value: 10 }] })
+    expect(updatedPublic.body.cache.etag).not.toBe(firstPublic.body.cache.etag)
+    expect(await dataSource.query("SELECT count(*)::int AS count FROM cms_releases")).toEqual(releaseCount)
+  })
+
   it("publishes normalized Metrika settings without exposing or publishing another owner's site-settings draft", async () => {
     const baseValue = {
       siteName: "Свистоплясово",
