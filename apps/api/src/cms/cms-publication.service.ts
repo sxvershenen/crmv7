@@ -942,6 +942,11 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
       parentSections.set(section.key, { id: section.id, key: section.key, renderer: section.renderer, rendererVersion: section.rendererVersion, schemaVersion: section.schemaVersion, order: section.order, config: config as never, ...(section.analyticsActionId ? { analyticsActionId: section.analyticsActionId } : {}) })
     }
     for (const section of parentSections.values()) {
+      if (candidate.node.kind === "home" && section.key !== "hero" && section.key !== "footer"
+        && section.key !== "partners" && section.key !== "why-us" && !isCmsHomeSectionKey(section.key)
+        && !(section.key === "body" && section.renderer === "editorial-content")) {
+        issues.push(issue("CMS_HOMEPAGE_SECTION_UNSUPPORTED", `Секция «${section.key}» не отображается на главной; скройте её или замените поддерживаемым блоком`, candidate.revision.path))
+      }
       if (section.renderer === "editorial-content" && (section.rendererVersion !== "1" || section.schemaVersion !== 1 || !PublicEditorialContentConfigSchema.safeParse(section.config).success)) {
         issues.push(issue("CMS_EDITORIAL_SECTION_INVALID", "Текстовая секция не соответствует опубликованному контракту", candidate.revision.path))
       }

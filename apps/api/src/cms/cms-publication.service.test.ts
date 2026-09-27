@@ -198,6 +198,11 @@ const heroOverride = {
 }
 
 describe("materializeRelease", () => {
+  it("blocks a legacy homepage section that the public renderer cannot display", () => {
+    const home = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [{ ...heroOverride, key: "welcome", renderer: "rich-text", rendererVersion: "site-ui@1", policy: { mode: "override", patch: { scalars: { content: { operation: "replace", value: "Invisible welcome" } }, objects: {}, keyedArrays: {} } } }] })
+    expect(materializeRelease([home] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_HOMEPAGE_SECTION_UNSUPPORTED" })]))
+  })
+
   it("requires a resolved public variant for the optional mobile hero background", () => {
     const assetId = childId
     const page = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [] })

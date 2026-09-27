@@ -2,11 +2,13 @@ import {
   CmsHomeSectionSchema,
   CmsPartnersSectionSchema,
   CmsWhyUsSectionSchema,
+  PublicEditorialContentConfigSchema,
   isCmsHomeSectionKey,
   type CmsHomeSectionConfig,
   type CmsHomeSectionKey,
   type CmsPartnersSectionConfig,
   type CmsWhyUsSectionConfig,
+  type PublicEditorialContentConfig,
   type PublicReleasePageContent,
 } from "@crm/contracts"
 import {
@@ -21,13 +23,15 @@ export type HomepageSectionBinding =
   | { key: CmsHomeSectionKey; config: CmsHomeSectionConfig }
   | { key: "why-us"; config: CmsWhyUsSectionConfig }
   | { key: "partners"; config: CmsPartnersSectionConfig }
+  | { key: "body"; config: PublicEditorialContentConfig }
 
 export function getHomepageSections(page: Pick<PublicReleasePageContent, "sections"> | null, fixture: boolean): HomepageSectionBinding[] {
   if (fixture) return DEFAULT_HOMEPAGE_SECTION_ORDER.flatMap((key) => defaultBinding(key))
   const result: HomepageSectionBinding[] = []
   let locationRendered = false
   for (const section of (page?.sections ?? []).filter((candidate) => candidate.key !== "hero").sort((left, right) => left.order - right.order || left.key.localeCompare(right.key))) {
-    if (section.key === "partners") result.push({ key: "partners", config: CmsPartnersSectionSchema.parse(section).config })
+    if (section.key === "body" && section.renderer === "editorial-content") result.push({ key: "body", config: PublicEditorialContentConfigSchema.parse(section.config) })
+    else if (section.key === "partners") result.push({ key: "partners", config: CmsPartnersSectionSchema.parse(section).config })
     else if (section.key === "why-us") result.push({ key: "why-us", config: CmsWhyUsSectionSchema.parse(section).config })
     else if (isCmsHomeSectionKey(section.key) && (section.key !== "faq" && section.key !== "directions" || !locationRendered)) {
       const config = CmsHomeSectionSchema.parse(section).config

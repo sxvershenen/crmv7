@@ -18,6 +18,7 @@ import FloatingHelperIsland from "../components/islands/FloatingHelperIsland"
 import WhyUsSection from "../components/sections/WhyUsSection.astro"
 import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
+import EditorialContent from "../components/sections/EditorialContent.astro"
 import Footer from "../components/sections/Footer.astro"
 import ContentFailure from "../components/ContentFailure.astro"
 import { fixtureContentEnabled, getDraftPreview, getPreviewHomepageCommerce, getPublishedRoute, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
@@ -84,6 +85,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {(fixture || hero) && <HeroIsland {fixture} promos={promos} {...(hero ? { hero } : {})} client:load />}
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {homepageSections.map((section) => {
+        if (section.key === "body") return <EditorialContent config={section.config} sectionKey="body" />
         if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} published={curatedHomepageItems(commerce?.houses, section.config.selectedOfferingIds)} {fixture} client:visible />
         if (section.key === "sauna-chan" && fixture) return <SaunaChanIsland config={section.config} client:visible />

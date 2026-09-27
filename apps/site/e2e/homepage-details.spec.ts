@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test"
 
+test("renders the homepage text block from the active CMS release", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-editorial")
+  const response = await page.goto("/")
+  expect(response?.status()).toBe(200)
+  await expect(page.locator(".site-editorial-content")).toContainText("Текст главной из CMS.")
+  await expect(page.locator(".site-editorial-content h2")).toHaveText("Добро пожаловать")
+})
+
 test("renders release-owned reviews and FAQ in authored order and supports keyboard", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=details-published")
   for (const path of ["/", "/cms-test"]) {

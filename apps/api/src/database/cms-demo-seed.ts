@@ -52,11 +52,11 @@ export async function seedCmsDemoData(
 ): Promise<{ nodeIds: string[]; settingsRevisionId: string | null }> {
   if (process.env.APP_ENV === "production") return { nodeIds: [], settingsRevisionId: null }
   const pages: DemoPage[] = [
-    page({ kind: "home", path: "/", slug: "home", title: "Свистоплясово — отдых за городом", summary: "Домики, природа и тёплые программы для отдыха недалеко от города.", state: "published", parentPath: null, indexPolicy: "index_follow", heroTitle: "Отдых, который начинается с тишины", section: textSection("welcome", "Добро пожаловать в Свистоплясово — место для спокойных выходных, семейных поездок и встреч с друзьями.") }),
+    page({ kind: "home", path: "/", slug: "home", title: "Свистоплясово — отдых за городом", summary: "Домики, природа и тёплые программы для отдыха недалеко от города.", state: "published", parentPath: null, indexPolicy: "index_follow", heroTitle: "Отдых, который начинается с тишины", section: textSection("Добро пожаловать в Свистоплясово — место для спокойных выходных, семейных поездок и встреч с друзьями.") }),
     page({ kind: "resource_listing", path: "/houses", slug: "houses", title: "Домики для отдыха", summary: "Выберите домик под компанию, сезон и свой ритм отдыха.", state: "published", parentPath: "/", indexPolicy: "index_follow", heroTitle: "Домики среди сосен", section: listingSection() }),
-    page({ kind: "resource_detail", path: "/houses/sosna", slug: "sosna", title: "Дом «Сосна»", summary: "Уютный домик для семьи или компании до шести гостей.", state: "review", parentPath: "/houses", indexPolicy: "noindex_follow", heroTitle: "Дом «Сосна»", section: textSection("details", "Тёплый деревянный домик для размеренного отдыха на природе. Актуальные цены и доступность приходят из CRM.") }),
-    page({ kind: "landing", path: "/family", slug: "family", title: "Семейный отдых", summary: "Пространство для выходных, которые удобно прожить вместе.", state: "draft", parentPath: "/", indexPolicy: "noindex_follow", heroTitle: "Выходные всей семьёй", section: textSection("family", "Маршрут для семейного дня: домик, прогулка, костёр и программа без спешки.") }),
-    page({ kind: "program_detail", path: "/programs/family", slug: "family", title: "Программа «Семейный день»", summary: "Два часа совместных впечатлений для детей и взрослых.", state: "review", parentPath: null, indexPolicy: "noindex_follow", heroTitle: "Семейный день", section: textSection("program", "Демонстрационная программа локального окружения: встреча, совместная активность и время для общения.") }),
+    page({ kind: "resource_detail", path: "/houses/sosna", slug: "sosna", title: "Дом «Сосна»", summary: "Уютный домик для семьи или компании до шести гостей.", state: "review", parentPath: "/houses", indexPolicy: "noindex_follow", heroTitle: "Дом «Сосна»", section: textSection("Тёплый деревянный домик для размеренного отдыха на природе. Актуальные цены и доступность приходят из CRM.") }),
+    page({ kind: "landing", path: "/family", slug: "family", title: "Семейный отдых", summary: "Пространство для выходных, которые удобно прожить вместе.", state: "draft", parentPath: "/", indexPolicy: "noindex_follow", heroTitle: "Выходные всей семьёй", section: textSection("Маршрут для семейного дня: домик, прогулка, костёр и программа без спешки.") }),
+    page({ kind: "program_detail", path: "/programs/family", slug: "family", title: "Программа «Семейный день»", summary: "Два часа совместных впечатлений для детей и взрослых.", state: "review", parentPath: null, indexPolicy: "noindex_follow", heroTitle: "Семейный день", section: textSection("Демонстрационная программа локального окружения: встреча, совместная активность и время для общения.") }),
   ]
 
   const nodes = dataSource.getRepository(CmsNodeEntity)
@@ -165,11 +165,11 @@ function page(input: Omit<DemoPage, "hero" | "seo" | "sections"> & { indexPolicy
 }
 
 function hero(title: string) {
-  return { variant: "default" as const, eyebrow: "Свистоплясово", title, subtitle: null, backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null, overlay: "soft" as const, align: "left" as const, actions: [{ id: randomUUID(), label: "Посмотреть домики", href: "/houses", target: "_self" as const, style: "primary" as const, enabled: true }], slides: [], badge: null, featureCards: [], autoplayMs: null }
+  return { variant: "default" as const, eyebrow: "Свистоплясово", title, subtitle: null, backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null, overlay: "soft" as const, align: "left" as const, actions: [{ id: randomUUID(), label: "Посмотреть домики", href: "/houses", target: "_self" as const, style: "primary" as const, enabled: false }], slides: [], badge: null, featureCards: [], autoplayMs: null }
 }
 
-function textSection(key: string, content: string): CmsSection {
-  return { id: randomUUID(), key, renderer: "rich-text", rendererVersion: "site-ui@1", schemaVersion: 1, order: 20, policy: { mode: "override", patch: { scalars: { content: { operation: "replace", value: content } }, objects: {}, keyedArrays: {} } } }
+function textSection(content: string): CmsSection {
+  return { id: randomUUID(), key: "body", renderer: "editorial-content", rendererVersion: "1", schemaVersion: 1, order: 20, policy: { mode: "override", patch: { scalars: { heading: { operation: "replace", value: null }, lead: { operation: "replace", value: null }, blocks: { operation: "replace", value: [{ type: "paragraph", text: content }] }, links: { operation: "replace", value: [] } }, objects: {}, keyedArrays: {} } } }
 }
 
 function listingSection(): CmsSection {

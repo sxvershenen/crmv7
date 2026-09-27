@@ -266,7 +266,7 @@ function CompositionTab({ draft, editable, updateSection, update }: { draft: Edi
   {draft.kind === "home" && !draft.sections.some((section) => section.key === "partners") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createPartnersEditorSection()] })} size="sm" variant="outline">Добавить секцию «Партнёры»</Button>}
   {draft.kind === "home" && !draft.sections.some((section) => section.key === "why-us") && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createWhyUsEditorSection()] })} size="sm" variant="outline">Добавить секцию «О нас»</Button>}
   {draft.kind === "home" && homepageEditableSections.filter((key) => !draft.sections.some((section) => section.key === key)).map((key) => <Button key={key} disabled={!editable} onClick={() => update({ sections: [...draft.sections, createHomepageSectionEditorSection(key)] })} size="sm" variant="outline">Добавить секцию «{homepageSectionLabel(key)}»</Button>)}
-  {(draft.kind === "article" || draft.kind === "landing" || draft.kind === "profile") && !draft.sections.some((section) => section.editorialConfig || section.editorialUnsupported) && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createEditorialSection()] })} size="sm" variant="outline">Добавить текст страницы</Button>}
+  {(draft.kind === "home" || draft.kind === "article" || draft.kind === "landing" || draft.kind === "profile") && !draft.sections.some((section) => section.editorialConfig || section.editorialUnsupported) && <Button disabled={!editable} onClick={() => update({ sections: [...draft.sections, createEditorialSection()] })} size="sm" variant="outline">Добавить текст страницы</Button>}
   </div></EditorSection>
 }
 
