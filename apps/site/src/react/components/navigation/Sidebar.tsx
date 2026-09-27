@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import { ArrowRight, CalendarCheck, ChevronLeft, Leaf, Phone, Send } from "lucide-react";
 import type { SiteBrandConfig, SiteNavigationItem } from "@crm/site-ui";
 import { DEFAULT_PUBLIC_NAVIGATION } from "../../../data/publicContentDefaults";
@@ -31,10 +31,12 @@ export function Sidebar({
   const [bookingOpen, setBookingOpen] = useState(false);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const go = (href: string, external?: boolean) => {
-    if (!external && href.startsWith("/#")) onNavigate(href.slice(2));
-    else if (external) window.open(href, "_blank", "noopener,noreferrer");
-    else window.location.assign(href);
+  const followAnchor = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.currentTarget.target === "_blank" || !href.startsWith("/#") || window.location.pathname !== "/") return;
+    const sectionId = href.slice(2);
+    if (!document.getElementById(sectionId)) return;
+    event.preventDefault();
+    onNavigate(sectionId);
   };
   const keep = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); };
   const closeSoon = () => { leaveTimer.current = setTimeout(() => setHovered(null), 180); };
@@ -45,22 +47,22 @@ export function Sidebar({
         <ChevronLeft size={16} className={`transition-transform duration-500 ${isCollapsed ? "rotate-180" : ""}`} />
       </button>
 
-      <button type="button" onClick={() => go(brand.href)} className={`flex items-center gap-3 px-6 h-[88px] shrink-0 group text-left ${isCollapsed ? "justify-center !px-0" : ""}`}>
+      <a href={brand.href} className={`flex items-center gap-3 px-6 h-[88px] shrink-0 group text-left ${isCollapsed ? "justify-center !px-0" : ""}`}>
         <span className="icon-tile !bg-green !text-white !w-10 !h-10 group-hover:-rotate-[8deg] transition-transform duration-500" style={configuredColors ? { backgroundColor: brand.color } : undefined} aria-label={brand.mark}><Leaf size={19} /></span>
         {!isCollapsed ? <span className="flex flex-col whitespace-nowrap overflow-hidden"><span className="text-[15px] font-semibold tracking-[-.5px] leading-none">{brand.title}</span><span className="text-[11px] text-ink-3 mt-1">{brand.subtitle}</span></span> : null}
-      </button>
+      </a>
 
       <nav className="flex-1 px-4 pt-2 flex flex-col gap-1">
         {items.map((item) => {
           const open = hovered === item.id;
           return <div key={item.id} className="relative" onFocusCapture={() => { keep(); setHovered(item.id); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeSoon(); }} onMouseEnter={() => { keep(); setHovered(item.id); }} onMouseLeave={closeSoon}>
-            <button type="button" onClick={() => go(item.href, item.external)} className={`nav-item w-full ${open ? "open" : ""} ${isCollapsed ? "justify-center !px-0" : ""}`} title={isCollapsed ? item.label : undefined}>
+            <a href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noopener noreferrer" : undefined} onClick={(event) => followAnchor(event, item.href)} className={`nav-item w-full ${open ? "open" : ""} ${isCollapsed ? "justify-center !px-0" : ""}`} title={isCollapsed ? item.label : undefined}>
               <span className="icon-tile"><NavigationIcon icon={item.icon} color={configuredColors ? item.color : undefined} /></span>
               {!isCollapsed ? <><span className="flex-1 whitespace-nowrap text-left">{item.label}</span><ArrowRight size={13} className={`text-ink-3 transition-all duration-300 ${open ? "opacity-100 rotate-90" : "opacity-0 rotate-0"}`} /></> : null}
-            </button>
-            {open && item.children.length ? <div className="absolute left-full top-0 pl-3 z-[70]" onMouseEnter={keep} onMouseLeave={closeSoon}><div className="dropdown-panel !p-2 w-[300px] max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-xl"><div className="flex items-center gap-3 px-3 pt-2 pb-3"><span className="icon-tile !bg-green-soft !text-green-deep"><NavigationIcon icon={item.icon} /></span><div><div className="text-[14px] font-semibold tracking-[-.4px]">{item.label}</div></div></div><div className="hair mx-3 mb-1" />{item.children.map((child) => <div key={child.id}>
-              <button type="button" onClick={() => { setHovered(null); go(child.href, child.external); }} className="dropdown-item justify-between group/i"><span>{child.label}</span><ArrowRight size={13} className="opacity-0 group-hover/i:opacity-100 group-hover/i:-rotate-45 transition-all" /></button>
-              {child.children?.length ? <div className="ml-4 border-l border-border pl-2">{child.children.map((grandchild) => <button key={grandchild.id} type="button" onClick={() => { setHovered(null); go(grandchild.href, grandchild.external); }} className="dropdown-item w-full text-left"><span>{grandchild.label}</span></button>)}</div> : null}
+            </a>
+            {item.children.length ? <div hidden={!open} className="absolute left-full top-0 pl-3 z-[70]" onMouseEnter={keep} onMouseLeave={closeSoon}><div className="dropdown-panel !p-2 w-[300px] max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-xl"><div className="flex items-center gap-3 px-3 pt-2 pb-3"><span className="icon-tile !bg-green-soft !text-green-deep"><NavigationIcon icon={item.icon} /></span><div><div className="text-[14px] font-semibold tracking-[-.4px]">{item.label}</div></div></div><div className="hair mx-3 mb-1" />{item.children.map((child) => <div key={child.id}>
+              <a href={child.href} target={child.external ? "_blank" : undefined} rel={child.external ? "noopener noreferrer" : undefined} onClick={(event) => { setHovered(null); followAnchor(event, child.href); }} className="dropdown-item justify-between group/i"><span>{child.label}</span><ArrowRight size={13} className="opacity-0 group-hover/i:opacity-100 group-hover/i:-rotate-45 transition-all" /></a>
+              {child.children?.length ? <div className="ml-4 border-l border-border pl-2">{child.children.map((grandchild) => <a key={grandchild.id} href={grandchild.href} target={grandchild.external ? "_blank" : undefined} rel={grandchild.external ? "noopener noreferrer" : undefined} onClick={(event) => { setHovered(null); followAnchor(event, grandchild.href); }} className="dropdown-item w-full text-left"><span>{grandchild.label}</span></a>)}</div> : null}
             </div>)}</div></div> : null}
           </div>;
         })}

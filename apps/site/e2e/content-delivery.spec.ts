@@ -92,6 +92,7 @@ test("respects published empty footer and hidden nested menu links", async ({ pa
   expect(response.status()).toBe(200)
   const html = await response.text()
   expect(html).toContain("Видимая ссылка")
+  expect(html).toContain('href="/cms-test"')
   expect(html).not.toContain("Скрытая ссылка")
   expect(html).not.toContain("Скрытый третий уровень")
 
@@ -100,21 +101,40 @@ test("respects published empty footer and hidden nested menu links", async ({ pa
   await expect(page.locator("aside[aria-label='Основная навигация']")).not.toContainText("Только телефон")
 })
 
+test("published desktop menu links work without JavaScript", async ({ browser, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "Desktop navigation fallback")
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
+  const context = await browser.newContext({ baseURL: "http://127.0.0.1:4327", javaScriptEnabled: false, viewport: { width: 1440, height: 1000 } })
+  try {
+    const page = await context.newPage()
+    await page.goto("/")
+    const link = page.getByRole("complementary", { name: "Основная навигация" }).getByRole("link", { name: "Раздел из CMS" })
+    await expect(link).toHaveAttribute("href", "/cms-test")
+    await link.click()
+    await expect(page).toHaveURL(/\/cms-test$/)
+  } finally {
+    await context.close()
+  }
+})
+
 test("opens published nested mobile links with keyboard and follows their destination", async ({ page, request }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium", "Mobile drawer interaction")
   await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
   await page.goto("/")
   await page.getByRole("button", { name: "Меню", exact: true }).click()
   const drawer = page.getByRole("dialog", { name: "Навигация по сайту" })
+  await expect(drawer.getByRole("button", { name: "Закрыть меню" })).toBeFocused()
 
   const openRoot = drawer.getByRole("button", { name: "Показать подпункты: Раздел из CMS" })
+  await openRoot.focus()
+  await expect(openRoot).toBeFocused()
   await openRoot.press("Enter")
-  await expect(drawer.getByRole("button", { name: "Видимая ссылка" })).toBeVisible()
-  await expect(drawer.getByRole("button", { name: "Скрытая ссылка" })).toHaveCount(0)
+  await expect(drawer.getByRole("link", { name: "Видимая ссылка" })).toBeVisible()
+  await expect(drawer.getByRole("link", { name: "Скрытая ссылка" })).toHaveCount(0)
   await drawer.getByRole("button", { name: "Показать подпункты: Группа" }).click()
-  await expect(drawer.getByRole("button", { name: "Доступный третий уровень" })).toBeVisible()
+  await expect(drawer.getByRole("link", { name: "Доступный третий уровень" })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await drawer.getByRole("button", { name: "Доступный третий уровень" }).click()
+  await drawer.getByRole("link", { name: "Доступный третий уровень" }).click()
   await expect(page).toHaveURL(/\/cms-test$/)
 })
 
@@ -123,11 +143,11 @@ test("opens third-level published desktop links by keyboard", async ({ page, req
   await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
   await page.goto("/")
   const navigation = page.getByRole("complementary", { name: "Основная навигация" })
-  await navigation.getByRole("button", { name: "Раздел из CMS" }).focus()
+  await navigation.getByRole("link", { name: "Раздел из CMS" }).focus()
 
-  await expect(navigation.getByRole("button", { name: "Доступный третий уровень" })).toBeVisible()
-  await expect(navigation.getByRole("button", { name: "Скрытый третий уровень" })).toHaveCount(0)
-  await navigation.getByRole("button", { name: "Доступный третий уровень" }).click()
+  await expect(navigation.getByRole("link", { name: "Доступный третий уровень" })).toBeVisible()
+  await expect(navigation.getByRole("link", { name: "Скрытый третий уровень" })).toHaveCount(0)
+  await navigation.getByRole("link", { name: "Доступный третий уровень" }).click()
   await expect(page).toHaveURL(/\/cms-test$/)
 })
 

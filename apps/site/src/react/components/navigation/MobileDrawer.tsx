@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, type MouseEvent } from 'react';
 import { ChevronDown, X, Home, Flame, Sparkles, Layers, CalendarDays, Compass, MapPin, Phone, Send, Calculator } from 'lucide-react';
 import type { SiteNavigationChild, SiteNavigationConfig, SiteNavigationItem } from '@crm/site-ui';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
@@ -39,17 +39,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
     ? (navigation.mobileItems?.length ? navigation.mobileItems : navigation.items)
     : null;
 
-  const followLink = (href: string, external?: boolean) => {
+  const followLink = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
     onClose();
-    if (!external && href.startsWith("/#")) {
-      onNavigate(href.slice(2));
-      return;
-    }
-    if (external) {
-      window.open(href, "_blank", "noopener,noreferrer");
-      return;
-    }
-    window.location.assign(href);
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.currentTarget.target === "_blank" || !href.startsWith("/#") || window.location.pathname !== "/") return;
+    const sectionId = href.slice(2);
+    if (!document.getElementById(sectionId)) return;
+    event.preventDefault();
+    onNavigate(sectionId);
   };
 
   return (
@@ -80,19 +76,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           {/* Links list */}
           <div className="flex flex-col gap-1">
             {configuredLinks ? configuredLinks.map((link) => <MobileNavigationRow followLink={followLink} item={link} key={link.id} />) : defaultLinks.map((link) => (
-              <button
+              <a
                 key={link.id}
-                onClick={() => {
-                  onNavigate(link.id);
-                  onClose();
-                }}
+                href={`/#${link.id}`}
+                onClick={(event) => followLink(event, `/#${link.id}`)}
                 className="nav-item w-full !bg-bg text-left"
               >
                 <div className="icon-tile !bg-surface !w-9 !h-9">
                   {link.icon}
                 </div>
                 <span>{link.label}</span>
-              </button>
+              </a>
             ))}
           </div>
         </div>
@@ -136,17 +130,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   );
 };
 
-function MobileNavigationRow({ item, followLink }: { item: SiteNavigationItem | SiteNavigationChild; followLink: (href: string, external?: boolean) => void }) {
+function MobileNavigationRow({ item, followLink }: { item: SiteNavigationItem | SiteNavigationChild; followLink: (event: MouseEvent<HTMLAnchorElement>, href: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const children = item.children ?? [];
   const submenuId = `mobile-nav-${item.id}`;
 
   return <div>
     <div className="flex items-stretch gap-1">
-      <button type="button" onClick={() => followLink(item.href, item.external)} className="nav-item min-w-0 flex-1 !bg-bg text-left">
+      <a href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noopener noreferrer" : undefined} onClick={(event) => followLink(event, item.href)} className="nav-item min-w-0 flex-1 !bg-bg text-left">
         <span className="icon-tile !bg-surface !w-9 !h-9"><NavigationIcon icon={item.icon ?? "arrow-right"} color={item.color} /></span>
         <span className="min-w-0 truncate">{item.label}</span>
-      </button>
+      </a>
       {children.length > 0 ? <button type="button" aria-controls={expanded ? submenuId : undefined} aria-expanded={expanded} aria-label={`${expanded ? "Скрыть" : "Показать"} подпункты: ${item.label}`} onClick={() => setExpanded((value) => !value)} className="icon-tile !w-11 !h-11 shrink-0 !bg-bg">
         <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button> : null}
