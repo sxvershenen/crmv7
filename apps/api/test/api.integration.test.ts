@@ -3170,7 +3170,8 @@ describe.sequential("internal API + PostgreSQL", () => {
       originalFilename: "hero-v2.png", mimeType: "image/png", width: 12, height: 8, usageCount: 2,
     })
     expect(replaced.body.variants.map((variant: { id: string }) => variant.id)).not.toEqual(expect.arrayContaining(uploaded.body.variants.map((variant: { id: string }) => variant.id)))
-    await request(app.getHttpServer()).get(webp.url).expect(404)
+    const oldPublishedVariant = await request(app.getHttpServer()).get(webp.url).expect(200).expect("content-type", "image/webp")
+    expect(oldPublishedVariant.body).toEqual(delivered.body)
     const replacementWebp = replaced.body.variants.find((variant: { format: string }) => variant.format === "webp")
     await request(app.getHttpServer()).get(replacementWebp.url).expect(200).expect("content-type", "image/webp")
     expect(await dataSource.query(`SELECT revision FROM media_blobs WHERE asset_id = $1 ORDER BY revision`, [assetId])).toEqual([{ revision: 1 }, { revision: 2 }])

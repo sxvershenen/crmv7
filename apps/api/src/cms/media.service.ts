@@ -179,6 +179,9 @@ export class MediaService {
       if (!asset) throw new NotFoundException({ code: "MEDIA_ASSET_NOT_FOUND", message: "Asset не найден" })
       if (asset.state !== "ready" || !asset.currentBlobId) throw new ConflictException({ code: "MEDIA_REPLACEMENT_NOT_READY", message: "Заменить можно только ready asset" })
       if (asset.version !== input.expectedVersion) throw new ConflictException({ code: "VERSION_CONFLICT", message: "Asset уже изменён" })
+      const activeReplacement = await manager.getRepository(MediaUploadEntity).createQueryBuilder("upload")
+        .where("upload.asset_id = :assetId AND upload.purpose = 'replacement' AND upload.state = 'processing'", { assetId }).getOne()
+      if (activeReplacement) throw new ConflictException({ code: "MEDIA_REPLACEMENT_IN_PROGRESS", message: "Замена файла уже выполняется; проверьте её статус" })
       const duplicate = await manager.getRepository(MediaBlobEntity).findOne({ where: { checksumSha256: input.checksumSha256 } })
       if (duplicate) throw new ConflictException({
         code: duplicate.assetId === assetId ? "MEDIA_REPLACEMENT_DUPLICATE" : "MEDIA_DUPLICATE",

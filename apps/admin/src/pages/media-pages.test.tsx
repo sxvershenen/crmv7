@@ -73,6 +73,14 @@ it("distinguishes a queued replacement from the still available original", async
   expect(await screen.findByText("Ожидает повторной обработки")).toBeInTheDocument()
   expect(screen.getByText(/Прежняя готовая версия файла остаётся доступной/)).toBeInTheDocument()
   expect(screen.getByText(/15:00:00 МСК/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Заменить" })).toBeDisabled()
+})
+
+it("allows another replacement after the previous attempt failed", async () => {
+  getAsset.mockResolvedValue({ ...asset, processing: { state: "failed", purpose: "replacement", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_DECODE_FAILED" } })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText("Замена файла не выполнена")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Заменить" })).toBeEnabled()
 })
 
 it("keeps metadata edits after a failed save", async () => {
