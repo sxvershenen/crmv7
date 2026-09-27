@@ -31,9 +31,12 @@ it("separates the active publication from the working SEO revision", async () =>
   vi.spyOn(cmsRepository, "getPublicationStatus").mockResolvedValue({
     active: true, path: "/family", revisionId: "00000000-0000-4000-8000-000000000010",
     activeReleaseId: "00000000-0000-4000-8000-000000000020", activeReleaseVersion: 1,
+    publishedSeo: { title: "Старый заголовок", description: "Старое описание", indexPolicy: "noindex_follow", canonical: { mode: "custom", url: "https://example.org/family" } },
   })
   renderSeo("/seo/pages/landing-family")
   expect(await screen.findByText("В активной публикации: /family")).toBeInTheDocument()
+  expect(screen.getByText("От рабочей редакции отличаются: заголовок, описание, индексация, canonical.")).toBeInTheDocument()
+  expect(screen.getByText("Старый заголовок")).toBeInTheDocument()
   expect(screen.getByText(/SEO-поля ниже относятся к рабочей редакции CMS/)).toBeInTheDocument()
 })
 

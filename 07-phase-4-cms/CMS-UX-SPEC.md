@@ -359,7 +359,7 @@ Actions: create draft workspace, edit, format, save draft, validate, typecheck/l
 
 ## 16. SEO, marketing и redirects UI
 
-Текущий `/seo` читает `currentSeo` списка content nodes: число рабочих страниц, title/description warnings, index policy и canonical. `/seo/pages/:nodeId` раскрывает проверку и ведёт в canonical editor `?tab=seo`. Это отчёт по рабочей редакции, а не по active release или поисковой выдаче; остальные проверки ниже остаются scope C10.
+Текущий `/seo` читает `currentSeo` списка content nodes: число рабочих страниц, title/description warnings, index policy и canonical. `/seo/pages/:nodeId` отдельно показывает SEO четырёх полей из immutable active release item, сравнивает его с рабочей редакцией и ведёт в canonical editor `?tab=seo`. Если опубликованный payload не читается, сравнение явно недоступно; принадлежность странице к active release и доставку сайта не смешивать. Остальные проверки ниже остаются scope C10.
 
 Текущий `/redirects` показывает только реальные 301 из public route manifest активной публикации: старый адрес, конечный адрес, поиск и ссылку на публикацию. При отсутствии публикации список пуст, ошибка доставки показывается отдельно. Редактирования и ручного создания пока нет; планируемый реестр и проверки slug changes остаются в C10.
 

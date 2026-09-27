@@ -37,6 +37,8 @@ export function SeoPage() {
     const node = state.data.find((item) => item.id === nodeId)
     if (!node) return <PageFrame><PageState icon={IconReportSearch} title="Страница не найдена"><Link className="text-primary underline" to="/seo">К списку SEO</Link></PageState></PageFrame>
     const issues = seoIssues(node)
+    const publishedSeo = !publication.loading && !publication.error && publication.data?.active ? publication.data.publishedSeo : null
+    const differences = publishedSeo && node.seo ? seoDifferences(node, publishedSeo, publication.data?.path ?? node.path) : []
     return <PageFrame>
       <Link className="mb-3 inline-flex items-center gap-1 text-xs text-primary hover:underline" to="/seo"><IconArrowLeft className="size-4" />Все страницы</Link>
       <PageHeading description={`${node.path} · проверка рабочей редакции`} title={`SEO: ${node.title}`} />
@@ -46,11 +48,23 @@ export function SeoPage() {
         {publication.error ? <p className="mt-1 text-xs text-danger" role="alert">{publication.error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">SEO-поля ниже относятся к рабочей редакции CMS. Опубликованная версия может отличаться; доставка сайта здесь не проверяется.</p>
       </section>
+      {!publication.loading && !publication.error && publication.data?.active ? <section className="mb-4 rounded-xl border bg-background p-4">
+        <h3 className="text-xs font-semibold">SEO активной публикации</h3>
+        {publishedSeo ? <>
+          <p className="mt-2 text-xs text-muted-foreground">{!node.seo ? "SEO рабочей редакции недоступно для сравнения." : differences.length ? `От рабочей редакции отличаются: ${differences.join(", ")}.` : "Показанные ниже SEO-поля совпадают с рабочей редакцией."}</p>
+          <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+            <div><dt className="text-muted-foreground">Заголовок</dt><dd className="mt-1 break-words font-medium">{publishedSeo.title}</dd></div>
+            <div><dt className="text-muted-foreground">Описание</dt><dd className="mt-1 break-words font-medium">{publishedSeo.description}</dd></div>
+            <div><dt className="text-muted-foreground">Индексация</dt><dd className="mt-1 font-medium">{indexPolicyLabel(publishedSeo.indexPolicy)}</dd></div>
+            <div><dt className="text-muted-foreground">Canonical</dt><dd className="mt-1 break-all font-medium">{canonicalLabel(publishedSeo.canonical, publication.data.path ?? node.path)}</dd></div>
+          </dl>
+        </> : <p className="mt-2 text-xs text-warning-foreground">SEO опубликованной версии не удалось прочитать. Статус страницы подтверждён, но сравнение недоступно.</p>}
+      </section> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Поисковый заголовок</h3><p className="mt-2 break-words text-sm">{node.seo?.title || "Не заполнен"}</p><p className="mt-2 text-xs text-muted-foreground">{node.seo?.title.length ?? 0} символов · ориентир до 60</p></section>
         <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Описание</h3><p className="mt-2 break-words text-sm">{node.seo?.description || "Не заполнено"}</p><p className="mt-2 text-xs text-muted-foreground">{node.seo?.description.length ?? 0} символов · ориентир до 160</p></section>
-        <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Индексация</h3><p className="mt-2 text-sm">{node.seo?.indexPolicy === "index_follow" ? "Индексировать" : node.seo ? "Не индексировать" : "Нет данных"}</p></section>
-        <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Canonical</h3><p className="mt-2 break-all text-sm">{node.seo?.canonical.mode === "custom" ? node.seo.canonical.url : node.seo ? `Собственный адрес: ${node.path}` : "Нет данных"}</p></section>
+        <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Индексация</h3><p className="mt-2 text-sm">{node.seo ? indexPolicyLabel(node.seo.indexPolicy) : "Нет данных"}</p></section>
+        <section className="rounded-xl border bg-background p-4"><h3 className="text-xs font-semibold">Canonical</h3><p className="mt-2 break-all text-sm">{node.seo ? canonicalLabel(node.seo.canonical, node.path) : "Нет данных"}</p></section>
       </div>
       <section className="mt-4 rounded-xl border bg-background p-4"><h3 className="text-sm font-semibold">Что проверить</h3>{issues.length ? <ul className="mt-3 space-y-2">{issues.map((issue) => <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 p-3 text-xs" key={`${issue.field}-${issue.message}`}><span><strong>{issue.field}:</strong> {issue.message}</span><Link className="inline-flex items-center gap-1 text-primary hover:underline" to={editorHref(node)}>Исправить<IconArrowRight className="size-4" /></Link></li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">По доступным проверкам замечаний нет.</p>}</section>
       <p className="mt-3 text-xs text-muted-foreground">Проверяются только длина и заполнение title/description. Ссылки, изображения, schema, sitemap и поисковые позиции пока не входят в этот отчёт.</p>
@@ -82,4 +96,23 @@ function publicationLabel(state: { data?: CmsNodePublicationStatus | null; error
   if (state.loading || !state.data) return "Проверяем активную публикацию…"
   if (!state.data.active) return "Не входит в активную публикацию"
   return state.data.path ? `В активной публикации: ${state.data.path}` : "В активной публикации; адрес не получен"
+}
+
+function indexPolicyLabel(policy: NonNullable<ContentNode["seo"]>["indexPolicy"]) {
+  return policy === "index_follow" ? "Индексировать и переходить по ссылкам" : policy === "noindex_follow" ? "Не индексировать; переходить по ссылкам" : "Не индексировать и не переходить по ссылкам"
+}
+
+function canonicalLabel(canonical: NonNullable<ContentNode["seo"]>["canonical"], path: string) {
+  return canonical.mode === "custom" ? canonical.url : `Собственный адрес: ${path}`
+}
+
+function seoDifferences(node: ContentNode, published: NonNullable<CmsNodePublicationStatus["publishedSeo"]>, publishedPath: string) {
+  const draft = node.seo
+  if (!draft) return []
+  return [
+    draft.title !== published.title ? "заголовок" : null,
+    draft.description !== published.description ? "описание" : null,
+    draft.indexPolicy !== published.indexPolicy ? "индексация" : null,
+    canonicalLabel(draft.canonical, node.path) !== canonicalLabel(published.canonical, publishedPath) ? "canonical" : null,
+  ].filter((field): field is string => field !== null)
 }

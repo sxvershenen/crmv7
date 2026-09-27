@@ -134,12 +134,17 @@ export class CmsPublicationService {
     const item = active.releaseId
       ? await manager.getRepository(CmsReleaseItemEntity).findOneBy({ releaseId: active.releaseId, nodeId })
       : null
+    const publishedSeo = item ? SeoMetadataSchema.safeParse(item.resolvedContent?.seo) : null
     return CmsNodePublicationStatusSchema.parse({
       active: item !== null,
       path: item?.path ?? null,
       revisionId: item?.revisionId ?? null,
       activeReleaseId: active.releaseId,
       activeReleaseVersion: active.version,
+      publishedSeo: publishedSeo?.success ? {
+        title: publishedSeo.data.title, description: publishedSeo.data.description,
+        indexPolicy: publishedSeo.data.indexPolicy, canonical: publishedSeo.data.canonical,
+      } : null,
     })
   }
 

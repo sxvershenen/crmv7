@@ -102,7 +102,7 @@ describe("CmsPublicationService republish selection", () => {
 
 describe("CmsPublicationService node publication status", () => {
   it.each([true, false])("reads active-release membership when present=%s, regardless of old published revisions", async (present) => {
-    const item = present ? { path: "/family", revisionId: rootRevisionId } : null
+    const item = present ? { path: "/family", revisionId: rootRevisionId, resolvedContent: { ...publishedHome, path: "/family" } } : null
     const nodeLookup = vi.fn().mockResolvedValue({ id: rootId, status: "archived" })
     const itemLookup = vi.fn().mockResolvedValue(item)
     const manager = { getRepository: (entity: unknown) => entity === CmsNodeEntity ? { findOneBy: nodeLookup }
@@ -110,8 +110,17 @@ describe("CmsPublicationService node publication status", () => {
       : entity === CmsReleaseItemEntity ? { findOneBy: itemLookup } : {} }
     const service = new CmsPublicationService({ manager } as never)
     const result = await service.nodePublicationStatus(rootId, { capabilities: { canViewContent: true } } as never)
-    expect(result).toEqual({ active: present, path: present ? "/family" : null, revisionId: present ? rootRevisionId : null, activeReleaseId: childId, activeReleaseVersion: 7 })
+    expect(result).toEqual({ active: present, path: present ? "/family" : null, revisionId: present ? rootRevisionId : null, activeReleaseId: childId, activeReleaseVersion: 7,
+      publishedSeo: present ? { title: "Главная", description: "Описание", indexPolicy: "index_follow", canonical: { mode: "self" } } : null })
     expect(itemLookup).toHaveBeenCalledWith({ releaseId: childId, nodeId: rootId })
+  })
+
+  it("keeps membership visible when a stored release has invalid SEO metadata", async () => {
+    const manager = { getRepository: (entity: unknown) => entity === CmsNodeEntity ? { findOneBy: vi.fn().mockResolvedValue({ id: rootId }) }
+      : entity === CmsActiveReleaseEntity ? { findOneBy: vi.fn().mockResolvedValue({ releaseId: childId, version: 7 }) }
+      : entity === CmsReleaseItemEntity ? { findOneBy: vi.fn().mockResolvedValue({ path: "/family", revisionId: rootRevisionId, resolvedContent: { seo: { title: "Некорректно" } } }) } : {} }
+    const status = await new CmsPublicationService({ manager } as never).nodePublicationStatus(rootId, { capabilities: { canViewContent: true } } as never)
+    expect(status).toMatchObject({ active: true, path: "/family", publishedSeo: null })
   })
 })
 

@@ -321,6 +321,7 @@ export const CmsNodePublicationStatusSchema = z.object({
   revisionId: IdSchema.nullable(),
   activeReleaseId: IdSchema.nullable(),
   activeReleaseVersion: VersionSchema,
+  publishedSeo: SeoMetadataSchema.pick({ title: true, description: true, indexPolicy: true, canonical: true }).strict().nullable().optional(),
 }).strict();
 export type CmsNodePublicationStatus = z.infer<typeof CmsNodePublicationStatusSchema>;
 
