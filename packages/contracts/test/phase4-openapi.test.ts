@@ -38,6 +38,8 @@ describe("Phase 4 OpenAPI namespace isolation", () => {
     expect(paths["/auth/session"]?.get?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/auth/change-password"]?.post?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/content/nodes"]?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(paths["/content/home-offering-choices"]?.get?.security).toEqual([{ sessionCookie: [] }]);
+    expect(publicOpenApiDocument.paths?.["/content/home-offering-choices"]).toBeUndefined();
     expect(paths["/content/nodes/{id}"]?.patch?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/media/uploads"]?.post?.security).toEqual([{ sessionCookie: [] }]);
     expect(paths["/media/assets/{assetId}/replacements"]?.post?.security).toEqual([{ sessionCookie: [] }]);

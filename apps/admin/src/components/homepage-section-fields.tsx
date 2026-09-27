@@ -2,6 +2,7 @@ import { CmsHomeSectionConfigSchema, type CmsHomeSectionDraft } from "@crm/contr
 import { Alert, AlertDescription, AlertTitle, FormField, Input, Textarea } from "@crm/ui"
 
 import { HomepageDetailsFields } from "./homepage-details-fields"
+import { HomeOfferingsField } from "./home-offerings-field"
 
 export function HomepageSectionFields({ id, value, editable, onChange, sectionKey }: { sectionKey?: string; id: string; value: CmsHomeSectionDraft; editable: boolean; onChange: (value: CmsHomeSectionDraft) => void }) {
   const validation = CmsHomeSectionConfigSchema.safeParse(value)
@@ -21,6 +22,7 @@ export function HomepageSectionFields({ id, value, editable, onChange, sectionKe
       <FormField htmlFor={`${id}-action-href`} label="Ссылка кнопки"><Input id={`${id}-action-href`} maxLength={2048} placeholder="/blog" value={value.action?.href ?? ""} onChange={(event) => updateAction({ href: event.target.value })} /></FormField>
     </div>
     <HomepageDetailsFields id={id} {...(sectionKey ? { sectionKey } : {})} value={value} onChange={onChange} />
+    {(sectionKey === "houses" || sectionKey === "programs" || sectionKey === "venues") && <HomeOfferingsField kind={sectionKey === "houses" ? "house" : sectionKey === "programs" ? "program" : "venue"} ids={value.selectedOfferingIds} editable={editable} onChange={(selectedOfferingIds) => onChange({ ...value, selectedOfferingIds })} />}
     {!validation.success && <Alert><AlertTitle>Перед публикацией</AlertTitle><AlertDescription>{validation.error.issues[0]?.message}. Черновик можно сохранить.</AlertDescription></Alert>}
   </fieldset>
 }

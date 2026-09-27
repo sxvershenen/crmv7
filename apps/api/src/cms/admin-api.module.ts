@@ -15,6 +15,7 @@ import { CmsDashboardController } from "./cms-dashboard.controller.js"
 import { CmsDashboardService } from "./cms-dashboard.service.js"
 import { CmsPreviewController } from "./cms-preview.controller.js"
 import { CmsPromotionChoicesController } from "./cms-promotion-choices.controller.js"
+import { CmsHomeOfferingChoicesController } from "./cms-home-offering-choices.controller.js"
 import { CmsPublicationController } from "./cms-publication.controller.js"
 import { CmsPublicationService } from "./cms-publication.service.js"
 import { PublicContentService } from "./public-content.service.js"
@@ -40,6 +41,7 @@ import { MediaStorageService } from "./media-storage.service.js"
     CmsDashboardController,
     CmsPreviewController,
     CmsPromotionChoicesController,
+    CmsHomeOfferingChoicesController,
     CmsPublicationController,
     CmsSiteSettingsController,
     MediaController,

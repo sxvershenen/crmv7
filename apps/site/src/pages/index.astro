@@ -20,25 +20,27 @@ import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
 import ContentFailure from "../components/ContentFailure.astro"
-import { fixtureContentEnabled, getDraftPreview, getPublishedRoute, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
+import { fixtureContentEnabled, getDraftPreview, getPreviewHomepageCommerce, getPublishedRoute, getPublishedSiteSettings, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
 import { getHomepageSections } from "../lib/content/homepage-sections"
+import { curatedHomepageItems } from "../lib/content/homepage-commerce"
 
 const previewRequested = Astro.url.searchParams.has("__cms_preview")
 const previewToken = Astro.url.searchParams.get("__cms_preview") ?? ""
 const preview = previewRequested && previewToken.length >= 32 ? await getDraftPreview(previewToken) : null
 const previewDocument = preview?.status === "published" && preview.value.renderable && preview.value.path === "/" && preview.value.page.path === "/" ? preview.value : null
+const previewCommerce = previewDocument ? await getPreviewHomepageCommerce(previewDocument.page.sections) : null
 const result = previewRequested || fixtureContentEnabled ? null : await getPublishedRoute("/")
 const publishedPage = previewRequested ? previewDocument?.page ?? null : result?.status === "published" ? result.value.page : null
 const publishedSiteSettings = previewRequested ? await getPublishedSiteSettings() : result?.status === "published" ? result.value.settings : null
 const fixture = fixtureContentEnabled && !previewRequested
 const homepageSections = getHomepageSections(publishedPage, fixture)
-const commerce = result?.status === "published" ? result.value.commerce : undefined
+const commerce = previewRequested ? previewCommerce?.status === "published" ? previewCommerce.value : undefined : result?.status === "published" ? result.value.commerce : undefined
 Astro.response.headers.set("Cache-Control", "no-store")
 if (previewRequested) {
   Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive")
   Astro.response.headers.set("Referrer-Policy", "no-referrer")
 }
-const failure = previewRequested ? previewDocument ? null : "not_found" : result && result.status !== "published" ? result.status : null
+const failure = previewRequested ? !previewDocument ? "not_found" : previewCommerce?.status !== "published" ? "unavailable" : null : result && result.status !== "published" ? result.status : null
 const contentAvailable = !failure
 if (failure) {
   Astro.response.status = failure === "not_found" ? 404 : 503
@@ -83,10 +85,10 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
-        if (section.key === "houses") return <HousesIsland config={section.config} published={commerce?.houses} {fixture} client:visible />
+        if (section.key === "houses") return <HousesIsland config={section.config} published={curatedHomepageItems(commerce?.houses, section.config.selectedOfferingIds)} {fixture} client:visible />
         if (section.key === "sauna-chan" && fixture) return <SaunaChanIsland config={section.config} client:visible />
-        if (section.key === "programs") return <ProgramsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
-        if (section.key === "venues") return <VenuesIsland config={section.config} published={commerce?.venues} {fixture} client:visible />
+        if (section.key === "programs") return <ProgramsIsland config={section.config} published={curatedHomepageItems(commerce?.programs, section.config.selectedOfferingIds)} {fixture} client:visible />
+        if (section.key === "venues") return <VenuesIsland config={section.config} published={curatedHomepageItems(commerce?.venues, section.config.selectedOfferingIds)} {fixture} client:visible />
         if (section.key === "blog") return <BlogSection config={section.config} />
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
         if (section.key === "reviews") return <ReviewsIsland config={section.config} {fixture} client:visible />

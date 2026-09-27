@@ -85,6 +85,19 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("loads all CRM card choices for CMS selection", async () => {
+    const client = clientMock()
+    const firstId = "11111111-1111-4111-8111-111111111111"
+    const secondId = "22222222-2222-4222-8222-222222222222"
+    client.get.mockResolvedValueOnce({ items: [{ offeringId: firstId, title: "Первый", state: "active" }], nextCursor: firstId })
+      .mockResolvedValueOnce({ items: [{ offeringId: secondId, title: "Второй", state: "draft" }], nextCursor: null })
+    await expect(new ApiCmsRepository(client as never).getHomeOfferingChoices("house")).resolves.toEqual([
+      { offeringId: firstId, title: "Первый", state: "active" }, { offeringId: secondId, title: "Второй", state: "draft" },
+    ])
+    expect(client.get.mock.calls.map(([path]) => path)).toEqual([
+      "/content/home-offering-choices?kind=house", `/content/home-offering-choices?kind=house&cursor=${firstId}`,
+    ])
+  })
   it("reads the active public redirect manifest and distinguishes no publication from a server failure", async () => {
     const repository = new ApiCmsRepository(clientMock() as never)
     const redirect = { sourcePath: "/houses", destinationPath: "/domiki", statusCode: 301 }

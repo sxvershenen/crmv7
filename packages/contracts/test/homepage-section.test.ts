@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CmsHomeSectionConfigSchema, CmsHomeSectionDraftSchema, CmsHomeSectionSchema } from "../src/homepage-section.js"
+import { CmsHomeOfferingChoiceListSchema, CmsHomeSectionConfigSchema, CmsHomeSectionDraftSchema, CmsHomeSectionSchema } from "../src/homepage-section.js"
 
 const config = { eyebrow: "Афиша", title: "Ближайшие события", description: "Повод выбраться из города.", action: { label: "Все события", href: "/events" } }
 const section = { id: "11111111-1111-4111-8111-111111111111", key: "events", renderer: "homepage-section", rendererVersion: "1", schemaVersion: 1, order: 10, config }
@@ -42,5 +42,17 @@ describe("homepage reviews and FAQ", () => {
   it("rejects details attached to another section kind", () => {
     expect(CmsHomeSectionSchema.safeParse({ ...section, config: { ...config, reviews: [review] } }).success).toBe(false)
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, faq: [faq] } }).success).toBe(false)
+  })
+})
+
+describe("manual homepage offerings", () => {
+  const id = "22222222-2222-4222-8222-222222222222"
+  it("keeps ordered CRM references only on supported sections", () => {
+    const selected = { ...config, selectedOfferingIds: [id] }
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "houses", config: selected }).success).toBe(true)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "events", config: selected }).success).toBe(false)
+    expect(CmsHomeSectionConfigSchema.safeParse({ ...config, selectedOfferingIds: [id, id] }).success).toBe(false)
+    expect(CmsHomeSectionConfigSchema.safeParse({ ...config, selectedOfferingIds: ["invalid"] }).success).toBe(false)
+    expect(CmsHomeOfferingChoiceListSchema.safeParse({ items: [{ offeringId: id, title: "Домик", state: "draft" }], nextCursor: null }).success).toBe(true)
   })
 })

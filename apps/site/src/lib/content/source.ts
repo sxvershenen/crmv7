@@ -80,11 +80,39 @@ export function createPublicContentSource(baseUrl: string, request: typeof fetch
     }
   }
 
+  async function collection<T extends { items: { offeringId: string }[]; nextCursor: string | null; releaseId: string; asOf: string }>(path: string, parse: (value: unknown) => T): Promise<ContentResult<T>> {
+    const items: T["items"] = []
+    const cursors = new Set<string>()
+    const ids = new Set<string>()
+    let cursor: string | null = null
+    let first: T | null = null
+    let asOf = ""
+    for (let page = 0; page < 100; page++) {
+      const query = new URLSearchParams({ limit: "100" })
+      if (cursor) query.set("cursor", cursor)
+      const result = await document(`${path}?${query}`, parse)
+      if (result.status !== "published") return { status: "unavailable" }
+      if (first && first.releaseId !== result.value.releaseId) return { status: "unavailable" }
+      first ??= result.value
+      asOf = result.value.asOf > asOf ? result.value.asOf : asOf
+      for (const item of result.value.items) {
+        if (ids.has(item.offeringId)) return { status: "unavailable" }
+        ids.add(item.offeringId)
+        items.push(item)
+      }
+      if (!result.value.nextCursor) return { status: "published", value: { ...first, items, nextCursor: null, asOf } }
+      if (cursors.has(result.value.nextCursor) || !result.value.items.length) return { status: "unavailable" }
+      cursors.add(result.value.nextCursor)
+      cursor = result.value.nextCursor
+    }
+    return { status: "unavailable" }
+  }
+
   return {
-    houses: () => document("/offerings/houses?limit=100", (value) => PublicHouseListResponseSchema.parse(value)),
-    programs: () => document("/offerings/programs?limit=100", (value) => PublicProgramListResponseSchema.parse(value)),
-    venues: () => document("/offerings/venues?limit=100", (value) => PublicVenueListResponseSchema.parse(value)),
-    addons: () => document("/offerings/addons?limit=100", (value) => PublicAddOnListResponseSchema.parse(value)),
+    houses: () => collection("/offerings/houses", (value) => PublicHouseListResponseSchema.parse(value)),
+    programs: () => collection("/offerings/programs", (value) => PublicProgramListResponseSchema.parse(value)),
+    venues: () => collection("/offerings/venues", (value) => PublicVenueListResponseSchema.parse(value)),
+    addons: () => collection("/offerings/addons", (value) => PublicAddOnListResponseSchema.parse(value)),
     page(path) {
       const query = new URLSearchParams({ path, locale: "ru-RU" })
       return document(`/pages/resolve?${query}`, (value) => PublicPageSchema.parse(value))
@@ -139,6 +167,33 @@ export type PublishedRoute = ContentResult<{
   eventService: PublicEventServiceSummary | null
 }>
 
+/** Read the current public projections for the visible homepage sections. */
+export async function resolveHomepageCommerce(source: ContentSource, sections: Array<{ key: string }>, releaseId: string, includeCalculator = true): Promise<ContentResult<HomepageCommerce>> {
+  const commerce: HomepageCommerce = { houses: [], programs: [], venues: [], addons: [] }
+  const sectionKeys = new Set(sections.map((section) => section.key))
+  const calculator = includeCalculator && sectionKeys.has("calculator")
+  const [houses, programs, venues, addons] = await Promise.all([
+    sectionKeys.has("houses") || calculator ? source.houses() : null,
+    sectionKeys.has("programs") || sectionKeys.has("events") || calculator ? source.programs() : null,
+    sectionKeys.has("venues") || calculator ? source.venues() : null,
+    calculator ? source.addons() : null,
+  ])
+  for (const result of [houses, programs, venues, addons]) {
+    if (result && (result.status !== "published" || result.value.releaseId !== releaseId || result.value.items.some((item) => item.sourceVersions.contentReleaseId !== releaseId))) return { status: "unavailable" }
+  }
+  if (houses?.status === "published") {
+    if (houses.value.items.some((item) => item.releaseId !== releaseId)) return { status: "unavailable" }
+    commerce.houses = houses.value.items
+  }
+  if (programs?.status === "published") {
+    if (programs.value.items.some((item) => item.releaseId !== releaseId)) return { status: "unavailable" }
+    commerce.programs = programs.value.items
+  }
+  if (venues?.status === "published") commerce.venues = venues.value.items
+  if (addons?.status === "published") commerce.addons = addons.value.items
+  return { status: "published", value: commerce }
+}
+
 /** Each response reads the active pointer independently. Never render a mixed release. */
 export async function resolvePublishedRoute(source: ContentSource, path: string, searchParams: URLSearchParams): Promise<PublishedRoute> {
   const [page, settings] = await Promise.all([source.page(path), source.settings()])
@@ -154,28 +209,9 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
   if (partners.length > 1 || partners.some((section) => !CmsPartnersSectionSchema.safeParse(section).success) || whyUs.length > 1 || whyUs.some((section) => !CmsWhyUsSectionSchema.safeParse(section).success) || homepage.length !== uniqueHomepageKeys.size || homepage.some((section) => !CmsHomeSectionSchema.safeParse(section).success)) {
     return { status: "unavailable" }
   }
-  const commerce: HomepageCommerce = { houses: [], programs: [], venues: [], addons: [] }
-  const sectionKeys = new Set(homepage.map((section) => section.key))
-  const calculator = sectionKeys.has("calculator")
-  const [houses, programs, venues, addons] = await Promise.all([
-    sectionKeys.has("houses") || calculator ? source.houses() : null,
-    sectionKeys.has("programs") || sectionKeys.has("events") || calculator ? source.programs() : null,
-    sectionKeys.has("venues") || calculator ? source.venues() : null,
-    calculator ? source.addons() : null,
-  ])
-  for (const result of [houses, programs, venues, addons]) {
-    if (result && (result.status !== "published" || result.value.releaseId !== page.value.releaseId || result.value.items.some((item) => item.sourceVersions.contentReleaseId !== page.value.releaseId))) return { status: "unavailable" }
-  }
-  if (houses?.status === "published") {
-    if (houses.value.items.some((item) => item.releaseId !== page.value.releaseId)) return { status: "unavailable" }
-    commerce.houses = houses.value.items
-  }
-  if (programs?.status === "published") {
-    if (programs.value.items.some((item) => item.releaseId !== page.value.releaseId)) return { status: "unavailable" }
-    commerce.programs = programs.value.items
-  }
-  if (venues?.status === "published") commerce.venues = venues.value.items
-  if (addons?.status === "published") commerce.addons = addons.value.items
+  const commerceResult = await resolveHomepageCommerce(source, homepage, page.value.releaseId)
+  if (commerceResult.status !== "published") return { status: "unavailable" }
+  const commerce = commerceResult.value
   let listing: PublicListingResult | null = null
   if (page.value.sections.some((section) => section.renderer === "listing")) {
     const result = await source.listing(path, searchParams)

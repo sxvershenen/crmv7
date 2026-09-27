@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { CmsPathSchema } from "./content.js"
 import { PublicResolvedSectionSchema } from "./public-site.js"
+import { IdSchema } from "./primitives.js"
 
 export const CMS_HOME_SECTION_KEYS = [
   "events", "houses", "sauna-chan", "programs", "venues", "blog", "reviews", "map", "faq", "directions", "calculator",
@@ -28,6 +29,8 @@ export const CmsHomeSectionDraftSchema = z.object({
   action: CmsHomeSectionActionSchema.nullable(),
   reviews: z.array(CmsHomeReviewDraftSchema).max(40).optional(),
   faq: z.array(CmsHomeFaqDraftSchema).max(40).optional(),
+  /** Undefined preserves old automatic collections; a saved array is a manual selection. */
+  selectedOfferingIds: z.array(IdSchema).max(12).refine((ids) => new Set(ids).size === ids.length, "Карточки не должны повторяться").optional(),
 }).strict()
 export type CmsHomeSectionDraft = z.infer<typeof CmsHomeSectionDraftSchema>
 
@@ -56,7 +59,18 @@ export const CmsHomeSectionSchema = PublicResolvedSectionSchema.extend({
 }).superRefine((value, context) => {
   if (value.config.reviews !== undefined && value.key !== "reviews") context.addIssue({ code: "custom", path: ["config", "reviews"], message: "Отзывы доступны только в секции отзывов" })
   if (value.config.faq !== undefined && value.key !== "faq" && value.key !== "directions") context.addIssue({ code: "custom", path: ["config", "faq"], message: "Вопросы доступны только в секции FAQ" })
+  if (value.config.selectedOfferingIds !== undefined && !["houses", "programs", "venues"].includes(value.key)) context.addIssue({ code: "custom", path: ["config", "selectedOfferingIds"], message: "Ручной выбор доступен только для домиков, программ и площадок" })
 })
+
+export const CmsHomeOfferingKindSchema = z.enum(["house", "program", "venue"])
+export type CmsHomeOfferingKind = z.infer<typeof CmsHomeOfferingKindSchema>
+export const CmsHomeOfferingChoiceQuerySchema = z.object({ kind: CmsHomeOfferingKindSchema, cursor: IdSchema.optional() }).strict()
+export type CmsHomeOfferingChoiceQuery = z.infer<typeof CmsHomeOfferingChoiceQuerySchema>
+export const CmsHomeOfferingChoiceListSchema = z.object({
+  items: z.array(z.object({ offeringId: IdSchema, title: z.string().min(1).max(500), state: z.enum(["draft", "active", "paused"]) }).strict()).max(100),
+  nextCursor: IdSchema.nullable(),
+}).strict()
+export type CmsHomeOfferingChoice = z.infer<typeof CmsHomeOfferingChoiceListSchema>["items"][number]
 
 export function isCmsHomeSectionKey(value: string): value is CmsHomeSectionKey {
   return CMS_HOME_SECTION_KEYS.includes(value as CmsHomeSectionKey)

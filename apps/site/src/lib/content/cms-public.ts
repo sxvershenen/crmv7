@@ -15,7 +15,7 @@ import type {
   SitePromoCode,
 } from "@crm/site-ui"
 import { DEFAULT_HERO_CONFIG, DEFAULT_PUBLIC_NAVIGATION } from "../../data/publicContentDefaults"
-import { createPublicContentSource, resolvePublishedRoute, usesFixtureContent } from "./source"
+import { createPublicContentSource, resolveHomepageCommerce, resolvePublishedRoute, usesFixtureContent } from "./source"
 
 const iconNames = new Set<SiteNavigationIcon>([
   "home", "flame", "sparkles", "layers", "calendar", "compass", "map-pin", "calculator", "arrow-right",
@@ -42,6 +42,16 @@ export function getPublishedRoute(pathname: string, searchParams = new URLSearch
 
 export function getDraftPreview(token: string) {
   return createPublicContentSource(publicApiBaseUrl()).preview(token)
+}
+
+export async function getPreviewHomepageCommerce(sections: Array<{ key: string }>) {
+  const empty = { houses: [], programs: [], venues: [], addons: [] }
+  if (!sections.some((section) => ["houses", "programs", "venues", "events"].includes(section.key))) return { status: "published" as const, value: empty }
+  const source = createPublicContentSource(publicApiBaseUrl())
+  const settings = await source.settings()
+  if (settings.status === "not_found") return { status: "published" as const, value: empty }
+  if (settings.status !== "published") return { status: "unavailable" as const }
+  return resolveHomepageCommerce(source, sections, settings.value.releaseId, false)
 }
 
 export function getPublishedRouteManifest() {

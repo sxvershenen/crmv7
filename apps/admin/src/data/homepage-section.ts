@@ -18,7 +18,7 @@ export function homepageSectionDraft(section: CmsSection): CmsHomeSectionDraft |
   if (section.policy.mode !== "override") return blankConfig(key)
   const { scalars, objects, keyedArrays } = section.policy.patch
   if (Object.keys(objects).length || Object.keys(keyedArrays).length) return undefined
-  if (Object.entries(scalars).some(([field, patch]) => !["eyebrow", "title", "description", "action", ...(key === "reviews" ? ["reviews"] : []), ...(key === "faq" || key === "directions" ? ["faq"] : [])].includes(field) || patch.operation !== "replace")) return undefined
+  if (Object.entries(scalars).some(([field, patch]) => !["eyebrow", "title", "description", "action", ...(["houses", "programs", "venues"].includes(key) ? ["selectedOfferingIds"] : []), ...(key === "reviews" ? ["reviews"] : []), ...(key === "faq" || key === "directions" ? ["faq"] : [])].includes(field) || patch.operation !== "replace")) return undefined
   const values = Object.fromEntries(Object.entries(scalars).map(([field, patch]) => [field, patch.operation === "replace" ? patch.value : undefined]))
   const parsed = CmsHomeSectionDraftSchema.safeParse({ ...blankConfig(key), ...values })
   return parsed.success ? parsed.data : undefined
@@ -32,12 +32,13 @@ export function homepageSectionPolicy(config: CmsHomeSectionDraft): CmsSection["
     action: { operation: "replace", value: config.action },
     ...(config.reviews !== undefined ? { reviews: { operation: "replace" as const, value: config.reviews } } : {}),
     ...(config.faq !== undefined ? { faq: { operation: "replace" as const, value: config.faq } } : {}),
+    ...(config.selectedOfferingIds !== undefined ? { selectedOfferingIds: { operation: "replace" as const, value: config.selectedOfferingIds } } : {}),
   }, objects: {}, keyedArrays: {} } }
 }
 
 export function createHomepageSectionEditorSection(key: CmsHomeSectionKey): SectionConfig {
   return {
     id: crypto.randomUUID(), key, label: labels[key], description: "Заголовок, описание и действие секции",
-    mode: "override", source: "Эта страница", sourceHref: "?tab=composition", effectiveTitle: labels[key], homepageConfig: blankConfig(key),
+    mode: "override", source: "Эта страница", sourceHref: "?tab=composition", effectiveTitle: labels[key], homepageConfig: { ...blankConfig(key), ...(["houses", "programs", "venues"].includes(key) ? { selectedOfferingIds: [] } : {}) },
   }
 }

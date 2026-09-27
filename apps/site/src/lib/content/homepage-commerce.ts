@@ -8,6 +8,13 @@ export interface HomepageCommerce {
   addons: PublicAddOnSummary[]
 }
 
+/** Keep editorial order while taking every card from the current public projection. */
+export function curatedHomepageItems<T extends { offeringId: string }>(items: T[] | undefined, ids: string[] | undefined): T[] | undefined {
+  if (!items || ids === undefined) return items
+  const byId = new Map(items.map((item) => [item.offeringId, item]))
+  return ids.flatMap((id) => { const item = byId.get(id); return item ? [item] : [] })
+}
+
 export type HomepageHouse = Omit<HouseItem, "priceFrom"> & {
   priceFrom: number | null
   publicOffering?: PublicHouseSummary

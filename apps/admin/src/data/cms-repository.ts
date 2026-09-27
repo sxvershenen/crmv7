@@ -8,7 +8,7 @@ import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseLi
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 import { PublicRouteManifestSchema } from "@crm/contracts"
-import { PromotionListSchema } from "@crm/contracts"
+import { CmsHomeOfferingChoiceListSchema, PromotionListSchema, type CmsHomeOfferingKind, type CmsHomeOfferingChoice } from "@crm/contracts"
 
 import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetListQuery, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
@@ -190,6 +190,12 @@ export class FixtureCmsRepository implements CmsRepository {
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
   async getPublishedRedirects() { await pause(); return PublicRouteManifestSchema.parse({ releaseId: "00000000-0000-4000-8000-000000000020", generatedAt: "2026-09-01T09:00:00.000Z", routes: [], redirects: [{ sourcePath: "/houses", destinationPath: "/domiki", statusCode: 301 }, { sourcePath: "/campgrounds", destinationPath: "/kemping", statusCode: 301 }], cache: { etag: '"fixture-routes"', maxAgeSeconds: 60, staleWhileRevalidateSeconds: 60, tags: [] } }) }
   async getPromotions() { await pause(); return clone(promotionFixtures) }
+  async getHomeOfferingChoices(kind: CmsHomeOfferingKind): Promise<CmsHomeOfferingChoice[]> {
+    await pause()
+    const labels = { house: ["Сосновый домик", "Домик у озера"], program: ["Лесная прогулка", "Семейный мастер-класс"], venue: ["Большая беседка", "Площадка у воды"] }
+    const prefixes = { house: "1", program: "2", venue: "3" }
+    return labels[kind].map((title, index) => ({ offeringId: `${prefixes[kind]}000000${index + 1}-0000-4000-8000-000000000001`, title, state: index ? "draft" as const : "active" as const }))
+  }
   async uploadMedia(file: File) {
     await pause()
     const bitmap = await createImageBitmap(file)
@@ -457,6 +463,22 @@ export class ApiCmsRepository implements CmsRepository {
     return parsed.data
   }
   async getPromotions() { const response = await this.client.get("/marketing/promotions", PromotionListSchema); return response.items }
+  async getHomeOfferingChoices(kind: CmsHomeOfferingKind): Promise<CmsHomeOfferingChoice[]> {
+    const items: CmsHomeOfferingChoice[] = []
+    const seen = new Set<string>()
+    let cursor: string | null = null
+    for (let page = 0; page < 100; page++) {
+      const query = new URLSearchParams({ kind })
+      if (cursor) query.set("cursor", cursor)
+      const response = await this.client.get(`/content/home-offering-choices?${query}`, CmsHomeOfferingChoiceListSchema)
+      items.push(...response.items)
+      if (!response.nextCursor) return items
+      if (seen.has(response.nextCursor)) throw new CmsUnavailableError("Список ресурсов CRM вернул повторный курсор")
+      seen.add(response.nextCursor)
+      cursor = response.nextCursor
+    }
+    throw new CmsUnavailableError("Список ресурсов CRM слишком большой для редактора")
+  }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
     return uploadGrantedMedia(grant, file, () => this.getAsset(grant.assetId))

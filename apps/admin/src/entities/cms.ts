@@ -269,6 +269,7 @@ export interface CmsRepository {
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   getPublishedRedirects(): Promise<PublicRouteManifest | null>
   getPromotions(): Promise<Promotion[]>
+  getHomeOfferingChoices(kind: import("@crm/contracts").CmsHomeOfferingKind): Promise<import("@crm/contracts").CmsHomeOfferingChoice[]>
   uploadMedia(file: File): Promise<MediaAsset>
   replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>
   saveMediaMetadata(asset: MediaAsset): Promise<MediaAsset>
