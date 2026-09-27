@@ -154,6 +154,7 @@ export type EditorRecord = {
 
 export type MediaAsset = {
   id: string
+  kind: "image" | "svg" | "video" | "document"
   version?: number
   title: string
   filename: string
@@ -246,7 +247,7 @@ export interface CmsRepository {
   getMetrikaSettings(): Promise<MetrikaSettingsRecord>
   saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number): Promise<MetrikaSettingsRecord>
   publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord>
-  getMedia(): Promise<MediaAsset[]>
+  getMedia(query?: { q?: string; state?: "ready" }): Promise<MediaAsset[]>
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   uploadMedia(file: File): Promise<MediaAsset>
   replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>

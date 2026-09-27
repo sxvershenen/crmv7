@@ -1046,10 +1046,11 @@ function hasSchemaPlaceholder(value: unknown): boolean {
   return Boolean(value && typeof value === "object" && Object.values(value as Record<string, unknown>).some(hasSchemaPlaceholder))
 }
 function validateHeroMedia(hero: CmsHeroConfig, route: string, issues: ReleaseValidationIssue[]) {
-  const unresolved = (assetId: string | null, media: { assetId: string } | null, field: string) => {
-    if (assetId && media?.assetId !== assetId) issues.push(issue("CMS_MEDIA_NOT_RESOLVED", `Hero: для ${field} нет готового public WebP/AVIF варианта`, route))
+  const unresolved = (assetId: string | null, media: CmsHeroConfig["background"], field: string) => {
+    if (assetId && (!media || media.assetId !== assetId || !media.variants.some((variant) => (variant.format === "webp" || variant.format === "avif") && variant.width && variant.height))) issues.push(issue("CMS_MEDIA_NOT_RESOLVED", `Hero: для ${field} нет готового public WebP/AVIF варианта`, route))
   }
   unresolved(hero.backgroundAssetId, hero.background, "фона")
+  unresolved(hero.mobileBackgroundAssetId ?? null, hero.mobileBackground ?? null, "мобильного фона")
   unresolved(hero.foregroundAssetId, hero.foreground, "переднего изображения")
   for (const slide of hero.slides) unresolved(slide.imageAssetId, slide.image, `слайда ${slide.title}`)
   for (const card of hero.featureCards) unresolved(card.imageAssetId, card.image, `карточки ${card.title}`)

@@ -484,9 +484,11 @@ function stable(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function hasUnresolvedHeroMedia(hero: { backgroundAssetId: string | null; foregroundAssetId: string | null; background: { assetId: string } | null; foreground: { assetId: string } | null; slides: Array<{ imageAssetId: string; image: { assetId: string } | null }>; featureCards: Array<{ imageAssetId: string; image: { assetId: string } | null }> }) {
-  return (hero.backgroundAssetId !== null && hero.background?.assetId !== hero.backgroundAssetId)
-    || (hero.foregroundAssetId !== null && hero.foreground?.assetId !== hero.foregroundAssetId)
-    || hero.slides.some((item) => item.image?.assetId !== item.imageAssetId)
-    || hero.featureCards.some((item) => item.image?.assetId !== item.imageAssetId)
+function hasUnresolvedHeroMedia(hero: NonNullable<CmsSiteSettingsValue["heroDefault"]>) {
+  const unresolved = (id: string | null | undefined, media: NonNullable<CmsSiteSettingsValue["heroDefault"]>["background"] | undefined) => Boolean(id && (!media || media.assetId !== id || !media.variants.some((variant) => (variant.format === "webp" || variant.format === "avif") && variant.width && variant.height)))
+  return unresolved(hero.backgroundAssetId, hero.background)
+    || unresolved(hero.mobileBackgroundAssetId, hero.mobileBackground)
+    || unresolved(hero.foregroundAssetId, hero.foreground)
+    || hero.slides.some((item) => unresolved(item.imageAssetId, item.image))
+    || hero.featureCards.some((item) => unresolved(item.imageAssetId, item.image))
 }

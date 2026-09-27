@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CatalogOfferingEntity, CmsActiveReleaseEntity, CmsNodeEntity, CmsPublicProfileEntity, CmsReleaseEntity, CmsReleaseItemEntity, IdempotencyKeyEntity, OfferingBindingEntity, PriceBookEntity, ResourceEntity } from "@crm/db"
-import { CmsSiteSettingsStoredValueSchema } from "@crm/contracts"
+import { CmsHeroPolicySchema, CmsSiteSettingsStoredValueSchema } from "@crm/contracts"
 
 import { CmsPublicationService, materializeRelease, publicationPreview, unpublishBlockers } from "./cms-publication.service.js"
 import { createPublicHouseProjectionDependency } from "../offerings/public-house-projection.js"
@@ -166,6 +166,17 @@ const heroOverride = {
 }
 
 describe("materializeRelease", () => {
+  it("requires a resolved public variant for the optional mobile hero background", () => {
+    const assetId = childId
+    const page = candidate({ nodeId: rootId, revisionId: rootRevisionId, kind: "home", path: "/", slug: "home", sections: [] })
+    const unresolved = CmsHeroPolicySchema.parse({ mode: "override", config: { title: "Главная", mobileBackgroundAssetId: assetId } })
+    expect(materializeRelease([{ ...page, revision: { ...page.revision, hero: unresolved } }] as never).issues).toEqual([expect.objectContaining({ code: "CMS_MEDIA_NOT_RESOLVED" })])
+
+    const resolved = CmsHeroPolicySchema.parse({ mode: "override", config: { title: "Главная", mobileBackgroundAssetId: assetId,
+      mobileBackground: { assetId, alt: "Лес", variants: [{ url: "/mobile.webp", format: "webp", width: 480, height: 720 }] },
+    } })
+    expect(materializeRelease([{ ...page, revision: { ...page.revision, hero: resolved } }] as never).issues).toEqual([])
+  })
   const partnersConfig = { title: "Наши партнёры", description: "Работаем вместе", items: [{ id: childId, label: "Пекарня" }] }
   const partners = { ...heroOverride, key: "partners", renderer: "partners", policy: { mode: "override", patch: {
     scalars: Object.fromEntries(Object.entries(partnersConfig).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},

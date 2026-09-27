@@ -126,9 +126,9 @@ export class FixtureCmsRepository implements CmsRepository {
     this.metrika = { ...this.metrika, version: expectedVersion + 1, status: "published", updatedLabel: "только что" }
     return clone(this.metrika)
   }
-  async getMedia() { await pause(); return clone(mediaFixtures) }
+  async getMedia(query?: { q?: string; state?: "ready" }) { await pause(); return clone(mediaFixtures.filter((asset) => (!query?.q || `${asset.title} ${asset.filename} ${asset.alt}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query?.state || asset.status === query.state))) }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
-  async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
+  async uploadMedia(file: File) { await pause(); const asset = { id: `fixture-${Date.now()}`, kind: "image" as const, version: 1, title: file.name.replace(/\.[^.]+$/, ""), filename: file.name, status: "ready" as const, dimensions: "—", size: formatBytes(file.size), usageCount: 0, publishedUsage: false, alt: "", license: "Не указана", dominant: "#66705a" }; mediaFixtures.unshift(asset); return clone(asset) }
   async replaceMedia(id: string, file: File, expectedVersion: number) { await pause(); const asset = await this.getAsset(id); if ((asset.version ?? 1) !== expectedVersion) throw new Error("Asset уже изменён в другой сессии"); const replaced = { ...asset, version: expectedVersion + 1, filename: file.name, title: file.name.replace(/\.[^.]+$/, ""), status: "ready" as const, size: formatBytes(file.size) }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = replaced; return clone(replaced) }
   async saveMediaMetadata(asset: import("@admin/entities/cms").MediaAsset) { const index = mediaFixtures.findIndex((item) => item.id === asset.id); if (index >= 0) mediaFixtures[index] = clone(asset); return clone(asset) }
   async archiveMedia(id: string) { const asset = await this.getAsset(id); const archived = { ...asset, status: "archived" as const, version: (asset.version ?? 1) + 1 }; const index = mediaFixtures.findIndex((item) => item.id === id); if (index >= 0) mediaFixtures[index] = archived; return clone(archived) }
@@ -191,7 +191,7 @@ export class ApiCmsRepository implements CmsRepository {
         const detail = await this.client.post("/content/nodes", {
           ...operationMeta(), kind: apiKind(record.kind),
           route: { path: record.url, slug: record.kind === "home" ? "home" : record.slug, parentNodeId: record.parentNodeId ?? null, sortOrder: record.sortOrder ?? 10 },
-          title: record.publicTitle, summary: record.description || null, hero: heroPolicy(record.hero), sections: mergeSectionModes([], record.sections),
+          title: record.publicTitle, summary: record.description || null, hero: await this.resolvedHeroPolicy(record.hero), sections: mergeSectionModes([], record.sections),
           seo: { title: record.seoTitle, description: record.seoDescription, indexPolicy: record.indexPolicy, canonical: { mode: "self" }, structuredData: [] },
           relations: [], schemaVersion: 1,
         }, CmsNodeDetailSchema)
@@ -206,13 +206,26 @@ export class ApiCmsRepository implements CmsRepository {
       const detail = await this.client.patch(`/content/nodes/${encodeURIComponent(record.id)}`, contentChanged ? {
         ...operationMeta(), expectedVersion, route,
         title: record.publicTitle, summary: record.description || null,
-        hero: heroPolicy(record.hero), sections: mergeSectionModes(revision.sections, record.sections),
+        hero: await this.resolvedHeroPolicy(record.hero), sections: mergeSectionModes(revision.sections, record.sections),
         seo: { ...revision.seo, title: record.seoTitle, description: record.seoDescription, indexPolicy: record.indexPolicy },
         relations: revision.relations,
       } : { ...operationMeta(), expectedVersion, route }, CmsNodeDetailSchema)
       this.details.set(detail.node.id, detail)
       return this.editor(detail)
     } catch (error) { throw mapMutationError(error) }
+  }
+
+  private async resolvedHeroPolicy(hero: HeroConfig): Promise<CmsHeroPolicy> {
+    const policy = heroPolicy(hero)
+    if (policy.mode !== "override") return policy
+    for (const binding of [{ id: policy.config.backgroundAssetId, media: policy.config.background, key: "background" as const }, { id: policy.config.mobileBackgroundAssetId, media: policy.config.mobileBackground, key: "mobileBackground" as const }]) {
+      if (!binding.id || binding.media?.assetId === binding.id) continue
+      const asset = await this.getAsset(binding.id)
+      const variants = asset.variants?.filter((variant) => (variant.format === "webp" || variant.format === "avif") && variant.url && variant.width && variant.height) ?? []
+      if (asset.kind !== "image" || asset.status !== "ready" || variants.length === 0) throw new Error(`Изображение «${asset.title}» ещё не готово для публикации. Выберите готовый файл с WebP/AVIF.`)
+      policy.config[binding.key] = { assetId: asset.id, alt: asset.alt || null, variants: variants.slice(0, 20).map(({ url, format, width, height }) => ({ url, format, width: width!, height: height! })) }
+    }
+    return policy
   }
 
   submitReview(id: string, expectedVersion: number) { return this.transition(id, expectedVersion, "submit-review") }
@@ -312,7 +325,7 @@ export class ApiCmsRepository implements CmsRepository {
       activity: dashboard.activity.map((item) => ({ ...item, when: formatUpdated(item.when) })),
     }
   }
-  async getMedia() { const response = await this.client.get("/media/assets?limit=100", MediaAssetListResponseSchema); return response.items.map((asset) => mediaView(asset)) }
+  async getMedia(query?: { q?: string; state?: "ready" }) { const search = new URLSearchParams({ limit: "100" }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return response.items.map((asset) => mediaView(asset)) }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaView(response.asset, response.usages) }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
@@ -547,7 +560,7 @@ function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
     description: config ? config.subtitle ?? "" : revision.summary ?? "", primaryCtaLabel: primary?.label ?? "Подобрать отдых",
     primaryCtaTarget: primary?.href ?? "#booking", primaryCtaEnabled: primary?.enabled ?? false,
     secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
-    desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.foregroundAssetId ?? "",
+    desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.mobileBackgroundAssetId ?? "",
     overlay: config?.overlay === "none" ? 0 : config?.overlay === "soft" ? 25 : config?.overlay === "strong" ? 70 : 45,
     focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left",
     sourcePolicy: clone(revision.hero),
@@ -559,15 +572,15 @@ function heroPolicy(hero: HeroConfig): CmsHeroPolicy {
   const sourceConfig = hero.sourcePolicy?.mode === "override" ? hero.sourcePolicy.config : undefined
   const base = sourceConfig ? clone(sourceConfig) : {
     variant: "default" as const, eyebrow: null, title: hero.title, subtitle: null,
-    backgroundAssetId: null, foregroundAssetId: null, background: null, foreground: null,
+    backgroundAssetId: null, mobileBackgroundAssetId: null, foregroundAssetId: null, background: null, mobileBackground: null, foreground: null,
     overlay: "medium" as const, align: "left" as const, actions: [], slides: [], badge: null, featureCards: [], autoplayMs: null,
   }
   const baseline = sourceConfig ? heroEditableValues(sourceConfig) : heroEditableDefaults(hero.title)
   if (hero.eyebrow !== baseline.eyebrow) base.eyebrow = hero.eyebrow || null
   if (hero.title !== baseline.title) base.title = hero.title
   if (hero.description !== baseline.description) base.subtitle = hero.description || null
-  if (hero.desktopImage !== baseline.desktopImage) { base.backgroundAssetId = isUuid(hero.desktopImage) ? hero.desktopImage : null; base.background = null }
-  if (hero.mobileImage !== baseline.mobileImage) { base.foregroundAssetId = isUuid(hero.mobileImage) ? hero.mobileImage : null; base.foreground = null }
+  if (hero.desktopImage !== baseline.desktopImage) { if (hero.desktopImage && !isUuid(hero.desktopImage)) throw new Error("Выберите фоновое изображение из медиатеки"); base.backgroundAssetId = hero.desktopImage || null; base.background = null }
+  if (hero.mobileImage !== baseline.mobileImage) { if (hero.mobileImage && !isUuid(hero.mobileImage)) throw new Error("Выберите мобильное изображение из медиатеки"); base.mobileBackgroundAssetId = hero.mobileImage || null; base.mobileBackground = null }
   if (hero.overlay !== baseline.overlay) base.overlay = overlayPolicy(hero.overlay)
   if (hero.alignment !== baseline.alignment) base.align = hero.alignment
   if (hero.focalPosition !== baseline.focalPosition && base.slides[0]) base.slides[0] = { ...base.slides[0], focalPoint: { ...base.slides[0].focalPoint, x: focalPoint(hero.focalPosition) } }
@@ -594,7 +607,7 @@ function heroEditableValues(config: Extract<CmsHeroPolicy, { mode: "override" }>
     eyebrow: config.eyebrow ?? "Свистоплясово", title: config.title, description: config.subtitle ?? "",
     primaryCtaLabel: primary?.label ?? "Подобрать отдых", primaryCtaTarget: primary?.href ?? "#booking", primaryCtaEnabled: primary?.enabled ?? false,
     secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
-    desktopImage: config.backgroundAssetId ?? "", mobileImage: config.foregroundAssetId ?? "", overlay: overlayValue(config.overlay),
+    desktopImage: config.backgroundAssetId ?? "", mobileImage: config.mobileBackgroundAssetId ?? "", overlay: overlayValue(config.overlay),
     focalPosition: focal < 0.34 ? "left" as const : focal > 0.66 ? "right" as const : "center" as const, alignment: config.align,
   }
 }
@@ -662,7 +675,7 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
   const status = asset.state === "failed" ? "error" : asset.state === "processing" ? "converting" : asset.state
   const preview = asset.variants.filter((variant) => variant.format === "webp").sort((left, right) => (left.width ?? 0) - (right.width ?? 0))[0]
   return {
-    id: asset.id, version: asset.version, title: asset.title, filename: asset.originalFilename, status,
+    id: asset.id, kind: asset.kind, version: asset.version, title: asset.title, filename: asset.originalFilename, status,
     dimensions: asset.width && asset.height ? `${asset.width}×${asset.height}` : "—", size: formatBytes(asset.byteSize),
     usageCount: asset.usageCount, publishedUsage: asset.publishedUsage, alt: asset.alt ?? "", license: asset.license ?? "Не указана",
     sourceMetadata: { alt: asset.alt, caption: asset.caption, credit: asset.credit, license: asset.license },

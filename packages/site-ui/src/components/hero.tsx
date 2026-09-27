@@ -66,14 +66,16 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
     <section id="hero" data-section-key="hero" data-site-component="hero" className="w-full pt-0 lg:pt-6">
       <div className="relative rounded-t-none rounded-b-2xl lg:rounded-2xl overflow-hidden h-[460px] lg:h-[520px] img-dim bg-ink">
         {slides.map((slide, index) => (
-          <img
-            key={slide.id}
-            src={slide.image}
-            alt={slide.imageAlt}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[1200ms] ${index === currentSlide ? "opacity-100 scale-[1.04]" : "opacity-0 scale-100"}`}
-            style={{ objectPosition: slide.focalPoint ? `${slide.focalPoint.x}% ${slide.focalPoint.y}%` : undefined, transition: "opacity 1.2s, transform 6s linear" }}
-            loading={index === 0 ? "eager" : "lazy"}
-          />
+          <picture key={slide.id}>
+            {slide.mobileImage ? <source media="(max-width: 767px)" srcSet={slide.mobileImage} /> : null}
+            <img
+              src={slide.image}
+              alt={slide.imageAlt}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[1200ms] ${index === currentSlide ? "opacity-100 scale-[1.04]" : "opacity-0 scale-100"}`}
+              style={{ objectPosition: slide.focalPoint ? `${slide.focalPoint.x}% ${slide.focalPoint.y}%` : undefined, transition: "opacity 1.2s, transform 6s linear" }}
+              loading={index === 0 ? "eager" : "lazy"}
+            />
+          </picture>
         ))}
 
         <div className="absolute inset-0 z-10 p-5 lg:p-10 flex flex-col justify-between">

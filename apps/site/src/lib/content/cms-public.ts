@@ -161,10 +161,12 @@ export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {
     strong: { from: 92, via: 65, to: 45 },
   }[hero.overlay]
   const background = mediaUrl(hero.background)
+  const mobileBackground = mediaUrl(hero.mobileBackground ?? null)
   const slides = hero.slides.length
     ? hero.slides.map((slide, index) => ({
         id: slide.id,
         image: mediaUrl(slide.image) ?? DEFAULT_HERO_CONFIG.slides[index % DEFAULT_HERO_CONFIG.slides.length]!.image,
+        ...(mobileBackground ? { mobileImage: mobileBackground } : {}),
         imageAlt: slide.image?.alt ?? slide.title,
         title: slide.title,
         tagline: slide.tagline ?? hero.subtitle ?? "",
@@ -173,6 +175,7 @@ export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {
     : [{
         ...DEFAULT_HERO_CONFIG.slides[0]!,
         image: background ?? DEFAULT_HERO_CONFIG.slides[0]!.image,
+        ...(mobileBackground ? { mobileImage: mobileBackground } : {}),
         imageAlt: hero.background?.alt ?? hero.title,
         title: hero.title,
         tagline: hero.subtitle ?? "",

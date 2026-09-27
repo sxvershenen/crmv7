@@ -108,9 +108,21 @@ describe("CMS route screens", () => {
     renderWithRouter(<ContentEditorPage kind="landing" />, "/content/pages/landing-family", "/content/pages/:nodeId")
     expect(await screen.findByRole("heading", { name: "Hero этой страницы" })).toBeInTheDocument()
     expect(screen.getByLabelText("Заголовок hero")).toHaveValue("Семейный отдых на природе")
-    expect(screen.getByLabelText("Фоновое изображение")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Выбрать: фоновое изображение" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Выбрать: фон для телефона" })).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "Показывать основную кнопку" })).not.toBeChecked()
     expect(screen.getByRole("switch", { name: "Показывать вторую кнопку" })).not.toBeChecked()
+  })
+
+  it("chooses a ready hero image without losing unsaved page text", async () => {
+    renderWithRouter(<ContentEditorPage kind="landing" />, "/content/pages/landing-family", "/content/pages/:nodeId")
+    const title = await screen.findByLabelText("Заголовок hero")
+    fireEvent.change(title, { target: { value: "Несохранённый заголовок" } })
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать: фоновое изображение" }))
+    fireEvent.click(await screen.findByRole("button", { name: /Hero · зимний лес/ }))
+    expect(title).toHaveValue("Несохранённый заголовок")
+    expect(await screen.findByText("Hero · зимний лес")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
   })
 
   it("renders the full public navigation editor", async () => {

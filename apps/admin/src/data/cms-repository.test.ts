@@ -44,6 +44,36 @@ describe("FixtureCmsRepository", () => {
 })
 
 describe("ApiCmsRepository", () => {
+  it("binds ready desktop and mobile media with public variants before saving", async () => {
+    const desktopId = ids.node2
+    const mobileId = ids.revision2
+    const client = clientMock()
+    client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? {
+      asset: { ...wireMediaAsset(), id: path.endsWith(mobileId) ? mobileId : desktopId, variants: [{ id: ids.revision, format: "webp", width: 1600, height: 900, byteSize: 1200, url: path.endsWith(mobileId) ? "/mobile.webp" : "/desktop.webp", contentHash: "a".repeat(64) }] },
+      usages: [], usageTotal: 0, usagesTruncated: false,
+    } : detail)
+    client.patch.mockImplementation(async (_path: string, body: { hero: unknown }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, hero: body.hero } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+
+    await repository.saveEditor({ ...editor, hero: { ...editor.hero, mode: "override", desktopImage: desktopId, mobileImage: mobileId } }, editor.version)
+
+    expect(client.patch.mock.calls[0]?.[1].hero.config).toMatchObject({
+      backgroundAssetId: desktopId, background: { assetId: desktopId, alt: "Лес", variants: [{ url: "/desktop.webp", format: "webp" }] },
+      mobileBackgroundAssetId: mobileId, mobileBackground: { assetId: mobileId, alt: "Лес", variants: [{ url: "/mobile.webp", format: "webp" }] },
+    })
+  })
+
+  it("refuses media without a ready public variant before changing the page", async () => {
+    const client = clientMock()
+    client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? { asset: wireMediaAsset(), usages: [], usageTotal: 0, usagesTruncated: false } : detail)
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+
+    await expect(repository.saveEditor({ ...editor, hero: { ...editor.hero, mode: "override", desktopImage: ids.node } }, editor.version)).rejects.toThrow("ещё не готово")
+    expect(client.patch).not.toHaveBeenCalled()
+  })
+
   it("creates an article with its text inside the first CMS revision", async () => {
     const client = clientMock()
     client.post.mockImplementation(async (_path: string, body: { sections: NonNullable<CmsNodeDetail["currentRevision"]>["sections"] }) => ({

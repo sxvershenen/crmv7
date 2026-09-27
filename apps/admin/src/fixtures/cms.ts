@@ -48,7 +48,7 @@ const defaultHero: EditorRecord["hero"] = {
   description: "Загородный отдых, домики и программы в Нижегородской области.",
   primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false,
   secondaryCtaLabel: "Посмотреть домики", secondaryCtaTarget: "/domiki", secondaryCtaEnabled: false,
-  desktopImage: "/images/hero.webp", mobileImage: "/images/hero-mobile.webp",
+  desktopImage: "asset-hero", mobileImage: "asset-mobile-ready",
   overlay: 46, focalPosition: "center", alignment: "left",
 }
 
@@ -74,10 +74,11 @@ export const navigationFixture: PublicNavigation = {
 }
 
 export const mediaFixtures: MediaAsset[] = [
-  { id: "asset-hero", title: "Hero · зимний лес", filename: "hero-winter.jpg", status: "ready", dimensions: "2400×1600", size: "384 KB WebP", usageCount: 4, publishedUsage: true, alt: "Домики в зимнем лесу", license: "Собственное фото", dominant: "#66705a" },
-  { id: "asset-mobile", title: "Hero mobile", filename: "hero-mobile.jpg", status: "converting", dimensions: "1280×1600", size: "3.8 MB original", usageCount: 1, publishedUsage: false, alt: "", license: "Собственное фото", dominant: "#8c7a62" },
-  { id: "asset-map", title: "Схема территории", filename: "base-map.png", status: "ready", dimensions: "1800×1200", size: "218 KB WebP", usageCount: 18, publishedUsage: true, alt: "Карта базы отдыха", license: "Автор: Алексей П.", dominant: "#d5d0b8" },
-  { id: "asset-broken", title: "Галерея бани", filename: "bath-gallery.tiff", status: "error", dimensions: "—", size: "18.6 MB", usageCount: 0, publishedUsage: false, alt: "Баня с террасой", license: "Не указана", dominant: "#955f42" },
+  { id: "asset-hero", kind: "image", title: "Hero · зимний лес", filename: "hero-winter.jpg", status: "ready", dimensions: "800×533", size: "139 KB WebP", usageCount: 4, publishedUsage: true, alt: "Домики в зимнем лесу", license: "Демо-фото Pexels", dominant: "#66705a", previewUrl: "https://images.pexels.com/photos/9211816/pexels-photo-9211816.jpeg?auto=compress&cs=tinysrgb&fit=crop&fm=webp&w=800", variants: [{ id: "fixture-hero-webp", format: "webp", width: 800, height: 533, byteSize: 142376, url: "https://images.pexels.com/photos/9211816/pexels-photo-9211816.jpeg?auto=compress&cs=tinysrgb&fit=crop&fm=webp&w=800" }] },
+  { id: "asset-mobile-ready", kind: "image", title: "Hero · телефон", filename: "hero-mobile-ready.jpg", status: "ready", dimensions: "480×720", size: "91 KB WebP", usageCount: 1, publishedUsage: false, alt: "Отдых в лесу", license: "Демо-фото Pexels", dominant: "#8c7a62", previewUrl: "https://images.pexels.com/photos/34923437/pexels-photo-34923437.jpeg?auto=compress&cs=tinysrgb&fit=crop&fm=webp&w=480&h=720", variants: [{ id: "fixture-mobile-webp", format: "webp", width: 480, height: 720, byteSize: 92854, url: "https://images.pexels.com/photos/34923437/pexels-photo-34923437.jpeg?auto=compress&cs=tinysrgb&fit=crop&fm=webp&w=480&h=720" }] },
+  { id: "asset-mobile", kind: "image", title: "Hero mobile", filename: "hero-mobile.jpg", status: "converting", dimensions: "1280×1600", size: "3.8 MB original", usageCount: 1, publishedUsage: false, alt: "", license: "Собственное фото", dominant: "#8c7a62" },
+  { id: "asset-map", kind: "image", title: "Схема территории", filename: "base-map.png", status: "ready", dimensions: "1800×1200", size: "218 KB WebP", usageCount: 18, publishedUsage: true, alt: "Карта базы отдыха", license: "Автор: Алексей П.", dominant: "#d5d0b8" },
+  { id: "asset-broken", kind: "image", title: "Галерея бани", filename: "bath-gallery.tiff", status: "error", dimensions: "—", size: "18.6 MB", usageCount: 0, publishedUsage: false, alt: "Баня с террасой", license: "Не указана", dominant: "#955f42" },
 ]
 
 export const releaseFixtures: ReleaseRecord[] = [

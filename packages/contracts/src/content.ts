@@ -113,8 +113,11 @@ export const CmsHeroConfigSchema = z.object({
   title: z.string().min(1).max(240),
   subtitle: z.string().max(1000).nullable().default(null),
   backgroundAssetId: IdSchema.nullable().default(null),
+  /** Optional to keep historical published payloads byte-stable. */
+  mobileBackgroundAssetId: IdSchema.nullable().optional(),
   foregroundAssetId: IdSchema.nullable().default(null),
   background: CmsHeroMediaSchema.nullable().default(null),
+  mobileBackground: CmsHeroMediaSchema.nullable().optional(),
   foreground: CmsHeroMediaSchema.nullable().default(null),
   overlay: z.enum(["none", "soft", "medium", "strong"]).default("medium"),
   align: z.enum(["left", "center"]).default("left"),

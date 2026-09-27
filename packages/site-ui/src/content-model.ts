@@ -51,6 +51,7 @@ export interface SiteNavigationConfig {
 export interface SiteHeroSlide {
   id: string
   image: string
+  mobileImage?: string
   imageAlt: string
   title: string
   tagline: string
