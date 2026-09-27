@@ -19,4 +19,11 @@ describe("PublicContentController", () => {
     expect(response.setHeader).toHaveBeenCalledWith("Surrogate-Key", "cms-release:test")
     expect(response.status).toHaveBeenCalledWith(200)
   })
+
+  it("does not cache a homepage with live CRM promotions", async () => {
+    const resolve = vi.fn().mockResolvedValue({ cache: { etag: '"live"', maxAgeSeconds: 0, staleWhileRevalidateSeconds: 0, tags: [] } })
+    const response = { setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn(), send: vi.fn() }
+    await new PublicContentController({ resolve } as never).resolve({ path: "/", locale: "ru-RU" }, undefined, response as never)
+    expect(response.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store")
+  })
 })

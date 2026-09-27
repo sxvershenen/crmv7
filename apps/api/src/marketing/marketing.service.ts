@@ -26,6 +26,7 @@ import {
 } from "@crm/db"
 
 import { canonicalSha256 } from "../offerings/offering-mutation-support.js"
+import { promotionAvailable } from "./promotion-availability.js"
 
 type StoredReplay = Pick<IdempotencyKeyEntity, "operationId" | "idempotencyKey" | "requestHash" | "responseBody">
 type PromotionReportRow = {
@@ -134,7 +135,7 @@ export class MarketingService {
       .getOne()
     if (!entity || entity.archivedAt !== null) throw new NotFoundException({ code: "PROMOTION_NOT_FOUND", message: "Промокод не найден" })
     const promotion = this.toPromotion(entity)
-    if (!this.isAvailable(promotion.terms, new Date())) {
+    if (!promotionAvailable(promotion.terms, new Date())) {
       throw new ConflictException({ code: "PROMOTION_UNAVAILABLE", message: "Промокод сейчас недоступен", details: { code: normalized } })
     }
     return promotion
@@ -286,12 +287,6 @@ export class MarketingService {
       id: entity.id, version: entity.version, terms: entity.terms,
       createdAt: entity.createdAt.toISOString(), updatedAt: entity.updatedAt.toISOString(),
     })
-  }
-
-  private isAvailable(terms: PromotionTerms, now: Date) {
-    return terms.active
-      && (!terms.startsAt || new Date(terms.startsAt) <= now)
-      && (!terms.endsAt || new Date(terms.endsAt) > now)
   }
 
   private async lockCodes(manager: EntityManager, codes: readonly string[]) {

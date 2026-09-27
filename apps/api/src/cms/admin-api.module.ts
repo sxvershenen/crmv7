@@ -7,12 +7,14 @@ import { DeliveryAdminService } from "../delivery/delivery-admin.service.js"
 import { OfferingsAdminModule } from "../offerings/offerings-admin.module.js"
 import { AnalyticsAggregateController } from "../analytics/analytics-aggregate.controller.js"
 import { AnalyticsAggregateService } from "../analytics/analytics-aggregate.service.js"
+import { MarketingService } from "../marketing/marketing.service.js"
 
 import { CmsContentController } from "./cms-content.controller.js"
 import { CmsContentService } from "./cms-content.service.js"
 import { CmsDashboardController } from "./cms-dashboard.controller.js"
 import { CmsDashboardService } from "./cms-dashboard.service.js"
 import { CmsPreviewController } from "./cms-preview.controller.js"
+import { CmsPromotionChoicesController } from "./cms-promotion-choices.controller.js"
 import { CmsPublicationController } from "./cms-publication.controller.js"
 import { CmsPublicationService } from "./cms-publication.service.js"
 import { PublicContentService } from "./public-content.service.js"
@@ -37,6 +39,7 @@ import { MediaStorageService } from "./media-storage.service.js"
     CmsContentController,
     CmsDashboardController,
     CmsPreviewController,
+    CmsPromotionChoicesController,
     CmsPublicationController,
     CmsSiteSettingsController,
     MediaController,
@@ -45,6 +48,7 @@ import { MediaStorageService } from "./media-storage.service.js"
   ],
   providers: [
     CmsContentService,
+    MarketingService,
     CmsDashboardService,
     CmsPublicationService,
     CmsSiteSettingsService,

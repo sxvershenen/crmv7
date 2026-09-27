@@ -29,11 +29,11 @@
 - DB tests требуют отдельную disposable test database и restricted role. Старые результаты прогонов — исторические, не текущий gate.
 - Media production config fail-closed: `APP_ENV=production` требует S3-compatible bucket, CDN base URL, external HTTP scanner и upload signing secret; local storage/scanner остаются только development/test adapters.
 - Standalone site runtime проверяется HTTP contract stub без БД; production backend/CDN/deployment gates этим не закрыты. Full-homepage visual baselines сверены с текущими секциями why-us/partners; стандартный site E2E теперь проходит.
-- Главная читает published public summaries домиков/программ/площадок/допов, афиша — ближайшие открытые проведения программ. Цена в карточке/окне/подборе обновляется при следующем запросе без новой CMS-публикации; no-store и один release проверяются. Media карточек ещё отсутствует в этих summaries; баня/чан и промокоды не показываются в API mode до соответствующих safe contracts. Map/directions и прежние hero media fallbacks требуют отдельного контентного подключения.
+- Главная читает published public summaries домиков/программ/площадок/допов, афиша — ближайшие открытые проведения программ. Цена в карточке/окне/подборе обновляется при следующем запросе без новой CMS-публикации; no-store и один release проверяются. В CMS выбираются до трёх CRM-промокодов для первого экрана; их текущие условия и доступность обновляются без новой публикации. Media карточек ещё отсутствует в этих summaries; баня/чан не показывается в API mode до safe contract. Map/directions и прежние hero media fallbacks требуют отдельного контентного подключения.
 
 ## Следующий инкремент
 
-1. CMS: продолжить media lifecycle (usage/retry/processing) и оставшиеся C3–C10; проверить первый запуск сайта в isolated API E2E и доработать ошибки доставки/откат по результатам. Затем — CRM promotions/sauna contracts и API E2E по roadmap. Сохранность редактора, FAQ/отзывы, hero media и история редакций уже реализованы; новые формы переиспользуют этот flow.
+1. CMS: продолжить media lifecycle (usage/retry/processing) и оставшиеся C3–C10; проверить первый запуск сайта и выбор промокодов в isolated API E2E, затем доработать ошибки доставки/откат по результатам. Дальше — scheduled-resource contract бани/чана и media карточек по roadmap. Сохранность редактора, FAQ/отзывы, hero media и история редакций уже реализованы; новые формы переиспользуют этот flow.
 2. Параллельно закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
 3. После надёжного редакционного ядра расширять P4.7 attribution linkage/models; минимальная аналитика должна честно отражать уже поддержанные измерения.
 

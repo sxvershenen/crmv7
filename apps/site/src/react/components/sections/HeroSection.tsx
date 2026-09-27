@@ -1,4 +1,4 @@
-import { SiteHero, type SiteHeroConfig } from "@crm/site-ui"
+import { SiteHero, type SiteHeroConfig, type SitePromoCode } from "@crm/site-ui"
 
 import { DEFAULT_HERO_CONFIG } from "../../../data/publicContentDefaults"
 import { PROMO_CODES } from "../../data/resortData"
@@ -12,21 +12,22 @@ interface HeroSectionProps {
   onToast: (message: string) => void
   fixture?: boolean
   config?: SiteHeroConfig
+  promos?: SitePromoCode[]
 }
 
-export function HeroSection({ config, fixture = false, onNavigate, onOpenBookingModal, onOpenCallModal, onToast }: HeroSectionProps) {
+export function HeroSection({ config, fixture = false, promos = [], onNavigate, onOpenBookingModal, onOpenCallModal, onToast }: HeroSectionProps) {
   // SiteHero owns the canonical data-section-key="hero" marker.
   return <SiteHero
     config={config ?? DEFAULT_HERO_CONFIG}
     configured={Boolean(config)}
-    promos={fixture ? PROMO_CODES : []}
+    promos={fixture ? PROMO_CODES : promos}
     onBooking={() => onOpenBookingModal()}
     onCall={onOpenCallModal}
     onNavigate={onNavigate}
     onPromoCopied={(promo) => {
       fireConfetti()
-      applyPromo(promo.code)
-      onToast(`Промокод ${promo.code} скопирован! Примените скидку ${promo.amount}`)
+      if (fixture) applyPromo(promo.code)
+      onToast(`Промокод ${promo.code} скопирован`)
     }}
   />
 }

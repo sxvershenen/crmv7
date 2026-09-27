@@ -2,7 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 
 import { ConfigService } from "@nestjs/config"
 import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common"
-import { DataSource } from "typeorm"
+import { DataSource, In, IsNull } from "typeorm"
 
 import {
   CmsPreviewTokenResponseSchema,
@@ -13,6 +13,7 @@ import {
   PublicPageSchema,
   PublicRouteManifestSchema,
   PublicReleasePageContentSchema,
+  PromotionTermsSchema,
   ReleaseDependencyRefSchema,
   type CmsPreviewDocument,
   type CmsPreviewTokenIssue,
@@ -26,7 +27,9 @@ import {
   ChangeLogEntity,
   CmsNodeEntity,
   CmsNodeRevisionEntity,
+  PromotionEntity,
 } from "@crm/db"
+import { promotionAvailable } from "../marketing/promotion-availability.js"
 import { CmsPublicationService } from "./cms-publication.service.js"
 
 type PreviewClaims = {
@@ -96,23 +99,41 @@ export class PublicContentService {
       throw new ServiceUnavailableException({ code: "CMS_RELEASE_INVALID", message: "Опубликованная версия содержит недействительные зависимости" })
     }
     const generatedAt = row.releasePublishedAt ?? row.releaseCreatedAt
-    const etagValue = `${row.releaseId}-${row.revisionId}-${row.resolvedContentHash}`
+    const promotionIds = query.path === "/" ? content.data.hero?.promotionIds ?? [] : []
+    const featuredPromotions = await this.featuredPromotions(promotionIds)
+    const promotionHash = promotionIds.length ? `-${createHash("sha256").update(JSON.stringify(featuredPromotions)).digest("hex").slice(0, 16)}` : ""
+    const etagValue = `${row.releaseId}-${row.revisionId}-${row.resolvedContentHash}${promotionHash}`
     return PublicPageSchema.parse({
       nodeId: row.nodeId,
       revisionId: row.revisionId,
       releaseId: row.releaseId,
       ...content.data,
+      featuredPromotions,
       path: query.path,
       sections: [...content.data.sections].sort((left, right) => left.order - right.order || left.key.localeCompare(right.key)),
       dependencies: dependencies.data,
       generatedAt: generatedAt.toISOString(),
       cache: {
         etag: `"${etagValue}"`,
-        maxAgeSeconds: 60,
-        staleWhileRevalidateSeconds: 300,
+        maxAgeSeconds: promotionIds.length ? 0 : 60,
+        staleWhileRevalidateSeconds: promotionIds.length ? 0 : 300,
         tags: [`cms-release:${row.releaseId}`, `cms-node:${row.nodeId}`, `cms-revision:${row.revisionId}`],
       },
-      freshness: { contentVersion: row.resolvedContentHash, crmProjectionAsOf: null, ready: true },
+      freshness: { contentVersion: row.resolvedContentHash, crmProjectionAsOf: promotionIds.length ? new Date().toISOString() : null, ready: true },
+    })
+  }
+
+  private async featuredPromotions(ids: string[]) {
+    if (!ids.length) return []
+    const rows = await this.dataSource.getRepository(PromotionEntity).find({ where: { id: In(ids), archivedAt: IsNull() } })
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const now = new Date()
+    return ids.flatMap((id) => {
+      const row = byId.get(id)
+      if (!row) return []
+      const terms = PromotionTermsSchema.safeParse(row.terms)
+      if (!terms.success || !promotionAvailable(terms.data, now) || row.code !== terms.data.code) return []
+      return [{ id: row.id, code: terms.data.code, name: terms.data.name, discountType: terms.data.discountType, value: terms.data.value, minimumAmountMinor: terms.data.minimumAmountMinor, scope: terms.data.scope }]
     })
   }
 

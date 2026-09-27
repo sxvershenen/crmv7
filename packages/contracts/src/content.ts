@@ -141,6 +141,8 @@ export const CmsHeroConfigSchema = z.object({
     target: z.enum(["_self", "_blank"]).default("_self"),
   }).strict()).max(4).default([]),
   autoplayMs: z.number().int().min(3000).max(30000).nullable().default(null),
+  /** CMS chooses placement; CRM owns the current promotion terms. Optional for older releases. */
+  promotionIds: z.array(IdSchema).max(3).refine((ids) => new Set(ids).size === ids.length, "Промокоды не должны повторяться").optional(),
 }).strict();
 export type CmsHeroConfig = z.infer<typeof CmsHeroConfigSchema>;
 

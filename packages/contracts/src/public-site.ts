@@ -99,6 +99,18 @@ export const PublicReleasePageContentSchema = z.object({
 }).strict().superRefine((value, context) => requireValidEditorialSections(value.sections, context));
 export type PublicReleasePageContent = z.infer<typeof PublicReleasePageContentSchema>;
 
+/** Current CRM facts for promotions selected in the published homepage hero. */
+export const PublicFeaturedPromotionSchema = z.object({
+  id: IdSchema,
+  code: z.string().min(2).max(40),
+  name: z.string().min(1).max(160),
+  discountType: z.enum(["percent", "fixed"]),
+  value: z.number().int().positive(),
+  minimumAmountMinor: z.number().int().nonnegative(),
+  scope: z.enum(["all", "selected"]),
+}).strict();
+export type PublicFeaturedPromotion = z.infer<typeof PublicFeaturedPromotionSchema>;
+
 export const PublicPageSchema = z.object({
   nodeId: IdSchema,
   revisionId: IdSchema,
@@ -108,6 +120,7 @@ export const PublicPageSchema = z.object({
   title: z.string().min(1).max(240),
   summary: z.string().max(1000).nullable(),
   hero: CmsHeroConfigSchema.nullable().default(null),
+  featuredPromotions: z.array(PublicFeaturedPromotionSchema).max(3).default([]),
   sections: z.array(PublicResolvedSectionSchema).max(200),
   seo: SeoMetadataSchema,
   dependencies: z.array(ReleaseDependencyRefSchema).max(1000),

@@ -15,6 +15,7 @@ CRM composition, backend-owned promotion registry/application и operational rep
 - Selected Resource or primary Offering matches only the base service portion. Selected add-on Offering matches that add-on snapshot line. Union of scopes, never count a line twice. All scope includes all lines.
 - Minimum applies to eligible subtotal. Dates govern moment of application (not service date); endsAt exclusive.
 - A promo does not stack with manual discounts. No payment is created by calculation. Activation changes only future/recalculated orders; existing saved application is a historical snapshot.
+- CMS selects up to three promotion IDs for the homepage hero. The read-only admin choices come from the CRM promotion registry; public delivery resolves current active terms from the same registry on every request and hides expired/archived codes. Booking eligibility and application remain server-owned.
 - No usage limits, customer segmentation, or public promo validation endpoint in this bounded increment.
 
 ## Gates

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { expect, it } from "vitest"
 import { CmsHeroConfigSchema } from "@crm/contracts"
 import { SiteHero } from "@crm/site-ui"
-import { toSiteHero } from "./cms-public"
+import { toSiteHero, toSitePromo } from "./cms-public"
 
 const desktopId = "11111111-1111-4111-8111-111111111111"
 const mobileId = "22222222-2222-4222-8222-222222222222"
@@ -27,4 +27,14 @@ it("leaves old published heroes without a mobile source", () => {
   })
   expect("mobileBackground" in hero).toBe(false)
   expect(toSiteHero(hero).slides[0]).not.toHaveProperty("mobileImage")
+})
+
+it("renders selected CRM promotion terms with scope and minimum spend", () => {
+  const hero = CmsHeroConfigSchema.parse({ title: "Отдых" })
+  const promo = toSitePromo({ id: desktopId, code: "WEEKDAY3000", name: "Будние дни", discountType: "fixed", value: 300000, minimumAmountMinor: 1000000, scope: "selected" })
+  const html = renderToStaticMarkup(<SiteHero config={toSiteHero(hero)} promos={[promo]} onBooking={() => {}} onCall={() => {}} onNavigate={() => {}} />)
+  expect(html).toContain("WEEKDAY3000")
+  expect(html).toContain("3 000")
+  expect(html).toContain("от 10 000")
+  expect(html).toContain("на выбранные предложения")
 })

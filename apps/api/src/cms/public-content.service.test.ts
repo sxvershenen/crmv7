@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity } from "@crm/db"
+import { ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, PromotionEntity } from "@crm/db"
 
 import { PublicContentService, resolvedContentHash, signPreviewToken } from "./public-content.service.js"
 
@@ -34,10 +34,11 @@ const resolvedContent = {
 }
 
 function service(overrides: Partial<Record<string, unknown>> = {}) {
-  const repositories = new Map<unknown, { findOneBy?: ReturnType<typeof vi.fn>; save?: ReturnType<typeof vi.fn> }>([
+  const repositories = new Map<unknown, { findOneBy?: ReturnType<typeof vi.fn>; find?: ReturnType<typeof vi.fn>; save?: ReturnType<typeof vi.fn> }>([
     [CmsNodeRevisionEntity, { findOneBy: vi.fn().mockResolvedValue(revision) }],
     [CmsNodeEntity, { findOneBy: vi.fn().mockResolvedValue(node) }],
     [ChangeLogEntity, { save: vi.fn().mockImplementation(async (value) => value) }],
+    [PromotionEntity, { find: vi.fn().mockResolvedValue([]) }],
   ])
   const dataSource = {
     query: vi.fn().mockResolvedValue([{
@@ -66,6 +67,32 @@ function service(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe("PublicContentService", () => {
+  it("projects only current CRM promotions selected in the published homepage, preserving order", async () => {
+    const subject = service()
+    const first = "66666666-6666-4666-8666-666666666666"
+    const second = "77777777-7777-4777-8777-777777777777"
+    const expired = "88888888-8888-4888-8888-888888888888"
+    const home = { ...resolvedContent, kind: "home", path: "/", hero: { title: "Главная", promotionIds: [second, expired, first] } }
+    subject.dataSource.query.mockResolvedValue([{ releaseId, releaseCreatedAt: new Date("2026-09-01T10:00:00.000Z"), releasePublishedAt: new Date("2026-09-01T10:01:00.000Z"), nodeId, revisionId, resolvedContentHash: resolvedContentHash(home), resolvedContent: home, dependencies: [], itemPath: "/" }])
+    const terms = (code: string, value: number, endsAt: string | null = null) => ({ code, name: `Скидка ${code}`, active: true, discountType: "fixed", value, minimumAmountMinor: 0, startsAt: null, endsAt, scope: "all", resourceIds: [], offeringIds: [] })
+    const rows = [
+      { id: first, code: "FIRST", archivedAt: null, terms: terms("FIRST", 300000) },
+      { id: second, code: "SECOND", archivedAt: null, terms: terms("SECOND", 500000) },
+      { id: expired, code: "EXPIRED", archivedAt: null, terms: terms("EXPIRED", 100000, "2020-01-01T00:00:00.000Z") },
+    ]
+    subject.repositories.get(PromotionEntity)!.find!.mockResolvedValue(rows)
+    const before = await subject.service.resolve({ path: "/", locale: "ru-RU" })
+    expect(before.featuredPromotions.map((promotion) => promotion.code)).toEqual(["SECOND", "FIRST"])
+    expect(before.featuredPromotions[0]).toMatchObject({ value: 500000, discountType: "fixed", minimumAmountMinor: 0, scope: "all" })
+    expect(before.featuredPromotions[0]).not.toHaveProperty("resourceIds")
+    expect(before.cache).toMatchObject({ maxAgeSeconds: 0, staleWhileRevalidateSeconds: 0 })
+    rows[0]!.terms.active = false
+    rows[1]!.terms.value = 800000
+    const after = await subject.service.resolve({ path: "/", locale: "ru-RU" })
+    expect(after.featuredPromotions).toMatchObject([{ code: "SECOND", value: 800000 }])
+    expect(after.cache.etag).not.toBe(before.cache.etag)
+    expect(subject.repositories.get(PromotionEntity)!.find).toHaveBeenCalledTimes(2)
+  })
   it("resolves only the revision pinned by the active published release", async () => {
     const subject = service()
     const page = await subject.service.resolve({ path: "/svadby", locale: "ru-RU" })

@@ -12,6 +12,7 @@ import type {
   SiteNavigationItem,
   SiteHeroConfig,
   SiteHeroCta,
+  SitePromoCode,
 } from "@crm/site-ui"
 import { DEFAULT_HERO_CONFIG, DEFAULT_PUBLIC_NAVIGATION } from "../../data/publicContentDefaults"
 import { createPublicContentSource, resolvePublishedRoute, usesFixtureContent } from "./source"
@@ -25,6 +26,15 @@ function publicApiBaseUrl() {
 }
 
 export const fixtureContentEnabled = usesFixtureContent(import.meta.env)
+
+export function toSitePromo(promotion: PublicPage["featuredPromotions"][number]): SitePromoCode {
+  const rubles = (minor: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(minor / 100)
+  const amount = promotion.discountType === "percent"
+    ? `${promotion.value}%`
+    : rubles(promotion.value)
+  const conditions = [promotion.minimumAmountMinor ? `от ${rubles(promotion.minimumAmountMinor)}` : "", promotion.scope === "selected" ? "на выбранные предложения" : ""].filter(Boolean)
+  return { id: promotion.id, code: promotion.code, amount, desc: [promotion.name, ...conditions].join(" · "), emoji: "🎟️", colorBg: "" }
+}
 
 export function getPublishedRoute(pathname: string, searchParams = new URLSearchParams()) {
   return resolvePublishedRoute(createPublicContentSource(publicApiBaseUrl()), pathname, searchParams)

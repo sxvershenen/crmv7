@@ -5,6 +5,7 @@ import {
   AnalyticsEventBatchSchema,
   CmsContentOutboxEventSchema,
   CmsEntityRelationSchema,
+  CmsHeroConfigSchema,
   CmsNodeCreateSchema,
   CmsNodeMutationSchema,
   CmsSectionPolicySchema,
@@ -27,6 +28,11 @@ const secondId = "22222222-2222-4222-8222-222222222222";
 const timestamp = "2026-08-31T12:00:00+03:00";
 
 describe("Phase 4 contracts", () => {
+  it("keeps homepage promotion choices ordered, unique and limited to three", () => {
+    expect(CmsHeroConfigSchema.parse({ title: "Главная", promotionIds: [secondId, id] }).promotionIds).toEqual([secondId, id]);
+    expect(CmsHeroConfigSchema.safeParse({ title: "Главная", promotionIds: [id, id] }).success).toBe(false);
+    expect(CmsHeroConfigSchema.safeParse({ title: "Главная", promotionIds: [id, secondId, "33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"] }).success).toBe(false);
+  });
   it("bounds media pages and requires an explicit next cursor", () => {
     expect(MediaAssetListQuerySchema.parse({ limit: "30", cursor: "older" })).toMatchObject({ limit: 30, cursor: "older" });
     expect(MediaAssetListQuerySchema.safeParse({ limit: 101 }).success).toBe(false);

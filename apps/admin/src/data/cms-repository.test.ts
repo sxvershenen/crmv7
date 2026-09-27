@@ -490,6 +490,7 @@ describe("ApiCmsRepository", () => {
         badge: { label: "Новинка", icon: "star" },
         featureCards: [{ id: ids.revision2, imageAssetId: ids.node2, image: null, title: "Домики", description: "Уютно", href: "/houses", target: "_blank" as const }],
         autoplayMs: 5000,
+        promotionIds: [ids.node, ids.node2],
       },
     }
     const server = { ...detail, currentRevision: { ...detail.currentRevision!, hero } }
@@ -499,12 +500,14 @@ describe("ApiCmsRepository", () => {
     const repository = new ApiCmsRepository(client as never)
     const editor = await repository.getEditor(ids.node, "landing")
 
-    await repository.saveEditor({ ...editor, hero: { ...editor.hero, title: "Новый hero", primaryCtaTarget: "/new" } }, editor.version)
+    expect(editor.hero.promotionIds).toEqual([ids.node, ids.node2])
+    await repository.saveEditor({ ...editor, hero: { ...editor.hero, title: "Новый hero", primaryCtaTarget: "/new", promotionIds: [ids.node2, ids.node] } }, editor.version)
 
     const savedHero = client.patch.mock.calls[0]?.[1].hero
     expect(savedHero.config).toMatchObject({
       variant: "fullscreen", title: "Новый hero", background: hero.config.background, foreground: hero.config.foreground,
       slides: hero.config.slides, badge: hero.config.badge, featureCards: hero.config.featureCards, autoplayMs: 5000,
+      promotionIds: [ids.node2, ids.node],
     })
     expect(savedHero.config.actions).toEqual([
       { ...hero.config.actions[0], href: "/new" },

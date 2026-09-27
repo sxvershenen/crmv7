@@ -20,7 +20,7 @@ import BlogSection from "../components/sections/BlogSection.astro"
 import PartnersMarquee from "../components/sections/PartnersMarquee.astro"
 import Footer from "../components/sections/Footer.astro"
 import ContentFailure from "../components/ContentFailure.astro"
-import { fixtureContentEnabled, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSiteStructuredData } from "../lib/content/cms-public"
+import { fixtureContentEnabled, getPublishedRoute, toFooterNavigation, toSiteHero, toSiteNavigation, toSitePromo, toSiteStructuredData } from "../lib/content/cms-public"
 import { getHomepageSections } from "../lib/content/homepage-sections"
 
 const result = fixtureContentEnabled ? null : await getPublishedRoute("/")
@@ -47,6 +47,7 @@ const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSit
 // Inheritance and disabled slots have already been materialized by the release.
 const effectiveHero = publishedPage?.hero
 const hero = effectiveHero ? toSiteHero(effectiveHero) : undefined
+const promos = publishedPage?.featuredPromotions.map(toSitePromo) ?? []
 const failureTitle = failure === "not_found" ? "Страница не найдена" : "Сайт временно недоступен"
 ---
 
@@ -64,7 +65,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
 
   <SitePageShell>
     {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
-      {(fixtureContentEnabled || hero) && <HeroIsland fixture={fixtureContentEnabled} {...(hero ? { hero } : {})} client:load />}
+      {(fixtureContentEnabled || hero) && <HeroIsland fixture={fixtureContentEnabled} promos={promos} {...(hero ? { hero } : {})} client:load />}
       {publishedPage && !hero && <h1 class="site-type-h1">{publishedPage.title}</h1>}
       {homepageSections.map((section) => {
         if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} fixture={fixtureContentEnabled} client:visible />

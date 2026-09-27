@@ -4,6 +4,7 @@ import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 import type { SeoMetadata } from "@crm/contracts/seo"
 import type { PublicRouteManifest } from "@crm/contracts"
+import type { Promotion } from "@crm/contracts"
 
 export type ContentStatus = "draft" | "review" | "scheduled" | "published" | "archived" | "failed"
 export type SourceKind = "CMS" | "CRM" | "computed" | "inherited"
@@ -86,6 +87,7 @@ export type HeroConfig = {
   overlay: number
   focalPosition: "left" | "center" | "right"
   alignment: "left" | "center"
+  promotionIds: string[]
   /** Original authoritative policy used to preserve fields this form does not edit. */
   sourcePolicy?: CmsHeroPolicy
 }
@@ -266,6 +268,7 @@ export interface CmsRepository {
   getMedia(query?: MediaAssetListQuery): Promise<MediaAssetPage>
   getAsset(id: string, query?: MediaAssetUsageQuery): Promise<MediaAsset>
   getPublishedRedirects(): Promise<PublicRouteManifest | null>
+  getPromotions(): Promise<Promotion[]>
   uploadMedia(file: File): Promise<MediaAsset>
   replaceMedia(id: string, file: File, expectedVersion: number): Promise<MediaAsset>
   saveMediaMetadata(asset: MediaAsset): Promise<MediaAsset>

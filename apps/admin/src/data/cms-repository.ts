@@ -8,10 +8,11 @@ import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseLi
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 import { PublicRouteManifestSchema } from "@crm/contracts"
+import { PromotionListSchema } from "@crm/contracts"
 
 import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetListQuery, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
-import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
+import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, promotionFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, parseAdminApiError, type AdminApiClient } from "@admin/lib/api-client"
 import { cmsDataMode } from "@admin/lib/data-mode"
 import { isPartnersRenderer, partnersDraft, partnersPolicy } from "./partners-section"
@@ -188,6 +189,7 @@ export class FixtureCmsRepository implements CmsRepository {
   }
   async getAsset(id: string, query?: MediaAssetUsageQuery) { await pause(); const asset = mediaFixtures.find((item) => item.id === id); if (!asset) throw new Error("Ассет не найден"); return clone(filterMediaUsages(asset, query)) }
   async getPublishedRedirects() { await pause(); return PublicRouteManifestSchema.parse({ releaseId: "00000000-0000-4000-8000-000000000020", generatedAt: "2026-09-01T09:00:00.000Z", routes: [], redirects: [{ sourcePath: "/houses", destinationPath: "/domiki", statusCode: 301 }, { sourcePath: "/campgrounds", destinationPath: "/kemping", statusCode: 301 }], cache: { etag: '"fixture-routes"', maxAgeSeconds: 60, staleWhileRevalidateSeconds: 60, tags: [] } }) }
+  async getPromotions() { await pause(); return clone(promotionFixtures) }
   async uploadMedia(file: File) {
     await pause()
     const bitmap = await createImageBitmap(file)
@@ -454,6 +456,7 @@ export class ApiCmsRepository implements CmsRepository {
     if (!parsed.success) throw new Error("Сервер вернул неверный список редиректов.")
     return parsed.data
   }
+  async getPromotions() { const response = await this.client.get("/marketing/promotions", PromotionListSchema); return response.items }
   async uploadMedia(file: File) {
     const grant = await this.client.post("/media/uploads", await mediaUploadInput(file), MediaUploadGrantSchema)
     return uploadGrantedMedia(grant, file, () => this.getAsset(grant.assetId))
@@ -689,7 +692,7 @@ function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
     secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
     desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.mobileBackgroundAssetId ?? "",
     overlay: config?.overlay === "none" ? 0 : config?.overlay === "soft" ? 25 : config?.overlay === "strong" ? 70 : 45,
-    focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left",
+    focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left", promotionIds: config?.promotionIds ?? [],
     sourcePolicy: clone(revision.hero),
   }
 }
@@ -712,6 +715,7 @@ function heroPolicy(hero: HeroConfig): CmsHeroPolicy {
   if (hero.alignment !== baseline.alignment) base.align = hero.alignment
   if (hero.focalPosition !== baseline.focalPosition && base.slides[0]) base.slides[0] = { ...base.slides[0], focalPoint: { ...base.slides[0].focalPoint, x: focalPoint(hero.focalPosition) } }
   base.actions = mergeHeroActions(base.actions, hero, baseline)
+  if (JSON.stringify(hero.promotionIds) !== JSON.stringify(sourceConfig?.promotionIds ?? [])) base.promotionIds = [...hero.promotionIds]
   return { mode: "override", config: base }
 }
 
@@ -736,10 +740,11 @@ function heroEditableValues(config: Extract<CmsHeroPolicy, { mode: "override" }>
     secondaryCtaLabel: secondary?.label ?? "", secondaryCtaTarget: secondary?.href ?? "", secondaryCtaEnabled: secondary?.enabled ?? false,
     desktopImage: config.backgroundAssetId ?? "", mobileImage: config.mobileBackgroundAssetId ?? "", overlay: overlayValue(config.overlay),
     focalPosition: focal < 0.34 ? "left" as const : focal > 0.66 ? "right" as const : "center" as const, alignment: config.align,
+    promotionIds: config.promotionIds ?? [],
   }
 }
 
-function heroEditableDefaults(title: string): ReturnType<typeof heroEditableValues> { return { eyebrow: "Свистоплясово", title, description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" } }
+function heroEditableDefaults(title: string): ReturnType<typeof heroEditableValues> { return { eyebrow: "Свистоплясово", title, description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left", promotionIds: [] } }
 function overlayValue(overlay: Extract<CmsHeroPolicy, { mode: "override" }>["config"]["overlay"]) { return overlay === "none" ? 0 : overlay === "soft" ? 25 : overlay === "strong" ? 70 : 45 }
 function overlayPolicy(overlay: number) { return overlay <= 10 ? "none" as const : overlay <= 35 ? "soft" as const : overlay >= 60 ? "strong" as const : "medium" as const }
 function focalPoint(position: HeroConfig["focalPosition"]) { return position === "left" ? 0.2 : position === "right" ? 0.8 : 0.5 }
@@ -817,7 +822,7 @@ function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; own
 }
 function mapMutationError(error: unknown) { if (error instanceof AdminApiError && error.rawCode === "VERSION_CONFLICT") return new CmsConflictError(Number(error.details.serverVersion ?? 0), error.requestId); return error }
 function mediaTextValue(value: string, source: string | null | undefined, emptyDisplay: string) { return source !== undefined && value === (source ?? emptyDisplay) ? source : value || null }
-function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left" }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
+function blankEditor(kind: EditorRecord["kind"]): EditorRecord { return { id: "new", kind, internalName: "Без названия", publicTitle: "Новая страница", slug: "new-page", parent: "Корень сайта", parentNodeId: null, sortOrder: 10, hasPublishedRevision: false, url: "/new-page", status: "draft", version: 1, revision: 0, owner: "Текущий пользователь", source: "CMS", updatedLabel: "Не сохранено", reviewLabel: "Не опубликовано", seoChecks: { passed: 0, warnings: 2, blockers: 0 }, sections: [], hero: { mode: "inherit", eyebrow: "Свистоплясово", title: "Новая страница", description: "", primaryCtaLabel: "Подобрать отдых", primaryCtaTarget: "#booking", primaryCtaEnabled: false, secondaryCtaLabel: "", secondaryCtaTarget: "", secondaryCtaEnabled: false, desktopImage: "", mobileImage: "", overlay: 45, focalPosition: "center", alignment: "left", promotionIds: [] }, description: "", seoTitle: "Новая страница", seoDescription: "Добавьте описание страницы для поисковых систем.", indexPolicy: "noindex_follow" } }
 
 function sameEditorContent(left: EditorRecord, right: EditorRecord) {
   return JSON.stringify({ title: left.publicTitle, summary: left.description, hero: left.hero, sections: left.sections.map(({ id, mode, partnersConfig, whyUsConfig, homepageConfig, editorialConfig }) => ({ id, mode, partnersConfig, whyUsConfig, homepageConfig, editorialConfig })), seoTitle: left.seoTitle, seoDescription: left.seoDescription, indexPolicy: left.indexPolicy }) === JSON.stringify({ title: right.publicTitle, summary: right.description, hero: right.hero, sections: right.sections.map(({ id, mode, partnersConfig, whyUsConfig, homepageConfig, editorialConfig }) => ({ id, mode, partnersConfig, whyUsConfig, homepageConfig, editorialConfig })), seoTitle: right.seoTitle, seoDescription: right.seoDescription, indexPolicy: right.indexPolicy })

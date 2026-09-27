@@ -51,7 +51,7 @@ export class PublicContentController {
 
   private publicCacheHeaders(response: Response, etag: string, maxAge: number, staleWhileRevalidate: number, tags: string[]) {
     response.setHeader("ETag", etag)
-    response.setHeader("Cache-Control", `public, max-age=${maxAge}, s-maxage=${maxAge}, stale-while-revalidate=${staleWhileRevalidate}`)
+    response.setHeader("Cache-Control", maxAge === 0 ? "no-store" : `public, max-age=${maxAge}, s-maxage=${maxAge}, stale-while-revalidate=${staleWhileRevalidate}`)
     response.setHeader("Surrogate-Key", tags.join(" "))
   }
 }
