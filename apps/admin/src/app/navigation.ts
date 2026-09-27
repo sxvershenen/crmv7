@@ -1,7 +1,7 @@
 import {
   IconArticle, IconDashboard, IconFileAnalytics, IconFiles, IconLink,
   IconMap, IconPhoto, IconReportSearch, IconRoute, IconSettings, IconSitemap, IconSparkles,
-  IconTemplate, IconRocket,
+  IconRocket,
   IconWorldCog,
 } from "@tabler/icons-react"
 import type { Capabilities } from "@crm/contracts/capabilities"
@@ -15,7 +15,6 @@ export const navGroups: { label: string; items: AdminNavItem[] }[] = [
     { label: "История публикаций", href: "/releases", icon: IconRocket, match: "/releases" },
   ] },
   { label: "Оформление", items: [
-    { label: "Глобальные секции", href: "/globals/sections", icon: IconTemplate },
     { label: "Меню и подвал", href: "/globals/navigation", icon: IconRoute },
     { label: "Медиа", href: "/media", icon: IconPhoto, match: "/media" },
   ] },

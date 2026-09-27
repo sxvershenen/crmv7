@@ -54,9 +54,9 @@ function AdminRoutes() {
     <Route path="offers/campgrounds/:offeringId" element={<CapabilityRoute capabilities={["canView", "canViewContent"]}><CampgroundOfferingWorkspacePage /></CapabilityRoute>} />
     <Route path="offers/addons" element={<Navigate replace to="/content/tree?type=profile&source=addon" />} />
     <Route path="offers/addons/:offeringId" element={<CapabilityRoute capabilities={["canView", "canViewContent"]}><AddOnOfferingWorkspacePage /></CapabilityRoute>} />
-    <Route path="globals/sections" element={<ManagementPage />} />
-    <Route path="globals/sections/new" element={<ManagementPage />} />
-    <Route path="globals/sections/:presetId" element={<ManagementPage />} />
+    <Route path="globals/sections" element={<Navigate replace to="/content/home?tab=composition" />} />
+    <Route path="globals/sections/new" element={<Navigate replace to="/content/home?tab=composition" />} />
+    <Route path="globals/sections/:presetId" element={<Navigate replace to="/content/home?tab=composition" />} />
     <Route path="globals/navigation" element={<NavigationPage />} />
     <Route path="globals/footer" element={<Navigate replace to="/globals/navigation?tab=footer" />} />
     <Route path="media" element={<MediaLibraryPage />} />

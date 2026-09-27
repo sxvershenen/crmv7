@@ -36,10 +36,10 @@ export const nodeFixtures: ContentNode[] = [
 ]
 
 const inheritedSections = [
-  { id: "hero", label: "Hero", description: "H1, фон, CTA и trust-факты", mode: "override", source: "Главная · локальная настройка", sourceHref: "/content/home?tab=sections", effectiveTitle: "Отдых на природе в Свистоплясово", quality: "ok" },
-  { id: "map", label: "Карта базы", description: "Точки, подписи и CTA", mode: "inherit", source: "Настройки сайта → Карта", sourceHref: "/globals/sections?section=map", effectiveTitle: "Карта территории", quality: "ok" },
-  { id: "faq", label: "FAQ и как добраться", description: "Ответы, schema.org и маршруты", mode: "inherit", source: "Тип страницы → Посадочная", sourceHref: "/globals/sections?section=faq", effectiveTitle: "Частые вопросы", quality: "ok" },
-  { id: "calculator", label: "Калькулятор", description: "Пресет подбора и funnel IDs", mode: "disabled", source: "Скрыто на странице", sourceHref: "/globals/sections?section=calculator", effectiveTitle: "Подобрать отдых", quality: "warning" },
+  { id: "hero", label: "Hero", description: "H1, фон, CTA и trust-факты", mode: "override", source: "Главная · локальная настройка", sourceHref: "/content/home?tab=composition", effectiveTitle: "Отдых на природе в Свистоплясово", quality: "ok" },
+  { id: "map", label: "Карта базы", description: "Точки, подписи и CTA", mode: "inherit", source: "Главная · секции", sourceHref: "/content/home?tab=composition", effectiveTitle: "Карта территории", quality: "ok" },
+  { id: "faq", label: "FAQ и как добраться", description: "Ответы, schema.org и маршруты", mode: "inherit", source: "Главная · секции", sourceHref: "/content/home?tab=composition", effectiveTitle: "Частые вопросы", quality: "ok" },
+  { id: "calculator", label: "Калькулятор", description: "Подбор отдыха", mode: "disabled", source: "Скрыто на странице", sourceHref: "/content/home?tab=composition", effectiveTitle: "Подобрать отдых", quality: "warning" },
   { id: "footer", label: "Footer", description: "Навигация, контакты, legal", mode: "inherit", source: "Глобальный footer", sourceHref: "/globals/footer", effectiveTitle: "Основной footer", quality: "ok" },
 ] satisfies EditorRecord["sections"]
 

@@ -31,7 +31,6 @@ Frontend CMS использует существующие tokens, generated sha
 
 **Оформление**
 
-- Глобальные секции;
 - Навигация и footer;
 - Медиа;
 
@@ -63,6 +62,7 @@ Mobile: отдельная адаптация — компактный topbar, b
 ```text
 /
 /content/tree
+/content/home
 /content/pages
 /content/pages/new
 /content/pages/:nodeId
@@ -75,9 +75,6 @@ Mobile: отдельная адаптация — компактный topbar, b
 /content/articles
 /content/articles/new
 /content/articles/:nodeId
-/globals/sections
-/globals/sections/new
-/globals/sections/:presetId
 /globals/navigation
 /globals/footer
 /media
@@ -294,9 +291,9 @@ Editor fields:
 
 Первый рабочий текстовый блок в редакторе страницы использует `editorial-content`: абзацы, H2/H3, списки и внутренние ссылки редактируются в «Текст и блоки», сохраняются в редакции страницы и проходят обычный preview/publish. Пустые блоки допускаются только в черновике; перед публикацией нужен хотя бы один заполненный блок. Неподдерживаемые сложные patches форма оставляет без изменений. Авторские поля и изображения в теле статьи остаются в C5/C9; сохранённая редакция уже открывается в public preview.
 
-## 13. Глобальные секции, navigation и components
+## 13. Секции страниц, navigation и components
 
-`/globals/sections`: presets for hero/map/FAQ/directions/calculator/footer, usage count, published version, affected routes, variants.
+Секции главной редактируются на `/content/home?tab=composition`; порядок, содержимое и видимость относятся к редакции этой страницы. Отдельный реестр пресетов не нужен для текущего сценария. Старые `/globals/sections/*` ведут в редактор главной. Общие настройки сайта остаются в `/settings/site`; управление одним блоком сразу на нескольких страницах добавляется только при подтверждённом сценарии переиспользования.
 
 `/globals/navigation`: desktop/mobile menus, nesting, external/internal links, visibility, active rules, CTA, broken-link validation. Header/footer share link registry, not copied strings.
 
@@ -424,7 +421,7 @@ This matrix is the target product review of every top-level CMS area. A section 
 | Offering-linked pages | editorial-only locator | content/composition/media/SEO/publication plus CRM deep link; no price, fulfillment, bindings, tariffs, versions or access matrix |
 | Категории/listings | typed tree nodes plus deep configuration | taxonomy, ListingDefinition, filters/sorts/cards, curated indexable nodes and URL-explosion guard; no competing primary registry |
 | Blog/materials | keep | article lifecycle, author/reviewer/source notes, relations, freshness, SEO/schema/media and publication |
-| Глобальные секции | keep | named defaults/presets, inheritance/effective preview, usage and blast radius, versioning/direct settings publication |
+| Секции главной | edit in home page | typed content, order, visibility, preview and direct publication; shared editing only for confirmed multi-page use |
 | Navigation/footer | merge into one link registry UI | desktop/mobile/footer trees, visibility, CTA, broken links, preview and settings publication |
 | Media | keep and finish backend states | upload/scan/process, metadata/rights/focal point, variants/usages/version/replace/archive, provider/worker errors |
 | Components/templates | capability-gated tool, not primary navigation | renderer/schema versions, reusable instances, usage/blast radius and approved variants; no arbitrary JSON renderer |
