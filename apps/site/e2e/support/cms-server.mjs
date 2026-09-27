@@ -61,7 +61,15 @@ createServer(async (request, response) => {
       revisionId: id, contentVersion: "a".repeat(64), publishedAt: asOf,
       value: {
         siteName: "Тестовый опубликованный сайт",
-        headerNavigation: [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" } }],
+        headerNavigation: scenario === "homepage-navigation-managed" ? [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" }, children: [
+          { id: "11111111-1111-4111-8111-111111111112", label: "Видимая ссылка", link: { kind: "internal", path: "/cms-test" } },
+          { id: "11111111-1111-4111-8111-111111111113", label: "Скрытая ссылка", link: { kind: "internal", path: "/cms-test" }, enabled: false },
+          { id: "11111111-1111-4111-8111-111111111114", label: "Только телефон", link: { kind: "internal", path: "/cms-test" }, visibleOn: "mobile" },
+          { id: "11111111-1111-4111-8111-111111111115", label: "Группа", link: { kind: "internal", path: "/cms-test" }, children: [
+            { id: "11111111-1111-4111-8111-111111111116", label: "Скрытый третий уровень", link: { kind: "internal", path: "/cms-test" }, enabled: false },
+          ] },
+        ] }] : [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" } }],
+        ...(scenario === "homepage-navigation-managed" ? { footerNavigation: [] } : {}),
         heroDefault: { title: "Глобальный hero не должен воскреснуть" },
         analytics: { metrika: { enabled: true, counterId: "12345678" } },
       },

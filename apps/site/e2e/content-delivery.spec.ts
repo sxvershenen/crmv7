@@ -59,6 +59,20 @@ test("renders release content in SSR and respects disabled hero and absent blog"
   expect(errors).toEqual([])
 })
 
+test("respects published empty footer and hidden nested menu links", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-navigation-managed")
+  const response = await request.get("/")
+  expect(response.status()).toBe(200)
+  const html = await response.text()
+  expect(html).toContain("Видимая ссылка")
+  expect(html).not.toContain("Скрытая ссылка")
+  expect(html).not.toContain("Скрытый третий уровень")
+
+  await page.goto("/")
+  await expect(page.locator("footer")).not.toContainText("Домик «Гнездо» с чаном")
+  await expect(page.locator("aside[aria-label='Основная навигация']")).not.toContainText("Только телефон")
+})
+
 test("loads Metrika only after consent and destroys it on revoke", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=homepage-published")
   let scriptRequests = 0

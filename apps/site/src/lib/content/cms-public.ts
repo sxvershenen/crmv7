@@ -84,7 +84,11 @@ function iconName(value: string | null): SiteNavigationIcon {
   return value && iconNames.has(value as SiteNavigationIcon) ? value as SiteNavigationIcon : "arrow-right"
 }
 
-function childView(item: NavigationNode): SiteNavigationChild {
+function visibleOn(item: NavigationNode, device: "desktop" | "mobile" | "footer"): boolean {
+  return item.enabled && (device === "footer" || item.visibleOn === "all" || item.visibleOn === device)
+}
+
+function childView(item: NavigationNode, device: "desktop" | "mobile" | "footer"): SiteNavigationChild {
   return {
     id: item.id,
     label: item.label,
@@ -92,18 +96,18 @@ function childView(item: NavigationNode): SiteNavigationChild {
     icon: iconName(item.icon),
     ...(item.color ? { color: item.color } : {}),
     ...((item.target === "_blank" || item.link.kind === "external") ? { external: true } : {}),
-    children: item.children.map(childView),
+    children: item.children.filter((child) => visibleOn(child, device)).map((child) => childView(child, device)),
   }
 }
 
-function itemView(item: CmsNavigationItem): SiteNavigationItem {
+function itemView(item: CmsNavigationItem, device: "desktop" | "mobile" | "footer"): SiteNavigationItem {
   return {
     id: item.id,
     label: item.label,
     href: linkHref(item),
     icon: iconName(item.icon),
     color: item.color ?? "#2B9E47",
-    children: item.children.filter((child) => child.enabled).map(childView),
+    children: item.children.filter((child) => visibleOn(child, device)).map((child) => childView(child, device)),
     ...((item.target === "_blank" || item.link.kind === "external") ? { external: true } : {}),
   }
 }
@@ -111,7 +115,7 @@ function itemView(item: CmsNavigationItem): SiteNavigationItem {
 export function toSiteNavigation(settings: PublicSiteSettings): SiteNavigationConfig {
   const header = settings.value.headerNavigation
     .filter((item) => item.enabled && item.visibleOn !== "mobile")
-    .map(itemView)
+    .map((item) => itemView(item, "desktop"))
   const mobileSource = settings.value.mobileNavigation.length
     ? settings.value.mobileNavigation
     : settings.value.headerNavigation
@@ -123,12 +127,12 @@ export function toSiteNavigation(settings: PublicSiteSettings): SiteNavigationCo
     items: header,
     mobileItems: mobileSource
       .filter((item) => item.enabled && item.visibleOn !== "desktop")
-      .map(itemView),
+      .map((item) => itemView(item, "mobile")),
   }
 }
 
 export function toFooterNavigation(settings: PublicSiteSettings): SiteNavigationItem[] {
-  return settings.value.footerNavigation.filter((item) => item.enabled).map(itemView)
+  return settings.value.footerNavigation.filter((item) => item.enabled).map((item) => itemView(item, "footer"))
 }
 
 function mediaUrl(media: CmsHeroConfig["background"]): string | null {

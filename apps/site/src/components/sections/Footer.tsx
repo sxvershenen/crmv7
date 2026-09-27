@@ -10,7 +10,7 @@ const fallback = [
 ];
 
 export default function Footer({ navigation }: FooterProps) {
-  const columns = (navigation?.length ? navigation : fallback).slice(0, 3);
+  const columns = (navigation ?? fallback).slice(0, 3);
   return (
     <SiteFooterShell data-section-key="footer">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-6">
