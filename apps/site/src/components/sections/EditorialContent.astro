@@ -15,6 +15,7 @@ const { config, sectionKey, analyticsId } = Astro.props
   <article class="site-container site-container--md site-surface site-surface--bordered site-surface--raised p-6 sm:p-10">
     {config.heading && <h2 class="site-type-h2">{config.heading}</h2>}
     {config.lead && <p class="site-type-lead mt-3 text-[var(--site-color-text-muted)]">{config.lead}</p>}
+    {config.authorName && <p class="site-type-caption mt-3">Автор: {config.authorName}</p>}
     <div class="site-type-body mt-6 space-y-5 text-[var(--site-color-text)]">
       {config.blocks.map((block) => {
         if (block.type === "paragraph") return <p>{block.text}</p>

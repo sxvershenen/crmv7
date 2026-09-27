@@ -24,3 +24,14 @@ it("edits and reorders text blocks and links without losing the draft", async ()
   expect(value.blocks).toEqual([{ type: "list", items: ["Домики", "Программы"] }, { type: "paragraph", text: "Текст страницы" }])
   expect(value.links).toEqual([{ label: "Домики", href: "/domiki" }])
 })
+
+it("edits a public article byline without a separate author record", async () => {
+  const user = userEvent.setup()
+  function ArticleEditor() {
+    const [value, setValue] = useState<PublicEditorialContentConfig>({ heading: null, lead: null, blocks: [], links: [] })
+    return <><EditorialSectionFields editable id="article" onChange={setValue} showAuthor value={value} /><output data-testid="body-value">{JSON.stringify(value)}</output></>
+  }
+  render(<ArticleEditor />)
+  await user.type(screen.getByLabelText("Автор статьи"), "Марина Кириллова")
+  expect(JSON.parse(screen.getByTestId("body-value").textContent ?? "{}")).toMatchObject({ authorName: "Марина Кириллова" })
+})

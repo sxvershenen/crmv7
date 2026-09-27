@@ -72,6 +72,7 @@ export const PublicResolvedSectionSchema = z.object({
 export const PublicEditorialContentConfigSchema = z.object({
   heading: z.string().min(1).max(240).nullable().default(null),
   lead: z.string().min(1).max(1000).nullable().default(null),
+  authorName: z.string().min(1).max(160).regex(/\S/).nullable().optional(),
   blocks: z.array(z.discriminatedUnion("type", [
     z.object({ type: z.literal("paragraph"), text: z.string().min(1).max(5000) }).strict(),
     z.object({ type: z.literal("heading"), level: z.enum(["h2", "h3"]), text: z.string().min(1).max(240) }).strict(),

@@ -217,7 +217,7 @@ describe("materializeRelease", () => {
   } } }
 
   it("materializes authored article blocks and rejects an empty published body", () => {
-    const config = { heading: "История места", lead: null, blocks: [{ type: "paragraph", text: "О природе" }, { type: "list", items: ["Лес", "Река"] }], links: [] }
+    const config = { heading: "История места", lead: null, authorName: "Марина Кириллова", blocks: [{ type: "paragraph", text: "О природе" }, { type: "list", items: ["Лес", "Река"] }], links: [] }
     const editorial = { ...heroOverride, key: "body", renderer: "editorial-content", policy: { mode: "override", patch: {
       scalars: Object.fromEntries(Object.entries(config).map(([key, value]) => [key, { operation: "replace", value }])), objects: {}, keyedArrays: {},
     } } }
@@ -228,6 +228,8 @@ describe("materializeRelease", () => {
     expect(result.routes[1]?.content.sections[0]?.config).toEqual(config)
     const empty = { ...editorial, policy: { mode: "override", patch: { scalars: { ...editorial.policy.patch.scalars, blocks: { operation: "replace", value: [] } }, objects: {}, keyedArrays: {} } } }
     expect(materializeRelease([home, { ...article, revision: { ...article.revision, sections: [empty] } }] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_EDITORIAL_SECTION_INVALID" })]))
+    const blankAuthor = { ...editorial, policy: { mode: "override", patch: { scalars: { ...editorial.policy.patch.scalars, authorName: { operation: "replace", value: "   " } }, objects: {}, keyedArrays: {} } } }
+    expect(materializeRelease([home, { ...article, revision: { ...article.revision, sections: [blankAuthor] } }] as never).issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "CMS_EDITORIAL_SECTION_INVALID" })]))
   })
 
   it("pins partners content through inherited revisions without mutable draft reads", () => {

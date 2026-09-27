@@ -3,7 +3,7 @@ import { Alert, AlertDescription, AlertTitle, Button, FormField, Input, Textarea
 
 type Block = PublicEditorialContentConfig["blocks"][number]
 
-export function EditorialSectionFields({ id, value, editable, onChange }: { id: string; value: PublicEditorialContentConfig; editable: boolean; onChange: (value: PublicEditorialContentConfig) => void }) {
+export function EditorialSectionFields({ id, value, editable, showAuthor = false, onChange }: { id: string; value: PublicEditorialContentConfig; editable: boolean; showAuthor?: boolean; onChange: (value: PublicEditorialContentConfig) => void }) {
   const validation = PublicEditorialContentConfigSchema.safeParse(value)
   const replaceBlock = (index: number, block: Block) => onChange({ ...value, blocks: value.blocks.map((current, at) => at === index ? block : current) })
   const moveBlock = (index: number, direction: -1 | 1) => {
@@ -18,6 +18,7 @@ export function EditorialSectionFields({ id, value, editable, onChange }: { id: 
     <div className="grid gap-3">
       <FormField htmlFor={`${id}-heading`} label="Заголовок блока"><Input id={`${id}-heading`} maxLength={240} onChange={(event) => onChange({ ...value, heading: event.target.value || null })} value={value.heading ?? ""} /></FormField>
       <FormField htmlFor={`${id}-lead`} label="Вводный текст"><Textarea id={`${id}-lead`} maxLength={1000} onChange={(event) => onChange({ ...value, lead: event.target.value || null })} value={value.lead ?? ""} /></FormField>
+      {showAuthor ? <FormField htmlFor={`${id}-author`} label="Автор статьи"><Input id={`${id}-author`} maxLength={160} onChange={(event) => onChange({ ...value, authorName: event.target.value || null })} placeholder="Имя, которое увидят читатели" value={value.authorName ?? ""} /></FormField> : null}
     </div>
     <div className="space-y-3">
       <p className="text-xs font-medium">Основной текст</p>

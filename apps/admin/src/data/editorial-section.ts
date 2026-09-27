@@ -13,7 +13,7 @@ export function editorialDraft(section: CmsSection): PublicEditorialContentConfi
   if (section.policy.mode !== "override") return emptyContent()
   const { scalars, objects, keyedArrays } = section.policy.patch
   if (Object.keys(objects).length || Object.keys(keyedArrays).length) return undefined
-  if (Object.entries(scalars).some(([field, patch]) => !["heading", "lead", "blocks", "links"].includes(field) || patch.operation !== "replace")) return undefined
+  if (Object.entries(scalars).some(([field, patch]) => !["heading", "lead", "authorName", "blocks", "links"].includes(field) || patch.operation !== "replace")) return undefined
   const values = Object.fromEntries(Object.entries(scalars).map(([field, patch]) => [field, patch.operation === "replace" ? patch.value : undefined]))
   const candidate: unknown = { ...emptyContent(), ...values }
   return isEditableDraft(candidate) ? candidate : undefined
@@ -23,6 +23,7 @@ export function editorialPolicy(config: PublicEditorialContentConfig): CmsSectio
   return { mode: "override", patch: { scalars: {
     heading: { operation: "replace", value: config.heading },
     lead: { operation: "replace", value: config.lead },
+    ...(config.authorName === undefined ? {} : { authorName: { operation: "replace" as const, value: config.authorName } }),
     blocks: { operation: "replace", value: config.blocks },
     links: { operation: "replace", value: config.links },
   }, objects: {}, keyedArrays: {} } }
@@ -38,8 +39,9 @@ export function createEditorialSection(): SectionConfig {
 function isEditableDraft(value: unknown): value is PublicEditorialContentConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const config = value as Record<string, unknown>
-  if (Object.keys(config).some((key) => !["heading", "lead", "blocks", "links"].includes(key))) return false
+  if (Object.keys(config).some((key) => !["heading", "lead", "authorName", "blocks", "links"].includes(key))) return false
   if (!(config.heading === null || typeof config.heading === "string") || !(config.lead === null || typeof config.lead === "string")) return false
+  if (!(config.authorName === undefined || config.authorName === null || typeof config.authorName === "string")) return false
   if (!Array.isArray(config.blocks) || !Array.isArray(config.links)) return false
   const blocksValid = config.blocks.every((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false

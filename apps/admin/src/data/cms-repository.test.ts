@@ -262,7 +262,7 @@ describe("ApiCmsRepository", () => {
     const repository = new ApiCmsRepository(client as never)
     const editor = await repository.getEditor(ids.node, "landing")
     const section = createEditorialSection()
-    section.editorialConfig = { heading: "О семейном отдыхе", lead: "Приезжайте вместе.", blocks: [
+    section.editorialConfig = { heading: "О семейном отдыхе", lead: "Приезжайте вместе.", authorName: "Марина Кириллова", blocks: [
       { type: "paragraph", text: "Живой текст страницы." },
       { type: "list", items: ["Домики", "Программы"] },
     ], links: [{ label: "Домики", href: "/domiki" }] }
