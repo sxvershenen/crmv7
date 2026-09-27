@@ -440,6 +440,29 @@ describe("ApiCmsRepository", () => {
     }), expect.anything())
   })
 
+  it("edits only the site name in the shared settings draft and publishes its saved version", async () => {
+    const settings = siteSettingsDetail()
+    const current = { ...settings, draft: { ...settings.draft!, value: { ...settings.draft!.value,
+      headerCta: { label: "Заявка", link: { kind: "internal" as const, path: "/contacts" }, enabled: true },
+      sectionDefaults: [],
+    } } }
+    const saved = { ...current, version: 4, draft: { ...current.draft, revision: 3, value: { ...current.draft.value, siteName: "Новое название" } } }
+    const published = { ...saved, version: 5, draft: null, published: { ...saved.draft, state: "published" as const } }
+    const client = clientMock()
+    client.get.mockResolvedValueOnce(current)
+    client.patch.mockResolvedValueOnce(saved)
+    client.post.mockResolvedValueOnce(published)
+    const repository = new ApiCmsRepository(client as never)
+
+    expect((await repository.getSiteSettings()).draft?.value.siteName).toBe("Свистоплясово")
+    expect((await repository.saveSiteName("Новое название", 3)).draft?.value.siteName).toBe("Новое название")
+    expect(client.patch).toHaveBeenCalledWith("/site-settings", expect.objectContaining({ expectedVersion: 3,
+      value: expect.objectContaining({ siteName: "Новое название", headerNavigation: current.draft.value.headerNavigation, headerCta: current.draft.value.headerCta }),
+    }), expect.anything())
+    expect((await repository.publishSiteSettings(4)).published?.value.siteName).toBe("Новое название")
+    expect(client.post).toHaveBeenCalledWith("/site-settings/publish", expect.objectContaining({ expectedVersion: 4 }), expect.anything())
+  })
+
   it("reports previous navigation publication separately from the current draft", async () => {
     const settings = siteSettingsDetail()
     const client = clientMock()

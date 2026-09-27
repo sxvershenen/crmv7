@@ -21,6 +21,7 @@ import { MobileMenuPage } from "@admin/pages/mobile-menu-page"
 import { NavigationPage } from "@admin/pages/navigation-page"
 import { NotFoundPage } from "@admin/pages/not-found-page"
 import { ReleaseDetailPage, ReleasesPage } from "@admin/pages/release-pages"
+import { SiteSettingsPage } from "@admin/pages/site-settings-page"
 
 export function AdminRouter() {
   return <RouterProvider router={adminRouter} />
@@ -70,7 +71,7 @@ function AdminRoutes() {
     <Route path="analytics/*" element={<CapabilityRoute capability="canViewAnalytics"><AnalyticsPage /></CapabilityRoute>} />
     <Route path="releases" element={<ReleasesPage />} />
     <Route path="releases/:releaseId" element={<ReleaseDetailPage />} />
-    <Route path="settings/site" element={<CapabilityRoute capability="canManageSiteSettings"><ManagementPage /></CapabilityRoute>} />
+    <Route path="settings/site" element={<CapabilityRoute capability="canManageSiteSettings"><SiteSettingsPage /></CapabilityRoute>} />
     <Route path="settings/integrations" element={<CapabilityRoute capability="canManageIntegrations"><IntegrationsPage /></CapabilityRoute>} />
     <Route path="settings/access" element={<CapabilityRoute capability="canManageUsers"><ManagementPage /></CapabilityRoute>} />
     <Route path="audit" element={<CapabilityRoute capability="canViewAudit"><ManagementPage /></CapabilityRoute>} />

@@ -2,7 +2,7 @@ import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublicationStatu
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
-import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsSiteSettingsDetailSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
+import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsSiteSettingsDetailSchema, CmsSiteSettingsValueSchema, type CmsMetrikaSettingsDetail, type CmsSiteSettingsDetail, type CmsSiteSettingsValue } from "@crm/contracts"
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
@@ -29,6 +29,12 @@ export class FixtureCmsRepository implements CmsRepository {
   private editors = clone(editorFixtures)
   private unpublished = new Set<string>()
   private navigation = clone(navigationFixture)
+  private siteSettings: CmsSiteSettingsDetail = CmsSiteSettingsDetailSchema.parse({
+    id: "00000000-0000-4000-8000-000000000041", version: 1, draft: null,
+    published: { id: "00000000-0000-4000-8000-000000000042", revision: 1, state: "published",
+      value: { siteName: "Свистоплясово", headerNavigation: [], mobileNavigation: [], footerNavigation: [], headerCta: null, heroDefault: null, sectionDefaults: [] },
+      contentHash: "a".repeat(64), createdBy: "00000000-0000-4000-8000-000000000043", createdAt: "2026-01-01T00:00:00.000Z" },
+  })
   private metrika: MetrikaSettingsRecord = { version: 1, status: "published", updatedLabel: "не настроено", metrika: { enabled: false, counterId: null } }
 
   async getAccess() { return fixtureAccess }
@@ -86,6 +92,26 @@ export class FixtureCmsRepository implements CmsRepository {
     if (this.navigation.version !== expectedVersion) throw new CmsConflictError(this.navigation.version)
     this.navigation = { ...this.navigation, version: expectedVersion + 1, status: "published", updatedLabel: "только что" }
     return clone(this.navigation)
+  }
+  async getSiteSettings() { await pause(); return clone(this.siteSettings) }
+  async saveSiteName(siteName: string, expectedVersion: number) {
+    await pause()
+    if (this.siteSettings.version !== expectedVersion) throw new CmsConflictError(this.siteSettings.version)
+    const base = this.siteSettings.draft?.value ?? this.siteSettings.published?.value ?? emptySiteSettingsValue(siteName)
+    const value = CmsSiteSettingsValueSchema.parse({ ...base, siteName })
+    this.siteSettings = { ...this.siteSettings, version: expectedVersion + 1, draft: {
+      id: crypto.randomUUID(), revision: (this.siteSettings.draft?.revision ?? this.siteSettings.published?.revision ?? 0) + 1,
+      state: "draft", value, contentHash: "b".repeat(64), createdBy: "00000000-0000-4000-8000-000000000043", createdAt: new Date().toISOString(),
+    } }
+    return clone(this.siteSettings)
+  }
+  async publishSiteSettings(expectedVersion: number) {
+    await pause()
+    if (this.siteSettings.version !== expectedVersion) throw new CmsConflictError(this.siteSettings.version)
+    if (!this.siteSettings.draft) throw new Error("Нет изменений для публикации")
+    this.siteSettings = { ...this.siteSettings, version: expectedVersion + 1,
+      published: { ...this.siteSettings.draft, state: "published" }, draft: null }
+    return clone(this.siteSettings)
   }
   async getMetrikaSettings() { await pause(); return clone(this.metrika) }
   async saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number) {
@@ -222,6 +248,27 @@ export class ApiCmsRepository implements CmsRepository {
   }
 
   async getNavigation(): Promise<PublicNavigation> { const detail = await this.client.get("/site-settings", CmsSiteSettingsDetailSchema); this.settingsDetail = detail; return navigationFromDetail(detail) }
+  async getSiteSettings(): Promise<CmsSiteSettingsDetail> {
+    const detail = await this.client.get("/site-settings", CmsSiteSettingsDetailSchema)
+    this.settingsDetail = detail
+    return detail
+  }
+  async saveSiteName(siteName: string, expectedVersion: number): Promise<CmsSiteSettingsDetail> {
+    try {
+      const current = this.settingsDetail ?? await this.client.get("/site-settings", CmsSiteSettingsDetailSchema)
+      const base = current.draft?.value ?? current.published?.value ?? emptySiteSettingsValue(siteName)
+      const detail = await this.client.patch("/site-settings", { ...operationMeta(), expectedVersion, value: { ...base, siteName } }, CmsSiteSettingsDetailSchema)
+      this.settingsDetail = detail
+      return detail
+    } catch (error) { throw mapMutationError(error) }
+  }
+  async publishSiteSettings(expectedVersion: number): Promise<CmsSiteSettingsDetail> {
+    try {
+      const detail = await this.client.post("/site-settings/publish", { ...operationMeta(), expectedVersion }, CmsSiteSettingsDetailSchema)
+      this.settingsDetail = detail
+      return detail
+    } catch (error) { throw mapMutationError(error) }
+  }
   async saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation> {
     try {
       const current = this.settingsDetail ?? await this.client.get("/site-settings", CmsSiteSettingsDetailSchema)
@@ -632,6 +679,9 @@ function sameEditorContent(left: EditorRecord, right: EditorRecord) {
 }
 
 type WireNavigationItem = CmsSiteSettingsValue["headerNavigation"][number]
+function emptySiteSettingsValue(siteName: string): CmsSiteSettingsValue {
+  return { siteName, headerNavigation: [], mobileNavigation: [], footerNavigation: [], headerCta: null, heroDefault: null, sectionDefaults: [] }
+}
 type WireNavigationChild = WireNavigationItem["children"][number]
 type WireNavigationLeaf = WireNavigationChild["children"][number]
 type WireNavigationAny = WireNavigationItem | WireNavigationChild | WireNavigationLeaf

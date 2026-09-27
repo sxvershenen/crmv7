@@ -1,5 +1,5 @@
 import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
-import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsWhyUsSectionDraft, PublicEditorialContentConfig } from "@crm/contracts"
+import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetail, CmsWhyUsSectionDraft, PublicEditorialContentConfig } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
 
@@ -240,6 +240,9 @@ export interface CmsRepository {
   getNavigation(): Promise<PublicNavigation>
   saveNavigation(value: PublicNavigation, expectedVersion: number): Promise<PublicNavigation>
   publishNavigation(expectedVersion: number): Promise<PublicNavigation>
+  getSiteSettings(): Promise<CmsSiteSettingsDetail>
+  saveSiteName(siteName: string, expectedVersion: number): Promise<CmsSiteSettingsDetail>
+  publishSiteSettings(expectedVersion: number): Promise<CmsSiteSettingsDetail>
   getMetrikaSettings(): Promise<MetrikaSettingsRecord>
   saveMetrikaSettings(value: MetrikaSettings, expectedVersion: number): Promise<MetrikaSettingsRecord>
   publishMetrikaSettings(expectedVersion: number): Promise<MetrikaSettingsRecord>
