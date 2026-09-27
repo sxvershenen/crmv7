@@ -33,7 +33,7 @@ export default function SiteUiV2GalleryIsland() {
   return <>
     <section aria-labelledby="v2-hero-title" className="site-section site-section--compact">
       <SiteSectionHeader eyebrow="Hero · главная" eyebrowIcon={<Sparkles className="w-3 h-3 text-[var(--site-color-accent-amber)]" />} title="Hero и промокоды" description="Каноничный hero нового public-дизайна: slider, CTA, chooser и полнокарточное копирование промокода." titleId="v2-hero-title" />
-      <SiteHero config={{ ...DEFAULT_HERO_CONFIG, autoplayMs: 0 }} promos={PROMO_CODES} onBooking={() => openBooking()} onCall={openCall} onNavigate={navigateTo} onPromoCopied={(promo) => showToast(`Промокод ${promo.code} скопирован`)} />
+      <SiteHero config={{ ...DEFAULT_HERO_CONFIG, autoplayMs: 0 }} promos={PROMO_CODES} onBooking={() => openBooking()} onCall={openCall} onNavigate={navigateTo} onPromoSelected={(promo, copied) => showToast(copied ? `Промокод ${promo.code} скопирован` : `Промокод ${promo.code} выбран — скопируйте его вручную`)} />
     </section>
 
     <section aria-labelledby="v2-headings-title" className="site-section site-section--compact">

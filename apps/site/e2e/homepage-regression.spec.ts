@@ -120,9 +120,11 @@ test("has no mobile document overflow while the reusable swipe hint runs", async
   await expect.poll(widths).toEqual({ client: 390, scroll: 390 });
 });
 
-test("copies a promo from the whole card and applies it to intake", async ({ page }) => {
+test("applies a selected promo when clipboard access is denied", async ({ page }) => {
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Clipboard denied") } } }));
   const promo = page.getByRole("button", { name: "Скопировать промокод GLAMP3000" });
   await promo.click();
+  await expect(page.getByText("Промокод GLAMP3000 выбран — скопируйте его вручную")).toBeVisible();
   const quiz = page.locator("#quiz");
   await quiz.scrollIntoViewIfNeeded();
   await expect.poll(() => quiz.evaluate((element) => !element.closest("astro-island")?.hasAttribute("ssr"))).toBe(true);

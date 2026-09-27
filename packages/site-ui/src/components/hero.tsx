@@ -20,11 +20,11 @@ export interface SiteHeroProps {
   onBooking: () => void
   onCall: () => void
   onNavigate: (sectionId: string) => void
-  onPromoCopied?: (promo: SitePromoCode) => void
+  onPromoSelected?: (promo: SitePromoCode, copied: boolean) => void
 }
 
 /** Faithful port of attached components/sections/Hero.tsx with CMS props. */
-export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied, promos }: SiteHeroProps) {
+export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoSelected, promos }: SiteHeroProps) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [bookingOpen, setBookingOpen] = useState(false)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
@@ -53,10 +53,13 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoCopied,
   }
 
   const copyPromo = async (promo: SitePromoCode) => {
-    try { await navigator.clipboard.writeText(promo.code) } catch { return }
-    setCopiedCode(promo.code)
-    onPromoCopied?.(promo)
-    window.setTimeout(() => setCopiedCode(null), 2200)
+    let copied = false
+    try { await navigator.clipboard.writeText(promo.code); copied = true } catch { /* The code is still selectable when clipboard access is denied. */ }
+    if (copied) {
+      setCopiedCode(promo.code)
+      window.setTimeout(() => setCopiedCode(null), 2200)
+    }
+    onPromoSelected?.(promo, copied)
   }
 
   if (!config.enabled || !slides.length) return null

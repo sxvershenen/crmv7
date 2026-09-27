@@ -24,10 +24,10 @@ export function HeroSection({ config, fixture = false, promos = [], onNavigate, 
     onBooking={() => onOpenBookingModal()}
     onCall={onOpenCallModal}
     onNavigate={onNavigate}
-    onPromoCopied={(promo) => {
+    onPromoSelected={(promo, copied) => {
       fireConfetti()
       if (fixture) applyPromo(promo.code)
-      onToast(`Промокод ${promo.code} скопирован`)
+      onToast(copied ? `Промокод ${promo.code} скопирован` : `Промокод ${promo.code} выбран — скопируйте его вручную`)
     }}
   />
 }
