@@ -457,7 +457,7 @@ export class ApiCmsRepository implements CmsRepository {
     return {
       id: item.node.id, title: revision?.title ?? "Без названия", path: revision?.route.path ?? "—", type: localNodeType(item.node.kind), status, hasPublishedRevision: item.latestPublished !== null,
       pageKind: item.node.kind, sortOrder: revision?.route.sortOrder ?? 0, quality: status === "draft" || status === "review" ? "warning" : "ok", parentId: revision?.route.parentNodeId ?? null, children: [],
-      owner: importedDraft ? "Синхронизация CRM" : revision?.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", updatedLabel: formatUpdated(item.node.updatedAt), inboundLinks: null, mediaCount: null,
+      owner: importedDraft ? "Синхронизация CRM" : revision?.createdBy ? `ID ${revision.createdBy.slice(0, 8)}` : "CMS", updatedLabel: formatUpdated(item.node.updatedAt), updatedAt: item.node.updatedAt, inboundLinks: null, mediaCount: null,
       source: importedDraft ? "CRM" : "CMS", ...(item.source ? { sourceKind: item.source.sourceKind } : {}), importedDraft,
     }
   }

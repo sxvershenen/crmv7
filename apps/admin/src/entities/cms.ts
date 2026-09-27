@@ -25,6 +25,8 @@ export type ContentNode = {
   children: string[]
   owner: string
   updatedLabel: string
+  /** Server timestamp for chronological sorting; label is display-only. */
+  updatedAt?: string
   inboundLinks: number | null
   mediaCount: number | null
   source?: "CMS" | "CRM"

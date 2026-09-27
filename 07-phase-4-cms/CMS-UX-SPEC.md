@@ -138,6 +138,8 @@ List/view/filter state хранится в URL: `q`, `status`, `type`, `owner`, 
 - alternative table view для массовых операций и сортировки;
 - search по title, slug, route, CRM entity, media filename.
 
+Выбор узла, поиск и вид дерева остаются в URL при переходе в редактор и возврате. Списки страниц сохраняют фильтр, вид и сортировку в URL; «Обновлено» сортируется по server timestamp, а не по текстовой подписи.
+
 Действия: создать child/sibling, duplicate, move, change slug, preview, request review, publish, schedule, archive. Изменение path сначала показывает affected descendants, redirect proposal, canonical/sitemap impact.
 
 ## 6. Общий route-driven editor

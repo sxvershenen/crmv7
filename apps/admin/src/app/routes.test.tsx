@@ -5,6 +5,7 @@ import { TooltipProvider } from "@crm/ui"
 
 import { navGroups, quickCreateItems } from "@admin/app/navigation"
 import { ContentEditorPage } from "@admin/pages/content-editor-page"
+import { ContentListPage } from "@admin/pages/content-list-page"
 import { buildContentTree, ContentTreePage } from "@admin/pages/content-tree-page"
 import type { ContentNode } from "@admin/entities/cms"
 import { AnalyticsPage } from "@admin/pages/analytics-page"
@@ -33,6 +34,35 @@ describe("CMS route screens", () => {
     renderWithRouter(<ContentTreePage />, "/content/tree?selected=houses")
     expect(await screen.findByRole("heading", { name: "Домики" })).toBeInTheDocument()
     expect(screen.getAllByText("/domiki")).toHaveLength(2)
+  })
+
+  it("returns from a tree editor to the selected node and search", async () => {
+    render(<TooltipProvider><AdminAuthSessionProvider><MemoryRouter initialEntries={["/content/tree?selected=house-lesnoy&q=Лесной"]}><Routes>
+      <Route element={<ContentTreePage />} path="/content/tree" />
+      <Route element={<ContentEditorPage kind="profile" />} path="/content/public-profiles/:entityType/:entityId" />
+    </Routes></MemoryRouter></AdminAuthSessionProvider></TooltipProvider>)
+    expect(await screen.findByRole("heading", { name: "Домик «Лесной»" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Открыть" }))
+    expect(await screen.findByText("/domiki/lesnoy · Редакция 12")).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole("button", { name: "Закрыть" })[0]!)
+    expect(await screen.findByRole("heading", { name: "Домик «Лесной»" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Поиск по структуре")).toHaveValue("Лесной")
+  })
+
+  it("keeps table view and search when selecting a tree row", async () => {
+    renderWithRouter(<ContentTreePage />, "/content/tree?view=table&q=Лесной", "/content/tree")
+    const rowLink = await screen.findByRole("link", { name: "Домик «Лесной»" })
+    fireEvent.click(rowLink)
+    expect(screen.getByLabelText("Поиск по структуре")).toHaveValue("Лесной")
+    expect(screen.getByRole("button", { name: "Таблица" })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  it("sorts the content list by server timestamps instead of displayed relative dates", async () => {
+    renderWithRouter(<ContentListPage kind="profiles" />, "/content/public-profiles?sort=updated&direction=desc", "/content/public-profiles")
+    expect(await screen.findByRole("heading", { name: "Публичные профили" })).toBeInTheDocument()
+    const rows = await screen.findAllByRole("row")
+    expect(rows[1]).toHaveTextContent("Новый домик")
+    expect(rows[2]).toHaveTextContent("Новая программа")
   })
 
   it("distinguishes a current draft from its earlier publication in the tree", async () => {
