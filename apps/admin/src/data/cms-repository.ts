@@ -1,4 +1,4 @@
-import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, CmsNodeUnpublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodePublicationStatus, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
+import { CmsNodeDetailSchema, CmsNodeListResponseSchema, CmsNodeRevisionListResponseSchema, CmsNodePublicationStatusSchema, CmsNodePublishResultSchema, CmsNodeUnpublishResultSchema, type CmsHeroPolicy, type CmsNodeDetail, type CmsNodePublicationStatus, type CmsNodeRevision, type CmsPageKind, type CmsSection } from "@crm/contracts/content"
 import { CmsDashboardResponseSchema } from "@crm/contracts/cms-dashboard"
 import { SessionUserSchema } from "@crm/contracts/auth"
 import { AnalyticsAggregateResponseSchema } from "@crm/contracts/analytics"
@@ -8,7 +8,7 @@ import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseLi
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
 import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
 
-import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
+import type { AnalyticsSummary, CmsAccess, CmsNodeQuery, CmsRepository, CmsRevisionHistoryEntry, CmsRevisionHistoryPage, ContentNode, ContentStatus, EditorRecord, HeroConfig, MediaAssetUsageQuery, MetrikaSettings, MetrikaSettingsRecord, PublicNavigation, PublicNavigationItem } from "@admin/entities/cms"
 import { CmsConflictError, CmsUnavailableError } from "@admin/entities/cms"
 import { analyticsFixture, codeArtifactFixture, dashboardFixture, editorFixtures, mediaFixtures, navigationFixture, nodeFixtures, releaseFixtures } from "@admin/fixtures/cms"
 import { AdminApiError, createAdminApiClient, type AdminApiClient } from "@admin/lib/api-client"
@@ -27,6 +27,7 @@ const ANALYTICS_RECENT_DAYS = 30
 export class FixtureCmsRepository implements CmsRepository {
   readonly mode = "fixtures" as const
   private editors = clone(editorFixtures)
+  private revisionHistory = new Map<string, CmsRevisionHistoryEntry[]>()
   private unpublished = new Set<string>()
   private navigation = clone(navigationFixture)
   private siteSettings: CmsSiteSettingsDetail = CmsSiteSettingsDetailSchema.parse({
@@ -46,15 +47,38 @@ export class FixtureCmsRepository implements CmsRepository {
     const fallbackId = kind === "home" ? "home" : kind === "category" ? "houses" : kind === "profile" ? "house-lesnoy" : "landing-family"
     const record = this.editors[id] ?? this.editors[fallbackId]
     if (!record) throw new Error("Запись не найдена")
-    return { ...clone(record), id, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
+    return { ...clone(record), id, revision: this.revisionHistory.get(id)?.[0]?.revision ?? record.revision ?? record.version, internalName: record.internalName, status: record.status, hasPublishedRevision: record.hasPublishedRevision ?? record.status === "published" }
+  }
+  async getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage> {
+    await pause()
+    const current = this.editors[id]
+    if (!current) {
+      const node = nodeFixtures.find((item) => item.id === id)
+      if (!node) throw new Error("Страница не найдена")
+      const entry: CmsRevisionHistoryEntry = { id: `fixture-${id}-1`, revision: 1, state: node.status === "failed" ? "draft" : node.status, title: node.title, path: node.path, createdAt: node.updatedAt ?? null, createdBy: null }
+      return { items: before !== undefined && before <= 1 ? [] : [entry], nextBefore: null }
+    }
+    const items = this.historyFor(id, current).filter((entry) => before === undefined || entry.revision < before).slice(0, 30)
+    const all = this.historyFor(id, current)
+    return { items: clone(items), nextBefore: all.some((entry) => entry.revision < (items.at(-1)?.revision ?? 0)) ? items.at(-1)!.revision : null }
+  }
+  private historyFor(id: string, current: EditorRecord): CmsRevisionHistoryEntry[] {
+    let history = this.revisionHistory.get(id)
+    if (!history) {
+      history = [{ id: `fixture-${id}-${current.revision ?? current.version}`, revision: current.revision ?? current.version, state: fixtureRevisionState(current), title: current.publicTitle, path: current.url, createdAt: nodeFixtures.find((node) => node.id === id)?.updatedAt ?? null, createdBy: null }]
+      this.revisionHistory.set(id, history)
+    }
+    return history
   }
   async saveEditor(record: EditorRecord, expectedVersion: number) {
     await pause()
     const current = this.editors[record.id]
     if (current && current.version !== expectedVersion) throw new CmsConflictError(current.version)
+    if (current) this.historyFor(record.id, current)
     const savedId = record.id === "new" ? `fixture-${Date.now()}` : record.id
     const saved = { ...clone(record), id: savedId, version: expectedVersion + 1, revision: (record.revision ?? expectedVersion) + 1, updatedLabel: "только что" }
     this.editors[savedId] = saved
+    this.revisionHistory.set(savedId, [{ id: `fixture-${savedId}-${saved.revision}`, revision: saved.revision!, state: "draft", title: saved.publicTitle, path: saved.url, createdAt: new Date().toISOString(), createdBy: null }, ...(this.revisionHistory.get(savedId) ?? []).map((entry, index) => index === 0 && entry.state === "draft" ? { ...entry, state: "superseded" as const } : entry)])
     return clone(saved)
   }
   async submitReview(id: string, expectedVersion: number) { return this.transitionFixture(id, expectedVersion, "review") }
@@ -170,8 +194,14 @@ export class FixtureCmsRepository implements CmsRepository {
     const status: ContentStatus = revisionState === "approved" ? "review" : revisionState
     const saved = { ...current, revisionState, status, version: current.version + 1, updatedLabel: "только что" }
     this.editors[id] = saved
+    const entry = this.historyFor(id, current)[0]
+    if (entry) entry.state = fixtureRevisionState(saved)
     return clone(saved)
   }
+}
+
+function fixtureRevisionState(record: EditorRecord): CmsRevisionHistoryEntry["state"] {
+  return record.revisionState ?? (record.status === "failed" ? "draft" : record.status)
 }
 
 export class ApiCmsRepository implements CmsRepository {
@@ -192,6 +222,13 @@ export class ApiCmsRepository implements CmsRepository {
     const byId = new Map(nodes.map((node) => [node.id, node]))
     for (const node of nodes) if (node.parentId && byId.has(node.parentId)) byId.get(node.parentId)!.children.push(node.id)
     return nodes
+  }
+
+  async getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage> {
+    const query = new URLSearchParams({ limit: "30" })
+    if (before !== undefined) query.set("before", String(before))
+    const response = await this.client.get(`/content/nodes/${encodeURIComponent(id)}/revisions?${query}`, CmsNodeRevisionListResponseSchema)
+    return { items: response.items.map((item) => ({ id: item.id, revision: item.revision, state: item.state, title: item.title, path: item.route.path, createdAt: item.createdAt, createdBy: item.createdBy })), nextBefore: response.nextBefore }
   }
 
   async getEditor(id: string, kind: EditorRecord["kind"]): Promise<EditorRecord> {

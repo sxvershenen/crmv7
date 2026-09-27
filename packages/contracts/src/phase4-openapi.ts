@@ -8,6 +8,8 @@ import {
   CmsNodeIdParamsSchema,
   CmsNodeListQuerySchema,
   CmsNodeListResponseSchema,
+  CmsNodeRevisionListQuerySchema,
+  CmsNodeRevisionListResponseSchema,
   CmsNodeMutationSchema,
   CmsNodePublicationStatusSchema,
   CmsNodePublishResultSchema,
@@ -101,6 +103,8 @@ const adminError = adminRegister("AdminApiError", ApiErrorSchema);
 const cmsDetail = adminRegister("CmsNodeDetail", CmsNodeDetailSchema);
 const cmsList = adminRegister("CmsNodeListResponse", CmsNodeListResponseSchema);
 const cmsListQuery = adminRegister("CmsNodeListQuery", CmsNodeListQuerySchema);
+const cmsRevisionListQuery = adminRegister("CmsNodeRevisionListQuery", CmsNodeRevisionListQuerySchema);
+const cmsRevisionList = adminRegister("CmsNodeRevisionListResponse", CmsNodeRevisionListResponseSchema);
 const cmsCreate = adminRegister("CmsNodeCreate", CmsNodeCreateSchema);
 const cmsMutation = adminRegister("CmsNodeMutation", CmsNodeMutationSchema);
 const cmsTransition = adminRegister("CmsNodeTransition", CmsNodeTransitionSchema);
@@ -226,6 +230,7 @@ adminRegistry.registerPath({ method: "get", path: "/analytics/aggregates", ...ad
 adminRegistry.registerPath({ method: "get", path: "/content/nodes", ...adminPrivate, tags: ["Content"], summary: "List and search CMS nodes", request: { query: cmsListQuery }, responses: { 200: { description: "Cursor page of CMS nodes", content: json(cmsList) }, 400: errorResponse("Invalid cursor or filter", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes", ...adminPrivate, tags: ["Content"], summary: "Create a CMS node and its first draft", request: { body: { required: true, content: json(cmsCreate) } }, responses: { 201: { description: "Created CMS node", content: json(cmsDetail) }, 400: errorResponse("Invalid content", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Route placement or idempotency conflict", adminError) } });
 adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}", ...adminPrivate, tags: ["Content"], summary: "Read a CMS node, working revision and latest published metadata", request: { params: idParams }, responses: { 200: { description: "CMS node", content: json(cmsDetail) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Node not found", adminError) } });
+adminRegistry.registerPath({ method: "get", path: "/content/nodes/{id}/revisions", ...adminPrivate, tags: ["Content"], summary: "List actual immutable revisions of one CMS page, newest first", request: { params: idParams, query: cmsRevisionListQuery }, responses: { 200: { description: "Revision history", content: json(cmsRevisionList) }, 401: errorResponse("Session required", adminError), 403: errorResponse("Content view capability denied", adminError), 404: errorResponse("Node not found", adminError) } });
 adminRegistry.registerPath({ method: "patch", path: "/content/nodes/{id}", ...adminPrivate, tags: ["Content"], summary: "Create the next immutable CMS draft revision", request: { params: idParams, body: { required: true, content: json(cmsMutation) } }, responses: { 200: { description: "CMS node with new draft", content: json(cmsDetail) }, 400: errorResponse("Invalid mutation", adminError), 401: errorResponse("Session required", adminError), 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Version, route placement or idempotency conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/submit-review", ...adminPrivate, tags: ["Content"], summary: "Submit the current draft for review without changing its content", request: { params: idParams, body: { required: true, content: json(cmsTransition) } }, responses: { 200: { description: "Review revision", content: json(cmsDetail) }, 403: errorResponse("Content edit capability denied", adminError), 409: errorResponse("Invalid state or version conflict", adminError) } });
 adminRegistry.registerPath({ method: "post", path: "/content/nodes/{id}/return-to-draft", ...adminPrivate, tags: ["Content"], summary: "Return a review revision to draft without changing its content", request: { params: idParams, body: { required: true, content: json(cmsTransition) } }, responses: { 200: { description: "Draft revision", content: json(cmsDetail) }, 403: errorResponse("Content review capability denied", adminError), 409: errorResponse("Invalid state or version conflict", adminError) } });

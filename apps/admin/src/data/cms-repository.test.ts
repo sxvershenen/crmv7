@@ -10,6 +10,18 @@ import { createHomepageSectionEditorSection, homepageSectionPolicy } from "@admi
 import { createEditorialSection, editorialPolicy } from "@admin/data/editorial-section"
 
 describe("FixtureCmsRepository", () => {
+  it("shows only real fixture revisions created by saves", async () => {
+    const repository = new FixtureCmsRepository()
+    const editor = await repository.getEditor("landing-family", "landing")
+    const before = await repository.getRevisionHistory(editor.id)
+    expect(before.items).toHaveLength(1)
+    const saved = await repository.saveEditor({ ...editor, publicTitle: "Новый заголовок" }, editor.version)
+    const after = await repository.getRevisionHistory(saved.id)
+    expect(after.items.map((entry) => entry.revision)).toEqual([saved.revision, editor.revision ?? editor.version])
+    expect(after.items[0]).toMatchObject({ title: "Новый заголовок", state: "draft" })
+    expect(after.items[1]).toMatchObject({ title: editor.publicTitle, state: "superseded" })
+  })
+
   it("versions media metadata and rejects a stale fixture save", async () => {
     const repository = new FixtureCmsRepository()
     const original = await repository.getAsset("asset-hero")

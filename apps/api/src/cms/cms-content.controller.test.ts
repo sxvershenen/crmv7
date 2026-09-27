@@ -8,6 +8,7 @@ import { CmsContentController } from "./cms-content.controller.js"
 describe("CmsContentController", () => {
   it("declares granular capabilities for view, edit and review routes", () => {
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.list)).toEqual(["canViewContent"])
+    expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.revisions)).toEqual(["canViewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.update)).toEqual(["canEditContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.returnToDraft)).toEqual(["canReviewContent"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, CmsContentController.prototype.publicationPreview)).toEqual(["canViewContent"])

@@ -248,6 +248,18 @@ export const CmsNodeRevisionMetadataSchema = CmsNodeRevisionSchema.pick({
 }).strict();
 export type CmsNodeRevisionMetadata = z.infer<typeof CmsNodeRevisionMetadataSchema>;
 
+export const CmsNodeRevisionListQuerySchema = z.object({
+  before: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+}).strict();
+export type CmsNodeRevisionListQuery = z.infer<typeof CmsNodeRevisionListQuerySchema>;
+
+export const CmsNodeRevisionListResponseSchema = z.object({
+  items: z.array(CmsNodeRevisionMetadataSchema).max(100),
+  nextBefore: z.number().int().positive().nullable(),
+}).strict();
+export type CmsNodeRevisionListResponse = z.infer<typeof CmsNodeRevisionListResponseSchema>;
+
 export const CmsNodeDetailSchema = z.object({
   node: CmsNodeIdentitySchema,
   currentRevision: CmsNodeRevisionSchema.nullable(),

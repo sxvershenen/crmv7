@@ -231,6 +231,7 @@ export interface CmsRepository {
   getDashboard(): Promise<CmsDashboard>
   getNodes(query?: CmsNodeQuery): Promise<ContentNode[]>
   getEditor(id: string, kind: EditorRecord["kind"]): Promise<EditorRecord>
+  getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage>
   saveEditor(record: EditorRecord, expectedVersion: number): Promise<EditorRecord>
   submitReview(id: string, expectedVersion: number): Promise<EditorRecord>
   returnToDraft(id: string, expectedVersion: number): Promise<EditorRecord>
@@ -263,6 +264,17 @@ export interface CmsRepository {
   getAnalytics(): Promise<AnalyticsSummary>
   getCodeArtifact(id?: string): Promise<CodeArtifact>
 }
+
+export type CmsRevisionHistoryEntry = {
+  id: string
+  revision: number
+  state: "draft" | "review" | "approved" | "scheduled" | "published" | "superseded" | "archived"
+  title: string
+  path: string
+  createdAt: string | null
+  createdBy: string | null
+}
+export type CmsRevisionHistoryPage = { items: CmsRevisionHistoryEntry[]; nextBefore: number | null }
 
 export type CmsNodeQuery = { q?: string; kind?: CmsPageKind; status?: "active" | "archived" }
 export type CmsAccess = { canViewContent: boolean; canEditContent: boolean; canReviewContent: boolean; canPublishContent: boolean }

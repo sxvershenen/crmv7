@@ -5,6 +5,7 @@ import {
   CmsNodeCreateSchema,
   CmsNodeIdParamsSchema,
   CmsNodeListQuerySchema,
+  CmsNodeRevisionListQuerySchema,
   CmsNodeMutationSchema,
   CmsNodePublishSchema,
   CmsNodeUnpublishSchema,
@@ -13,6 +14,7 @@ import {
   type CmsNodeCreate,
   type CmsNodeIdParams,
   type CmsNodeListQuery,
+  type CmsNodeRevisionListQuery,
   type CmsNodeMutation,
   type CmsNodePublish,
   type CmsNodeUnpublish,
@@ -45,6 +47,12 @@ export class CmsContentController {
   @RequireCapabilities("canViewContent")
   get(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Req() request: AuthenticatedRequest) {
     return this.content.get(params.id, request.sessionUser!)
+  }
+
+  @Get(":id/revisions")
+  @RequireCapabilities("canViewContent")
+  revisions(@Param(new ZodValidationPipe(CmsNodeIdParamsSchema)) params: CmsNodeIdParams, @Query(new ZodValidationPipe(CmsNodeRevisionListQuerySchema)) query: CmsNodeRevisionListQuery, @Req() request: AuthenticatedRequest) {
+    return this.content.revisions(params.id, query, request.sessionUser!)
   }
 
   @Patch(":id")

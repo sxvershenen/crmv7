@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto"
 
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
-import { DataSource, In, type EntityManager } from "typeorm"
+import { DataSource, In, LessThan, type EntityManager } from "typeorm"
 
 import {
   canonicalPublicPath,
   CmsContentOutboxEventSchema,
   CmsNodeRevisionSchema,
+  CmsNodeRevisionListResponseSchema,
   IdSchema,
   type CmsContentOutboxEvent,
   type CmsNodeArchive,
@@ -17,6 +18,8 @@ import {
   type CmsNodeListResponse,
   type CmsNodeMutation,
   type CmsNodeRevision,
+  type CmsNodeRevisionListQuery,
+  type CmsNodeRevisionListResponse,
   type CmsNodeRevisionMetadata,
   type CmsNodeTransition,
   type SessionUser,
@@ -73,6 +76,21 @@ export class CmsContentService {
   async get(id: string, actor: SessionUser): Promise<CmsNodeDetail> {
     this.assert(actor, "canViewContent")
     return this.detail(this.dataSource.manager, await this.findNode(this.dataSource.manager, id))
+  }
+
+  async revisions(id: string, query: CmsNodeRevisionListQuery, actor: SessionUser): Promise<CmsNodeRevisionListResponse> {
+    this.assert(actor, "canViewContent")
+    await this.findNode(this.dataSource.manager, id)
+    const rows = await this.dataSource.getRepository(CmsNodeRevisionEntity).find({
+      where: { nodeId: id, ...(query.before ? { revision: LessThan(query.before) } : {}) },
+      order: { revision: "DESC" },
+      take: query.limit + 1,
+    })
+    const page = rows.slice(0, query.limit)
+    return CmsNodeRevisionListResponseSchema.parse({
+      items: page.map((row) => this.metadata(row)),
+      nextBefore: rows.length > query.limit ? page.at(-1)?.revision ?? null : null,
+    })
   }
 
   async create(input: CmsNodeCreate, actor: SessionUser, requestId: string): Promise<CmsNodeDetail> {

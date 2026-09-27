@@ -43,6 +43,27 @@ const revision = {
 }
 
 describe("CmsContentService", () => {
+  it("lists only this node's immutable revisions with a stable older-page cursor", async () => {
+    const find = vi.fn().mockResolvedValue([
+      { ...revision, id: "44444444-4444-4444-8444-444444444444", revision: 4 },
+      { ...revision, revision: 3 },
+      { ...revision, id: "55555555-5555-4555-8555-555555555555", revision: 2 },
+    ])
+    const manager = { findOneBy: vi.fn().mockResolvedValue(node) }
+    const service = new CmsContentService({ manager, getRepository: vi.fn().mockReturnValue({ find }) } as never)
+    const page = await service.revisions(node.id, { before: 5, limit: 2 }, actor)
+    expect(page.items.map((item) => item.revision)).toEqual([4, 3])
+    expect(page.nextBefore).toBe(3)
+    expect(find).toHaveBeenCalledWith(expect.objectContaining({ where: { nodeId: node.id, revision: expect.objectContaining({ _type: "lessThan", _value: 5 }) }, order: { revision: "DESC" }, take: 3 }))
+  })
+
+  it("denies revision history before reading persistence", async () => {
+    const manager = { findOneBy: vi.fn() }
+    const service = new CmsContentService({ manager } as never)
+    await expect(service.revisions(node.id, { limit: 30 }, { ...actor, capabilities: { ...actor.capabilities, canViewContent: false } })).rejects.toMatchObject({ response: { code: "PERMISSION_DENIED" } })
+    expect(manager.findOneBy).not.toHaveBeenCalled()
+  })
+
   it("reads a node through a mocked persistence boundary", async () => {
     const findOne = vi.fn().mockResolvedValueOnce(revision).mockResolvedValueOnce(null)
     const manager = { findOneBy: vi.fn().mockResolvedValue(node), getRepository: vi.fn().mockReturnValue({ findOne }) }
