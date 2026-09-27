@@ -37,7 +37,6 @@ Frontend CMS использует существующие tokens, generated sha
 **Продвижение**
 
 - SEO;
-- Маркетинг и кампании;
 - Редиректы;
 - Аналитика.
 
@@ -373,7 +372,7 @@ Page SEO fields:
 - primary topic/query note, search intent, related links;
 - preview for desktop/mobile snippet and share card.
 
-Marketing: campaigns, UTM builder/allowlist, campaign landings/CTA, active dates, promotion display content. Campaign does not own authoritative discount calculation unless CRM explicitly gains that domain rule.
+Текущий `/marketing/campaigns` сохранён только для старых ссылок: он объясняет, что промокоды и скидки редактируются в CRM, и ведёт в её реестр. Фиктивные кампании и кнопка создания удалены из обычного меню CMS. Если понадобится редакционное управление баннерами и UTM, оно должно использовать реальные данные/сохранение; расчёт скидки остаётся в CRM.
 
 ## 17. Publish workflow
 
@@ -427,7 +426,7 @@ This matrix is the target product review of every top-level CMS area. A section 
 | Components/templates | capability-gated tool, not primary navigation | renderer/schema versions, reusable instances, usage/blast radius and approved variants; no arbitrary JSON renderer |
 | Files/code | capability-gated tool, not ordinary page tab | linked managed artifacts only, diff/build/preview/dependencies/media/history and sandbox gates |
 | SEO | keep as reporting/control center | issues and drilldowns; field editing deep-links to canonical page/offer editor; sitemap/schema/indexing/links/images/freshness |
-| Marketing | keep, clarify boundary | campaign metadata, UTM allowlist, CTA/landing schedule and promotion copy; discounts/calculation remain CRM Pricing |
+| Marketing | hide until real editorial use | campaign metadata, UTM allowlist and promotion copy only if needed; promo terms and discount calculation remain CRM Pricing |
 | Redirects | keep | proposed slug redirects, validation, chains/loops, source/target lifecycle, import/export and audited publication |
 | Analytics | keep, implement later | acquisition/content/funnel/forms/retention/quality with consent, server conversion facts and data-quality states |
 | Publication log | replace manual release editor | direct publication history, validation/delivery/cache status, retries and rollback; immutable releases stay internal |

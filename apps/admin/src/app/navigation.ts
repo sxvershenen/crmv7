@@ -20,7 +20,6 @@ export const navGroups: { label: string; items: AdminNavItem[] }[] = [
   ] },
   { label: "Продвижение", items: [
     { label: "SEO", href: "/seo", icon: IconReportSearch, match: "/seo" },
-    { label: "Маркетинг", href: "/marketing/campaigns", icon: IconSparkles },
     { label: "Редиректы", href: "/redirects", icon: IconLink, capability: "canManageRedirects" },
     { label: "Аналитика", href: "/analytics", icon: IconFileAnalytics, match: "/analytics", capability: "canViewAnalytics" },
   ] },
@@ -50,6 +49,7 @@ export function hasAdminCapability(capabilities: Capabilities, capability?: keyo
 
 export function routeTitle(pathname: string) {
   if (pathname === "/settings/access") return "Мои права"
+  if (pathname === "/marketing/campaigns") return "Маркетинг"
   for (const group of navGroups) for (const item of group.items) if (pathname === item.href || (item.match && pathname.startsWith(item.match))) return item.label
   return pathname.includes("/new") ? "Новая запись" : "CMS"
 }
