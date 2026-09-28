@@ -131,6 +131,19 @@ it("allows another replacement after the previous attempt failed", async () => {
   expect(screen.getByRole("button", { name: "Заменить" })).toBeEnabled()
 })
 
+it("lets an administrator choose the same replacement file after a failed upload", async () => {
+  replaceMedia.mockRejectedValueOnce(new Error("Соединение прервалось")).mockResolvedValueOnce(asset)
+  const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Заменить" }))
+  const input = view.container.querySelector('input[type="file"]')!
+  const file = new File(["image"], "new.jpg", { type: "image/jpeg" })
+  fireEvent.change(input, { target: { files: [file] } })
+  expect(await screen.findByText("Не удалось заменить файл")).toBeInTheDocument()
+  expect(input).toHaveValue("")
+  fireEvent.change(input, { target: { files: [file] } })
+  await waitFor(() => expect(replaceMedia).toHaveBeenCalledTimes(2))
+})
+
 it("keeps metadata edits after a failed save", async () => {
   saveMediaMetadata.mockRejectedValueOnce(new Error("Сервер не сохранил изменения"))
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
@@ -162,6 +175,14 @@ it("shows processing after upload when the API has not marked the file ready", a
   expect(await screen.findByRole("status")).toHaveTextContent("Файл загружен. Обработка продолжается.")
   expect(uploadMedia).toHaveBeenCalledOnce()
   expect(screen.queryByText("Файл готов")).not.toBeInTheDocument()
+})
+
+it("accepts a dropped image in the media upload area", async () => {
+  uploadMedia.mockResolvedValue(asset)
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)
+  const file = new File(["image"], "sosna.jpg", { type: "image/jpeg" })
+  fireEvent.drop(screen.getByText("Перетащите изображение сюда или выберите файл").closest("label")!, { dataTransfer: { files: [file] } })
+  await waitFor(() => expect(uploadMedia).toHaveBeenCalledWith(file))
 })
 
 it("treats a queued upload as accepted and refreshes the library", async () => {
