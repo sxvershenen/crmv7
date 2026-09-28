@@ -8,11 +8,11 @@ async function login(page: Page) {
   await expect(page.getByRole("tab", { name: "Продажи и цены" })).toHaveAttribute("aria-selected", "true")
 }
 
-test("program offering survives API reload and remains public fail-closed", async ({ page }) => {
+test("program offering survives API reload and shows CMS publication separately", async ({ page }) => {
   await login(page)
 
   const prepare = page.getByRole("button", { name: "Подготовить продажи и CMS-страницу" })
-  const cmsDraft = page.getByText("CMS-черновик", { exact: true })
+  const cmsDraft = page.getByText("Связь с CMS", { exact: true })
   await expect(prepare.or(cmsDraft).first()).toBeVisible()
   if (await prepare.isVisible()) {
     const response = page.waitForResponse((item) => item.request().method() === "POST" && /\/programs\/[0-9a-f-]+\/offering$/i.test(new URL(item.url()).pathname))
@@ -21,7 +21,7 @@ test("program offering survives API reload and remains public fail-closed", asyn
   }
 
   await expect(cmsDraft).toBeVisible()
-  await expect(page.getByText("Закрыт до public gate")).toBeVisible()
+  await expect(page.getByText("Публикация CMS")).toBeVisible()
 
   const createDraft = page.getByRole("button", { name: "Создать черновик тарифа" })
   const activate = page.getByRole("button", { name: "Активировать тариф" })
@@ -50,7 +50,7 @@ test("program offering survives API reload and remains public fail-closed", asyn
 
   await page.reload()
   await expect(page.getByText("Тариф активен")).toBeVisible()
-  await expect(page.getByText("Закрыт до public gate")).toBeVisible()
+  await expect(page.getByText("Публикация CMS")).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

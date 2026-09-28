@@ -152,7 +152,7 @@ export function AppTopbar({
               <TooltipContent>Назад</TooltipContent>
             </Tooltip>
             <h1 className="min-w-0 truncate text-sm font-semibold">{editorChrome.title}</h1>
-            <span className="shrink-0 text-xs font-normal text-muted-foreground">{editorChrome.idLabel}</span>
+            <span className="hidden shrink-0 text-xs font-normal text-muted-foreground sm:inline">{editorChrome.idLabel}</span>
             {editorChrome.mobileStatus ? <div className="ml-auto min-w-0 max-w-28 shrink md:hidden" data-slot="editor-mobile-status">{editorChrome.mobileStatus}</div> : null}
           </div>
         ) : (

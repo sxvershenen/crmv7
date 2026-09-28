@@ -96,7 +96,7 @@ test("program template editor follows shared chrome and keeps stage actions oper
   await expect(page.getByRole("button", { name: /Поднять этап/ })).toHaveCount(5)
 })
 
-test("program commercial dossier stays route-driven and fail-closed on desktop and mobile", async ({ page }) => {
+test("program commercial dossier shows separate sales and CMS states on desktop and mobile", async ({ page }) => {
   await page.goto("/programs/forest-family?tab=commercial")
   await expect(page.getByRole("tab", { name: "Продажи и цены" })).toHaveAttribute("aria-selected", "true")
   const prepare = page.getByRole("button", { name: "Подготовить продажи и CMS-страницу" })
@@ -104,10 +104,12 @@ test("program commercial dossier stays route-driven and fail-closed on desktop a
   await prepare.focus()
   await expect(prepare).toBeFocused()
   await prepare.press("Enter")
-  await expect(page.getByText("CMS-черновик")).toBeVisible()
-  await expect(page.getByText("Закрыт до public gate")).toBeVisible()
+  await expect(page.getByText("Связь с CMS")).toBeVisible()
+  await expect(page.getByText("Публикация CMS")).toBeVisible()
   await expect(page.getByText("Расчёт станет доступен после активации тарифа.")).toBeVisible()
   await expect(page).toHaveURL(/tab=commercial/)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole("combobox", { name: "Публикация программы" })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 

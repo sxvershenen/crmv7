@@ -869,7 +869,7 @@ function ProgramCommercial({
   return (
     <div className="space-y-3">
       {error ? <CommercialError message={error} /> : null}
-      <ProgramOfferingReadiness cmsReady={offering.cmsReady} editor={editor} publicReady={offering.publicReady} />
+      <ProgramOfferingReadiness cmsReady={offering.cmsReady} editor={editor} />
       <ProgramPriceBookEditor busy={busy} draft={draft} editor={editor} onActivate={onActivate} onSave={onSavePrice} />
       <ProgramQuotePreview busy={busy} draft={draft} editor={editor} onInvalidateQuote={onInvalidateQuote} onPreview={onPreview} quote={quote} />
       <EditorSection
@@ -900,16 +900,17 @@ function CommercialError({ message }: { message: string }) {
   return <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{message}</div>;
 }
 
-function ProgramOfferingReadiness({ cmsReady, editor, publicReady }: { cmsReady: boolean; editor: Extract<ProgramOfferingResolution, { resolution: "linked" }>["editor"]; publicReady: false }) {
+function ProgramOfferingReadiness({ cmsReady, editor }: { cmsReady: boolean; editor: Extract<ProgramOfferingResolution, { resolution: "linked" }>["editor"] }) {
   const editorial = editor.editorial;
   const cmsHref = editorial ? `${adminAppBaseUrl}/content/tree?selected=${encodeURIComponent(editorial.node.id)}` : null;
   return (
     <EditorSection title="Готовность">
       <div className="grid gap-3 sm:grid-cols-3">
         <ReadinessItem label="Продажи" ready={editor.offering.state === "active" && Boolean(editor.offering.activePriceBookId)} readyText="Активны" waitText="Нужен активный тариф" />
-        <ReadinessItem label="CMS-черновик" ready={cmsReady && Boolean(editorial)} readyText="Готов" waitText="Нужна сверка" />
-        <ReadinessItem label="Публичный сайт" ready={publicReady} readyText="Готов" waitText="Закрыт до public gate" />
+        <ReadinessItem label="Связь с CMS" ready={cmsReady && Boolean(editorial)} readyText="Готова" waitText="Нужна сверка" />
+        <ReadinessItem label="Публикация CMS" ready={Boolean(editorial?.latestPublished)} readyText="Есть опубликованная версия" waitText="Ещё не опубликована" />
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">Доступность страницы на сайте зависит от публикации CMS и действующих данных программы в CRM.</p>
       {editorial ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
           <div className="min-w-0">
