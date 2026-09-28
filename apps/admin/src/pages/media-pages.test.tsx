@@ -67,6 +67,20 @@ it("shows published usage locations and narrows them by a page address", async (
   await waitFor(() => expect(getAsset).toHaveBeenLastCalledWith("asset-1", { path: "/family" }))
 })
 
+it("refreshes usage after a page is published in another tab", async () => {
+  const usage = { ownerType: "cms_revision", ownerId: "revision-1", pageId: "page-1", path: "/family", pointer: "/hero/config/background/assetId" }
+  getAsset.mockResolvedValueOnce({ ...asset, usageCount: 1, usageTotal: 1, usages: [{ ...usage, published: false }] })
+    .mockResolvedValueOnce({ ...asset, usageCount: 1, publishedUsage: true, usageTotal: 1, usages: [{ ...usage, published: true }] })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1?tab=usage"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+
+  expect(await screen.findByText("Черновик")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Архивировать" })).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "Обновить связи" }))
+  expect(await screen.findByText("Опубликованная ссылка")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Архивировать" })).toBeDisabled()
+  expect(getAsset).toHaveBeenCalledTimes(2)
+})
+
 it("explains a failed initial upload without displaying raw processing messages", async () => {
   getAsset.mockResolvedValue({ ...asset, status: "error", processing: { state: "failed", purpose: "initial", attempts: 1, nextAttemptAt: null, errorCode: "MEDIA_DECODE_FAILED" } })
   render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
