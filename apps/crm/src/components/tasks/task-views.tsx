@@ -29,6 +29,8 @@ import {
 
 import type { CrmTask, TaskSortDirection, TaskSortKey, TaskStatus } from "@app/entities/tasks"
 import { isTaskOverdue, taskPriorityMeta, taskStatusMeta, taskStatuses } from "@app/entities/tasks"
+import { useAuthSession } from "@app/features/auth-session-context"
+import { businessDate } from "@app/lib/business-datetime"
 
 type TaskActions = {
   onArchive: (id: string) => void
@@ -37,18 +39,26 @@ type TaskActions = {
 }
 
 export function TaskDashboard({ tasks, ...actions }: { tasks: CrmTask[] } & TaskActions) {
+  const currentUserId = useAuthSession()?.user.id
+  const todayDate = businessDate()
+  const isDueToday = (task: CrmTask) => task.dueAt !== null && businessDate(new Date(task.dueAt)) === todayDate
   const open = tasks.filter((task) => task.status !== "done")
   const overdue = tasks.filter(isTaskOverdue)
-  const today = open.filter((task) => task.dueAt?.startsWith("2026-08-24"))
-  const mine = open.filter((task) => task.assignees.some((person) => person.id === "marina"))
+  const today = open.filter(isDueToday)
+  const mine = currentUserId ? open.filter((task) => task.assignees.some((person) => person.id === currentUserId)) : []
   const done = tasks.filter((task) => task.status === "done")
   const metrics = [
     { label: "Просрочено", value: overdue.length, icon: IconAlertTriangle, tone: "warning" as const, left: `Срочные · ${overdue.filter((task) => task.priority === "urgent").length}`, right: `Без исполнителя · ${overdue.filter((task) => task.assignees.length === 0).length}` },
     { label: "Сегодня", value: today.length, icon: IconCalendarEvent, tone: "info" as const, left: `В работе · ${today.filter((task) => task.status === "in_progress").length}`, right: `Проверка · ${today.filter((task) => task.status === "review").length}` },
-    { label: "Мои открытые", value: mine.length, icon: IconProgressCheck, tone: "task" as const, left: `Сегодня · ${mine.filter((task) => task.dueAt?.startsWith("2026-08-24")).length}`, right: `Просрочено · ${mine.filter(isTaskOverdue).length}` },
+    { label: "Мои открытые", value: mine.length, icon: IconProgressCheck, tone: "task" as const, left: `Сегодня · ${mine.filter(isDueToday).length}`, right: `Просрочено · ${mine.filter(isTaskOverdue).length}` },
     { label: "Выполнено", value: done.length, icon: IconCheck, tone: "success" as const, left: `С итогом · ${done.filter((task) => task.commentCount > 0).length}`, right: `Назначено · ${done.filter((task) => task.assignees.length > 0).length}` },
   ]
-  const workload = ["Марина Кириллова", "Алексей Воронов", "Ольга Семёнова"].map((name) => ({ name, count: open.filter((task) => task.assignees.some((person) => person.name === name)).length }))
+  const workloadById = new Map<string, { name: string; count: number }>()
+  for (const task of open) for (const person of task.assignees) {
+    const existing = workloadById.get(person.id)
+    workloadById.set(person.id, { name: person.name, count: (existing?.count ?? 0) + 1 })
+  }
+  const workload = [...workloadById.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru-RU"))
   const focus = open.slice(0, 5)
 
   return <div className="space-y-3" data-testid="task-dashboard">

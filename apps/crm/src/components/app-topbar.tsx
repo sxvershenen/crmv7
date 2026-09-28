@@ -66,6 +66,7 @@ import {
   type NotificationsRepository,
 } from "@app/data/notifications-repository"
 import { useNotifications } from "@app/features/use-notifications"
+import { BUSINESS_TIME_ZONE } from "@app/lib/business-datetime"
 
 const searchKindIcons: Record<GlobalSearchKind, React.ElementType> = {
   booking: IconBed,
@@ -100,6 +101,7 @@ export function AppTopbar({
   const { chrome: editorChrome } = useEditorLayout()
   const profileName = auth?.user.name ?? "Марина Кириллова"
   const profileInitials = profileName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru-RU") ?? "").join("") || "?"
+  const todayLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: BUSINESS_TIME_ZONE }).format(new Date())
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -159,7 +161,7 @@ export function AppTopbar({
             <IconChevronRight aria-hidden="true" className="hidden size-3 text-muted-foreground sm:block" />
             <h1 className="truncate text-sm font-semibold">{title}</h1>
             {location.pathname === "/" ? (
-              <span className="hidden text-xs text-muted-foreground md:inline">· Сегодня, 23 авг</span>
+              <span className="hidden text-xs text-muted-foreground md:inline">· Сегодня, {todayLabel}</span>
             ) : null}
           </div>
         )}
