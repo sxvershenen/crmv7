@@ -162,6 +162,20 @@ describe("ResourceEditorPage", () => {
     expect(document.querySelectorAll('[data-slot="editor-frame"]')).toHaveLength(1)
   })
 
+  it("opens the linked venue draft in CMS from its CRM resource", async () => {
+    const offeringId = "11111111-1111-4111-8111-111111111111"
+    const house = linkedHouseEditor(offeringId)
+    const venue = { ...house, offering: { ...house.offering, kind: "venue", fulfillment: { kind: "venue", allocationMode: "exclusive_resource", capacityUnit: "guests", pricingMode: "rate_plan" } } } as InternalOfferingEditor
+    const gateway = {
+      resolvePrimaryVenueOffering: vi.fn().mockResolvedValue({ resolution: "linked", offering: { offeringId, kind: "venue" } }),
+      getVenueEditor: vi.fn().mockResolvedValue(venue),
+    } as unknown as OfferingEditorGateway & ResourceOfferingLookupGateway
+    renderEditorWithOfferingGateway(gateway, "/resources/venues/venue-main?tab=offering")
+
+    expect(await screen.findByText("Досье площадки")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Открыть" })).toHaveAttribute("href", "http://localhost:5174/content/tree?selected=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+  })
+
   it("adds and removes additional services from the embedded resource offering tab", async () => {
     const user = userEvent.setup()
     const offeringId = "11111111-1111-4111-8111-111111111111"
