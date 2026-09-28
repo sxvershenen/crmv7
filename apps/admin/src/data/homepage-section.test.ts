@@ -28,6 +28,8 @@ describe("homepage details draft adapter", () => {
     const cards = [{ id: "family", title: "Семейный отдых", description: "На природе", imageUrl: "https://example.org/family.webp", imageAssetId: "44444444-4444-4444-8444-444444444444", selectedOfferingIds: ["22222222-2222-4222-8222-222222222222"] }]
     const program = { ...section, key: "programs", policy: homepageSectionPolicy({ eyebrow: null, title: "Программы", description: "", action: null, cards }) }
     expect(homepageSectionDraft(program)?.cards).toEqual(cards)
+    const videoCards = [{ id: "video", title: "Лесной вечер", description: "", imageUrl: "https://example.org/poster.webp", videoUrl: "https://example.org/forest.mp4" }]
+    expect(homepageSectionDraft({ ...section, policy: homepageSectionPolicy({ ...config, cards: videoCards }) })?.cards).toEqual(videoCards)
   })
   it("leaves unknown versions, fields and composed patches opaque and unmodified", () => {
     const policy = homepageSectionPolicy(config)

@@ -72,6 +72,10 @@ export const CmsHomeSectionSchema = PublicResolvedSectionSchema.extend({
   if (value.config.selectedOfferingIds !== undefined && !["houses", "programs", "venues"].includes(value.key)) context.addIssue({ code: "custom", path: ["config", "selectedOfferingIds"], message: "Ручной выбор доступен только для домиков, программ и площадок" })
   if (value.config.cards !== undefined && !["programs", "sauna-chan", "reviews"].includes(value.key)) context.addIssue({ code: "custom", path: ["config", "cards"], message: "Карточки доступны только для программ, бани и отзывов" })
   if (value.key !== "programs" && value.config.cards?.some((card) => card.selectedOfferingIds !== undefined)) context.addIssue({ code: "custom", path: ["config", "cards"], message: "Выбор программ доступен только в направлениях" })
+  if (value.key !== "reviews" && value.config.cards?.some((card) => card.videoUrl !== undefined)) context.addIssue({ code: "custom", path: ["config", "cards"], message: "Видео доступно только в отзывах" })
+  if (value.key === "reviews") for (const [index, card] of (value.config.cards ?? []).entries()) {
+    if (card.videoUrl && !card.imageUrl) context.addIssue({ code: "custom", path: ["config", "cards", index, "imageUrl"], message: "Для видео нужна обложка" })
+  }
 })
 
 export const CmsHomeOfferingKindSchema = z.enum(["house", "program", "venue"])

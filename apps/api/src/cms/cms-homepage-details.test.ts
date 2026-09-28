@@ -51,4 +51,11 @@ describe("publication of homepage details", () => {
     expect(result.routes[0]?.content.sections[0]?.config).toEqual(config)
     expect(PublicReleasePageContentSchema.safeParse(result.routes[0]?.content).success).toBe(true)
   })
+  it("publishes direct review videos and their poster without a separate entity", () => {
+    const cards = [{ id: "video", title: "Лесной вечер", description: "", imageUrl: "https://example.org/poster.webp", videoUrl: "https://example.org/forest.mp4" }]
+    const result = materializeRelease([candidate({ ...base, reviews, cards }, "reviews")] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.content.sections[0]?.config).toMatchObject({ cards })
+    expect(PublicReleasePageContentSchema.safeParse(result.routes[0]?.content).success).toBe(true)
+  })
 })

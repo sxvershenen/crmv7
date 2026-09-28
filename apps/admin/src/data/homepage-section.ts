@@ -33,7 +33,7 @@ export function homepageSectionPolicy(config: CmsHomeSectionDraft): CmsSection["
     ...(config.reviews !== undefined ? { reviews: { operation: "replace" as const, value: config.reviews } } : {}),
     ...(config.faq !== undefined ? { faq: { operation: "replace" as const, value: config.faq } } : {}),
     ...(config.selectedOfferingIds !== undefined ? { selectedOfferingIds: { operation: "replace" as const, value: config.selectedOfferingIds } } : {}),
-    ...(config.cards !== undefined ? { cards: { operation: "replace" as const, value: config.cards.map((card) => ({ id: card.id, title: card.title, description: card.description, imageUrl: card.imageUrl, ...(card.imageAssetId !== undefined ? { imageAssetId: card.imageAssetId } : {}), ...(card.selectedOfferingIds !== undefined ? { selectedOfferingIds: card.selectedOfferingIds } : {}) })) } } : {}),
+    ...(config.cards !== undefined ? { cards: { operation: "replace" as const, value: config.cards.map((card) => ({ id: card.id, title: card.title, description: card.description, imageUrl: card.imageUrl, ...(card.imageAssetId !== undefined ? { imageAssetId: card.imageAssetId } : {}), ...(card.videoUrl !== undefined ? { videoUrl: card.videoUrl } : {}), ...(card.selectedOfferingIds !== undefined ? { selectedOfferingIds: card.selectedOfferingIds } : {}) })) } } : {}),
   }, objects: {}, keyedArrays: {} } }
 }
 

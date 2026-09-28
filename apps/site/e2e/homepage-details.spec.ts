@@ -57,6 +57,38 @@ test("renders CMS directions, sauna cards and review photos without editorial pr
   await expect(reviews.locator("figure figcaption")).toHaveText("Второе фото из CMS")
 })
 
+test("plays selected review videos from published CMS links and keeps their poster", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=review-video")
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = function () { this.dispatchEvent(new Event("play")); return Promise.resolve() }
+    HTMLMediaElement.prototype.pause = function () { this.dispatchEvent(new Event("pause")) }
+  })
+  const response = await page.goto("/")
+  expect(response?.status()).toBe(200)
+  const reviews = page.locator("#reviews")
+  await reviews.scrollIntoViewIfNeeded()
+  const video = reviews.locator("video")
+  await expect(video).toHaveAttribute("src", "https://media.example.test/first.mp4")
+  await expect(video).toHaveAttribute("poster", /\/api\/public\/v1\/media\//)
+  await expect(video).toHaveAttribute("preload", "none")
+  await reviews.getByRole("button", { name: "Смотреть видео: Первый ролик из CMS" }).click()
+  await expect(video).toHaveAttribute("controls", "")
+  await reviews.getByRole("button", { name: "Выбрать видео: Второй ролик из CMS" }).click()
+  await expect(video).toHaveAttribute("src", "https://media.example.test/second.webm")
+  await expect(reviews.getByRole("button", { name: "Смотреть видео: Второй ролик из CMS" })).toBeVisible()
+  await page.evaluate(() => {
+    HTMLMediaElement.prototype.play = () => Promise.reject(new Error("unavailable"))
+    HTMLMediaElement.prototype.load = () => {}
+  })
+  await reviews.getByRole("button", { name: "Смотреть видео: Второй ролик из CMS" }).click()
+  await expect(reviews.getByRole("alert")).toContainText("Видео не загрузилось")
+  await page.evaluate(() => {
+    HTMLMediaElement.prototype.play = function () { this.dispatchEvent(new Event("play")); return Promise.resolve() }
+  })
+  await reviews.getByRole("button", { name: "Повторить" }).click()
+  await expect(video).toHaveAttribute("controls", "")
+})
+
 for (const scenario of ["empty", "absent"]) {
   test(`hides ${scenario} review and FAQ content without fixture fallback`, async ({ request, page }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=details-${scenario}`)

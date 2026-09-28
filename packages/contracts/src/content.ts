@@ -52,6 +52,10 @@ export const CmsHomeCardSchema = z.object({
     z.string().startsWith("/api/public/v1/media/").max(2048),
   ]),
   imageAssetId: IdSchema.nullable().optional(),
+  videoUrl: z.union([
+    z.literal(""),
+    z.string().url().max(2048).refine((url) => URL.canParse(url) && new URL(url).protocol === "https:" && /\.(mp4|webm)$/i.test(new URL(url).pathname), "Укажите прямую HTTPS-ссылку на MP4 или WebM"),
+  ]).optional(),
   selectedOfferingIds: z.array(IdSchema).max(12).optional(),
 }).strict();
 

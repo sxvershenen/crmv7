@@ -63,4 +63,13 @@ describe("homepage visual cards", () => {
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [card] } }).success).toBe(true)
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [{ ...card, imageUrl: "http://example.com/image.jpg" }] } }).success).toBe(false)
   })
+  it("accepts direct review videos with a poster and rejects page links or videos in other sections", () => {
+    const videoCard = { ...card, videoUrl: "https://example.org/forest.mp4?token=demo" }
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, cards: [videoCard] } }).success).toBe(true)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "programs", config: { ...config, cards: [videoCard] } }).success).toBe(false)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, cards: [{ ...videoCard, imageUrl: "" }] } }).success).toBe(false)
+    for (const videoUrl of ["http://example.org/forest.mp4", "https://example.org/watch/forest", "javascript:alert(1)"]) {
+      expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, cards: [{ ...videoCard, videoUrl }] } }).success).toBe(false)
+    }
+  })
 })
