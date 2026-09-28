@@ -1213,6 +1213,58 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect(await dataSource.getRepository(ResourceAllocationEntity).countBy({ resourceId, status: "tentative" })).toBe(1)
   })
 
+  it("shows standalone and house-linked bath slots in the bath calendar and rejects overlaps", async () => {
+    const customerId = randomUUID()
+    const bathId = randomUUID()
+    const houseId = randomUUID()
+    await dataSource.getRepository(CustomerEntity).save(dataSource.getRepository(CustomerEntity).create({
+      id: customerId, type: "person", name: "Bath Customer", phones: [], channels: [], email: null, notes: "", consent: {}, duplicateRisk: "none", assignees: [],
+      leadCount: 0, activeLeadCount: 0, bookingCount: 0, futureBookingCount: 0, taskCount: 0, turnover: 0, debt: 0, nextContactAt: null, lastVisitAt: null,
+      createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await dataSource.getRepository(ResourceEntity).save([
+      dataSource.getRepository(ResourceEntity).create({ id: houseId, code: "R-bath-house", kind: "house", name: "Дом с баней", capacityMode: "fixed", capacityTotal: 1, settings: {}, createdBy: adminId, updatedBy: adminId, archivedAt: null }),
+      dataSource.getRepository(ResourceEntity).create({ id: bathId, code: "R-bath-slot", kind: "bath", name: "Баня", capacityMode: "fixed", capacityTotal: 6, settings: {}, createdBy: adminId, updatedBy: adminId, archivedAt: null }),
+    ])
+    const item = (type: "accommodation" | "bath", resourceId: string | null, startAt: string, endAt: string) => ({
+      type, resourceId, startAt, endAt, quantity: 1, price: { amountMinor: type === "bath" ? 200000 : 800000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0,
+    })
+    const create = (suffix: string, items: ReturnType<typeof item>[]) => adminAgent.post("/api/internal/v1/bookings").send({
+      operationId: randomUUID(), idempotencyKey: `booking-bath-${suffix}`, overrideConflict: false, customerId, items, note: null,
+    })
+    const standalone = await create("standalone", [item("bath", bathId, "2026-11-20T07:00:00.000Z", "2026-11-20T08:00:00.000Z")]).expect(201)
+    const linked = await create("linked", [
+      item("accommodation", houseId, "2026-11-20T06:00:00.000Z", "2026-11-20T11:00:00.000Z"),
+      item("bath", bathId, "2026-11-20T08:00:00.000Z", "2026-11-20T09:00:00.000Z"),
+    ]).expect(201)
+    await create("overlap", [item("bath", bathId, "2026-11-20T08:30:00.000Z", "2026-11-20T09:30:00.000Z")]).expect(409)
+    const wrongResource = await create("wrong-resource", [item("bath", houseId, "2026-11-20T12:00:00.000Z", "2026-11-20T13:00:00.000Z")]).expect(409)
+    expect(wrongResource.body.code).toBe("BOOKING_RESOURCE_TYPE_MISMATCH")
+    const missingResource = await create("missing-resource", [item("bath", null, "2026-11-20T12:00:00.000Z", "2026-11-20T13:00:00.000Z")]).expect(409)
+    expect(missingResource.body.code).toBe("BOOKING_RESOURCE_REQUIRED")
+
+    const projection = await adminAgent.get("/api/internal/v1/bookings/projection?date=2026-11-20&rangeEnd=2026-11-20&category=bath&resource=all").expect(200)
+    expect(projection.body.bookings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: standalone.body.id, resourceId: bathId, category: "bath" }),
+      expect.objectContaining({ id: linked.body.id, resourceId: bathId, category: "bath", itemId: linked.body.items[1].id }),
+    ]))
+    expect(projection.body.bookings).toHaveLength(2)
+    expect(projection.body.operations.filter((operation: { resourceId: string }) => operation.resourceId === bathId)).toHaveLength(4)
+    const houseProjection = await adminAgent.get(`/api/internal/v1/bookings/projection?date=2026-11-20&rangeEnd=2026-11-20&category=all&resource=${houseId}`).expect(200)
+    expect(houseProjection.body.bookings).toEqual([expect.objectContaining({ id: linked.body.id, resourceId: houseId, itemId: linked.body.items[0].id })])
+    expect(await dataSource.getRepository(ResourceAllocationEntity).countBy({ resourceId: bathId, status: "tentative" })).toBe(2)
+
+    const moved = await adminAgent.patch(`/api/internal/v1/bookings/${linked.body.id}/interval`).send({
+      expectedVersion: linked.body.version, operationId: randomUUID(), idempotencyKey: "booking-bath-move-linked", itemId: linked.body.items[1].id,
+      startAt: "2026-11-20T09:00:00.000Z", endAt: "2026-11-20T10:00:00.000Z", resourceId: bathId, overrideConflict: false,
+    }).expect(200)
+    expect(moved.body.items).toEqual([
+      expect.objectContaining({ resourceId: houseId, startAt: "2026-11-20T06:00:00.000Z", endAt: "2026-11-20T11:00:00.000Z" }),
+      expect.objectContaining({ resourceId: bathId, startAt: "2026-11-20T09:00:00.000Z", endAt: "2026-11-20T10:00:00.000Z" }),
+    ])
+    await create("freed-slot", [item("bath", bathId, "2026-11-20T08:00:00.000Z", "2026-11-20T09:00:00.000Z")]).expect(201)
+  })
+
   it("creates normalized bookings, allocates resources and keeps payment operations immutable/idempotent", async () => {
     const resourceId = randomUUID()
     await dataSource.getRepository(ResourceEntity).save(dataSource.getRepository(ResourceEntity).create({

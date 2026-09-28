@@ -89,6 +89,12 @@ function AgendaOperationRow({ operation }: { operation: BookingOperation }) {
 }
 
 export function BookingTable({ bookings, onAssign, onSort, sortDirection, sortKey }: { bookings: Booking[]; onAssign: (id: string) => void; onSort: (key: BookingSortKey) => void; sortDirection: SortDirection; sortKey: BookingSortKey }) {
+  const rows = new Map<string, { booking: Booking; resourceNames: Set<string> }>()
+  for (const booking of bookings) {
+    const previous = rows.get(booking.id)
+    if (previous) previous.resourceNames.add(booking.resourceName)
+    else rows.set(booking.id, { booking, resourceNames: new Set([booking.resourceName]) })
+  }
   const header = (key: BookingSortKey, label: string, className?: string) => (
     <SortableHeader active={sortKey === key} className={className} direction={sortDirection} onSort={() => onSort(key)}>{label}</SortableHeader>
   )
@@ -104,7 +110,7 @@ export function BookingTable({ bookings, onAssign, onSort, sortDirection, sortKe
         {header("assignee", "Ответственный", "w-28")}
         <th className="w-12 px-2 py-2"><span className="sr-only">Действия</span></th>
       </tr></thead>
-      <tbody className="divide-y">{bookings.map((booking) => <BookingTableRow booking={booking} key={booking.id} onAssign={() => onAssign(booking.id)} />)}</tbody>
+      <tbody className="divide-y">{[...rows.values()].map(({ booking, resourceNames }) => <BookingTableRow booking={{ ...booking, resourceName: [...resourceNames].join(" · ") }} key={booking.id} onAssign={() => onAssign(booking.id)} />)}</tbody>
     </DataTableShell>
   )
 }

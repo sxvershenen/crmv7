@@ -118,7 +118,13 @@ export function BookingEditorPage({
           setLoading(false);
           return;
         }
-        setDraft(booking);
+        setDraft({
+          ...booking,
+          positions: booking.positions.map((position) => ({
+            ...position,
+            resourceName: directory.resources.find((resource) => resource.id === position.resourceId)?.name ?? position.resourceName,
+          })),
+        });
         setLoading(false);
       })
       .catch((reason: unknown) => {
@@ -438,7 +444,13 @@ export function BookingEditorPage({
     setMutationError(null);
     try {
       const saved = await repository.save(draft);
-      setDraft(saved);
+      setDraft({
+        ...saved,
+        positions: saved.positions.map((position) => ({
+          ...position,
+          resourceName: directory?.resources.find((resource) => resource.id === position.resourceId)?.name ?? position.resourceName,
+        })),
+      });
       setSaveState("saved");
     } catch (reason) {
       setSaveState("conflict");

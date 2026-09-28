@@ -134,7 +134,9 @@ export class ApiDirectoryRepository implements DirectoryRepository {
       overpayOnly: "false", sort: "arrival", order: "asc",
     })
     const data = await this.client.get(`/bookings/projection?${params.toString()}`, BookingProjectionResponseSchema)
-    return data.bookings.map((booking) => ({
+    const bookings = new Map<string, (typeof data.bookings)[number]>()
+    for (const booking of data.bookings) if (!bookings.has(booking.id)) bookings.set(booking.id, booking)
+    return [...bookings.values()].map((booking) => ({
       clientName: booking.clientName, date: booking.date, id: booking.id, phone: booking.phone,
       resourceName: booking.resourceName, sourceLeadId: booking.sourceLeadId,
     }))

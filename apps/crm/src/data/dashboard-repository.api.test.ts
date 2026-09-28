@@ -58,7 +58,7 @@ describe("ApiDashboardRepository", () => {
     }
     const get = vi.fn(async (path: string) => {
       if (path.startsWith("/tasks") || path.startsWith("/leads")) return []
-      if (path.startsWith("/bookings/projection")) return { bookings: [booking], operations: [], resources: [], window: {} }
+      if (path.startsWith("/bookings/projection")) return { bookings: [booking, { ...booking, itemId: "10000000-0000-4000-8000-000000000004", resourceName: "Баня", category: "bath" }], operations: [], resources: [], window: {} }
       return { items: [], nextCursor: null }
     })
     const repository = new ApiDashboardRepository({ client: { get }, now: () => new Date("2026-08-30T12:00:00+03:00") } as never)
@@ -69,6 +69,7 @@ describe("ApiDashboardRepository", () => {
       contentSummary: { value: "Дом «Сосна»" },
       payment: { paid: 2_000.01, total: 8_000.99 },
     })
+    expect(data.attention.find((section) => section.id === "debts")?.items).toHaveLength(1)
   })
 
   it("posts the authoritative version for supported self-assignment only", async () => {

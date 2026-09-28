@@ -11,7 +11,7 @@ import { BookingPromotionPreviewResultSchema, type BookingItemInput, type Bookin
 export interface BookingRepository {
   assignSelf(id: string): Promise<Booking>
   list(query: BookingQuery): Promise<BookingDataset>
-  updateInterval?(id: string, startHour: number, endHour: number, resourceId?: string | null): Promise<Booking>
+  updateInterval?(id: string, startHour: number, endHour: number, resourceId?: string | null, itemId?: string | null): Promise<Booking>
 }
 
 export interface BookingEditorRepository {
@@ -269,7 +269,7 @@ function mapDetail(dto: BookingDetailResponse): BookingEditorRecord {
     positions: items.map((item) => {
       const basePrice = minorToMajor(item.price.amountMinor)
       const discount = item.price.amountMinor > 0 ? item.discount.amountMinor / item.price.amountMinor * 100 : 0
-      const position = { basePrice, category: (item.type === "accommodation" ? "houses" : item.type === "bath" ? "bath" : item.type === "camping" ? "camping" : item.type === "venue" ? "venues" : "houses") as BookingEditorRecord["positions"][number]["category"], discount, endAt: toBusinessDateTimeInput(item.endAt), guestCount: item.quantity, id: item.id, resourceId: item.resourceId ?? "", resourceName: dto.resource?.name ?? "Без ресурса", startAt: toBusinessDateTimeInput(item.startAt), total: minorToMajor(item.price.amountMinor - item.discount.amountMinor), preparationMinutes: item.preparationMinutes, quoteSnapshotId: item.quoteSnapshotId ?? null, addOns: (item.addOns ?? []).map((addon) => ({ ...addon, price: minorToMajor(addon.price.amountMinor) })) }
+      const position = { basePrice, category: (item.type === "accommodation" ? "houses" : item.type === "bath" ? "bath" : item.type === "camping" ? "camping" : item.type === "venue" ? "venues" : "houses") as BookingEditorRecord["positions"][number]["category"], discount, endAt: toBusinessDateTimeInput(item.endAt), guestCount: item.quantity, id: item.id, resourceId: item.resourceId ?? "", resourceName: item.resourceId === dto.resource?.id ? dto.resource.name : item.resourceId ? "Ресурс выбран" : "Без ресурса", startAt: toBusinessDateTimeInput(item.startAt), total: minorToMajor(item.price.amountMinor - item.discount.amountMinor), preparationMinutes: item.preparationMinutes, quoteSnapshotId: item.quoteSnapshotId ?? null, addOns: (item.addOns ?? []).map((addon) => ({ ...addon, price: minorToMajor(addon.price.amountMinor) })) }
       return { ...position, calculatedInputKey: item.quoteSnapshotId ? bookingPriceKey(position) : null }
     }),
   }
@@ -428,13 +428,14 @@ export class ApiBookingRepository implements BookingRepository, BookingEditorRep
     }
   }
 
-  async updateInterval(id: string, startHour: number, endHour: number, resourceId?: string | null): Promise<Booking> {
-    const detail = await this.get(id)
-    if (!detail || !detail.itemId || detail.version === undefined) throw new Error("Бронирование не найдено")
-    const date = detail.date
+  async updateInterval(id: string, startHour: number, endHour: number, resourceId?: string | null, itemId?: string | null): Promise<Booking> {
+    const detail = await this.client.get(`/bookings/${encodeURIComponent(id)}`, BookingDetailResponseSchema)
+    const target = detail.items.find((item) => item.id === (itemId ?? detail.itemId))
+    if (!target) throw new Error("Позиция бронирования не найдена")
+    const date = toBusinessDateTimeInput(target.startAt).slice(0, 10)
     const iso = (hour: number) => new Date(`${date}T${String(hour).padStart(2, "0")}:00:00+03:00`).toISOString()
-    const result = await this.client.patch(`/bookings/${encodeURIComponent(id)}/interval`, { expectedVersion: detail.version, operationId: crypto.randomUUID(), idempotencyKey: `booking-interval-${crypto.randomUUID()}`, itemId: detail.itemId, startAt: iso(startHour), endAt: iso(endHour), resourceId: (resourceId ?? detail.resourceId) || null, overrideConflict: false }, BookingDtoSchema)
-    const next: Booking = { ...detail, version: result.version, startAt: iso(startHour), endAt: iso(endHour), date, startHour, endHour, preparationEndHour: Math.min(24, endHour + 1), resourceId: resourceId ?? detail.resourceId }
+    const result = await this.client.patch(`/bookings/${encodeURIComponent(id)}/interval`, { expectedVersion: detail.version, operationId: crypto.randomUUID(), idempotencyKey: `booking-interval-${crypto.randomUUID()}`, itemId: target.id, startAt: iso(startHour), endAt: iso(endHour), resourceId: resourceId ?? target.resourceId, overrideConflict: false }, BookingDtoSchema)
+    const next: Booking = { ...mapProjection(detail), version: result.version, itemId: target.id, startAt: iso(startHour), endAt: iso(endHour), date, startHour, endHour, preparationEndHour: Math.min(24, endHour + 1), resourceId: resourceId ?? target.resourceId ?? "" }
     return next
   }
 }

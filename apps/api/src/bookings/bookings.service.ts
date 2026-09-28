@@ -100,11 +100,7 @@ export class BookingsService {
              ) AS has_conflict
       FROM bookings b
       LEFT JOIN customers c ON c.id = b.customer_id
-      LEFT JOIN LATERAL (
-        SELECT bi.* FROM booking_items bi
-        WHERE bi.booking_id = b.id AND bi.archived_at IS NULL
-        ORDER BY bi.start_at, bi.id LIMIT 1
-      ) item ON true
+      JOIN booking_items item ON item.booking_id = b.id AND item.archived_at IS NULL
       LEFT JOIN resources resource ON resource.id = item.resource_id
       LEFT JOIN booking_lead_links active_link ON active_link.booking_id = b.id AND active_link.unlinked_at IS NULL
       LEFT JOIN leads lead ON lead.id = active_link.lead_id AND lead.archived_at IS NULL
@@ -455,8 +451,14 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
       resources.set(resource.id, resource)
     }
     for (const item of items) {
+      if (item.type === "bath" && !item.resourceId) {
+        throw new ConflictException({ code: "BOOKING_RESOURCE_REQUIRED", message: "Для бани или чана нужен ресурс с расписанием" })
+      }
       if (!item.resourceId) continue
       const resource = resources.get(item.resourceId)!
+      if (item.type === "bath" && resource.kind !== "bath" && resource.kind !== "sauna") {
+        throw new ConflictException({ code: "BOOKING_RESOURCE_TYPE_MISMATCH", message: "Для бани или чана выберите SPA-ресурс" })
+      }
       const start = new Date(item.startAt); start.setMinutes(start.getMinutes() - item.preparationMinutes)
       const existing = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder("allocation").where("allocation.resource_id = :resourceId", { resourceId: resource.id }).andWhere("allocation.status IN (:...statuses)", { statuses: ["active", "tentative"] }).andWhere("allocation.archived_at IS NULL").andWhere("allocation.start_at < :endAt AND allocation.end_at > :startAt", { startAt: start, endAt: new Date(item.endAt) }).getMany()
       const result = checkAvailability({ resourceId: resource.id, startAt: start, endAt: new Date(item.endAt), quantity: item.quantity }, existing.map(toAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})

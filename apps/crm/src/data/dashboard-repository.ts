@@ -131,17 +131,22 @@ export class ApiDashboardRepository implements DashboardRepository {
     ])
 
     const now = this.now()
+    const onePerBooking = (bookings: typeof bookingProjection.bookings) => {
+      const byId = new Map<string, (typeof bookings)[number]>()
+      for (const booking of bookings) if (!byId.has(booking.id)) byId.set(booking.id, booking)
+      return [...byId.values()]
+    }
     const attention = [
-      section("conflicts", "Конфликты", "conflict", "danger", bookingProjection.bookings.filter((booking) => booking.hasConflict).map((booking) => this.bookingItem(booking, "conflict", today, currentUserId))),
+      section("conflicts", "Конфликты", "conflict", "danger", onePerBooking(bookingProjection.bookings.filter((booking) => booking.hasConflict)).map((booking) => this.bookingItem(booking, "conflict", today, currentUserId))),
       section("overdue-leads", "Просроченные заявки", "lead", "warning", leads.filter((lead) => lead.nextContactAt && new Date(lead.nextContactAt) < now).map((lead) => this.leadItem(lead, "overdue", currentUserId))),
-      section("debts", "Неоплачено и долги", "payment", "warning", bookingProjection.bookings.filter((booking) => booking.amount > booking.paid && booking.paymentState !== "paid").map((booking) => this.bookingItem(booking, "debt", today, currentUserId))),
+      section("debts", "Неоплачено и долги", "payment", "warning", onePerBooking(bookingProjection.bookings.filter((booking) => booking.amount > booking.paid && booking.paymentState !== "paid")).map((booking) => this.bookingItem(booking, "debt", today, currentUserId))),
       section("overdue-tasks", "Просроченные задачи", "task", "task", tasks.filter((task) => task.dueAt && new Date(task.dueAt) < now && !["completed", "cancelled", "done"].includes(task.status)).map((task) => this.taskItem(task, currentUserId))),
-      section("cancellations", "Отмены", "cancel", "neutral", bookingProjection.bookings.filter((booking) => booking.status === "cancelled").map((booking) => this.bookingItem(booking, "cancelled", today, currentUserId))),
+      section("cancellations", "Отмены", "cancel", "neutral", onePerBooking(bookingProjection.bookings.filter((booking) => booking.status === "cancelled")).map((booking) => this.bookingItem(booking, "cancelled", today, currentUserId))),
     ].filter((item): item is NonNullable<typeof item> => item !== null)
     const todaySections = [
       section("new-leads", "Новые заявки", "lead", "info", leads.filter((lead) => lead.status === "new" && dateKey(new Date(lead.createdAt)) === today).map((lead) => this.leadItem(lead, "new", currentUserId))),
-      section("arrivals", "Заезды сегодня", "arrival", "stay", bookingProjection.bookings.filter((booking) => booking.startAt.slice(0, 10) === today).map((booking) => this.bookingItem(booking, "arrival", today, currentUserId))),
-      section("departures", "Выезды сегодня", "exit", "stay", bookingProjection.bookings.filter((booking) => booking.endAt.slice(0, 10) === today).map((booking) => this.bookingItem(booking, "departure", today, currentUserId))),
+      section("arrivals", "Заезды сегодня", "arrival", "stay", onePerBooking(bookingProjection.bookings.filter((booking) => booking.startAt.slice(0, 10) === today)).map((booking) => this.bookingItem(booking, "arrival", today, currentUserId))),
+      section("departures", "Выезды сегодня", "exit", "stay", onePerBooking(bookingProjection.bookings.filter((booking) => booking.endAt.slice(0, 10) === today)).map((booking) => this.bookingItem(booking, "departure", today, currentUserId))),
       section("programs", "Программы сегодня", "program", "program", occurrencePage.items.filter((run) => run.startsAt.slice(0, 10) === today).map((run) => this.programItem(run, currentUserId))),
       section("events", "Мероприятия сегодня", "event", "event", eventPage.items.filter((event) => event.startsAt.slice(0, 10) === today).map((event) => this.eventItem(event, currentUserId))),
     ].filter((item): item is NonNullable<typeof item> => item !== null)

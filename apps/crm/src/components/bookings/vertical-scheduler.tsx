@@ -55,6 +55,7 @@ const MAX_LANES = 5
 
 type Preview = { end: number; id: string; start: number; valid: boolean } | null
 type ActiveData = { action: "move" | "start" | "end"; booking: Booking }
+const slotId = (booking: Booking) => booking.itemId ?? booking.id
 
 type SchedulerProps = {
   data: BookingDataset
@@ -125,13 +126,13 @@ export function VerticalScheduler({ data, date, lanePage, onAnnouncement, onChan
       : action === "start"
         ? { end: booking.endHour, start: booking.startHour + delta }
         : { end: booking.endHour + delta, start: booking.startHour }
-    return { ...next, id: booking.id, valid: isValidInterval(next.start, next.end) }
+    return { ...next, id: slotId(booking), valid: isValidInterval(next.start, next.end) }
   }
 
   const handleStart = ({ active }: DragStartEvent) => {
     const value = active.data.current as ActiveData
     activeData.current = value
-    setPreview({ end: value.booking.endHour, id: value.booking.id, start: value.booking.startHour, valid: true })
+    setPreview({ end: value.booking.endHour, id: slotId(value.booking), start: value.booking.startHour, valid: true })
     onAnnouncement(`Изменение брони #${value.booking.id}. Текущее время ${time(value.booking.startHour)}–${time(value.booking.endHour)}.`)
   }
   const handleMove = ({ delta }: DragMoveEvent) => {
@@ -249,14 +250,14 @@ function SchedulerLane({ allResources, bookings, day, hourHeight, onChange, onCo
           to={`/bookings/new?date=${day}&resource=${resource.id}&start=${hour}`}
         />
       ))}
-      {bookings.map((booking) => <SchedulerCard booking={booking} hourHeight={hourHeight} key={booking.id} onChange={onChange} onConflict={onConflict} preview={preview?.id === booking.id ? preview : null} resources={allResources} />)}
+      {bookings.map((booking) => <SchedulerCard booking={booking} hourHeight={hourHeight} key={slotId(booking)} onChange={onChange} onConflict={onConflict} preview={preview?.id === slotId(booking) ? preview : null} resources={allResources} />)}
     </div>
   )
 }
 
 function SchedulerCard({ booking, hourHeight, onChange, onConflict, preview, resources }: { booking: Booking; hourHeight: number; onChange: SchedulerProps["onChange"]; onConflict: (message: string) => void; preview: Preview; resources: BookingResource[] }) {
   const navigate = useNavigate()
-  const { attributes, listeners, setActivatorNodeRef, setNodeRef } = useDraggable({ id: `move:${booking.id}`, data: { booking, action: "move" } satisfies ActiveData })
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef } = useDraggable({ id: `move:${slotId(booking)}`, data: { booking, action: "move" } satisfies ActiveData })
   const start = preview?.start ?? booking.startHour
   const end = preview?.end ?? booking.endHour
   const top = (start - START_HOUR) * hourHeight
@@ -314,7 +315,7 @@ function SchedulerCard({ booking, hourHeight, onChange, onConflict, preview, res
 }
 
 function ResizeHandle({ action, booking }: { action: "start" | "end"; booking: Booking }) {
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: `${action}:${booking.id}`, data: { action, booking } satisfies ActiveData })
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: `${action}:${slotId(booking)}`, data: { action, booking } satisfies ActiveData })
   return (
     <button
       aria-label={`${action === "start" ? "Изменить начало" : "Изменить окончание"} бронирования #${booking.id}`}
@@ -354,7 +355,7 @@ function BookingScheduleActions({ booking, onChange, onConflict, resources }: { 
         <div className="grid gap-3 px-4">
           <FilterSelect className="max-w-none" label="Начало" onValueChange={setStart} options={hours.slice(0, -1)} value={start} />
           <FilterSelect className="max-w-none" label="Окончание" onValueChange={setEnd} options={hours.slice(1)} value={end} />
-          <FilterSelect className="max-w-none" label="Ресурс" onValueChange={setResourceId} options={resources.map((item) => ({ label: item.name, value: item.id }))} value={resourceId} />
+          <FilterSelect className="max-w-none" label="Ресурс" onValueChange={setResourceId} options={resources.filter((item) => item.category === booking.category).map((item) => ({ label: item.name, value: item.id }))} value={resourceId} />
         </div>
         <SheetFooter>
           <Button disabled={!isValidInterval(Number(start), Number(end))} onClick={() => { void run(Number(start), Number(end), resourceId); setOpen(false) }}>Применить</Button>

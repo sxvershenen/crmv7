@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import { FixtureDirectoryRepository, loadDirectoryData } from "./directory-repository"
+import { ApiDirectoryRepository, FixtureDirectoryRepository, loadDirectoryData } from "./directory-repository"
 
 describe("FixtureDirectoryRepository", () => {
   it("returns narrow, cloned cross-entity lookup data", async () => {
@@ -14,5 +14,17 @@ describe("FixtureDirectoryRepository", () => {
 
     data.customers[0]!.name = "Изменено снаружи"
     expect((await repository.listCustomers())[0]?.name).not.toBe("Изменено снаружи")
+  })
+})
+
+describe("ApiDirectoryRepository", () => {
+  it("lists a multi-resource booking once for relation pickers", async () => {
+    const get = vi.fn().mockResolvedValue({ bookings: [
+      { id: "booking-1", clientName: "Гость", date: "2026-11-20", phone: "", resourceName: "Дом", sourceLeadId: null },
+      { id: "booking-1", clientName: "Гость", date: "2026-11-20", phone: "", resourceName: "Баня", sourceLeadId: null },
+    ] })
+    const repository = new ApiDirectoryRepository({ get, getWithMeta: vi.fn() } as never)
+
+    expect(await repository.listBookings()).toEqual([{ id: "booking-1", clientName: "Гость", date: "2026-11-20", phone: "", resourceName: "Дом", sourceLeadId: null }])
   })
 })

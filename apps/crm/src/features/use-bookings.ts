@@ -23,14 +23,14 @@ export function useBookings(query: BookingQuery, repository: BookingRepository =
   const key = repositoryKey(repository)
   const queryKey = ["bookings", key, query] as const
   const result = useQuery({ queryKey, queryFn: () => repository.list(query), placeholderData: (previous) => previous })
-  const mutation = useMutation({ mutationFn: (input: { id: string; startHour: number; endHour: number; resourceId?: string | null }) => {
+  const mutation = useMutation({ mutationFn: (input: { id: string; startHour: number; endHour: number; resourceId?: string | null; itemId?: string | null }) => {
     if (!repository.updateInterval) throw new Error("Изменение интервала бронирования недоступно")
-    return repository.updateInterval(input.id, input.startHour, input.endHour, input.resourceId)
+    return repository.updateInterval(input.id, input.startHour, input.endHour, input.resourceId, input.itemId)
   } })
   const assignment = useMutation({ mutationFn: (id: string) => repository.assignSelf(id) })
   const state: BookingsState = result.isPending ? { status: "loading" } : result.isError ? { status: "error", message: result.error instanceof Error ? result.error.message : "Не удалось загрузить бронирования" } : { status: "ready", data: result.data }
-  const updateInterval = async (id: string, startHour: number, endHour: number, resourceId?: string | null) => {
-    const updated = await mutation.mutateAsync({ id, startHour, endHour, ...(resourceId === undefined ? {} : { resourceId }) })
+  const updateInterval = async (id: string, startHour: number, endHour: number, resourceId?: string | null, itemId?: string | null) => {
+    const updated = await mutation.mutateAsync({ id, startHour, endHour, ...(resourceId === undefined ? {} : { resourceId }), ...(itemId === undefined ? {} : { itemId }) })
     await queryClient.invalidateQueries({ queryKey: ["bookings", key] })
     return updated
   }

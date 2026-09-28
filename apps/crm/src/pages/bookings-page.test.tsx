@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest"
 
 import { SchedulerBookingBlock, TooltipProvider, type SchedulerBookingTone } from "@crm/ui"
 
+import { BookingTable } from "@app/components/bookings/bookings-views"
+import { bookingsFixture } from "@app/fixtures/bookings"
 import { BookingsPage } from "./bookings-page"
 
 function renderBookings(initialEntry = "/bookings") {
@@ -16,6 +18,15 @@ function renderBookings(initialEntry = "/bookings") {
 function renderSchedule(initialEntry = "/schedule") { return render(<MemoryRouter initialEntries={[initialEntry]}><TooltipProvider><BookingsPage defaultView="scheduler" /></TooltipProvider></MemoryRouter>) }
 
 describe("BookingsPage shared UI contract", () => {
+  it("keeps one table row and lists both resources for a house with a bath slot", () => {
+    const house = { ...bookingsFixture[0]!, id: "mixed-booking", itemId: "house-item", resourceName: "Дом" }
+    const bath = { ...house, itemId: "bath-item", category: "bath" as const, resourceName: "Баня" }
+    render(<MemoryRouter><TooltipProvider><BookingTable bookings={[house, bath]} onAssign={() => undefined} onSort={() => undefined} sortDirection="asc" sortKey="arrival" /></TooltipProvider></MemoryRouter>)
+
+    expect(screen.getAllByRole("row")).toHaveLength(2)
+    expect(screen.getByText("Дом · Баня")).toBeInTheDocument()
+  })
+
   it("reuses the scheduler as the default representation for the dedicated schedule route", async () => {
     const user = userEvent.setup()
     renderSchedule()

@@ -115,7 +115,7 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
     setConflictMessage("")
     setAnnouncement(`Бронирование #${booking.id}: новый интервал ${startHour}:00–${endHour}:00`)
     try {
-      await updateInterval(booking.id, startHour, endHour, resourceId)
+      await updateInterval(booking.id, startHour, endHour, resourceId, booking.itemId)
       setAnnouncement(`Бронирование #${booking.id} сохранено на сервере.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Интервал не изменён"

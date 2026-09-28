@@ -92,6 +92,29 @@ describe("BookingRepository", () => {
     })
   })
 
+  it("moves the selected bath item rather than the first item of a mixed booking", async () => {
+    const bathItemId = "10000000-0000-4000-8000-000000000004"
+    const bathResourceId = "10000000-0000-4000-8000-000000000005"
+    const detail = rawBookingDetail()
+    const get = vi.fn().mockResolvedValue({
+      ...detail,
+      items: [...detail.items, { ...detail.items[0], id: bathItemId, type: "bath", resourceId: bathResourceId, startAt: "2026-09-11T07:00:00.000Z", endAt: "2026-09-11T08:00:00.000Z" }],
+    })
+    const patch = vi.fn().mockResolvedValue({ version: 5 })
+    const repository = new ApiBookingRepository({ client: { get, patch, post: vi.fn() } } as never)
+
+    await repository.updateInterval(bookingId, 12, 13, bathResourceId, bathItemId)
+
+    expect(patch).toHaveBeenCalledWith(`/bookings/${bookingId}/interval`, expect.objectContaining({
+      itemId: bathItemId,
+      resourceId: bathResourceId,
+      startAt: "2026-09-11T09:00:00.000Z",
+      endAt: "2026-09-11T10:00:00.000Z",
+    }), expect.anything())
+    await expect(repository.updateInterval(bookingId, 12, 13, bathResourceId, crypto.randomUUID())).rejects.toThrow("Позиция бронирования не найдена")
+    expect(patch).toHaveBeenCalledTimes(1)
+  })
+
   it("round-trips booking RUB values through integer minor-unit transport", async () => {
     const base = rawBookingDetail()
     const raw = {
