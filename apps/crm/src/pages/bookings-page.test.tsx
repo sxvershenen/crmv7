@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest"
 import { SchedulerBookingBlock, TooltipProvider, type SchedulerBookingTone } from "@crm/ui"
 
 import { BookingTable } from "@app/components/bookings/bookings-views"
-import { bookingsFixture } from "@app/fixtures/bookings"
+import { VerticalScheduler } from "@app/components/bookings/vertical-scheduler"
+import { bookingResourcesFixture, bookingsFixture } from "@app/fixtures/bookings"
 import { BookingsPage } from "./bookings-page"
 
 function renderBookings(initialEntry = "/bookings") {
@@ -83,6 +84,16 @@ describe("BookingsPage shared UI contract", () => {
 })
 
 describe("VerticalScheduler", () => {
+  it("renders both positions of one booking in their own resource lanes", () => {
+    const house = { ...bookingsFixture[1]!, itemId: "house-item" }
+    const bath = { ...house, itemId: "bath-item", resourceId: "bath-main", resourceName: "Баня и чан", category: "bath" as const, startHour: 15, endHour: 16, preparationEndHour: 17 }
+    const resources = bookingResourcesFixture.filter((resource) => resource.id === house.resourceId || resource.id === bath.resourceId)
+    const { container } = render(<MemoryRouter><TooltipProvider><VerticalScheduler data={{ bookings: [house, bath], operations: [], resources, window: { from: house.date, to: house.date, canAppendBefore: false, canAppendAfter: false } }} date={house.date} lanePage={0} onAnnouncement={() => undefined} onChange={async () => undefined} onConflict={() => undefined} onLaneCountChange={() => undefined} onNavigateDate={() => undefined} selectedResource={house.resourceId} /></TooltipProvider></MemoryRouter>)
+
+    expect(container.querySelectorAll(`[data-resource-lane="${house.resourceId}"] [data-slot="scheduler-booking-block"]`)).toHaveLength(1)
+    expect(container.querySelectorAll(`[data-resource-lane="${bath.resourceId}"] [data-slot="scheduler-booking-block"]`)).toHaveLength(1)
+  })
+
   it("keeps an explicitly selected mobile-compatible scheduler with Y geometry and separate preparation", async () => {
     const { container } = renderBookings("/bookings?view=scheduler")
     const scheduler = await screen.findByTestId("vertical-scheduler")
