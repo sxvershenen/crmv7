@@ -155,4 +155,22 @@ describe("VenueOfferingWorkspace", () => {
     expect(screen.getByRole("button", { name: "Применить сейчас" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Сохранить и применить" })).toBeDisabled()
   })
+
+  it("recognizes an applied venue price when only the activation response is lost", async () => {
+    const writable = editor({ capabilities: { ...editor().capabilities, pricing: { canView: true, canEditDraft: true, canActivate: true } } })
+    const draftBook: InternalOfferingEditor["priceBooks"][number] = {
+      id: "77777777-7777-4777-8777-777777777777", offeringId, version: 1, revision: 1, state: "draft", name: "Новый прайс-лист", currency: "RUB", timezone: "Europe/Moscow", validFrom: "2026-09-28", validToExclusive: null, changeReason: "", scheduledActivationAt: null, activatedAt: null, retiredAt: null, supersedesPriceBookId: null, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z",
+      ratePlans: [{ id: "88888888-8888-4888-8888-888888888888", priceBookId: "77777777-7777-4777-8777-777777777777", version: 1, key: "standard", label: "Стандарт", pricingBasis: "per_hour", quantityMetric: "guests", baseAmount: 100000, includedQuantity: null, baseExtraUnitAmount: null, minQuantity: null, maxQuantity: null, minDurationMinutes: null, maxDurationMinutes: null, isDefault: true, displayOrder: 0, rules: [] }],
+    }
+    const applied = editor({ ...writable, offering: { ...writable.offering, activePriceBookId: draftBook.id }, ownerVersions: { ...writable.ownerVersions, pricing: 3 }, priceBooks: [{ ...draftBook, state: "active" }] })
+    const getVenueEditor = vi.fn().mockResolvedValueOnce(writable).mockResolvedValue(applied)
+    const createDraftPriceBook = vi.fn().mockResolvedValue({ priceBook: draftBook, pricingVersion: 2 })
+    const activatePriceBook = vi.fn().mockRejectedValue(new Error("Ответ сервера потерян"))
+    render(<VenueOfferingWorkspace gateway={{ getVenueEditor, createDraftPriceBook, activatePriceBook } as unknown as OfferingEditorGateway} offeringId={offeringId} />)
+
+    fireEvent.change(await screen.findByLabelText("Цена за час, ₽"), { target: { value: "1000" } })
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить и применить" }))
+    expect(await screen.findByText("Цена сохранена и уже действует")).toBeInTheDocument()
+    expect(screen.queryByText("Цена не применена")).not.toBeInTheDocument()
+  })
 })

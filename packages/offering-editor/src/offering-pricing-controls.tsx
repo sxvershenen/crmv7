@@ -118,7 +118,7 @@ export function RatePlanEditor({ constraint, currency, disabled, index, onChange
   </article>
 }
 
-export function PriceBookLifecycle({ compact = false, createCommandMeta, draftDirty, editor, gateway, onReload }: { compact?: boolean; createCommandMeta: OfferingEditorCommandMetaFactory; draftDirty: boolean; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; onReload: () => Promise<void> }) {
+export function PriceBookLifecycle({ compact = false, createCommandMeta, draftDirty, editor, gateway, onReload }: { compact?: boolean; createCommandMeta: OfferingEditorCommandMetaFactory; draftDirty: boolean; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; onReload: () => Promise<void | InternalOfferingEditor | null> }) {
   const draft = editor.priceBooks.find((book) => book.state === "draft") ?? null
   const scheduled = editor.priceBooks.find((book) => book.state === "scheduled") ?? null
   const target = draft ?? scheduled

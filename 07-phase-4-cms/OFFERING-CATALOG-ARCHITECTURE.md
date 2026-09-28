@@ -271,6 +271,8 @@ Required fields:
 
 CRM shows program sales, the CMS link and the existence of a published CMS revision as separate facts. The v1 `publicReady` lookup field remains fail-closed and is not presented as the actual site status; public availability is determined by the published projection and current CRM facts.
 
+Редактор CRM сохраняет и активирует новый тариф программы одним действием. При отказе активации сохранённый черновик остаётся видимым и может быть применён после исправления причины; прежняя публичная цена сохраняется. Список программ показывает минимум действующего PriceBook (включая активные особые цены), а не legacy `ProgramTemplate.basePrice`; если публичная цена не подтверждена, показывает «Нет публичной цены». Legacy поле остаётся только для старых шаблонов и совместимости API.
+
 Lead-time rule is optional and mainly supports early-booking/promotional tariffs. It is evaluated from the server quote fixation instant to the local service start; quote stores that instant, selected rule and expiry. Without such a rule, booking time does not affect price.
 
 ## 5. CMS information architecture

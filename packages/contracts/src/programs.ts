@@ -32,7 +32,7 @@ export const ProgramTemplateSchema = z.object({
   id: IdSchema, version: VersionSchema, code: z.string().min(1).max(120), name: z.string().min(1).max(500),
   categoryId: IdSchema.nullable(), durationMinutes: z.number().int().positive().max(10080), minimumParticipants: z.number().int().nonnegative().nullable(),
   participantLimit: z.number().int().positive().max(1_000_000), registrationCloseHours: z.number().nonnegative().max(8760).nullable(),
-  basePrice: NonNegativeMoneySchema, description: z.string(), publication: ProgramTemplatePublicationSchema, published: z.boolean(),
+  basePrice: NonNegativeMoneySchema, activePrice: NonNegativeMoneySchema.nullable().optional(), description: z.string(), publication: ProgramTemplatePublicationSchema, published: z.boolean(),
   assigneeIds: z.array(IdSchema), stages: z.array(StageSchema.extend({ id: IdSchema })).max(500), nextOccurrence: z.object({ id: IdSchema, startsAt: DateTimeSchema }).nullable(),
   archived: z.boolean(), createdAt: DateTimeSchema, updatedAt: DateTimeSchema, capabilities: ProgramTemplateCapabilitiesSchema,
 }).strict()

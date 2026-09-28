@@ -19,6 +19,16 @@ describe("ProgramsRepository fixture adapter", () => {
     expect(result.templates.map((item) => item.id)).toEqual(["clay-lab"])
   })
 
+  it("sorts by active program price and keeps unpriced programs last", () => {
+    const templates = [
+      { ...programTemplatesFixture[0]!, basePrice: 5000, activePrice: 1600 },
+      { ...programTemplatesFixture[1]!, basePrice: 1000, activePrice: 2500 },
+      { ...programTemplatesFixture[2]!, basePrice: 500, activePrice: null },
+    ]
+    const result = selectPrograms({ ...data, templates }, { ...baseQuery, sort: { direction: "asc", key: "price" } })
+    expect(result.templates.map((item) => item.activePrice)).toEqual([1600, 2500, null])
+  })
+
   it("keeps runs as separate dated entities and combines period, category and status", () => {
     const result = selectPrograms(data, { ...baseQuery, category: "family", date: "2026-08-24", rangeEnd: "2026-08-25", section: "runs", sort: { direction: "asc", key: "date" }, status: "registration" })
     expect(result.runs.map((item) => item.id)).toEqual(["24081"])
@@ -139,12 +149,13 @@ describe("ProgramsRepository API adapter", () => {
     const post = vi.fn(async (_path: string, _body: unknown, schema: unknown) => schema === undefined ? occurrence : occurrence)
     const client = {
       get: vi.fn(async (path: string) => path === "/auth/session" ? { user: { id: "manager-1", name: "Manager", role: "manager", capabilities } } : occurrence),
-      getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("templates") ? { items: path.includes("archived=true") ? [] : [template], nextCursor: null } : path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [registration], nextCursor: null }, headers: new Headers(), status: 200 })),
+      getWithMeta: vi.fn(async (path: string) => ({ data: path.includes("templates") ? { items: path.includes("archived=true") ? [] : [{ ...template, activePrice: { amountMinor: 160000, currency: "RUB" } }], nextCursor: null } : path.includes("occurrences") ? { items: [occurrence], nextCursor: null } : { items: [registration], nextCursor: null }, headers: new Headers(), status: 200 })),
       patch: vi.fn(async () => template),
       post,
     }
     const repository = new ApiProgramsRepository(client as never)
     const data = await repository.list({ ...baseQuery, section: "runs", sort: { key: "date", direction: "asc" } })
+    expect(data.templates[0]).toMatchObject({ basePrice: 4200, activePrice: 1600 })
     expect(data.runs[0]).toMatchObject({ id: "occurrence-1", status: "registration", revenue: 8400, paid: 4200 })
     expect(data.registrations[0]).toMatchObject({ id: "registration-1", runId: "occurrence-1", total: 8400, debt: 4200 })
     await repository.updateRunStatus("occurrence-1", "completed")

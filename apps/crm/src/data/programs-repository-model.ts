@@ -109,7 +109,7 @@ const templateSortValue: Record<ProgramTemplateSortKey, (item: ProgramTemplate) 
   category: (item) => item.categoryName,
   duration: (item) => item.durationMinutes,
   limit: (item) => item.participantLimit,
-  price: (item) => item.basePrice,
+  price: (item) => item.activePrice === undefined ? item.basePrice : item.activePrice ?? 0,
   publication: (item) => Number(item.published),
   nextRun: (item) => item.nextRun?.startsAt ?? "9999-12-31",
 }
@@ -167,7 +167,13 @@ export function selectPrograms(data: ProgramsDataset, query: ProgramQuery): Prog
   const registrationSort = query.sort.key in registrationSortValue ? query.sort.key as ProgramRegistrationSortKey : "program"
   return {
     categories: structuredClone(data.categories),
-    templates: sortBy(templates, templateSortValue[templateSort], query.sort.direction),
+    templates: templateSort === "price" ? [...templates].sort((left, right) => {
+      const leftPrice = left.activePrice === undefined ? left.basePrice : left.activePrice
+      const rightPrice = right.activePrice === undefined ? right.basePrice : right.activePrice
+      if (leftPrice === null) return rightPrice === null ? 0 : 1
+      if (rightPrice === null) return -1
+      return compare(leftPrice, rightPrice) * (query.sort.direction === "asc" ? 1 : -1)
+    }) : sortBy(templates, templateSortValue[templateSort], query.sort.direction),
     runs: sortBy(runs, runSortValue[runSort], query.sort.direction),
     registrations: sortBy(registrations, registrationSortValue[registrationSort], query.sort.direction),
   }
@@ -181,7 +187,7 @@ export function mapTemplate(dto: ReturnType<typeof ProgramTemplateDtoSchema.pars
   return {
     id: dto.id, archived: dto.archived, name: dto.name, version: dto.version, updatedAt: dto.updatedAt, categoryId: dto.categoryId ?? "uncategorized",
     categoryName: category?.name ?? dto.categoryId ?? "Без категории", categoryIcon: category?.icon ?? "sparkles", categoryTone: category?.tone ?? "violet", durationMinutes: dto.durationMinutes,
-    participantLimit: dto.participantLimit, basePrice: dto.basePrice.amountMinor / 100, assignees: dto.assigneeIds.map(assigneeFromId), published: dto.published,
+    participantLimit: dto.participantLimit, basePrice: dto.basePrice.amountMinor / 100, ...(dto.activePrice === undefined ? {} : { activePrice: dto.activePrice ? dto.activePrice.amountMinor / 100 : null }), assignees: dto.assigneeIds.map(assigneeFromId), published: dto.published,
     nextRun: dto.nextOccurrence ? { id: dto.nextOccurrence.id, startsAt: dto.nextOccurrence.startsAt } : null, capabilities: dto.capabilities,
   }
 }

@@ -116,9 +116,11 @@ describe("ProgramTemplateEditorPage", () => {
     expect(screen.getByText(/Legacy стоимость сохранена только для совместимости/)).toBeInTheDocument()
   })
 
-  it("creates and activates an explicit participant tariff, then shows a non-acceptance quote", async () => {
+  it("saves and applies a participant tariff in one action, then shows a non-acceptance quote", async () => {
     const user = userEvent.setup()
-    renderEditor()
+    const repository = new FixtureProgramsRepository()
+    const activate = vi.spyOn(repository, "activateProgramPriceBook")
+    renderEditor("/programs/forest-family", repository)
     await screen.findByDisplayValue("Семейный день в лесу")
     await user.click(screen.getByRole("tab", { name: "Продажи и цены" }))
     await user.click(await screen.findByRole("button", { name: "Подготовить продажи и CMS-страницу" }))
@@ -126,8 +128,9 @@ describe("ProgramTemplateEditorPage", () => {
     const amount = await screen.findByLabelText("Цена за участника, ₽")
     await user.clear(amount)
     await user.type(amount, "1500")
-    await user.click(screen.getByRole("button", { name: "Создать черновик тарифа" }))
-    await user.click(await screen.findByRole("button", { name: "Активировать тариф" }))
+    await user.click(screen.getByRole("button", { name: "Сохранить и применить" }))
+    expect(await screen.findByText("Тариф активен")).toBeInTheDocument()
+    expect(activate).toHaveBeenCalledOnce()
     await user.click(await screen.findByRole("button", { name: "Рассчитать" }))
 
     expect(await screen.findByText("Не для подтверждения")).toBeInTheDocument()
@@ -136,6 +139,33 @@ describe("ProgramTemplateEditorPage", () => {
     await user.clear(screen.getByLabelText("Участники"))
     await user.type(screen.getByLabelText("Участники"), "6")
     expect(screen.queryByLabelText("Результат пробного расчёта")).not.toBeInTheDocument()
+  })
+
+  it("keeps the program draft and shows an explicit message when activation fails", async () => {
+    const user = userEvent.setup()
+    const repository = new FixtureProgramsRepository()
+    vi.spyOn(repository, "activateProgramPriceBook").mockRejectedValue(new Error("Период тарифа не подходит"))
+    renderEditor("/programs/forest-family?tab=commercial", repository)
+    await user.click(await screen.findByRole("button", { name: "Подготовить продажи и CMS-страницу" }))
+    await user.click(await screen.findByRole("button", { name: "Сохранить и применить" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Черновик тарифа сохранён, но цена на сайте не изменилась")
+    expect(screen.getByText("Черновик")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Активировать тариф" })).toBeEnabled()
+  })
+
+  it("recognizes an applied price when only the activation response is lost", async () => {
+    const user = userEvent.setup()
+    const repository = new FixtureProgramsRepository()
+    const activate = repository.activateProgramPriceBook.bind(repository)
+    vi.spyOn(repository, "activateProgramPriceBook").mockImplementation(async (...args) => {
+      await activate(...args)
+      throw new Error("Ответ сервера потерян")
+    })
+    renderEditor("/programs/forest-family?tab=commercial", repository)
+    await user.click(await screen.findByRole("button", { name: "Подготовить продажи и CMS-страницу" }))
+    await user.click(await screen.findByRole("button", { name: "Сохранить и применить" }))
+    expect(await screen.findByText("Тариф активен")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 
   it("fails closed when the current offering state cannot be read", async () => {

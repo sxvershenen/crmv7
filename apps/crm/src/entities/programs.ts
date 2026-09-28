@@ -47,6 +47,7 @@ export type ProgramTemplate = {
   durationMinutes: number
   participantLimit: number
   basePrice: number
+  activePrice?: number | null
   assignees: Assignee[]
   published: boolean
   nextRun: { id: string; startsAt: string } | null

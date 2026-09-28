@@ -370,7 +370,9 @@ export function ProgramTemplateEditorPage({
   ) : null;
   const refreshOffering = useCallback(async () => {
     if (!draft || draft.id === "new") return;
-    setOffering(await repository.resolveProgramOffering(draft.id));
+    const next = await repository.resolveProgramOffering(draft.id);
+    setOffering(next);
+    return next;
   }, [draft, repository]);
   const commercialAction = useCallback(async (name: string, action: () => Promise<void>) => {
     setCommercialBusy(name);
@@ -497,8 +499,23 @@ export function ProgramTemplateEditorPage({
             setQuote(await repository.previewProgramQuote(draft.id, input));
           })}
           onSavePrice={(offeringId, priceBookId, expectedPricingVersion, input) => commercialAction("price", async () => {
-            if (priceBookId) await repository.replaceProgramPriceBook(offeringId, priceBookId, expectedPricingVersion, input);
-            else await repository.createProgramPriceBook(offeringId, expectedPricingVersion, input);
+            const saved = priceBookId
+              ? await repository.replaceProgramPriceBook(offeringId, priceBookId, expectedPricingVersion, input)
+              : await repository.createProgramPriceBook(offeringId, expectedPricingVersion, input);
+            if (offering?.resolution === "linked" && offering.editor.capabilities.pricing.canActivate) {
+              try {
+                await repository.activateProgramPriceBook(offeringId, saved.priceBook.id, saved.pricingVersion);
+              } catch (reason) {
+                setQuote(null);
+                const refreshed = await refreshOffering().catch(() => null);
+                if (refreshed?.resolution === "linked" && refreshed.editor.offering.activePriceBookId === saved.priceBook.id) return;
+                const stillDraft = refreshed?.resolution === "linked" && refreshed.editor.priceBooks.some((book) => book.id === saved.priceBook.id && book.state === "draft");
+                setCommercialError(stillDraft
+                  ? `Черновик тарифа сохранён, но цена на сайте не изменилась. ${errorMessage(reason, "Не удалось применить тариф.")}`
+                  : "Черновик тарифа сохранён, но применение не подтверждено. Обновите страницу и проверьте действующую цену.");
+                return;
+              }
+            }
             await refreshOffering();
             setQuote(null);
           })}
@@ -1002,7 +1019,7 @@ function ProgramPriceBookEditor({ busy, draft, editor, onActivate, onSave }: {
       {!packagePairValid ? <p className="mt-2 text-xs text-destructive" role="alert">Укажите вместе включённое количество и доплату.</p> : null}
       {!writable ? <p className="mt-3 text-xs text-muted-foreground">Тариф доступен только для чтения.</p> : (
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button disabled={!canSave} onClick={submit} size="sm">{busy === "price" ? "Сохраняем…" : priceBook ? "Сохранить тариф" : "Создать черновик тарифа"}</Button>
+          <Button disabled={!canSave} onClick={submit} size="sm">{busy === "price" ? "Сохраняем…" : activateAllowed ? "Сохранить и применить" : "Сохранить черновик"}</Button>
           {priceBook ? <Button disabled={!activateAllowed || busy !== null} onClick={() => void onActivate(editor.offering.id, priceBook.id, editor.ownerVersions.pricing)} size="sm" variant="outline">{busy === "activate" ? "Активируем…" : "Активировать тариф"}</Button> : null}
         </div>
       )}

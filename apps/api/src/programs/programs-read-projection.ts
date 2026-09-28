@@ -52,7 +52,35 @@ export async function listProgramTemplates(dataSource: DataSource, query: Progra
   if (query.cursor) builder.andWhere("template.created_at < :cursor", { cursor: new Date(query.cursor) })
   builder.orderBy("template.created_at", "DESC").take(query.limit + 1)
   const rows = await builder.getMany(); const page = rows.slice(0, query.limit)
-  return { items: page.map((row) => programTemplateDto(row, actor)), nextCursor: rows.length > query.limit ? page.at(-1)?.createdAt.toISOString() ?? null : null }
+  const prices = page.length ? await dataSource.query(`
+    SELECT binding.program_template_id AS "templateId", offering.id AS "offeringId", offering.currency,
+      offering.price_display_mode AS "priceMode", MIN(amount.amount_minor) AS "amountMinor",
+      COUNT(DISTINCT amount.amount_minor) AS "amountCount"
+    FROM offering_bindings binding
+    JOIN catalog_offerings offering ON offering.id = binding.offering_id
+      AND offering.kind = 'program' AND offering.state = 'active' AND offering.archived_at IS NULL
+      AND offering.price_display_mode IN ('from', 'exact')
+    JOIN price_books book ON book.id = offering.active_price_book_id
+      AND book.state = 'active' AND book.archived_at IS NULL
+      AND book.valid_from <= (now() AT TIME ZONE offering.timezone)::date
+      AND (book.valid_to_exclusive IS NULL OR book.valid_to_exclusive > (now() AT TIME ZONE offering.timezone)::date)
+    JOIN rate_plans plan ON plan.price_book_id = book.id AND plan.archived_at IS NULL
+    CROSS JOIN LATERAL (
+      SELECT plan.base_amount_minor AS amount_minor
+      UNION
+      SELECT rule.amount_minor FROM price_rules rule
+      WHERE rule.rate_plan_id = plan.id AND rule.enabled = true AND rule.archived_at IS NULL AND rule.amount_minor IS NOT NULL
+    ) amount
+    WHERE binding.program_template_id = ANY($1::uuid[]) AND binding.role = 'primary' AND binding.archived_at IS NULL
+    GROUP BY binding.program_template_id, offering.id, offering.currency, offering.price_display_mode
+  `, [page.map((row) => row.id)]) as Array<{ templateId: string; offeringId: string; currency: string; priceMode: "from" | "exact"; amountMinor: number; amountCount: string }> : []
+  const pricesByTemplate = new Map<string, typeof prices>()
+  for (const price of prices) pricesByTemplate.set(price.templateId, [...(pricesByTemplate.get(price.templateId) ?? []), price])
+  return { items: page.map((row) => {
+    const matches = pricesByTemplate.get(row.id) ?? []
+    const price = matches.length === 1 ? matches[0]! : null
+    return { ...programTemplateDto(row, actor), activePrice: price && (price.priceMode === "from" || Number(price.amountCount) === 1) ? { amountMinor: Number(price.amountMinor), currency: price.currency } : null }
+  }), nextCursor: rows.length > query.limit ? page.at(-1)?.createdAt.toISOString() ?? null : null }
 }
 
 export async function listProgramOccurrences(dataSource: DataSource, query: ProgramOccurrenceListQuery, actor: SessionUser) {

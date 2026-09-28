@@ -31,6 +31,7 @@ export function VenueOfferingWorkspace({ gateway, offeringId, onEditorChange, on
       const next = await gateway.getVenueEditor(offeringId)
       setEditor(next)
       if (next) onEditorChange?.(next)
+      return next
     } catch (reason) {
       setError(offeringEditorErrorMessage(reason, "Не удалось открыть досье площадки."))
       setConflict(isOfferingEditorConflict(reason))

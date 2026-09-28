@@ -36,6 +36,7 @@ import { ProgramIdentity } from "./program-identity"
 import { ProgramStatusSelect } from "./program-status-select"
 
 const money = new Intl.NumberFormat("ru-RU", { currency: "RUB", maximumFractionDigits: 0, style: "currency" })
+function programPrice(item: ProgramTemplate) { return item.activePrice === null ? "Нет публичной цены" : money.format(item.activePrice ?? item.basePrice) }
 
 type SortProps<T> = { onSort: (key: T) => void; sortDirection: ProgramSortDirection; sortKey: T }
 
@@ -57,7 +58,7 @@ function ProgramTemplateTable({ items, onAssign, onSort, sortDirection, sortKey 
           <MainSecondaryCell>{item.categoryName}</MainSecondaryCell>
           <MainSecondaryCell className="tabular-nums">{formatDuration(item.durationMinutes)}</MainSecondaryCell>
           <MainSecondaryCell className="tabular-nums"><span className="inline-flex items-center gap-1"><IconUser aria-hidden="true" className="size-3.5 text-muted-foreground" />{item.participantLimit}</span></MainSecondaryCell>
-          <MainSecondaryCell className="whitespace-nowrap tabular-nums">{money.format(item.basePrice)}</MainSecondaryCell>
+          <MainSecondaryCell className="whitespace-nowrap tabular-nums">{programPrice(item)}</MainSecondaryCell>
           <MainSecondaryCell onClick={(event) => event.stopPropagation()}><AssigneeStatusRow assignLabel={`Назначить ответственного шаблону ${item.name}`} onAssign={() => onAssign(item.id)} people={item.assignees}><StatusBadge tone={item.published ? "success" : "neutral"}>{item.published ? "Опубликовано" : "Черновик"}</StatusBadge></AssigneeStatusRow></MainSecondaryCell>
           <MainSecondaryCell main={item.nextRun ? formatProgramDateTime(item.nextRun.startsAt) : <span className="text-muted-foreground">Не назначено</span>} secondary={item.nextRun ? `#${item.nextRun.id.replace("run-", "")}` : undefined} />
           <RowActions onClick={(event) => event.stopPropagation()}><ItemActions editLabel="Редактировать шаблон" onOpen={() => navigate(`/programs/${item.id}`)} /></RowActions>
@@ -74,7 +75,7 @@ function ProgramTemplateCards({ items, onAssign }: { items: ProgramTemplate[]; o
       {items.map((item) => (
         <ActionableCard actions={<ItemActions editLabel="Редактировать шаблон" mobile onOpen={() => navigate(`/programs/${item.id}`)} />} key={item.id} onOpen={() => navigate(`/programs/${item.id}`)} openLabel={`Открыть шаблон ${item.name}`}>
           <ProgramIdentity className="pr-11 [&_p]:line-clamp-2 [&_p]:whitespace-normal" icon={item.categoryIcon} secondary={`Версия ${item.version} · ${item.categoryName}`} title={item.name} tone={item.categoryTone} />
-          <div className="mt-3 grid grid-cols-3 divide-x border-t pt-2 text-[11px]"><Metric label="Длительность">{formatDuration(item.durationMinutes)}</Metric><Metric className="pl-2" label="Лимит"><IconUser aria-hidden="true" className="size-3" />{item.participantLimit}</Metric><Metric className="pl-2" label="Стоимость">{money.format(item.basePrice)}</Metric></div>
+          <div className="mt-3 grid grid-cols-3 divide-x border-t pt-2 text-[11px]"><Metric label="Длительность">{formatDuration(item.durationMinutes)}</Metric><Metric className="pl-2" label="Лимит"><IconUser aria-hidden="true" className="size-3" />{item.participantLimit}</Metric><Metric className="pl-2" label="Стоимость">{programPrice(item)}</Metric></div>
           <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2 text-[10px] text-muted-foreground"><span className="truncate">{item.nextRun ? formatProgramDateTime(item.nextRun.startsAt) : "Проведение не назначено"}</span></div>
           <AssigneeStatusRow assignLabel={`Назначить ответственного шаблону ${item.name}`} className="mt-2 border-t pt-2" onAssign={() => onAssign(item.id)} people={item.assignees}><StatusBadge tone={item.published ? "success" : "neutral"}>{item.published ? "Опубликовано" : "Черновик"}</StatusBadge></AssigneeStatusRow>
         </ActionableCard>

@@ -30,7 +30,7 @@ import {
 import { PriceBookLifecycle, RatePlanEditor, ResourceBasePrice, ResourceSpecialPrices } from "./offering-pricing-controls.js"
 import { QuoteSimulator } from "./offering-quote-simulator.js"
 
-export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, kind, onReload, onSaveActionChange, onSaveState, resourceView = false }: { createCommandMeta: OfferingEditorCommandMetaFactory; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; kind: "house" | "campground" | "addon" | "venue"; onReload: () => Promise<void>; onSaveActionChange?: (action: (() => void) | null) => void; onSaveState: (state: SaveState, detail: string) => void; resourceView?: boolean }) {
+export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, kind, onReload, onSaveActionChange, onSaveState, resourceView = false }: { createCommandMeta: OfferingEditorCommandMetaFactory; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; kind: "house" | "campground" | "addon" | "venue"; onReload: () => Promise<void | InternalOfferingEditor | null>; onSaveActionChange?: (action: (() => void) | null) => void; onSaveState: (state: SaveState, detail: string) => void; resourceView?: boolean }) {
   const draft = draftPriceBook(editor)
   const source = useMemo(() => draft ?? priceBookSource(editor), [draft, editor])
   const addOnConstraint = useMemo<AddOnPricingConstraint | null>(() => {
@@ -106,9 +106,16 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
           if (kind !== "venue") throw activationError
           localDraftDirty.current = false
           commandMeta.current = null
-          await onReload()
-          setActivationError(`Черновик сохранён, но цена на сайте не изменилась. ${offeringEditorErrorMessage(activationError, "Не удалось применить цену.")}`)
-          onSaveState("saved", "Цена сохранена как черновик, но ещё не действует")
+          const refreshed = await onReload().catch(() => null)
+          if (refreshed?.offering.activePriceBookId === saved.priceBook.id) {
+            onSaveState("saved", "Цена сохранена и уже действует")
+            return
+          }
+          const stillDraft = refreshed?.priceBooks.some((book) => book.id === saved.priceBook.id && book.state === "draft")
+          setActivationError(stillDraft
+            ? `Черновик сохранён, но цена на сайте не изменилась. ${offeringEditorErrorMessage(activationError, "Не удалось применить цену.")}`
+            : "Черновик сохранён, но применение не подтверждено. Обновите страницу и проверьте действующую цену.")
+          onSaveState("saved", stillDraft ? "Цена сохранена как черновик, но ещё не действует" : "Применение цены требует проверки")
           return
         }
       }
