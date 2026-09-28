@@ -205,6 +205,8 @@ describe("BookingEditorPage", () => {
     render(<DirectoryRepositoryProvider repository={directory}><MemoryRouter initialEntries={["/bookings/new?tab=composition"]}><TooltipProvider><Routes><Route element={<BookingEditorPage pricingGateway={{ previewResourceStayQuote: vi.fn(), previewScheduledResourceQuote }} repository={repository} />} path="bookings/:id" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>)
 
     const tariff = await screen.findByRole("combobox", { name: "Тариф позиции 1" })
+    expect(screen.getByText("Время сеанса")).toBeInTheDocument()
+    expect(screen.getByText("Уборка после сеанса блокирует слот, но не входит в оплачиваемое время.")).toBeInTheDocument()
     expect(screen.getByLabelText("Стоимость, ₽")).toHaveAttribute("readonly")
     expect(previewScheduledResourceQuote).not.toHaveBeenCalled()
     const user = userEvent.setup()

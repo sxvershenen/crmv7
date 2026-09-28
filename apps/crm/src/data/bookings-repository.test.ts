@@ -95,22 +95,24 @@ describe("BookingRepository", () => {
   it("moves the selected bath item rather than the first item of a mixed booking", async () => {
     const bathItemId = "10000000-0000-4000-8000-000000000004"
     const bathResourceId = "10000000-0000-4000-8000-000000000005"
+    const movedBathItemId = "10000000-0000-4000-8000-000000000006"
     const detail = rawBookingDetail()
     const get = vi.fn().mockResolvedValue({
       ...detail,
-      items: [...detail.items, { ...detail.items[0], id: bathItemId, type: "bath", resourceId: bathResourceId, startAt: "2026-09-11T07:00:00.000Z", endAt: "2026-09-11T08:00:00.000Z" }],
+      items: [...detail.items, { ...detail.items[0], id: bathItemId, type: "bath", resourceId: bathResourceId, startAt: "2026-09-11T07:00:00.000Z", endAt: "2026-09-11T08:00:00.000Z", preparationMinutes: 30 }],
     })
-    const patch = vi.fn().mockResolvedValue({ version: 5 })
+    const patch = vi.fn().mockResolvedValue({ version: 5, items: [...detail.items, { ...detail.items[0], id: movedBathItemId, preparationMinutes: 30 }] })
     const repository = new ApiBookingRepository({ client: { get, patch, post: vi.fn() } } as never)
 
-    await repository.updateInterval(bookingId, 12, 13, bathResourceId, bathItemId)
+    const moved = await repository.updateInterval(bookingId, 12.5, 13.5, bathResourceId, bathItemId)
 
     expect(patch).toHaveBeenCalledWith(`/bookings/${bookingId}/interval`, expect.objectContaining({
       itemId: bathItemId,
       resourceId: bathResourceId,
-      startAt: "2026-09-11T09:00:00.000Z",
-      endAt: "2026-09-11T10:00:00.000Z",
+      startAt: "2026-09-11T09:30:00.000Z",
+      endAt: "2026-09-11T10:30:00.000Z",
     }), expect.anything())
+    expect(moved).toMatchObject({ itemId: movedBathItemId, startHour: 12.5, endHour: 13.5, preparationEndHour: 14 })
     await expect(repository.updateInterval(bookingId, 12, 13, bathResourceId, crypto.randomUUID())).rejects.toThrow("Позиция бронирования не найдена")
     expect(patch).toHaveBeenCalledTimes(1)
   })

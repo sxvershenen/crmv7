@@ -56,7 +56,7 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     const [bath] = await ds.query("SELECT capacity_total FROM resources WHERE code = $1", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ capacity_total: number }>
     expect(bath?.capacity_total).toBe(15)
     const [bathBooking] = await ds.query("SELECT price_amount FROM booking_items WHERE booking_id = $1 AND type = 'bath'", [applied.report.ids.bookings![0]]) as Array<{ price_amount: number }>
-    expect(bathBooking?.price_amount).toBe(600_000)
+    expect(bathBooking?.price_amount).toBe(300_000)
     const [bathOffering] = await ds.query("SELECT offering.id FROM catalog_offerings offering JOIN offering_bindings binding ON binding.offering_id = offering.id JOIN resources resource ON resource.id = binding.resource_id WHERE resource.code = $1 AND offering.kind = 'addon'", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ id: string }>
     const bathRates = await ds.query("SELECT plan.rate_key, plan.base_amount_minor FROM rate_plans plan JOIN price_books book ON book.id = plan.price_book_id WHERE book.offering_id = $1 ORDER BY plan.sort_order", [bathOffering!.id]) as Array<{ rate_key: string; base_amount_minor: number }>
     expect(bathRates.map((row) => row.base_amount_minor)).toEqual([300_000, 350_000, 400_000, 600_000, 700_000, 800_000])
@@ -152,6 +152,15 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     expect(booking.items[0]).toMatchObject({ price: { amountMinor: 600_000, currency: "RUB" }, ratePlanKey: "standard_6" })
     const [storedItem] = await ds.query("SELECT price_amount, pricing_snapshot FROM booking_items WHERE id = $1", [booking.items[0]!.id]) as Array<{ price_amount: number; pricing_snapshot: Record<string, unknown> }>
     expect(storedItem).toMatchObject({ price_amount: 600_000, pricing_snapshot: { ratePlanKey: "standard_6", billableHours: 2, totalAmountMinor: 600_000 } })
+    const oneHour = await bookings.create(BookingCreateSchema.parse({
+      customerId: customer.id, operationId: demoId("bath-one-hour-booking"), idempotencyKey: "test.bath-one-hour-booking", promoCode: null, note: null, assignees: [], overrideConflict: false,
+      items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T15:00:00.000Z", endAt: "2026-09-12T16:00:00.000Z", quantity: 6, ratePlanKey: "standard_6", price: { amountMinor: 1, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],
+    }), actor, "bath-pricing-test")
+    expect(oneHour.items[0]).toMatchObject({ endAt: "2026-09-12T16:00:00.000Z", preparationMinutes: 30, price: { amountMinor: 300_000, currency: "RUB" } })
+    const [oneHourStorage] = await ds.query("SELECT item.end_at AS service_end, item.preparation_minutes, item.pricing_snapshot, allocation.end_at AS occupied_until FROM booking_items item JOIN resource_allocations allocation ON allocation.source_id = item.id AND allocation.source_type = 'booking_item' WHERE item.id = $1", [oneHour.items[0]!.id]) as Array<{ service_end: Date; preparation_minutes: number; pricing_snapshot: { billableHours: number }; occupied_until: Date }>
+    expect(oneHourStorage).toMatchObject({ preparation_minutes: 30, pricing_snapshot: { billableHours: 1 } })
+    expect(oneHourStorage!.service_end.toISOString()).toBe("2026-09-12T16:00:00.000Z")
+    expect(oneHourStorage!.occupied_until.toISOString()).toBe("2026-09-12T16:30:00.000Z")
     const noteOnly = await bookings.update(booking.id, BookingUpdateSchema.parse({
       expectedVersion: booking.version, operationId: demoId("bath-priced-note"), idempotencyKey: "test.bath-priced-note", note: "Уточнить время прибытия", overrideConflict: false,
       items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T09:00:00.000Z", endAt: "2026-09-12T10:30:00.000Z", quantity: 6, ratePlanKey: "standard_6", price: { amountMinor: 600_000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],

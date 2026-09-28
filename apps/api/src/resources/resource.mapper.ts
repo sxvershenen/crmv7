@@ -28,6 +28,7 @@ function settingsOf(resource: ResourceEntity): ResourceSettings {
 
 export function toResourceDto(resource: ResourceEntity, actor: SessionUser, allocations: ResourceAllocationEntity[] = []): ResourceDto {
   const settings = settingsOf(resource)
+  const rules = settings.rules ?? defaultRules
   const now = Date.now()
   const operational = allocations.filter((item) => item.sourceType !== "resource_block" && item.status !== "cancelled" && item.archivedAt === null)
   const blocks = allocations.filter((item) => item.sourceType === "resource_block").map((item) => ({
@@ -61,7 +62,7 @@ export function toResourceDto(resource: ResourceEntity, actor: SessionUser, allo
     customIconDataUrl: settings.customIconDataUrl ?? "",
     customIconName: settings.customIconName ?? "",
     description: settings.description ?? "",
-    rules: settings.rules ?? defaultRules,
+    rules: resource.kind === "bath" && rules.preparationAfterMinutes === "" ? { ...rules, preparationAfterMinutes: "30" } : rules,
     showOnSite: settings.showOnSite ?? false,
     spaceType: settings.spaceType ?? null,
     blocks,

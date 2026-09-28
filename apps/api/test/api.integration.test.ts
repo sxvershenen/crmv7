@@ -1236,9 +1236,9 @@ describe.sequential("internal API + PostgreSQL", () => {
     const standalone = await create("standalone", [item("bath", bathId, "2026-11-20T07:00:00.000Z", "2026-11-20T08:00:00.000Z")]).expect(201)
     const linked = await create("linked", [
       item("accommodation", houseId, "2026-11-20T06:00:00.000Z", "2026-11-20T11:00:00.000Z"),
-      item("bath", bathId, "2026-11-20T08:00:00.000Z", "2026-11-20T09:00:00.000Z"),
+      item("bath", bathId, "2026-11-20T08:30:00.000Z", "2026-11-20T09:30:00.000Z"),
     ]).expect(201)
-    await create("overlap", [item("bath", bathId, "2026-11-20T08:30:00.000Z", "2026-11-20T09:30:00.000Z")]).expect(409)
+    await create("overlap", [item("bath", bathId, "2026-11-20T09:00:00.000Z", "2026-11-20T10:00:00.000Z")]).expect(409)
     const wrongResource = await create("wrong-resource", [item("bath", houseId, "2026-11-20T12:00:00.000Z", "2026-11-20T13:00:00.000Z")]).expect(409)
     expect(wrongResource.body.code).toBe("BOOKING_RESOURCE_TYPE_MISMATCH")
     const missingResource = await create("missing-resource", [item("bath", null, "2026-11-20T12:00:00.000Z", "2026-11-20T13:00:00.000Z")]).expect(409)
@@ -1247,23 +1247,25 @@ describe.sequential("internal API + PostgreSQL", () => {
     const projection = await adminAgent.get("/api/internal/v1/bookings/projection?date=2026-11-20&rangeEnd=2026-11-20&category=bath&resource=all").expect(200)
     expect(projection.body.bookings).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: standalone.body.id, resourceId: bathId, category: "bath" }),
-      expect.objectContaining({ id: linked.body.id, resourceId: bathId, category: "bath", itemId: linked.body.items[1].id }),
+      expect.objectContaining({ id: linked.body.id, resourceId: bathId, category: "bath", itemId: linked.body.items[1].id, startHour: 11.5, endHour: 12.5, preparationEndHour: 13 }),
     ]))
     expect(projection.body.bookings).toHaveLength(2)
-    expect(projection.body.operations.filter((operation: { resourceId: string }) => operation.resourceId === bathId)).toHaveLength(4)
+    const bathOperations = projection.body.operations.filter((operation: { resourceId: string }) => operation.resourceId === bathId)
+    expect(bathOperations).toHaveLength(6)
+    expect(bathOperations.filter((operation: { kind: string }) => operation.kind === "preparation")).toHaveLength(2)
     const houseProjection = await adminAgent.get(`/api/internal/v1/bookings/projection?date=2026-11-20&rangeEnd=2026-11-20&category=all&resource=${houseId}`).expect(200)
     expect(houseProjection.body.bookings).toEqual([expect.objectContaining({ id: linked.body.id, resourceId: houseId, itemId: linked.body.items[0].id })])
     expect(await dataSource.getRepository(ResourceAllocationEntity).countBy({ resourceId: bathId, status: "tentative" })).toBe(2)
 
     const moved = await adminAgent.patch(`/api/internal/v1/bookings/${linked.body.id}/interval`).send({
       expectedVersion: linked.body.version, operationId: randomUUID(), idempotencyKey: "booking-bath-move-linked", itemId: linked.body.items[1].id,
-      startAt: "2026-11-20T09:00:00.000Z", endAt: "2026-11-20T10:00:00.000Z", resourceId: bathId, overrideConflict: false,
+      startAt: "2026-11-20T10:00:00.000Z", endAt: "2026-11-20T11:00:00.000Z", resourceId: bathId, overrideConflict: false,
     }).expect(200)
     expect(moved.body.items).toEqual([
       expect.objectContaining({ resourceId: houseId, startAt: "2026-11-20T06:00:00.000Z", endAt: "2026-11-20T11:00:00.000Z" }),
-      expect.objectContaining({ resourceId: bathId, startAt: "2026-11-20T09:00:00.000Z", endAt: "2026-11-20T10:00:00.000Z" }),
+      expect.objectContaining({ resourceId: bathId, startAt: "2026-11-20T10:00:00.000Z", endAt: "2026-11-20T11:00:00.000Z" }),
     ])
-    await create("freed-slot", [item("bath", bathId, "2026-11-20T08:00:00.000Z", "2026-11-20T09:00:00.000Z")]).expect(201)
+    await create("freed-slot", [item("bath", bathId, "2026-11-20T08:30:00.000Z", "2026-11-20T09:30:00.000Z")]).expect(201)
   })
 
   it("reserves bath preparation after the session without blocking the preceding slot", async () => {

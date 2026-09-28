@@ -19,5 +19,6 @@ export function formatDate(value: string) {
 }
 
 export function time(hour: number) {
-  return `${String(Math.max(0, Math.min(24, hour))).padStart(2, "0")}:00`
+  const minutes = Math.round(Math.max(0, Math.min(24, hour)) * 60)
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
 }

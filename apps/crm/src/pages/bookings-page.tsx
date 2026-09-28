@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom"
 
 import { Button, PageFrame, PageState } from "@crm/ui"
 
-import { shiftIso } from "@app/components/bookings/booking-date"
+import { shiftIso, time } from "@app/components/bookings/booking-date"
 import { BookingCategoryNav, BookingControls, SchedulerResourceSelect } from "@app/components/bookings/bookings-controls"
 import { AgendaView, BookingTable, BookingsLoading } from "@app/components/bookings/bookings-views"
 import { VerticalScheduler } from "@app/components/bookings/vertical-scheduler"
@@ -113,7 +113,7 @@ function BookingsPageContent({ defaultView = "agenda" }: { defaultView?: Booking
   }
   const handleScheduleChange = async (booking: Booking, startHour: number, endHour: number, resourceId: string) => {
     setConflictMessage("")
-    setAnnouncement(`Бронирование #${booking.id}: новый интервал ${startHour}:00–${endHour}:00`)
+    setAnnouncement(`Бронирование #${booking.id}: новый интервал ${time(startHour)}–${time(endHour)}`)
     try {
       await updateInterval(booking.id, startHour, endHour, resourceId, booking.itemId)
       setAnnouncement(`Бронирование #${booking.id} сохранено на сервере.`)

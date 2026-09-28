@@ -298,11 +298,12 @@ export function BookingComposition({
                     value={position.guestCount}
                   />
                 </FormField>
-                <FormField className="col-span-2 min-w-0 sm:col-span-4" htmlFor={`${position.id}-period`} label="Период">
-                  <DateTimeRangePicker id={`${position.id}-period`} label={`Период позиции ${index + 1}`} onValueChange={(value) => {
+                <FormField className="col-span-2 min-w-0 sm:col-span-4" htmlFor={`${position.id}-period`} label={position.category === "bath" ? "Время сеанса" : "Период"}>
+                  <DateTimeRangePicker id={`${position.id}-period`} label={`${position.category === "bath" ? "Время сеанса" : "Период"} позиции ${index + 1}`} onValueChange={(value) => {
                     updatePosition(position.id, "startAt", value.from);
                     updatePosition(position.id, "endAt", value.to);
                   }} value={{ from: position.startAt, to: position.endAt }} />
+                  {position.category === "bath" ? <p className="mt-1 text-xs text-muted-foreground">Уборка после сеанса блокирует слот, но не входит в оплачиваемое время.</p> : null}
                 </FormField>
               </div>
               {isStayCategory(position.category) && catalogs[position.id]?.length ? <BookingAddOns position={position} options={catalogs[position.id]!} onChange={(addOns) => { dirtyAddOnPositions.current.add(position.id); updatePosition(position.id, "addOns", addOns); updatePosition(position.id, "quoteSnapshotId", null); }} /> : null}

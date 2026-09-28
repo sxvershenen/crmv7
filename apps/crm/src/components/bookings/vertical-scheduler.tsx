@@ -264,7 +264,7 @@ function SchedulerCard({ booking, hourHeight, onChange, onConflict, preview, res
   const height = Math.max(hourHeight, (end - start) * hourHeight)
   const preparationDuration = booking.preparationEndHour - booking.endHour
   const preparationTop = (end - START_HOUR) * hourHeight
-  const preparationHeight = Math.max(32, preparationDuration * hourHeight)
+  const preparationHeight = Math.max(24, preparationDuration * hourHeight)
   const tone = statusTone[booking.status]
   const oneHour = end - start === 1
   const style: CSSProperties = { height, top }
@@ -307,7 +307,7 @@ function SchedulerCard({ booking, hourHeight, onChange, onConflict, preview, res
       </div>
       {preparationDuration > 0 ? (
         <div className="absolute inset-x-1 z-[2] min-w-0" data-preparation-preview={preview ? "true" : undefined} style={{ height: preparationHeight, top: preparationTop }}>
-          <PreparationBlock height={preparationHeight} label="Подготовка" timeLabel={`${time(end)}–${time(end + preparationDuration)}`} tone={preview && !preview.valid ? "danger" : "neutral"} />
+          <PreparationBlock className={preparationDuration < 1 ? "min-h-6 py-0.5" : ""} height={preparationHeight} label="Подготовка" timeLabel={`${time(end)}–${time(end + preparationDuration)}`} tone={preview && !preview.valid ? "danger" : "neutral"} />
         </div>
       ) : null}
     </>
@@ -338,7 +338,7 @@ function BookingScheduleActions({ booking, onChange, onConflict, resources }: { 
     try { await onChange(booking, nextStart, nextEnd, nextResource) }
     catch (error) { onConflict(error instanceof Error ? error.message : "Интервал не изменён") }
   }
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index).map((hour) => ({ label: time(hour), value: String(hour) }))
+  const hours = [...new Set([...Array.from({ length: (END_HOUR - START_HOUR) * 2 + 1 }, (_, index) => START_HOUR + index / 2), booking.startHour, booking.endHour])].sort((left, right) => left - right).map((hour) => ({ label: time(hour), value: String(hour) }))
   return (
     <Sheet onOpenChange={setOpen} open={open}>
       <DropdownMenu>

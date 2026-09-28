@@ -164,7 +164,7 @@ export class FixtureBookingRepository implements BookingRepository, BookingEdito
     if (!booking) throw new Error("Бронирование не найдено")
     if (booking.demoRejectMove) throw new Error(`Конфликт #${id}: demo-проверка отклонила изменение, прежний интервал восстановлен.`)
     const resource = this.data.length > 0 ? bookingResourcesFixture.find((item) => item.id === (resourceId ?? booking.resourceId)) : undefined
-    Object.assign(booking, { startHour, endHour, preparationEndHour: Math.min(24, endHour + 1), ...(resource ? { resourceId: resource.id, resourceName: resource.name, category: resource.category } : {}) })
+    Object.assign(booking, { startHour, endHour, preparationEndHour: Math.min(24, endHour + booking.preparationEndHour - booking.endHour), ...(resource ? { resourceId: resource.id, resourceName: resource.name, category: resource.category } : {}) })
     return structuredClone(booking)
   }
 }
@@ -433,9 +433,13 @@ export class ApiBookingRepository implements BookingRepository, BookingEditorRep
     const target = detail.items.find((item) => item.id === (itemId ?? detail.itemId))
     if (!target) throw new Error("Позиция бронирования не найдена")
     const date = toBusinessDateTimeInput(target.startAt).slice(0, 10)
-    const iso = (hour: number) => new Date(`${date}T${String(hour).padStart(2, "0")}:00:00+03:00`).toISOString()
+    const iso = (hour: number) => {
+      const minutes = Math.round(hour * 60)
+      return new Date(`${date}T${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00+03:00`).toISOString()
+    }
     const result = await this.client.patch(`/bookings/${encodeURIComponent(id)}/interval`, { expectedVersion: detail.version, operationId: crypto.randomUUID(), idempotencyKey: `booking-interval-${crypto.randomUUID()}`, itemId: target.id, startAt: iso(startHour), endAt: iso(endHour), resourceId: resourceId ?? target.resourceId, overrideConflict: false }, BookingDtoSchema)
-    const next: Booking = { ...mapProjection(detail), version: result.version, itemId: target.id, startAt: iso(startHour), endAt: iso(endHour), date, startHour, endHour, preparationEndHour: Math.min(24, endHour + 1), resourceId: resourceId ?? target.resourceId ?? "" }
+    const updatedItem = result.items[detail.items.indexOf(target)]
+    const next: Booking = { ...mapProjection(detail), version: result.version, itemId: updatedItem?.id ?? target.id, startAt: iso(startHour), endAt: iso(endHour), date, startHour, endHour, preparationEndHour: Math.min(24, endHour + (updatedItem?.preparationMinutes ?? target.preparationMinutes) / 60), resourceId: resourceId ?? target.resourceId ?? "" }
     return next
   }
 }

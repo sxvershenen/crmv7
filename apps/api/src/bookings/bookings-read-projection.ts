@@ -60,7 +60,7 @@ export function projectionBooking(row: ProjectionRow, payments: Array<{ kind: st
     return {
       id: row.id, code: row.code, version: row.version, customerId: row.customer_id, clientName: row.client_name ?? "Клиент", phone: row.phone ?? "",
       resourceId: row.resource_id, resourceName: row.resource_name ?? "Без ресурса", category: bookingCategory, date: startParts.date, startAt: start.toISOString(), endAt: end.toISOString(),
-      startHour: startParts.hour, endHour: endParts.hour === 0 && endParts.date !== startParts.date ? 24 : endParts.hour, preparationEndHour: Math.min(24, endParts.hour + Math.ceil((row.preparation_minutes ?? 0) / 60)), guestCount: Number.isFinite(guestCount) ? guestCount : 0,
+      startHour: startParts.hour + startParts.minute / 60, endHour: endParts.hour === 0 && endParts.date !== startParts.date ? 24 : endParts.hour + endParts.minute / 60, preparationEndHour: Math.min(24, endParts.hour + (endParts.minute + (row.preparation_minutes ?? 0)) / 60), guestCount: Number.isFinite(guestCount) ? guestCount : 0,
       status, lifecycleStatus: row.status as BookingProjectionBooking["lifecycleStatus"], amount: row.total_amount, paid, paymentState: bookingPaymentState, source, utm, promo, sourceLeadId: row.source_lead_id, assignees,
       itemId: row.item_id, hasConflict,
     }
@@ -101,7 +101,7 @@ export function localParts(value: Date) {
     const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00"
     const date = `${get("year")}-${get("month")}-${get("day")}`
     const hour = Number(get("hour"))
-    return { date, hour, label: `${String(hour).padStart(2, "0")}:${get("minute")}` }
+    return { date, hour, minute: Number(get("minute")), label: `${String(hour).padStart(2, "0")}:${get("minute")}` }
   }
 export function paymentState(total: number, net: number): BookingDto["paymentState"] { if (net < 0) return "refund"; if (net === 0) return total === 0 ? "paid" : "unpaid"; if (net < total) return "partial"; if (net === total) return "paid"; return "overpaid" }
 export const fromEntity = (item: BookingItemEntity): ItemInput => ({ type: item.type as ItemInput["type"], resourceId: item.resourceId, startAt: item.startAt.toISOString(), endAt: item.endAt.toISOString(), quantity: item.quantity, ratePlanKey: typeof item.pricingSnapshot?.ratePlanKey === "string" ? item.pricingSnapshot.ratePlanKey : null, price: { amountMinor: item.priceAmount, currency: item.currency }, discount: { amountMinor: item.discountAmount, currency: item.currency }, preparationMinutes: item.preparationMinutes, quoteSnapshotId: item.quoteSnapshotId, addOns: item.addOnSelections.map(({ assignmentId, quantity }) => ({ assignmentId, quantity })) })

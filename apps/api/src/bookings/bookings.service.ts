@@ -411,7 +411,7 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
         && before.quantity === after.quantity && before.ratePlanKey === after.ratePlanKey
         && before.price.amountMinor === after.price.amountMinor && before.price.currency === after.price.currency
         && before.discount.amountMinor === after.discount.amountMinor && before.discount.currency === after.discount.currency
-        && before.preparationMinutes === after.preparationMinutes && before.quoteSnapshotId === after.quoteSnapshotId
+        && (before.preparationMinutes === after.preparationMinutes || (before.type === "bath" && after.preparationMinutes === 0)) && before.quoteSnapshotId === after.quoteSnapshotId
         && JSON.stringify(before.addOns) === JSON.stringify(after.addOns)
     })
   }
@@ -507,7 +507,7 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
       if (item.type === "bath" && resource.kind !== "bath" && resource.kind !== "sauna") {
         throw new ConflictException({ code: "BOOKING_RESOURCE_TYPE_MISMATCH", message: "Для бани или чана выберите SPA-ресурс" })
       }
-      let preparationMinutes = item.preparationMinutes
+      let preparationMinutes = item.type === "bath" && item.preparationMinutes === 0 ? 30 : item.preparationMinutes
       if (item.type === "bath") {
         const configured = (resource.settings.rules as { preparationAfterMinutes?: unknown } | undefined)?.preparationAfterMinutes
         if (configured !== undefined && configured !== "") {
