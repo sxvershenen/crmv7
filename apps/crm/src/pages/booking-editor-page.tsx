@@ -239,6 +239,8 @@ export function BookingEditorPage({
                       resourceName: resource.name,
                       addOns: [],
                       quoteSnapshotId: null,
+                      ratePlanKey: null,
+                      calculatedInputKey: null,
                     }
                   : position,
               ),
@@ -373,7 +375,7 @@ export function BookingEditorPage({
     });
     setSaveState("dirty");
   }, []);
-  const pricePending = Boolean(draft?.positions.some(position => isUuid(position.resourceId) && isStayCategory(position.category) &&
+  const pricePending = Boolean(draft?.positions.some(position => isUuid(position.resourceId) && (isStayCategory(position.category) || position.category === "bath") &&
     (id === "new" || Boolean(position.addOns?.length) || position.calculatedInputKey != null) && position.calculatedInputKey !== bookingPriceKey(position)));
   useEffect(() => {
     if (!pricePending) setMutationError((current) => current === PRICE_PENDING_MESSAGE ? null : current);

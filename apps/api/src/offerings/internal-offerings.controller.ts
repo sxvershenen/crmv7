@@ -14,6 +14,7 @@ import {
   ResourceStayOfferingCreateBodySchema,
   ResourceVenueOfferingCreateBodySchema,
   ResourceScheduledOfferingCreateBodySchema,
+  ResourceScheduledOfferingQuotePreviewBodySchema,
   type OfferingListQuery,
   type AddOnOfferingCreateBody,
   type AddOnTermsMutationBody,
@@ -27,6 +28,7 @@ import {
   type ResourceStayOfferingCreateBody,
   type ResourceVenueOfferingCreateBody,
   type ResourceScheduledOfferingCreateBody,
+  type ResourceScheduledOfferingQuotePreviewBody,
 } from "@crm/contracts"
 
 import { RequireCapabilities } from "../common/require-capability.decorator.js"
@@ -92,6 +94,12 @@ export class InternalOfferingsController {
   @RequireCapabilities("canCreate", "canEdit")
   createScheduledOfferingFromResource(@Param("resourceId", new ParseUUIDPipe({ version: "4" })) resourceId: string, @Body(new ZodValidationPipe(ResourceScheduledOfferingCreateBodySchema)) body: ResourceScheduledOfferingCreateBody, @Req() request: AuthenticatedRequest) {
     return this.offerings.createScheduledOfferingFromResource(resourceId, body, this.context(request))
+  }
+
+  @Post("scheduled/by-resource/:resourceId/quotes/preview")
+  @HttpCode(HttpStatus.OK)
+  previewScheduledResourceQuote(@Param("resourceId", new ParseUUIDPipe({ version: "4" })) resourceId: string, @Body(new ZodValidationPipe(ResourceScheduledOfferingQuotePreviewBodySchema)) body: ResourceScheduledOfferingQuotePreviewBody, @Req() request: AuthenticatedRequest) {
+    return this.offerings.previewScheduledResourceQuote(resourceId, body, this.context(request))
   }
 
   @Post("by-resource/:resourceId/quotes/preview")

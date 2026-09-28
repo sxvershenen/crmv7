@@ -3,8 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { DataSource } from "typeorm"
 import { AddonOfferingTermsEntity, assertSafeTestDatabaseConnection, assertSafeTestDatabaseEnvironment, BusinessCalendarDateEntity, BusinessCalendarEntity, CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsSourceLinkEntity, CustomerEntity, databaseEntities, databaseMigrations, OfferingBindingEntity, ResourceGroupEntity, ResourceGroupMemberEntity, ScheduledResourceEditorialLink1788207200000, UserEntity } from "@crm/db"
 import { roleCapabilities } from "@crm/domain"
-import { CmsNodeMutationSchema, ResourceCreateSchema } from "@crm/contracts"
+import { BookingCreateSchema, BookingTransitionSchema, BookingUpdateSchema, CmsNodeMutationSchema, ResourceCreateSchema } from "@crm/contracts"
 import { CmsContentService } from "../cms/cms-content.service.js"
+import { BookingsService } from "../bookings/bookings.service.js"
+import { MarketingService } from "../marketing/marketing.service.js"
+import { OperationalQuoteAcceptanceService } from "../offerings/operational-quote-acceptance.service.js"
 import { ensureCatalogOfferingEditorialDraft, inspectLegacyCatalogOfferingPromotion } from "../cms/cms-source-draft.js"
 import { ResourcesService } from "../resources/resources.service.js"
 import { OfferingEditorApplicationService } from "../offerings/offering-editor-application.service.js"
@@ -138,6 +141,33 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     const activePrice = await editor.activate(result.offeringId, priceDraft.priceBook.id, { operationId: demoId("bath-price-activate"), idempotencyKey: "test.bath-price.activate", expectedPricingVersion: priceDraft.pricingVersion, reason: "Первый прайс" }, context)
     expect(activePrice.priceBook).toMatchObject({ state: "active", ratePlans: [{ baseAmount: 300_000 }, { baseAmount: 350_000 }] })
     expect((await editor.editor(result.offeringId, context)).offering).toMatchObject({ state: "active", activePriceBookId: activePrice.priceBook.id })
+    const preview = await editor.previewScheduledResourceQuote(resource.id, { startsAt: "2026-09-12T09:00:00.000Z", endsAt: "2026-09-12T10:30:00.000Z", guests: 6, ratePlanKey: "standard_6", currency: "RUB" }, context)
+    expect(preview).toMatchObject({ mode: "priced", billableHours: 2, total: { amountMinor: 600_000, currency: "RUB" } })
+    const customer = (await ds.getRepository(CustomerEntity).find({ take: 1 }))[0]!
+    const bookings = new BookingsService(ds, new OperationalQuoteAcceptanceService(), new MarketingService(ds))
+    const booking = await bookings.create(BookingCreateSchema.parse({
+      customerId: customer.id, operationId: demoId("bath-priced-booking"), idempotencyKey: "test.bath-priced-booking", promoCode: null, note: null, assignees: [], overrideConflict: false,
+      items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T09:00:00.000Z", endAt: "2026-09-12T10:30:00.000Z", quantity: 6, ratePlanKey: "standard_6", price: { amountMinor: 100, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],
+    }), actor, "bath-pricing-test")
+    expect(booking.items[0]).toMatchObject({ price: { amountMinor: 600_000, currency: "RUB" }, ratePlanKey: "standard_6" })
+    const [storedItem] = await ds.query("SELECT price_amount, pricing_snapshot FROM booking_items WHERE id = $1", [booking.items[0]!.id]) as Array<{ price_amount: number; pricing_snapshot: Record<string, unknown> }>
+    expect(storedItem).toMatchObject({ price_amount: 600_000, pricing_snapshot: { ratePlanKey: "standard_6", billableHours: 2, totalAmountMinor: 600_000 } })
+    const noteOnly = await bookings.update(booking.id, BookingUpdateSchema.parse({
+      expectedVersion: booking.version, operationId: demoId("bath-priced-note"), idempotencyKey: "test.bath-priced-note", note: "Уточнить время прибытия", overrideConflict: false,
+      items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T09:00:00.000Z", endAt: "2026-09-12T10:30:00.000Z", quantity: 6, ratePlanKey: "standard_6", price: { amountMinor: 600_000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],
+    }), actor, "bath-pricing-test")
+    expect(noteOnly.items[0]!.id).toBe(booking.items[0]!.id)
+    expect(noteOnly.total.amountMinor).toBe(600_000)
+    const unconfirmed = await bookings.transition(booking.id, BookingTransitionSchema.parse({ expectedVersion: noteOnly.version, operationId: demoId("bath-priced-unconfirmed"), idempotencyKey: "test.bath-priced-unconfirmed", status: "unconfirmed" }), actor, "bath-pricing-test")
+    const confirmed = await bookings.transition(booking.id, BookingTransitionSchema.parse({ expectedVersion: unconfirmed.version, operationId: demoId("bath-priced-confirmed"), idempotencyKey: "test.bath-priced-confirmed", status: "confirmed" }), actor, "bath-pricing-test")
+    await expect(bookings.update(booking.id, BookingUpdateSchema.parse({
+      expectedVersion: confirmed.version, operationId: demoId("bath-priced-change-confirmed"), idempotencyKey: "test.bath-priced-change-confirmed", overrideConflict: false,
+      items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T09:00:00.000Z", endAt: "2026-09-12T11:00:00.000Z", quantity: 6, ratePlanKey: "standard_6", price: { amountMinor: 600_000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],
+    }), actor, "bath-pricing-test")).rejects.toMatchObject({ response: { code: "BOOKING_PRICED_ITEM_IMMUTABLE" } })
+    await expect(bookings.create(BookingCreateSchema.parse({
+      customerId: customer.id, operationId: demoId("bath-priced-over-capacity"), idempotencyKey: "test.bath-priced-over-capacity", promoCode: null, note: null, assignees: [], overrideConflict: false,
+      items: [{ type: "bath", resourceId: resource.id, startAt: "2026-09-12T13:00:00.000Z", endAt: "2026-09-12T14:00:00.000Z", quantity: 16, ratePlanKey: "standard_6", price: { amountMinor: 1, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes: 0, quoteSnapshotId: null, addOns: [] }],
+    }), actor, "bath-pricing-test")).rejects.toMatchObject({ response: { code: "RESOURCE_CAPACITY_EXCEEDED" } })
     await expect(ds.transaction((manager) => new ScheduledResourceEditorialLink1788207200000().down(manager.queryRunner!))).rejects.toThrow("rollback is unsafe")
   })
 

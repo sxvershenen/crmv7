@@ -145,6 +145,70 @@ export interface AddOnQuoteCalculation {
   readonly matchedRule: Readonly<{ id: string; version: number; selector: HouseDateSelector; priority: number }> | null;
 }
 
+export interface ScheduledResourceQuoteRequest {
+  readonly offeringId: string;
+  readonly ratePlanKey: string | null;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly guests: number;
+  readonly currency: string;
+}
+
+export interface ScheduledResourceQuoteCalculation {
+  readonly offeringId: string;
+  readonly offeringVersion: number;
+  readonly pricingVersion: number;
+  readonly priceBookId: string;
+  readonly priceBookVersion: number;
+  readonly calendarId: string;
+  readonly calendarVersion: number;
+  readonly resourceServiceDate: LocalDate;
+  readonly ratePlan: Readonly<{ id: string; version: number; key: string; label: string; pricingBasis: "per_hour" | "per_slot" }>;
+  readonly guests: number;
+  readonly billableHours: number | null;
+  readonly unitAmountMinor: number;
+  readonly totalAmountMinor: number;
+  readonly currency: string;
+}
+
+/** Price one reserved bath/chan interval. Each started sauna hour is charged in full; a chan is one session. */
+export function resolveScheduledResourceQuote(snapshot: HousePricingSnapshot, request: ScheduledResourceQuoteRequest): ScheduledResourceQuoteCalculation {
+  const start = new Date(request.startsAt);
+  const end = new Date(request.endsAt);
+  const durationMs = end.getTime() - start.getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) fail("INVALID_INTERVAL", "Укажите корректные начало и окончание бани или чана");
+  if (snapshot.offering.id !== request.offeringId || snapshot.offering.kind !== "addon" || snapshot.offering.state !== "active") fail("OFFERING_NOT_QUOTABLE", "Баня или чан недоступны для расчёта");
+  if (!Number.isSafeInteger(request.guests) || request.guests <= 0) fail("PRICE_QUANTITY_OUT_OF_RANGE", "Количество гостей должно быть положительным");
+  if (snapshot.priceBook.state !== "active" || snapshot.offering.activePriceBookId !== snapshot.priceBook.id || snapshot.priceBook.offeringId !== snapshot.offering.id) fail("PRICE_BOOK_NOT_ACTIVE", "Для бани или чана нет действующего прайс-листа");
+  if (request.currency !== snapshot.offering.currency || request.currency !== snapshot.priceBook.currency) fail("PRICING_CURRENCY_MISMATCH", "Валюта тарифа не совпадает с валютой брони");
+  if (snapshot.calendar.state !== "active" || snapshot.calendar.id !== snapshot.offering.businessCalendarId) fail("CALENDAR_NOT_ACTIVE", "Календарь услуги недоступен");
+  if (snapshot.offering.timezone !== snapshot.priceBook.timezone || snapshot.offering.timezone !== snapshot.calendar.timezone) fail("PRICING_TIMEZONE_MISMATCH", "Часовые пояса цены и услуги различаются");
+  const serviceDate = localDateInTimeZone(start, snapshot.offering.timezone);
+  if (serviceDate < snapshot.priceBook.validFrom || (snapshot.priceBook.validToExclusive !== null && serviceDate >= snapshot.priceBook.validToExclusive)) fail("PRICE_BOOK_COVERAGE_GAP", "Прайс-лист не покрывает дату начала услуги");
+  if (!snapshot.calendar.dates.some((date) => date.date === serviceDate)) fail("CALENDAR_DATE_MISSING", "Дата услуги отсутствует в календаре");
+  const plans = snapshot.ratePlans.filter((plan) => !plan.archived && plan.priceBookId === snapshot.priceBook.id && (plan.pricingBasis === "per_hour" || plan.pricingBasis === "per_slot"));
+  const chosen = request.ratePlanKey === null ? plans : plans.filter((plan) => plan.key === request.ratePlanKey);
+  if (request.ratePlanKey !== null && chosen.length !== 1) fail("RATE_PLAN_NOT_FOUND", "Выбранный тариф бани или чана не найден");
+  const eligible = chosen.filter((plan) => (plan.quantityMetric === null || plan.quantityMetric === "guests")
+    && (plan.minQuantity === null || request.guests >= plan.minQuantity)
+    && (plan.maxQuantity === null || request.guests <= plan.maxQuantity));
+  if (eligible.length === 0) fail("PRICE_QUANTITY_OUT_OF_RANGE", "Для этого числа гостей нет подходящего тарифа");
+  if (eligible.length !== 1) fail("RATE_PLAN_DEFAULT_AMBIGUOUS", "Выберите вариант тарифа для бани или чана");
+  const plan = eligible[0]!;
+  if (plan.rules.some((rule) => rule.enabled && !rule.archived) || plan.includedQuantity !== null || plan.baseExtraUnitAmountMinor !== null || plan.minDurationMinutes !== null || plan.maxDurationMinutes !== null) fail("UNSUPPORTED_PRICING_DIMENSION", "Тариф содержит неподдерживаемые правила");
+  if (!isMinor(plan.baseAmountMinor)) fail("PRICE_RULE_INVALID", "Сумма тарифа некорректна");
+  const billableHours = plan.pricingBasis === "per_hour" ? Math.ceil(durationMs / 3_600_000) : null;
+  if (billableHours !== null && !Number.isSafeInteger(billableHours)) fail("PRICE_AMOUNT_OVERFLOW", "Слишком длинный период бронирования");
+  const totalAmountMinor = safeMultiply(billableHours ?? 1, plan.baseAmountMinor);
+  return deepFreeze({
+    offeringId: snapshot.offering.id, offeringVersion: snapshot.offering.version, pricingVersion: snapshot.offering.pricingVersion,
+    priceBookId: snapshot.priceBook.id, priceBookVersion: snapshot.priceBook.version,
+    calendarId: snapshot.calendar.id, calendarVersion: snapshot.calendar.version, resourceServiceDate: serviceDate,
+    ratePlan: { id: plan.id, version: plan.version, key: plan.key, label: plan.label, pricingBasis: plan.pricingBasis as "per_hour" | "per_slot" },
+    guests: request.guests, billableHours, unitAmountMinor: plan.baseAmountMinor, totalAmountMinor, currency: request.currency,
+  });
+}
+
 export interface HouseQuoteLine {
   readonly serviceDate: LocalDate;
   readonly baseAmountMinor: number;

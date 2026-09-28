@@ -4,6 +4,7 @@ import {
   resolveHousePerNightQuote,
   resolveCampgroundPerNightQuote,
   resolveAddOnServiceDateQuote,
+  resolveScheduledResourceQuote,
   validateAddOnPricingForActivation,
   validateCampgroundPricingForActivation,
   validateHousePricingForActivation,
@@ -120,6 +121,41 @@ function errorCode(action: () => unknown) {
     return (error as DomainError).code;
   }
 }
+
+function scheduledSnapshot(): HousePricingSnapshot {
+  const base = snapshot();
+  const saunaRow = (key: string, label: string, amount: number, min: number, max: number, isDefault: boolean) => ({
+    ...base.ratePlans[0]!, id: `rate-${key}`, key, label, pricingBasis: "per_hour", baseAmountMinor: amount,
+    includedQuantity: null, baseExtraUnitAmountMinor: null, minQuantity: min, maxQuantity: max,
+    isDefault, rules: [],
+  });
+  return { ...base, offering: { ...base.offering, id: "offering-sauna", kind: "addon" }, priceBook: { ...base.priceBook, offeringId: "offering-sauna" },
+    ratePlans: [saunaRow("standard_6", "Стандарт", 300_000, 1, 6, true), saunaRow("all_inclusive_6", "Всё включено", 600_000, 1, 6, false)] };
+}
+
+describe("scheduled bath and chan pricing", () => {
+  const request = { offeringId: "offering-sauna", ratePlanKey: "standard_6", startsAt: "2027-01-02T10:00:00+03:00", endsAt: "2027-01-02T11:30:00+03:00", guests: 6, currency: "RUB" };
+
+  it("charges each started sauna hour and keeps the chosen guest-tier package", () => {
+    expect(resolveScheduledResourceQuote(scheduledSnapshot(), request)).toMatchObject({ billableHours: 2, unitAmountMinor: 300_000, totalAmountMinor: 600_000, resourceServiceDate: "2027-01-02" });
+    expect(resolveScheduledResourceQuote(scheduledSnapshot(), { ...request, ratePlanKey: "all_inclusive_6" })).toMatchObject({ billableHours: 2, totalAmountMinor: 1_200_000 });
+    expect(resolveScheduledResourceQuote(scheduledSnapshot(), { ...request, endsAt: "2027-01-02T11:00:00+03:00" }).billableHours).toBe(1);
+  });
+
+  it("charges chan once per session regardless of the manager-defined interval", () => {
+    const base = scheduledSnapshot();
+    const chan: HousePricingSnapshot = { ...base, ratePlans: [{ ...base.ratePlans[0]!, key: "pine_chan", label: "Чан с хвойным наполнением", pricingBasis: "per_slot", quantityMetric: null, minQuantity: null, maxQuantity: null, baseAmountMinor: 560_000 }] };
+    expect(resolveScheduledResourceQuote(chan, { ...request, ratePlanKey: null, endsAt: "2027-01-02T15:37:00+03:00" })).toMatchObject({ billableHours: null, totalAmountMinor: 560_000 });
+  });
+
+  it("rejects ambiguous package, wrong guest tier, stale book and invalid interval", () => {
+    expect(errorCode(() => resolveScheduledResourceQuote(scheduledSnapshot(), { ...request, ratePlanKey: null }))).toBe("RATE_PLAN_DEFAULT_AMBIGUOUS");
+    expect(errorCode(() => resolveScheduledResourceQuote(scheduledSnapshot(), { ...request, guests: 7 }))).toBe("PRICE_QUANTITY_OUT_OF_RANGE");
+    const base = scheduledSnapshot();
+    expect(errorCode(() => resolveScheduledResourceQuote({ ...base, priceBook: { ...base.priceBook, state: "retired" } }, request))).toBe("PRICE_BOOK_NOT_ACTIVE");
+    expect(errorCode(() => resolveScheduledResourceQuote(base, { ...request, endsAt: request.startsAt }))).toBe("INVALID_INTERVAL");
+  });
+});
 
 describe("house per-night pricing", () => {
   it("sums every occupied local night and applies extra guests per night", () => {

@@ -40,6 +40,16 @@ describe("ApiHouseOfferingGateway", () => {
     expect(client.post).toHaveBeenCalledWith(`/offerings/by-resource/${priceBookId}/quotes/preview`, body, expect.anything())
   })
 
+  it("previews a scheduled bath tariff through its resource", async () => {
+    const client = clientMock()
+    const result = { mode: "manual" as const }
+    client.post.mockResolvedValue(result)
+    const gateway = new ApiHouseOfferingGateway(client as never)
+    const body = { startsAt: "2026-09-12T09:00:00.000Z", endsAt: "2026-09-12T10:30:00.000Z", guests: 6, ratePlanKey: "standard_6", currency: "RUB" as const }
+    await expect(gateway.previewScheduledResourceQuote(priceBookId, body)).resolves.toEqual(result)
+    expect(client.post).toHaveBeenCalledWith(`/offerings/scheduled/by-resource/${priceBookId}/quotes/preview`, body, expect.anything())
+  })
+
   it("uses only Internal offering endpoints", async () => {
     const client = clientMock()
     const response = { items: [], nextCursor: null } satisfies HouseOfferingListResponse

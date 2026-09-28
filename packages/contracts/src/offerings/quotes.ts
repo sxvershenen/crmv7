@@ -123,6 +123,27 @@ export const ResourceStayOfferingQuotePreviewBodySchema = z.object({
 });
 export type ResourceStayOfferingQuotePreviewBody = z.infer<typeof ResourceStayOfferingQuotePreviewBodySchema>;
 
+export const ResourceScheduledOfferingQuotePreviewBodySchema = z.object({
+  startsAt: DateTimeSchema,
+  endsAt: DateTimeSchema,
+  guests: z.number().int().positive().max(1_000_000),
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120).nullable(),
+  currency: CurrencySchema,
+}).strict().refine((value) => new Date(value.startsAt).getTime() < new Date(value.endsAt).getTime(), { path: ["endsAt"], message: "Invalid service interval" });
+export type ResourceScheduledOfferingQuotePreviewBody = z.infer<typeof ResourceScheduledOfferingQuotePreviewBodySchema>;
+
+export const ResourceScheduledOfferingQuotePreviewResultSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("manual") }).strict(),
+  z.object({
+    mode: z.literal("priced"), offeringId: IdSchema, offeringVersion: VersionSchema, pricingVersion: VersionSchema,
+    priceBookId: IdSchema, priceBookVersion: VersionSchema,
+    ratePlan: z.object({ id: IdSchema, version: VersionSchema, key: z.string(), label: z.string(), pricingBasis: z.enum(["per_hour", "per_slot"]) }).strict(),
+    resourceServiceDate: DateSchema, guests: z.number().int().positive(), billableHours: z.number().int().positive().nullable(),
+    unitAmount: NonNegativeMoneySchema, total: NonNegativeMoneySchema,
+  }).strict(),
+]);
+export type ResourceScheduledOfferingQuotePreviewResult = z.infer<typeof ResourceScheduledOfferingQuotePreviewResultSchema>;
+
 export const InternalOfferingQuoteLineSchema = z.object({
   kind: z.enum(["base", "night", "extra_unit", "addon"]),
   label: z.string().min(1).max(500),

@@ -189,6 +189,32 @@ describe("BookingEditorPage", () => {
     expect(previewResourceStayQuote).toHaveBeenCalledWith(resourceId, expect.objectContaining({ arrivalDate, departureDate: departureDate.toISOString().slice(0, 10), quantity: 1, currency: "RUB" }))
   })
 
+  it("requires a bath package and uses the server price before saving", async () => {
+    const resourceId = "11111111-1111-4111-8111-111111111111"
+    const offeringId = "22222222-2222-4222-8222-222222222222"
+    const bookId = "33333333-3333-4333-8333-333333333333"
+    const directory = new FixtureDirectoryRepository()
+    vi.spyOn(directory, "listResources").mockResolvedValue([{ id: resourceId, name: "Баня Кедр", category: "bath" }])
+    vi.spyOn(houseOfferingGateway, "resolvePrimaryScheduledOffering").mockResolvedValue({ resolution: "linked", offering: { offeringId, kind: "addon", code: "bath_cedar", operationalName: "Баня Кедр", state: "active" } })
+    vi.spyOn(houseOfferingGateway, "getAddOnEditor").mockResolvedValue({ offering: { kind: "addon", activePriceBookId: bookId }, priceBooks: [{ id: bookId, state: "active", ratePlans: [
+      { key: "standard_6", label: "Стандарт", minQuantity: 1, maxQuantity: 6, displayOrder: 0, baseAmount: 300_000, pricingBasis: "per_hour" },
+      { key: "all_inclusive_6", label: "Всё включено", minQuantity: 1, maxQuantity: 6, displayOrder: 1, baseAmount: 600_000, pricingBasis: "per_hour" },
+    ] }] } as never)
+    const previewScheduledResourceQuote = vi.fn().mockResolvedValue({ mode: "priced", ratePlan: { key: "all_inclusive_6" }, total: { amountMinor: 600_000, currency: "RUB" } })
+    const repository = new FixtureBookingRepository()
+    render(<DirectoryRepositoryProvider repository={directory}><MemoryRouter initialEntries={["/bookings/new?tab=composition"]}><TooltipProvider><Routes><Route element={<BookingEditorPage pricingGateway={{ previewResourceStayQuote: vi.fn(), previewScheduledResourceQuote }} repository={repository} />} path="bookings/:id" /></Routes></TooltipProvider></MemoryRouter></DirectoryRepositoryProvider>)
+
+    const tariff = await screen.findByRole("combobox", { name: "Тариф позиции 1" })
+    expect(screen.getByLabelText("Стоимость, ₽")).toHaveAttribute("readonly")
+    expect(previewScheduledResourceQuote).not.toHaveBeenCalled()
+    const user = userEvent.setup()
+    await user.click(tariff)
+    await user.click(await screen.findByRole("option", { name: /Всё включено/ }))
+    await waitFor(() => expect(previewScheduledResourceQuote).toHaveBeenCalledWith(resourceId, expect.objectContaining({ ratePlanKey: "all_inclusive_6", guests: 1, currency: "RUB" })))
+    await waitFor(() => expect(screen.getByLabelText("Стоимость, ₽")).toHaveValue(6_000))
+    expect(screen.getByText("Стоимость рассчитана сервером")).toBeInTheDocument()
+  })
+
   it("adds an assigned transfer to the stay quote", async () => {
     const resourceId = "11111111-1111-4111-8111-111111111111"
     const assignmentId = "22222222-2222-4222-8222-222222222222"

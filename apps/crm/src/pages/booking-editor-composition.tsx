@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { bookingPriceKey } from "@app/lib/booking-pricing"
+import { businessDateTimeToIso } from "@app/lib/business-datetime"
 import {
   IconCopy,
   IconPlus,
@@ -65,11 +66,41 @@ export function BookingComposition({
   const [quoteErrors, setQuoteErrors] = useState<Record<string, string>>({});
   const [quoteRetry, setQuoteRetry] = useState(0);
   const [catalogs, setCatalogs] = useState<Record<string, { assignmentId: string; addOnOfferingId: string; label: string; serviceType: "quantity_service" | "person_service"; available: boolean; requestOnly: boolean; blocker?: string }[]>>({});
+  const [bathTariffs, setBathTariffs] = useState<Record<string, { mode: "manual" | "priced" | "error"; options: { value: string; label: string }[]; message?: string }>>({});
   const quotedInputs = useRef(new Map<string, string>());
+  const latestPositions = useRef(draft.positions);
+  latestPositions.current = draft.positions;
   const dirtyAddOnPositions = useRef(new Set<string>());
   const catalogTargetsKey = JSON.stringify(draft.positions
     .filter((position) => isStayCategory(position.category) && isUuid(position.resourceId))
     .map(({ id, resourceId }) => ({ id, resourceId })));
+  const bathTargetsKey = JSON.stringify(draft.positions.filter((position) => position.category === "bath" && isUuid(position.resourceId)).map(({ id, resourceId, guestCount }) => ({ id, resourceId, guestCount })));
+
+  useEffect(() => {
+    let active = true;
+    for (const position of JSON.parse(bathTargetsKey) as Array<{ id: string; resourceId: string; guestCount: number }>) {
+      void houseOfferingGateway.resolvePrimaryScheduledOffering(position.resourceId).then(async (resolved) => {
+        if (resolved.resolution === "ambiguous") throw new Error("У ресурса несколько предложений. Обратитесь к техническому администратору");
+        if (resolved.resolution === "none" || resolved.offering.state !== "active") return { mode: "manual" as const, options: [] };
+        const editor = await houseOfferingGateway.getAddOnEditor(resolved.offering.offeringId);
+        if (!editor) throw new Error("Не удалось загрузить тарифы ресурса");
+        const book = editor.priceBooks.find((item) => item.id === editor.offering.activePriceBookId && item.state === "active");
+        if (!book) throw new Error("У ресурса нет действующего тарифа");
+        const options = book.ratePlans.filter((plan) => (plan.minQuantity === null || position.guestCount >= plan.minQuantity) && (plan.maxQuantity === null || position.guestCount <= plan.maxQuantity))
+          .sort((left, right) => left.displayOrder - right.displayOrder)
+          .map((plan) => ({ value: plan.key, label: `${plan.label} · ${money.format(plan.baseAmount / 100)}${plan.pricingBasis === "per_hour" ? "/ч" : "/сеанс"}` }));
+        return { mode: "priced" as const, options };
+      }).then((tariffs) => {
+        if (!active) return;
+        quotedInputs.current.delete(position.id);
+        setBathTariffs((current) => ({ ...current, [position.id]: tariffs }));
+        if (tariffs.mode === "priced" && tariffs.options.length === 1 && !latestPositions.current.find((item) => item.id === position.id)?.ratePlanKey) updatePosition(position.id, "ratePlanKey", tariffs.options[0]!.value);
+      }).catch((reason: unknown) => {
+        if (active) setBathTariffs((current) => ({ ...current, [position.id]: { mode: "error", options: [], message: reason instanceof Error ? reason.message : "Тарифы не загрузились" } }));
+      });
+    }
+    return () => { active = false; };
+  }, [bathTargetsKey, updatePosition]);
 
   useEffect(() => {
     let active = true;
@@ -100,6 +131,36 @@ export function BookingComposition({
     const pendingInputs = new Map<string, string>();
     const cachedInputs = quotedInputs.current;
     for (const position of draft.positions) {
+      if (position.category === "bath" && isUuid(position.resourceId) && pricingGateway.previewScheduledResourceQuote) {
+        const tariffs = bathTariffs[position.id];
+        if (!tariffs || tariffs.mode === "error" || (tariffs.mode === "priced" && !position.ratePlanKey)) continue;
+        if (!autoPrice && position.calculatedInputKey == null && tariffs.mode !== "priced") continue;
+        const inputKey = bookingPriceKey(position);
+        if (position.calculatedInputKey === inputKey || quotedInputs.current.get(position.id) === inputKey || position.guestCount < 1) continue;
+        let startsAt: string;
+        let endsAt: string;
+        try { startsAt = businessDateTimeToIso(position.startAt); endsAt = businessDateTimeToIso(position.endAt); }
+        catch { continue; }
+        if (Date.parse(startsAt) >= Date.parse(endsAt)) continue;
+        setQuoteState((current) => ({ ...current, [position.id]: "loading" }));
+        timers.push(setTimeout(() => {
+          quotedInputs.current.set(position.id, inputKey);
+          pendingInputs.set(position.id, inputKey);
+          void pricingGateway.previewScheduledResourceQuote!(position.resourceId, { startsAt, endsAt, guests: position.guestCount, ratePlanKey: position.ratePlanKey ?? null, currency: "RUB" }).then((quote) => {
+            if (!active || quotedInputs.current.get(position.id) !== inputKey) return;
+            pendingInputs.delete(position.id);
+            setQuoteState((current) => ({ ...current, [position.id]: "ready" }));
+            if (quote.mode === "priced") { updatePosition(position.id, "basePrice", quote.total.amountMinor / 100); updatePosition(position.id, "ratePlanKey", quote.ratePlan.key); }
+            updatePosition(position.id, "calculatedInputKey", inputKey);
+          }).catch((reason: unknown) => {
+            if (!active || quotedInputs.current.get(position.id) !== inputKey) return;
+            pendingInputs.delete(position.id);
+            setQuoteState((current) => ({ ...current, [position.id]: "error" }));
+            setQuoteErrors((current) => ({ ...current, [position.id]: reason instanceof Error ? reason.message : "Сервис расчёта недоступен" }));
+          });
+        }, 250));
+        continue;
+      }
       if (!isStayCategory(position.category) || !isUuid(position.resourceId)) continue;
       if (!autoPrice && !position.addOns?.length && position.calculatedInputKey == null && !dirtyAddOnPositions.current.has(position.id)) continue;
       const arrivalDate = position.startAt.slice(0, 10);
@@ -148,7 +209,7 @@ export function BookingComposition({
         if (cachedInputs.get(positionId) === inputKey) cachedInputs.delete(positionId);
       }
     };
-  }, [autoPrice, draft.positions, pricingGateway, quoteRetry, updatePosition]);
+  }, [autoPrice, bathTariffs, draft.positions, pricingGateway, quoteRetry, updatePosition]);
 
   return (
     <div className="min-w-0 space-y-3" data-slot="booking-composition">
@@ -245,6 +306,7 @@ export function BookingComposition({
                 </FormField>
               </div>
               {isStayCategory(position.category) && catalogs[position.id]?.length ? <BookingAddOns position={position} options={catalogs[position.id]!} onChange={(addOns) => { dirtyAddOnPositions.current.add(position.id); updatePosition(position.id, "addOns", addOns); updatePosition(position.id, "quoteSnapshotId", null); }} /> : null}
+              {position.category === "bath" && bathTariffs[position.id]?.mode === "priced" ? <FormField className="mt-3 sm:max-w-md" htmlFor={`${position.id}-tariff`} label="Тариф"><FormSelect id={`${position.id}-tariff`} label={`Тариф позиции ${index + 1}`} options={bathTariffs[position.id]!.options} placeholder={bathTariffs[position.id]!.options.length ? "Выберите тариф" : "Нет тарифа для этого числа гостей"} value={position.ratePlanKey ?? ""} onValueChange={(value) => updatePosition(position.id, "ratePlanKey", value)} /></FormField> : null}
               <div className="mt-3 grid min-w-0 grid-cols-2 items-start gap-3 border-t pt-3 sm:grid-cols-6 [&_input]:min-h-11 sm:[&_input]:min-h-9">
                 <FormField
                   className="min-w-0 sm:col-span-3"
@@ -261,10 +323,10 @@ export function BookingComposition({
                           inputNumber(event.target.value),
                         )
                       }
-                      readOnly={isStayCategory(position.category) && (autoPrice || Boolean(position.addOns?.length))}
+                      readOnly={(isStayCategory(position.category) && (autoPrice || Boolean(position.addOns?.length))) || (position.category === "bath" && bathTariffs[position.id]?.mode === "priced")}
                       type="number"
                       value={position.basePrice}
-                    />{(autoPrice || Boolean(position.addOns?.length) || dirtyAddOnPositions.current.has(position.id)) && isStayCategory(position.category) ? <div aria-live="polite" className={`mt-1 text-[11px] ${quoteState[position.id] === "error" ? "text-danger-foreground" : "text-muted-foreground"}`}>
+                    />{position.category === "bath" && bathTariffs[position.id]?.mode === "error" ? <p role="alert" className="mt-1 text-xs text-danger-foreground">{bathTariffs[position.id]!.message}</p> : null}{position.category === "bath" && bathTariffs[position.id]?.mode === "priced" ? <div aria-live="polite" className={`mt-1 text-[11px] ${quoteState[position.id] === "error" ? "text-danger-foreground" : "text-muted-foreground"}`}>{quoteState[position.id] === "loading" ? "Рассчитываем по тарифу…" : quoteState[position.id] === "ready" ? "Стоимость рассчитана сервером" : quoteState[position.id] === "error" ? <><p role="alert">{quoteErrors[position.id]}</p><Button aria-label={`Повторить расчёт позиции ${index + 1}`} className="mt-1" onClick={() => { quotedInputs.current.delete(position.id); setQuoteRetry((current) => current + 1); }} size="sm" variant="outline">Повторить расчёт</Button></> : position.ratePlanKey ? "Проверяем стоимость" : "Выберите тариф"}</div> : null}{(autoPrice || Boolean(position.addOns?.length) || dirtyAddOnPositions.current.has(position.id)) && isStayCategory(position.category) ? <div aria-live="polite" className={`mt-1 text-[11px] ${quoteState[position.id] === "error" ? "text-danger-foreground" : "text-muted-foreground"}`}>
                       {quoteState[position.id] === "loading" ? "Рассчитываем по датам…" : quoteState[position.id] === "ready" ? "Рассчитано по ценам ресурса" : quoteState[position.id] === "error" ? <><p className="break-words">Не удалось рассчитать: {quoteErrors[position.id]}</p><Button aria-label={`Повторить расчёт позиции ${index + 1}`} className="mt-1 min-h-11 sm:min-h-8" onClick={() => { quotedInputs.current.delete(position.id); setQuoteRetry((current) => current + 1); }} size="sm" variant="outline"><IconRotateClockwise aria-hidden="true" />Повторить расчёт</Button></> : "Укажите даты заезда и выезда"}
                     </div> : null}{position.addOns?.length ? <p className="mt-1 text-[11px] text-muted-foreground">Допуслуги включены в стоимость</p> : null}</div>
                 </FormField>
@@ -367,4 +429,3 @@ function PositionAction({
     </Tooltip>
   );
 }
-

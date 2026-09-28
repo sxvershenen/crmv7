@@ -26,11 +26,13 @@ export const BookingItemSchema = z.object({
   id: IdSchema, type: BookingItemTypeSchema, resourceId: IdSchema.nullable(),
   startAt: DateTimeSchema, endAt: DateTimeSchema, quantity: z.number().int().positive(),
   price: NonNegativeMoneySchema, discount: NonNegativeMoneySchema, preparationMinutes: z.number().int().nonnegative().max(1440),
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120).nullable().optional(),
   quoteSnapshotId: IdSchema.nullable().optional(),
   addOns: z.array(BookingItemAddOnSchema).max(100).optional(),
 }).strict();
 export type BookingItem = z.infer<typeof BookingItemSchema>;
 export const BookingItemInputSchema = BookingItemSchema.omit({ id: true, quoteSnapshotId: true, addOns: true }).extend({
+  ratePlanKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(120).nullable().default(null),
   quoteSnapshotId: IdSchema.nullable().default(null),
   addOns: z.array(BookingItemAddOnInputSchema).max(100).default([]),
 }).strict();

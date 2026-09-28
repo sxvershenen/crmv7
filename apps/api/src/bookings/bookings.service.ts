@@ -6,12 +6,14 @@ import { Brackets, DataSource, IsNull, QueryFailedError, type EntityManager } fr
 import { InternalOfferingQuoteResultSchema, type BookingDetailResponse, type BookingItemInput, type BookingIntervalUpdate, type BookingLeadLinkHistoryResponse, type BookingLeadLinkInput, type BookingLeadLinkResponse, type BookingLeadUnlinkInput, type BookingProjectionBooking, type BookingProjectionQuery, type BookingProjectionResponse, type SessionUser } from "@crm/contracts"
 import { AcceptedOfferingQuoteLinkEntity, BookingEntity, BookingItemEntity, BookingLeadLinkEntity, ChangeLogEntity, CustomerEntity, IdempotencyKeyEntity, LeadEntity, OfferingQuoteSnapshotEntity, OutboxEventEntity, PaymentEntity, ResourceAllocationEntity, ResourceEntity } from "@crm/db"
 import { assertAvailable, checkAvailability, createInterval } from "@crm/domain"
+import type { ScheduledResourceQuoteCalculation } from "@crm/domain"
 
 import { canonicalSha256 } from "../offerings/offering-mutation-support.js"
 import { type BookingPromotion, type BookingPromotionPreview, type BookingPromotionPreviewResult } from "@crm/contracts"
 import { calculateBookingPromotion, type PromotionLine } from "@crm/domain"
 import { MarketingService } from "../marketing/marketing.service.js"
 import { OperationalQuoteAcceptanceService } from "../offerings/operational-quote-acceptance.service.js"
+import { quoteScheduledResource } from "../offerings/scheduled-resource-quote.js"
 import type { BookingArchive, BookingAssignSelf, BookingCreate, BookingDto, BookingListQuery, BookingTransition, BookingUpdate } from "./bookings.contracts.js"
 import {
   bookingSnapshot,
@@ -30,6 +32,7 @@ import {
 } from "./bookings-read-projection.js"
 
 type ItemInput = BookingItemInput
+type PricedItemInput = ItemInput & { scheduledPricing?: ScheduledResourceQuoteCalculation | null }
 
 @Injectable()
 export class BookingsService {
@@ -38,7 +41,7 @@ export class BookingsService {
   async previewPromotion(input: BookingPromotionPreview, actor: SessionUser): Promise<BookingPromotionPreviewResult> {
     this.assert(actor, "canView")
     return this.dataSource.transaction(async manager => {
-      const items = this.normalizeItems(input.items)
+      const items = await this.priceBathItems(manager, this.normalizeItems(input.items))
       this.assertCurrency(items, "RUB")
       const promotion = await this.applyPromotion(manager, input.promoCode, items)
       return { promotion, total: { amountMinor: this.total(items) - promotion.discountAmountMinor, currency: "RUB" } }
@@ -229,7 +232,7 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
       const requestHash = JSON.stringify(input)
       const replay = await this.idempotentReplay<BookingDto>(manager, scope, input.operationId, input.idempotencyKey, requestHash)
       if (replay) return replay
-      const normalized = this.normalizeItems(input.items)
+      const normalized = await this.priceBathItems(manager, this.normalizeItems(input.items))
       const currency = normalized[0]!.price.currency
       this.assertCurrency(normalized, currency)
       const promotion = input.promoCode ? await this.applyPromotion(manager, input.promoCode, normalized) : null
@@ -269,14 +272,15 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
         const normalized = beforeItems.map((item) => item.id === target.id ? { ...fromEntity(item), startAt: input.startAt!, endAt: input.endAt!, resourceId: input.resourceId === undefined ? item.resourceId : input.resourceId } : fromEntity(item))
         await this.cancelAllocations(manager, beforeItems, actor)
         await manager.getRepository(BookingItemEntity).update({ bookingId: current.id, archivedAt: IsNull() }, { archivedAt: new Date(), updatedBy: actor.id })
-        items = await this.replaceItems(manager, current, this.normalizeItems(normalized), actor)
+        items = await this.replaceItems(manager, current, await this.priceBathItems(manager, this.normalizeItems(normalized)), actor)
         await this.allocateItems(manager, current, items, actor, input.overrideConflict)
       } else if (input.items) {
-        const normalized = this.normalizeItems(input.items)
-        this.assertCurrency(normalized, normalized[0]!.price.currency)
-        if (normalized[0]!.price.currency !== current.currency) throw new ConflictException({ code: "CURRENCY_MISMATCH", message: "Валюта брони неизменяема" })
-        if (!this.sameItems(beforeItems, normalized)) {
+        const requested = this.normalizeItems(input.items)
+        this.assertCurrency(requested, requested[0]!.price.currency)
+        if (requested[0]!.price.currency !== current.currency) throw new ConflictException({ code: "CURRENCY_MISMATCH", message: "Валюта брони неизменяема" })
+        if (!this.sameItems(beforeItems, requested)) {
           await this.assertCompositionMutable(manager, beforeItems)
+          const normalized = await this.priceBathItems(manager, requested)
           await this.cancelAllocations(manager, beforeItems, actor)
           await manager.getRepository(BookingItemEntity).update({ bookingId: current.id, archivedAt: IsNull() }, { archivedAt: new Date(), updatedBy: actor.id })
           items = await this.replaceItems(manager, current, normalized, actor)
@@ -366,8 +370,30 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
     return items.map((item) => {
       createInterval(new Date(item.startAt), new Date(item.endAt))
       if (item.discount.amountMinor > item.price.amountMinor) throw new ConflictException({ code: "INVALID_AMOUNT", message: "Скидка не может быть больше цены" })
-      return { ...item, type: item.type, resourceId: item.resourceId, startAt: item.startAt, endAt: item.endAt, quantity: item.quantity, price: { ...item.price }, discount: { ...item.discount }, preparationMinutes: item.preparationMinutes }
+      return { ...item, type: item.type, resourceId: item.resourceId, startAt: item.startAt, endAt: item.endAt, quantity: item.quantity, ratePlanKey: item.ratePlanKey ?? null, price: { ...item.price }, discount: { ...item.discount }, preparationMinutes: item.preparationMinutes }
     })
+  }
+
+  private async priceBathItems(manager: EntityManager, items: readonly ItemInput[]): Promise<PricedItemInput[]> {
+    const result: PricedItemInput[] = []
+    for (const item of items) {
+      if (item.type !== "bath" || !item.resourceId) {
+        if (item.ratePlanKey !== null) throw new ConflictException({ code: "RESOURCE_SCHEDULED_PRICE_NOT_FOUND", message: "Тариф бани или чана можно выбрать только для позиции с этим ресурсом" })
+        result.push({ ...item, scheduledPricing: null }); continue
+      }
+      const calculation = await quoteScheduledResource(manager, item.resourceId, {
+        startsAt: item.startAt, endsAt: item.endAt, guests: item.quantity, ratePlanKey: item.ratePlanKey, currency: item.price.currency,
+      })
+      if (!calculation) {
+        if (item.ratePlanKey !== null) throw new ConflictException({ code: "RESOURCE_SCHEDULED_PRICE_NOT_FOUND", message: "Выбранный тариф для ресурса не найден" })
+        result.push({ ...item, scheduledPricing: null })
+        continue
+      }
+      if (item.discount.amountMinor > calculation.totalAmountMinor) throw new ConflictException({ code: "INVALID_AMOUNT", message: "Скидка не может быть больше действующей цены" })
+      result.push({ ...item, ratePlanKey: calculation.ratePlan.key,
+        price: { amountMinor: calculation.totalAmountMinor, currency: calculation.currency }, scheduledPricing: calculation })
+    }
+    return result
   }
 
   private assertCurrency(items: readonly ItemInput[], currency: string) {
@@ -378,11 +404,25 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
 
   private sameItems(current: readonly BookingItemEntity[], requested: readonly ItemInput[]) {
     if (current.length !== requested.length) return false
-    return current.every((item, index) => JSON.stringify(fromEntity(item)) === JSON.stringify(requested[index]))
+    return current.every((item, index) => {
+      const before = fromEntity(item)
+      const after = requested[index]!
+      return before.type === after.type && before.resourceId === after.resourceId && before.startAt === after.startAt && before.endAt === after.endAt
+        && before.quantity === after.quantity && before.ratePlanKey === after.ratePlanKey
+        && before.price.amountMinor === after.price.amountMinor && before.price.currency === after.price.currency
+        && before.discount.amountMinor === after.discount.amountMinor && before.discount.currency === after.discount.currency
+        && before.preparationMinutes === after.preparationMinutes && before.quoteSnapshotId === after.quoteSnapshotId
+        && JSON.stringify(before.addOns) === JSON.stringify(after.addOns)
+    })
   }
 
   private async assertCompositionMutable(manager: EntityManager, items: readonly BookingItemEntity[]) {
     if (items.length === 0) return
+    if (items.some((item) => item.pricingSnapshot != null)) {
+      const booking = await manager.findOneByOrFail(BookingEntity, { id: items[0]!.bookingId })
+      const charged = await manager.getRepository(PaymentEntity).countBy({ bookingId: booking.id })
+      if (!["draft", "unconfirmed"].includes(booking.status) || charged > 0) throw new ConflictException({ code: "BOOKING_PRICED_ITEM_IMMUTABLE", message: "Подтверждённую или оплаченную бронь с баней нельзя пересчитать; создайте новую бронь" })
+    }
     const accepted = await manager.createQueryBuilder(AcceptedOfferingQuoteLinkEntity, "link")
       .where("link.booking_item_id IN (:...itemIds)", { itemIds: items.map((item) => item.id) })
       .getOne()
@@ -393,7 +433,7 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
     })
   }
 
-  private async replaceItems(manager: EntityManager, booking: BookingEntity, items: readonly ItemInput[], actor: SessionUser) {
+  private async replaceItems(manager: EntityManager, booking: BookingEntity, items: readonly PricedItemInput[], actor: SessionUser) {
     const entities: BookingItemEntity[] = []
     for (const item of items) {
       const addOnSelections = await this.authoritativeAddOnSelections(manager, item)
@@ -401,6 +441,14 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
         id: randomUUID(), bookingId: booking.id, type: item.type, resourceId: item.resourceId, startAt: new Date(item.startAt), endAt: new Date(item.endAt), quantity: item.quantity,
         priceAmount: item.price.amountMinor, discountAmount: item.discount.amountMinor, currency: item.price.currency, preparationMinutes: item.preparationMinutes,
         quoteSnapshotId: item.quoteSnapshotId, addOnSelections,
+        pricingSnapshot: item.scheduledPricing ? {
+          offeringId: item.scheduledPricing.offeringId, offeringVersion: item.scheduledPricing.offeringVersion,
+          pricingVersion: item.scheduledPricing.pricingVersion, priceBookId: item.scheduledPricing.priceBookId,
+          priceBookVersion: item.scheduledPricing.priceBookVersion, ratePlanId: item.scheduledPricing.ratePlan.id,
+          ratePlanVersion: item.scheduledPricing.ratePlan.version, ratePlanKey: item.scheduledPricing.ratePlan.key,
+          pricingBasis: item.scheduledPricing.ratePlan.pricingBasis, billableHours: item.scheduledPricing.billableHours,
+          unitAmountMinor: item.scheduledPricing.unitAmountMinor, totalAmountMinor: item.scheduledPricing.totalAmountMinor,
+        } : null,
         createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
       }))
     }

@@ -71,6 +71,7 @@ export type BookingEditorPosition = {
   /** Authoritative preparation buffer returned by the booking API. */
   preparationMinutes?: number
   quoteSnapshotId?: string | null
+  ratePlanKey?: string | null
   calculatedInputKey?: string | null
   addOns?: BookingEditorAddOn[]
 }

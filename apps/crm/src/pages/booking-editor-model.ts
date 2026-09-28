@@ -10,7 +10,7 @@ import {
   bookingStatuses,
   bookingStatusMeta,
 } from "@app/entities/bookings"
-import type { InternalOfferingQuoteResult, ResourceStayOfferingQuotePreviewBody } from "@crm/contracts"
+import type { InternalOfferingQuoteResult, ResourceStayOfferingQuotePreviewBody, ResourceScheduledOfferingQuotePreviewBody, ResourceScheduledOfferingQuotePreviewResult } from "@crm/contracts"
 
 export const tabs = [
   "main",
@@ -138,6 +138,7 @@ export function isUuid(value: string) {
 
 export type ResourceStayQuoteGateway = {
   previewResourceStayQuote(resourceId: string, input: ResourceStayOfferingQuotePreviewBody): Promise<InternalOfferingQuoteResult>;
+  previewScheduledResourceQuote?(resourceId: string, input: ResourceScheduledOfferingQuotePreviewBody): Promise<ResourceScheduledOfferingQuotePreviewResult>;
 };
 
 export function createPosition(

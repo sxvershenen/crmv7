@@ -507,6 +507,9 @@ export class BookingItemEntity extends MutableEntity {
   @Column({ name: "quote_snapshot_id", type: "uuid", nullable: true })
   quoteSnapshotId!: string | null
 
+  @Column({ name: "pricing_snapshot", type: "jsonb", nullable: true })
+  pricingSnapshot!: Record<string, unknown> | null
+
   @Column({ name: "addon_selections", type: "jsonb", default: () => "'[]'::jsonb" })
   addOnSelections!: Array<{
     assignmentId: string

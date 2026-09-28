@@ -23,6 +23,8 @@ import {
   ResourcePrimaryVenueOfferingLookupResponseSchema,
   ResourcePrimaryScheduledOfferingLookupResponseSchema,
   ResourceStayOfferingQuotePreviewBodySchema,
+  ResourceScheduledOfferingQuotePreviewBodySchema,
+  ResourceScheduledOfferingQuotePreviewResultSchema,
   ResourceStayOfferingCreateBodySchema,
   ResourceStayOfferingCreateResultSchema,
   ResourceVenueOfferingCreateBodySchema,
@@ -61,6 +63,7 @@ import {
   type ResourceScheduledOfferingCreateBody,
   type VenueOfferingListQuery,
   type ResourceStayOfferingQuotePreviewBody,
+  type ResourceScheduledOfferingQuotePreviewBody,
   type StayOfferingListQuery,
 } from "@crm/contracts"
 import type { OfferingEditorGateway } from "@crm/offering-editor"
@@ -189,6 +192,11 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
   previewResourceStayQuote(resourceId: string, input: ResourceStayOfferingQuotePreviewBody) {
     const body = ResourceStayOfferingQuotePreviewBodySchema.parse(input)
     return this.client.post(`/offerings/by-resource/${encodeURIComponent(resourceId)}/quotes/preview`, body, InternalOfferingQuoteResultSchema)
+  }
+
+  previewScheduledResourceQuote(resourceId: string, input: ResourceScheduledOfferingQuotePreviewBody) {
+    const body = ResourceScheduledOfferingQuotePreviewBodySchema.parse(input)
+    return this.client.post(`/offerings/scheduled/by-resource/${encodeURIComponent(resourceId)}/quotes/preview`, body, ResourceScheduledOfferingQuotePreviewResultSchema)
   }
 
   createAddOn(input: AddOnOfferingCreateBody) {

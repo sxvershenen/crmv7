@@ -18,6 +18,7 @@ import {
   ResourceVenueOfferingCreateResultSchema,
   ResourcePrimaryScheduledOfferingLookupResponseSchema,
   ResourceScheduledOfferingCreateResultSchema,
+  ResourceScheduledOfferingQuotePreviewResultSchema,
   OfferingQuoteOperationalContextSchema,
   OfferingPricingMutationResultSchema,
   OfferingPricingOutboxEventSchema,
@@ -48,6 +49,8 @@ import {
   type ResourcePrimaryScheduledOfferingLookupResponse,
   type ResourceScheduledOfferingCreateBody,
   type ResourceScheduledOfferingCreateResult,
+  type ResourceScheduledOfferingQuotePreviewBody,
+  type ResourceScheduledOfferingQuotePreviewResult,
   type OfferingPricingMutationResult,
   type RatePlanDraft,
   type SessionUser,
@@ -93,6 +96,7 @@ import {
 import { canonicalSha256, deriveOfferingEditorCapabilities } from "./offering-mutation-support.js"
 import { ensureCatalogOfferingEditorialDraft } from "../cms/cms-source-draft.js"
 import { loadEventServicePricingSnapshot, loadHousePricingSnapshot, loadPriceBook, loadPriceBooks, loadProgramPricingSnapshot } from "./offering-editor-pricing-snapshots.js"
+import { quoteScheduledResource } from "./scheduled-resource-quote.js"
 import { addOnCatalogItem, addOnTermsDto, addOnTermsEntity, assignmentDto, bindingDto, offeringDto, quoteDto, resourceBindingTargetDto, resourcePrimaryOfferingSummary, type AddOnTermsRow } from "./offering-editor-projections.js"
 
 export type OfferingRequestContext = Readonly<{
@@ -285,6 +289,22 @@ export class OfferingEditorApplicationService {
   async primaryScheduledOfferingForResource(resourceId: string, context: OfferingRequestContext): Promise<ResourcePrimaryScheduledOfferingLookupResponse> {
     this.assertRead(context)
     return this.primaryScheduledOfferingForResourceInManager(this.dataSource, resourceId)
+  }
+
+  async previewScheduledResourceQuote(resourceId: string, input: ResourceScheduledOfferingQuotePreviewBody, context: OfferingRequestContext): Promise<ResourceScheduledOfferingQuotePreviewResult> {
+    this.assertRead(context)
+    return this.dataSource.transaction("REPEATABLE READ", async (manager) => {
+      const calculation = await quoteScheduledResource(manager, resourceId, input)
+      if (!calculation) return ResourceScheduledOfferingQuotePreviewResultSchema.parse({ mode: "manual" })
+      return ResourceScheduledOfferingQuotePreviewResultSchema.parse({
+        mode: "priced", offeringId: calculation.offeringId, offeringVersion: calculation.offeringVersion,
+        pricingVersion: calculation.pricingVersion, priceBookId: calculation.priceBookId, priceBookVersion: calculation.priceBookVersion,
+        ratePlan: calculation.ratePlan, resourceServiceDate: calculation.resourceServiceDate, guests: calculation.guests,
+        billableHours: calculation.billableHours,
+        unitAmount: { amountMinor: calculation.unitAmountMinor, currency: calculation.currency },
+        total: { amountMinor: calculation.totalAmountMinor, currency: calculation.currency },
+      })
+    })
   }
 
   async createScheduledOfferingFromResource(resourceId: string, input: ResourceScheduledOfferingCreateBody, context: OfferingRequestContext): Promise<ResourceScheduledOfferingCreateResult> {
