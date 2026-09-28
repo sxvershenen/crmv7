@@ -4,7 +4,7 @@ import type { CmsHomeSectionConfig, PublicVenueSummary } from '@crm/contracts';
 import { VENUES, VenueItem } from '../../data/resortData';
 import { useSwipeHint } from '../../utils/useSwipeHint';
 import { EmptyState, SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
-import { offeringPriceLabel } from '../../../lib/content/homepage-commerce';
+import { offeringImageUrl, offeringPriceLabel } from '../../../lib/content/homepage-commerce';
 
 interface VenuesSectionProps {
   config: CmsHomeSectionConfig;
@@ -19,9 +19,10 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
   const [formatFilter, setFormatFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
   const [dropdownOpen, setDropdownOpen] = useState<'capacity' | 'format' | null>(null);
 
-  const venues: Array<VenueItem & { priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? VENUES : published.filter((item) => item.requestAvailable).map((item) => ({
+  const venues: Array<VenueItem & { imageAlt?: string; priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? VENUES : published.filter((item) => item.requestAvailable).map((item) => ({
     id: item.offeringId, title: item.title, capacity: `до ${item.fulfillment.capacityTotal} гостей`, capacityNumber: item.fulfillment.capacityTotal,
-    shortDesc: item.summary ?? "", photo: "", suitableFor: [], area: "", features: [],
+    shortDesc: item.summary ?? "", photo: offeringImageUrl(item) ?? "", suitableFor: [], area: "", features: [],
+    imageAlt: item.image?.alt ?? item.title,
     priceLabel: offeringPriceLabel(item), priceBasisLabel: item.priceBasisLabel,
   }))
   const filteredVenues = venues.filter((venue) => {
@@ -60,6 +61,7 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
             key={venue.id}
             onSelect={() => onOpenBookingModal(`Площадка: ${venue.title}`)}
             image={venue.photo}
+            imageAlt={venue.imageAlt}
             title={venue.title}
             area={venue.area}
             capacity={venue.capacityNumber}

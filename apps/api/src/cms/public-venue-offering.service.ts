@@ -147,7 +147,8 @@ export class PublicVenueOfferingService {
     const ready = available && price.mode !== "request" && row.salesMode !== "request_only"
     const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.resourceUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
     return PublicVenueSummarySchema.parse({
-      offeringId: row.offeringId, kind: "venue", title: content.data.title, summary: content.data.summary, price,
+      offeringId: row.offeringId, kind: "venue", title: content.data.title, summary: content.data.summary,
+      image: content.data.hero?.background ?? content.data.hero?.foreground ?? content.data.hero?.slides[0]?.image ?? null, price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_hour" ? "за час" : plans[0]?.pricingBasis === "per_slot" ? "за слот" : plans[0]?.pricingBasis === "per_day" ? "за день" : plans[0]?.pricingBasis === "flat_package" ? "за пакет" : null,
       quoteAvailable: false, requestAvailable: available, capacity: null,
       readiness: row.resourceArchivedAt !== null ? "archived" : !row.resourceActive ? "temporarily_unavailable" : ready ? "ready" : "request_only",

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CmsPathSchema } from "../content.js";
+import { CmsHeroMediaSchema, CmsPathSchema } from "../content.js";
 import { CurrencySchema, DateTimeSchema, IdSchema, NonNegativeMoneySchema, VersionSchema } from "../primitives.js";
 import { ResourceSpaceTypeSchema } from "../resources.js";
 import { AddOnCategoryKeySchema, CatalogOfferingKindSchema } from "./catalog.js";
@@ -16,6 +16,8 @@ export const PublicOfferingSummarySchema = z.object({
   kind: CatalogOfferingKindSchema,
   title: z.string().min(1).max(500),
   summary: z.string().max(2000).nullable(),
+  /** Image resolved from the published CMS hero; absent on older projections. */
+  image: CmsHeroMediaSchema.nullable().optional(),
   price: PublicOfferingPriceSchema,
   priceBasisLabel: z.string().min(1).max(240).nullable(),
   quoteAvailable: z.boolean(),

@@ -408,7 +408,7 @@ Each artifact manifest declares typed bindings such as:
 - `offeringAvailability(offeringId, allowedInputs)`;
 - `relatedOfferingListing(definitionId)`.
 
-The CMS release pins route/content/media/artifact versions and the offering relation. Live operational responses carry their own source versions/`asOf`; raw SSR HTML must render a safe published summary and must not turn a failed operational dependency into invented price/availability.
+The CMS release pins route/content/media/artifact versions and the offering relation. Public house, program and venue summaries may carry one card image resolved from that release's hero media; older summaries and pages without an image remain valid. Live operational responses carry their own source versions/`asOf`; raw SSR HTML must render a safe published summary and must not turn a failed operational dependency into invented price/availability.
 
 For AI generation the agent receives field schemas and fixtures, not database credentials. Generated code may choose composition only; pricing formulas, eligibility, sorting/filter allowlists and booking outcome remain backend-owned.
 

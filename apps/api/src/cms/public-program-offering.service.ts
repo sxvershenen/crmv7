@@ -163,7 +163,8 @@ export class PublicProgramOfferingService {
     const availabilityMode = nextOccurrence && price.mode !== "request" && row.salesMode !== "request_only" ? "occurrence" as const : "request_only" as const
     const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.templateUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt, row.nextOccurrenceStartsAt).toISOString()
     return PublicProgramSummarySchema.parse({
-      offeringId: row.offeringId, kind: "program", path: canonicalPublicPath(content.data.path), releaseId: row.releaseId, title: content.data.title, summary: content.data.summary, price,
+      offeringId: row.offeringId, kind: "program", path: canonicalPublicPath(content.data.path), releaseId: row.releaseId, title: content.data.title, summary: content.data.summary,
+      image: content.data.hero?.background ?? content.data.hero?.foreground ?? content.data.hero?.slides[0]?.image ?? null, price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_person" ? "за участника" : plans[0]?.pricingBasis === "flat_package" ? "за группу" : null,
       quoteAvailable: false, requestAvailable: true, capacity: null, readiness: availabilityMode === "occurrence" ? "ready" : "request_only",
       timezone: row.timezone, currency: row.currency,

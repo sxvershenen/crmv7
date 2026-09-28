@@ -31,6 +31,10 @@ createServer(async (request, response) => {
     response.writeHead(302, { Location: "/health" })
     return response.end()
   }
+  if (scenario === "commerce-media" && url.pathname === `/api/public/v1/media/${id}/${releaseId}`) {
+    response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=60" })
+    return response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/K1cAAAAASUVORK5CYII=", "base64"))
+  }
   if (url.pathname.endsWith("/pages/manifest")) {
     const unpublishedHouse = scenario === "unpublished-house"
     return send({
@@ -111,6 +115,7 @@ createServer(async (request, response) => {
       asOf,
       fulfillment: { allocationMode: "exclusive_resource", capacityUnit: "guests", capacityTotal: 4, pricingMode: "rate_plan", spaceType: "mixed", availabilityMode: "resource" },
     }
+    if (scenario === "commerce-media") house.image = { assetId: id, alt: "Домик среди сосен", variants: [{ url: `/api/public/v1/media/${id}/${releaseId}`, format: "original", width: 1, height: 1 }] }
     if (scenario === "house-empty") {
       house.price = { mode: "request" }
       house.priceBasisLabel = null
@@ -208,6 +213,7 @@ createServer(async (request, response) => {
       asOf,
       fulfillment: { allocationMode: "exclusive_resource", capacityUnit: "guests", capacityTotal: 40, pricingMode: "rate_plan", spaceType: "outdoor", availabilityMode: "resource" },
     }
+    if (scenario === "commerce-media") venue.image = { assetId: id, alt: "Поляна среди сосен", variants: [{ url: `/api/public/v1/media/${id}/${releaseId}`, format: "original", width: 1, height: 1 }] }
     if (scenario === "venue-empty") {
       venue.price = { mode: "request" }
       venue.priceBasisLabel = null
@@ -256,6 +262,7 @@ createServer(async (request, response) => {
       asOf,
       fulfillment: { durationMinutes: 180, minimumParticipants: 2, participantLimit: 20, availabilityMode: "occurrence", nextOccurrence: { startsAt: "2026-09-20T10:00:00.000Z", endsAt: "2026-09-20T13:00:00.000Z", participantLimit: 20, registrationLimit: 10 } },
     }
+    if (scenario === "commerce-media") program.image = { assetId: id, alt: "Участники на маршруте", variants: [{ url: `/api/public/v1/media/${id}/${releaseId}`, format: "original", width: 1, height: 1 }] }
     if (scenario === "program-empty") {
       program.price = { mode: "request" }
       program.priceBasisLabel = null

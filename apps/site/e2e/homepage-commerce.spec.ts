@@ -52,6 +52,19 @@ test("shows request-only pricing without invented amounts", async ({ request, pa
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText("По запросу")
 })
 
+test("renders published CMS card images through the public media route", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=commerce-media")
+  await page.goto("/")
+  const images = page.locator("#events img, #houses img, #programs img, #venues img")
+  await expect(images).toHaveCount(4)
+  for (const image of await images.all()) {
+    await image.scrollIntoViewIfNeeded()
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true)
+    await expect(image).toHaveAttribute("alt", /сосен|маршруте/)
+  }
+  expect((await request.get("/api/public/v1/media/not-an-id/not-an-id")).status()).toBe(404)
+})
+
 test("renders manually ordered CRM cards across cursor pages while events remain automatic", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-curated")
   const response = await page.goto("/")

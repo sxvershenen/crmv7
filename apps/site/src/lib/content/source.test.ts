@@ -1,8 +1,17 @@
 import { expect, it, vi } from "vitest"
 import { createPublicContentSource, resolveHomepageCommerce, type ContentSource } from "./source"
+import { offeringImageUrl } from "./homepage-commerce"
 
 const releaseId = "44444444-4444-4444-8444-444444444444"
 const revisionId = "33333333-3333-4333-8333-333333333333"
+
+it("uses a published card variant and leaves missing CMS media empty", () => {
+  expect(offeringImageUrl({ image: null })).toBeNull()
+  expect(offeringImageUrl({ image: { assetId: revisionId, alt: "Маршрут", variants: [
+    { url: "/media/320.webp", format: "webp", width: 320, height: 240 },
+    { url: "/media/640.webp", format: "webp", width: 640, height: 480 },
+  ] } })).toBe("/media/640.webp")
+})
 function house(offeringId: string) {
   return {
     offeringId, kind: "house", path: `/domiki/${offeringId}`, releaseId, title: offeringId,

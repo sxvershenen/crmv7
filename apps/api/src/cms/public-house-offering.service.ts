@@ -191,6 +191,7 @@ export class PublicHouseOfferingService {
       releaseId: row.releaseId,
       title: content.data.title,
       summary: content.data.summary,
+      image: content.data.hero?.background ?? content.data.hero?.foreground ?? content.data.hero?.slides[0]?.image ?? null,
       price,
       priceBasisLabel: plans[0]?.pricingBasis === "per_night" ? "за ночь" : plans[0]?.pricingBasis === "per_person" ? "за гостя" : null,
       quoteAvailable: false,

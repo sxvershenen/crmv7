@@ -121,6 +121,7 @@ export const SiteResponsiveRail = forwardRef<HTMLDivElement, SiteResponsiveRailP
 
 export interface SiteEventFeatureCardProps {
   image: string
+  imageAlt?: string | undefined
   title: ReactNode
   description: ReactNode
   dayMonth: ReactNode
@@ -130,15 +131,16 @@ export interface SiteEventFeatureCardProps {
   onSelect: () => void
 }
 
-export function SiteEventFeatureCard({ dayMonth, description, image, onSelect, seatsLeft, title, price, priceBasisLabel }: SiteEventFeatureCardProps) {
+export function SiteEventFeatureCard({ dayMonth, description, image, imageAlt, onSelect, seatsLeft, title, price, priceBasisLabel }: SiteEventFeatureCardProps) {
   const [day, ...monthParts] = String(dayMonth).trim().split(/\s+/)
   const month = monthParts.join(" ").replace(/[^А-Яа-яЁё]/g, "").slice(0, 3).toLocaleUpperCase("ru-RU")
   void seatsLeft
-  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div className="card-img aspect-square">{image && <img src={image} alt={typeof title === "string" ? title : ""} loading="lazy" />}<span className="absolute left-3 top-3 z-10 bg-surface rounded-md px-3 py-2 flex flex-col items-center text-center leading-none"><span data-event-day className="text-[26px] font-semibold tracking-[-1px]">{day}</span><span data-event-month className="text-[11px] text-ink-2 uppercase mt-1">{month}</span></span><span className="arrow-bubble absolute right-3 top-3 z-10"><ArrowRight size={16} /></span></div><div className="px-2 pt-4 pb-2 flex flex-col gap-1.5"><h3 className="text-[18px] leading-[1.25] font-semibold tracking-[-.5px]">{title}</h3><p className="text-[13px] leading-[1.5] text-ink-2">{description}</p>{price && <p className="text-[13px] font-semibold text-ink">{price}{priceBasisLabel && <span className="font-normal text-ink-3">{" · "}{priceBasisLabel}</span>}</p>}</div></div>
+  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div className="card-img aspect-square">{image && <img src={image} alt={imageAlt ?? (typeof title === "string" ? title : "")} loading="lazy" />}<span className="absolute left-3 top-3 z-10 bg-surface rounded-md px-3 py-2 flex flex-col items-center text-center leading-none"><span data-event-day className="text-[26px] font-semibold tracking-[-1px]">{day}</span><span data-event-month className="text-[11px] text-ink-2 uppercase mt-1">{month}</span></span><span className="arrow-bubble absolute right-3 top-3 z-10"><ArrowRight size={16} /></span></div><div className="px-2 pt-4 pb-2 flex flex-col gap-1.5"><h3 className="text-[18px] leading-[1.25] font-semibold tracking-[-.5px]">{title}</h3><p className="text-[13px] leading-[1.5] text-ink-2">{description}</p>{price && <p className="text-[13px] font-semibold text-ink">{price}{priceBasisLabel && <span className="font-normal text-ink-3">{" · "}{priceBasisLabel}</span>}</p>}</div></div>
 }
 
 export interface SiteVenueCardProps {
   image: string
+  imageAlt?: string | undefined
   title: string
   area: ReactNode
   capacity: ReactNode
@@ -149,13 +151,13 @@ export interface SiteVenueCardProps {
   onSelect: () => void
 }
 
-export function SiteVenueCard({ area, capacity, description, image, onSelect, tags, title, price, priceBasisLabel }: SiteVenueCardProps) {
-  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div className="card-img aspect-[5/4]">{image && <img src={image} alt={title} loading="lazy" />}<span className="arrow-bubble absolute right-3 top-3 z-10 !w-9 !h-9"><ArrowUpRight size={15} /></span></div><div className="px-2 pt-3.5 pb-2 flex flex-col gap-2 flex-1"><div className="flex items-center justify-between gap-2"><h3 className="text-[16px] leading-[1.25] font-semibold tracking-[-.5px]">{title}</h3><SiteMetaChip className="!bg-bg !text-ink" icon={<Users size={12} className="text-green" />}>{capacity}</SiteMetaChip></div><p className="text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="flex flex-wrap gap-1.5 mt-auto pt-1">{tags.map((tag, index) => <span key={index} className="chip !h-6 !text-[11px]">{tag}</span>)}{area && <span className="chip !h-6 !text-[11px]">{area}</span>}</div>{price && <p className="pt-1 text-[13px] font-semibold text-ink">{price}{priceBasisLabel && <span className="font-normal text-ink-3">{" · "}{priceBasisLabel}</span>}</p>}</div></div>
+export function SiteVenueCard({ area, capacity, description, image, imageAlt, onSelect, tags, title, price, priceBasisLabel }: SiteVenueCardProps) {
+  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform"><div className="card-img aspect-[5/4]">{image && <img src={image} alt={imageAlt ?? title} loading="lazy" />}<span className="arrow-bubble absolute right-3 top-3 z-10 !w-9 !h-9"><ArrowUpRight size={15} /></span></div><div className="px-2 pt-3.5 pb-2 flex flex-col gap-2 flex-1"><div className="flex items-center justify-between gap-2"><h3 className="text-[16px] leading-[1.25] font-semibold tracking-[-.5px]">{title}</h3><SiteMetaChip className="!bg-bg !text-ink" icon={<Users size={12} className="text-green" />}>{capacity}</SiteMetaChip></div><p className="text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="flex flex-wrap gap-1.5 mt-auto pt-1">{tags.map((tag, index) => <span key={index} className="chip !h-6 !text-[11px]">{tag}</span>)}{area && <span className="chip !h-6 !text-[11px]">{area}</span>}</div>{price && <p className="pt-1 text-[13px] font-semibold text-ink">{price}{priceBasisLabel && <span className="font-normal text-ink-3">{" · "}{priceBasisLabel}</span>}</p>}</div></div>
 }
 
 export interface SiteProgramFeatureCardProps {
   image: string
-  imageAlt?: string
+  imageAlt?: string | undefined
   title: ReactNode
   description: ReactNode
   age: ReactNode

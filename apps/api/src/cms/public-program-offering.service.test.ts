@@ -29,6 +29,13 @@ function subject(projectionRows = [row()]) {
 }
 
 describe("PublicProgramOfferingService", () => {
+  it("passes only the published CMS image binding into the public card", async () => {
+    const image = { assetId: "88888888-8888-4888-8888-888888888888", alt: "Гости на маршруте", variants: [{ url: "/api/public/v1/media/route/card", format: "webp", width: 640, height: 480 }] }
+    const resolvedContent = { ...content, hero: { title: "Рафтинг", backgroundAssetId: image.assetId, background: image } }
+    const result = await subject([row({ resolvedContent, resolvedContentHash: resolvedContentHash(resolvedContent) })]).service.detail(offeringId)
+    expect(result.data.image).toEqual(image)
+  })
+
   it("serves a release-pinned program with the next open occurrence", async () => {
     const result = await subject().service.detail(offeringId)
     expect(result.data).toMatchObject({ kind: "program", price: { mode: "from" }, fulfillment: { durationMinutes: 180, availabilityMode: "occurrence", participantLimit: 20 }, capacity: null })

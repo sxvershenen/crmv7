@@ -3,7 +3,7 @@ import { ArrowUpDown } from 'lucide-react';
 import type { CmsHomeSectionConfig, PublicProgramSummary } from '@crm/contracts';
 import { POPULAR_PROGRAMS, PROGRAM_CATEGORIES, ProgramItem } from '../../data/resortData';
 import { EmptyState, Pagination, SiteActionSectionHeader, SiteFilterMenu, SiteImageCategoryCard, SiteProgramFeatureCard, SiteSecondaryAction } from '@crm/site-ui';
-import { offeringPriceLabel } from '../../../lib/content/homepage-commerce';
+import { offeringImageUrl, offeringPriceLabel } from '../../../lib/content/homepage-commerce';
 
 interface ProgramsSectionProps {
   config: CmsHomeSectionConfig;
@@ -19,9 +19,10 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
 
-  const programs: Array<Omit<ProgramItem, "category"> & { category: string; priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? POPULAR_PROGRAMS : published.filter((item) => item.requestAvailable).map((item) => ({
-    id: item.offeringId, title: item.title, description: item.summary ?? "", photo: "", category: "", categoryLabel: "",
+  const programs: Array<Omit<ProgramItem, "category"> & { category: string; imageAlt?: string; priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? POPULAR_PROGRAMS : published.filter((item) => item.requestAvailable).map((item) => ({
+    id: item.offeringId, title: item.title, description: item.summary ?? "", photo: offeringImageUrl(item) ?? "", category: "", categoryLabel: "",
     age: `до ${item.fulfillment.participantLimit} участников`, season: "", duration: `${item.fulfillment.durationMinutes} мин`, participants: String(item.fulfillment.participantLimit),
+    imageAlt: item.image?.alt ?? item.title,
     priceLabel: offeringPriceLabel(item), priceBasisLabel: item.priceBasisLabel,
   }))
   const filteredPrograms = programs.filter((p) => {
@@ -77,6 +78,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
               key={prog.id}
               onSelect={() => onOpenBookingModal(`Программа: ${prog.title}`)}
               image={prog.photo}
+              imageAlt={prog.imageAlt}
               title={prog.title}
               description={prog.description}
               age={prog.age}
