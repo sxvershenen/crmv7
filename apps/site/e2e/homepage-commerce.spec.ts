@@ -52,6 +52,19 @@ test("shows request-only pricing without invented amounts", async ({ request, pa
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText("По запросу")
 })
 
+test("updates the selected sauna card price from CRM without a new CMS release", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=commerce-sauna-priced")
+  await page.goto("/")
+  const sauna = page.locator("#sauna")
+  await sauna.scrollIntoViewIfNeeded()
+  await expect(sauna).toContainText(/от 3\s*000\s*₽/)
+  await expect(sauna).toContainText("за час")
+  const updated = await request.post("http://127.0.0.1:4398/__bath-price?amountMinor=350000")
+  expect((await updated.json()).releaseId).toBe("22222222-2222-4222-8222-222222222222")
+  await page.reload()
+  await expect(page.locator("#sauna")).toContainText(/от 3\s*500\s*₽/)
+})
+
 test("renders published CMS card images through the public media route", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-media")
   await page.goto("/")

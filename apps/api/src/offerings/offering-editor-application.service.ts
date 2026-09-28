@@ -16,6 +16,8 @@ import {
   ResourceStayOfferingCreateResultSchema,
   ResourcePrimaryVenueOfferingLookupResponseSchema,
   ResourceVenueOfferingCreateResultSchema,
+  ResourcePrimaryScheduledOfferingLookupResponseSchema,
+  ResourceScheduledOfferingCreateResultSchema,
   OfferingQuoteOperationalContextSchema,
   OfferingPricingMutationResultSchema,
   OfferingPricingOutboxEventSchema,
@@ -43,6 +45,9 @@ import {
   type ResourcePrimaryVenueOfferingLookupResponse,
   type ResourceVenueOfferingCreateBody,
   type ResourceVenueOfferingCreateResult,
+  type ResourcePrimaryScheduledOfferingLookupResponse,
+  type ResourceScheduledOfferingCreateBody,
+  type ResourceScheduledOfferingCreateResult,
   type OfferingPricingMutationResult,
   type RatePlanDraft,
   type SessionUser,
@@ -212,7 +217,8 @@ export class OfferingEditorApplicationService {
     return this.serializable(async (manager) => {
       const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: offeringId })
       if (!offering || offering.archivedAt !== null) throw new NotFoundException({ code: "OFFERING_NOT_FOUND", message: "Предложение не найдено" })
-      if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service") {
+      const scheduledAddOn = offering.kind === "addon" && (await manager.findOne(AddonOfferingTermsEntity, { where: { offeringId: offering.id } }))?.serviceType === "scheduled_resource"
+      if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service" && !scheduledAddOn) {
         throw conflict("OFFERING_EDITORIAL_UNSUPPORTED", "Для этого предложения подготовка страницы недоступна")
       }
       const result = await ensureCatalogOfferingEditorialDraft(manager, { offeringId, actorId: context.actor.id, requestId: context.requestId })
@@ -274,6 +280,56 @@ export class OfferingEditorApplicationService {
   async primaryVenueOfferingForResource(resourceId: string, context: OfferingRequestContext): Promise<ResourcePrimaryVenueOfferingLookupResponse> {
     this.assertRead(context)
     return this.primaryVenueOfferingForResourceInManager(this.dataSource, resourceId)
+  }
+
+  async primaryScheduledOfferingForResource(resourceId: string, context: OfferingRequestContext): Promise<ResourcePrimaryScheduledOfferingLookupResponse> {
+    this.assertRead(context)
+    return this.primaryScheduledOfferingForResourceInManager(this.dataSource, resourceId)
+  }
+
+  async createScheduledOfferingFromResource(resourceId: string, input: ResourceScheduledOfferingCreateBody, context: OfferingRequestContext): Promise<ResourceScheduledOfferingCreateResult> {
+    this.assertStayOfferingCreate(context)
+    const scope = `resource:${resourceId}:scheduled-offering:create`
+    return this.serializable(async (manager) => {
+      const hash = canonicalSha256({ command: "scheduled-offering.create-from-resource", resourceId, input })
+      const replay = await this.replay<ResourceScheduledOfferingCreateResult>(manager, scope, input.operationId, input.idempotencyKey, hash)
+      if (replay) return replay
+      const resource = await manager.createQueryBuilder(ResourceEntity, "resource").setLock("pessimistic_write")
+        .where("resource.id = :resourceId", { resourceId }).getOne()
+      if (!resource || resource.archivedAt !== null) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Ресурс не найден" })
+      if (resource.kind !== "bath" || resource.capacityMode !== "fixed" || resource.capacityTotal <= 0) {
+        throw unprocessable("RESOURCE_SCHEDULED_INVALID", "Для бани или чана нужен ресурс с положительной фиксированной вместимостью", { resourceId })
+      }
+      const existing = await this.primaryScheduledOfferingForResourceInManager(manager, resourceId)
+      if (existing.resolution === "linked") throw conflict("RESOURCE_SCHEDULED_OFFERING_ALREADY_LINKED", "У ресурса уже есть условия продажи", { resourceId, offeringId: existing.offering.offeringId })
+      if (existing.resolution === "ambiguous") throw conflict("RESOURCE_SCHEDULED_OFFERING_AMBIGUOUS", "У ресурса несколько условий продажи; нужна проверка", { resourceId })
+      const calendars = await manager.find(BusinessCalendarEntity, { where: { state: "active", archivedAt: IsNull() }, order: { id: "ASC" } })
+      if (calendars.length !== 1) throw unprocessable("BUSINESS_CALENDAR_ACTIVE_COUNT_INVALID", "Для создания предложения нужен ровно один активный бизнес-календарь", { count: calendars.length })
+      const calendar = calendars[0]!
+      const offering = await manager.save(manager.create(CatalogOfferingEntity, {
+        id: randomUUID(), code: await this.uniqueResourceOfferingCode(manager, resource, "addon"), kind: "addon",
+        operationalName: resource.name, internalComment: "Создано из operational Resource.", state: "draft",
+        subjectVersion: 1, pricingVersion: 1, addonAssignmentsVersion: 1,
+        salesMode: "request_only", priceDisplayMode: "from", currency: "RUB", timezone: calendar.timezone, taxMode: "tax_included",
+        businessCalendarId: calendar.id, leadDirection: null, defaultAssigneeId: null, scope: "reusable", ownerOfferingId: null,
+        activePriceBookId: null, createdBy: context.actor.id, updatedBy: context.actor.id, archivedAt: null,
+      }))
+      await manager.save(manager.create(AddonOfferingTermsEntity, addOnTermsEntity(offering.id, {
+        serviceType: "scheduled_resource", categoryKey: "wellness",
+        applicableOfferingKinds: ["house", "campground", "venue", "event_service", "program"], quantity: null,
+      }, true, context.actor.id) as never))
+      await manager.save(manager.create(OfferingBindingEntity, {
+        id: randomUUID(), offeringId: offering.id, resourceId, resourceGroupId: null, programTemplateId: null, eventServiceTemplateId: null,
+        role: "primary", quantityDefault: 1, capacityImpactDefault: 1, preparationBeforeMinutes: 0, preparationAfterMinutes: 0,
+        availabilityRequired: true, createdBy: context.actor.id, updatedBy: context.actor.id, archivedAt: null,
+      }))
+      const editorial = await ensureCatalogOfferingEditorialDraft(manager, { offeringId: offering.id, actorId: context.actor.id, requestId: context.requestId })
+      if (editorial.status === "report_only") throw conflict("OFFERING_EDITORIAL_RECONCILIATION_REQUIRED", "Нельзя автоматически связать страницу; нужна проверка", editorial.report)
+      const response = ResourceScheduledOfferingCreateResultSchema.parse(resourcePrimaryOfferingSummary(offering, "addon"))
+      await this.recordStayOfferingCreated(manager, offering, calendar.version, input.operationId, context, hash)
+      await this.remember(manager, scope, input.operationId, input.idempotencyKey, hash, response)
+      return response
+    })
   }
 
   async createVenueOfferingFromResource(resourceId: string, input: ResourceVenueOfferingCreateBody, context: OfferingRequestContext): Promise<ResourceVenueOfferingCreateResult> {
@@ -349,6 +405,20 @@ export class OfferingEditorApplicationService {
     if (candidates.length === 0) return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "none" })
     if (candidates.length === 1) return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "linked", offering: candidates[0] })
     return ResourcePrimaryVenueOfferingLookupResponseSchema.parse({ resolution: "ambiguous", candidates })
+  }
+
+  private async primaryScheduledOfferingForResourceInManager(manager: Pick<EntityManager, "getRepository">, resourceId: string): Promise<ResourcePrimaryScheduledOfferingLookupResponse> {
+    const rows = await manager.getRepository(CatalogOfferingEntity).createQueryBuilder("offering")
+      .innerJoin(OfferingBindingEntity, "binding", "binding.offering_id = offering.id")
+      .innerJoin(AddonOfferingTermsEntity, "terms", "terms.offering_id = offering.id AND terms.service_type = 'scheduled_resource'")
+      .where("binding.resource_id = :resourceId", { resourceId })
+      .andWhere("binding.role = 'primary' AND binding.archived_at IS NULL")
+      .andWhere("offering.archived_at IS NULL AND offering.state <> 'archived' AND offering.kind = 'addon'")
+      .orderBy("offering.code", "ASC").addOrderBy("offering.id", "ASC").getMany()
+    const candidates = rows.map((offering) => resourcePrimaryOfferingSummary(offering, "addon"))
+    if (candidates.length === 0) return ResourcePrimaryScheduledOfferingLookupResponseSchema.parse({ resolution: "none" })
+    if (candidates.length === 1) return ResourcePrimaryScheduledOfferingLookupResponseSchema.parse({ resolution: "linked", offering: candidates[0] })
+    return ResourcePrimaryScheduledOfferingLookupResponseSchema.parse({ resolution: "ambiguous", candidates })
   }
 
   async editor(offeringId: string, context: OfferingRequestContext): Promise<InternalOfferingEditor> {
@@ -428,7 +498,8 @@ export class OfferingEditorApplicationService {
     const blockers: Array<"offering_not_active" | "cms_node_archived" | "cms_node_kind_incompatible" | "public_profile_missing" | "public_profile_mismatch" | "revision_relation_missing" | "revision_relation_mismatch" | "safe_public_projection_missing"> = []
     if (offering.state !== "active" || offering.archivedAt !== null) blockers.push("offering_not_active")
     if (node.status !== "active" || node.archivedAt !== null) blockers.push("cms_node_archived")
-    const expectedNodeKind = offering.kind === "addon" ? "addon_detail" : offering.kind === "program" ? "program_detail" : offering.kind === "event_service" ? "event_detail" : "resource_detail"
+    const scheduledAddOn = offering.kind === "addon" && (await manager.findOne(AddonOfferingTermsEntity, { where: { offeringId: offering.id } }))?.serviceType === "scheduled_resource"
+    const expectedNodeKind = offering.kind === "addon" && !scheduledAddOn ? "addon_detail" : offering.kind === "program" ? "program_detail" : offering.kind === "event_service" ? "event_detail" : "resource_detail"
     if (node.kind !== expectedNodeKind) blockers.push("cms_node_kind_incompatible")
     if (!exactProfile) blockers.push(profiles.length === 0 ? "public_profile_missing" : "public_profile_mismatch")
     const relations = current?.relations.filter((relation) => relation.kind === "catalog_offering") ?? []
@@ -470,6 +541,11 @@ export class OfferingEditorApplicationService {
       const template = binding?.programTemplateId ? await manager.findOne(ProgramTemplateEntity, { where: { id: binding.programTemplateId, publication: "published", archivedAt: IsNull() } }) : null
       const calendar = await manager.findOne(BusinessCalendarEntity, { where: { id: offering.businessCalendarId, state: "active", archivedAt: IsNull() } })
       if (!binding || !binding.programTemplateId || !template || !calendar || !current || !canonicalPublicPath(current.path).startsWith("/programmy/")) blockers.push("safe_public_projection_missing")
+    } else if (scheduledAddOn) {
+      const primaryBindings = await manager.find(OfferingBindingEntity, { where: { offeringId: offering.id, role: "primary", archivedAt: IsNull() } })
+      const binding = primaryBindings.length === 1 ? primaryBindings[0] : null
+      const resource = binding?.resourceId ? await manager.findOne(ResourceEntity, { where: { id: binding.resourceId } }) : null
+      if (!binding || !resource || resource.kind !== "bath" || !current || !canonicalPublicPath(current.path).startsWith("/dopy/")) blockers.push("safe_public_projection_missing")
     } else if (offering.kind !== "addon" && offering.kind !== "venue") blockers.push("safe_public_projection_missing")
     const revision = (row: CmsNodeRevisionEntity | null) => row ? {
       id: row.id, revision: row.revision, state: row.state, path: row.path, title: row.title, contentHash: row.contentHash,
@@ -993,7 +1069,7 @@ export class OfferingEditorApplicationService {
       : offering.kind === "program"
       ? validateProgramPricingForActivation(await loadProgramPricingSnapshot(manager, offering, snapshot), book.validFrom, toExclusive)
       : offering.kind === "addon"
-      ? validateAddOnPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireAddOnTerms(manager, offering.id)).serviceType as "quantity_service" | "person_service")
+      ? validateAddOnPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireAddOnTerms(manager, offering.id)).serviceType as "quantity_service" | "person_service" | "scheduled_resource")
       : offering.kind === "campground"
       ? validateCampgroundPricingForActivation(snapshot, { from: book.validFrom, toExclusive }, (await this.requireCampgroundTerms(manager, offering.id)).sellableUnit as "owned_tent" | "own_tent_pitch")
       : offering.kind === "venue"
@@ -1049,10 +1125,16 @@ export class OfferingEditorApplicationService {
       if (plan.isDefault) defaults += 1
       if (offering.kind === "addon") {
         const terms = await this.requireAddOnTerms(manager, offering.id)
-        const expectedBasis = terms.serviceType === "quantity_service" ? "per_unit" : "per_person"
-        const expectedMetric = terms.serviceType === "quantity_service" ? "units" : "participants"
-        if (plan.pricingBasis !== expectedBasis || plan.quantityMetric !== expectedMetric) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Дополнение должно использовать допустимую pricing basis и quantity metric", { expectedBasis, expectedMetric })
-        if (plan.includedQuantity !== null || plan.baseExtraUnitAmount !== null || plan.minQuantity !== null || plan.maxQuantity !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Количество дополнения задаётся terms, не прайс-листом")
+        if (terms.serviceType === "scheduled_resource") {
+          if (!(["per_hour", "per_slot"] as string[]).includes(plan.pricingBasis) || (plan.quantityMetric !== null && plan.quantityMetric !== "guests")) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Баня и чан поддерживают цену за час или за сеанс с лимитом гостей")
+          if (plan.quantityMetric === "guests" && (plan.minQuantity === null || plan.maxQuantity === null || plan.minQuantity <= 0)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Для тарифной группы укажите диапазон гостей")
+          if (plan.includedQuantity !== null || plan.baseExtraUnitAmount !== null || plan.minDurationMinutes !== null || plan.maxDurationMinutes !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Тариф бани и чана задаётся прямой суммой без дополнительных правил")
+        } else {
+          const expectedBasis = terms.serviceType === "quantity_service" ? "per_unit" : "per_person"
+          const expectedMetric = terms.serviceType === "quantity_service" ? "units" : "participants"
+          if (plan.pricingBasis !== expectedBasis || plan.quantityMetric !== expectedMetric) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Дополнение должно использовать допустимую pricing basis и quantity metric", { expectedBasis, expectedMetric })
+          if (plan.includedQuantity !== null || plan.baseExtraUnitAmount !== null || plan.minQuantity !== null || plan.maxQuantity !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Количество дополнения задаётся terms, не прайс-листом")
+        }
       } else if (offering.kind === "program") {
         if (plan.pricingBasis !== "per_person" && plan.pricingBasis !== "flat_package") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Программа поддерживает per_person или flat_package")
         if (plan.quantityMetric !== "participants") throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Программа использует quantityMetric=participants")
@@ -1078,7 +1160,10 @@ export class OfferingEditorApplicationService {
       for (const rule of plan.rules) {
         if (rule.id && ruleIds.has(rule.id)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "ID правил должны быть уникальны", { id: rule.id })
         if (rule.id) ruleIds.add(rule.id)
-        if (offering.kind === "addon" && (rule.durationMinutes !== null || rule.quantityRange !== null || rule.bookingLeadDays !== null)) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Первый add-on slice не поддерживает quantity/duration/lead rules")
+        if (offering.kind === "addon") {
+          const terms = await this.requireAddOnTerms(manager, offering.id)
+          if (terms.serviceType === "scheduled_resource" || rule.durationMinutes !== null || rule.quantityRange !== null || rule.bookingLeadDays !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Для бани и чана используйте прямые тарифы без дополнительных правил")
+        }
         if (offering.kind !== "addon" && offering.kind !== "program" && offering.kind !== "event_service" && offering.kind !== "venue" && rule.durationMinutes !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Duration-правила не поддерживаются для проживания")
         if (offering.kind === "program" && plan.pricingBasis === "per_person" && rule.extraUnitAmount !== null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Per-person правило не использует extra-unit цену")
         if (offering.kind === "program" && plan.pricingBasis === "flat_package" && rule.extraUnitAmount !== null && plan.includedQuantity === null) throw unprocessable("PRICE_BOOK_VALIDATION_FAILED", "Package extra требует includedQuantity")
@@ -1249,8 +1334,8 @@ export class OfferingEditorApplicationService {
     })))
   }
 
-  private async uniqueResourceOfferingCode(manager: EntityManager, resource: ResourceEntity, kind: "house" | "campground" | "venue") {
-    const prefix = kind === "house" ? "HOUSE" : kind === "campground" ? "CAMP" : "VENUE"
+  private async uniqueResourceOfferingCode(manager: EntityManager, resource: ResourceEntity, kind: "house" | "campground" | "venue" | "addon") {
+    const prefix = kind === "house" ? "HOUSE" : kind === "campground" ? "CAMP" : kind === "venue" ? "VENUE" : "SPA"
     const identity = resource.id.replaceAll("-", "").toUpperCase()
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const suffix = attempt === 0 ? identity : `${identity}-${randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`
@@ -1362,7 +1447,7 @@ export class OfferingEditorApplicationService {
 
   private async requireAddOnTerms(manager: EntityManager, offeringId: string) {
     const terms = await manager.findOne(AddonOfferingTermsEntity, { where: { offeringId } })
-    if (!terms || terms.offeringKind !== "addon" || (terms.serviceType !== "quantity_service" && terms.serviceType !== "person_service")) throw unprocessable("ADDON_TERMS_INVALID", "Для дополнения не заданы совместимые operational terms", { offeringId })
+    if (!terms || terms.offeringKind !== "addon" || (terms.serviceType !== "quantity_service" && terms.serviceType !== "person_service" && terms.serviceType !== "scheduled_resource")) throw unprocessable("ADDON_TERMS_INVALID", "Для дополнения не заданы совместимые operational terms", { offeringId })
     return terms
   }
 

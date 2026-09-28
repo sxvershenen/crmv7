@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 
 import type { CmsPageKind, CmsSourceKind } from "@crm/contracts"
 import { publicReleasePathCandidates } from "@crm/contracts"
-import { CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity, OutboxEventEntity } from "@crm/db"
+import { AddonOfferingTermsEntity, CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity, OutboxEventEntity } from "@crm/db"
 import type { EntityManager } from "typeorm"
 
 type LegacyCmsSourceKind = Exclude<CmsSourceKind, "catalog_offering">
@@ -44,7 +44,7 @@ export type LegacyProgramOfferingPromotionReport = Readonly<{
 }>
 
 /** Read-only reconciliation used before a legacy resource link can be promoted. */
-export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManager, resourceId: string, offeringKind: "house" | "campground" | "venue" = "house"): Promise<LegacyCatalogOfferingPromotionReport> {
+export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManager, resourceId: string, offeringKind: "house" | "campground" | "venue" | "addon" = "house"): Promise<LegacyCatalogOfferingPromotionReport> {
   const legacy = await manager.getRepository(CmsSourceLinkEntity).findOneBy({ sourceKind: "resource", sourceId: resourceId })
   const rows = await manager.query(`
     SELECT offering.id, (offering.kind = $2) AS "matchesKind"
@@ -52,7 +52,10 @@ export async function inspectLegacyCatalogOfferingPromotion(manager: EntityManag
     JOIN offering_bindings binding ON binding.offering_id = offering.id
       AND binding.role = 'primary' AND binding.archived_at IS NULL AND binding.resource_id = $1
     JOIN resources resource ON resource.id = binding.resource_id AND resource.archived_at IS NULL
-    WHERE offering.kind IN ('house', 'campground', 'venue') AND offering.archived_at IS NULL
+    WHERE offering.kind IN ('house', 'campground', 'venue', 'addon') AND offering.archived_at IS NULL
+      AND (offering.kind <> 'addon' OR EXISTS (
+        SELECT 1 FROM addon_offering_terms terms WHERE terms.offering_id = offering.id AND terms.service_type = 'scheduled_resource'
+      ))
     ORDER BY offering.id ASC
   `, [resourceId, offeringKind]) as Array<{ id: string; matchesKind: boolean }>
   const candidateOfferingIds = rows.map((row) => row.id)
@@ -93,7 +96,11 @@ export async function ensureCatalogOfferingEditorialDraft(
 ): Promise<{ status: "linked" | "created" | "promoted"; link: CmsSourceLinkEntity } | { status: "report_only"; report: LegacyCatalogOfferingPromotionReport | LegacyProgramOfferingPromotionReport }> {
   const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: input.offeringId })
   if (!offering || offering.archivedAt !== null) throw new Error(`Active catalog offering ${input.offeringId} was not found`)
-  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
+  if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service" && offering.kind !== "addon") throw new Error(`Catalog offering ${input.offeringId} is not supported by the editorial locator`)
+  if (offering.kind === "addon") {
+    const terms = await manager.getRepository(AddonOfferingTermsEntity).findOneBy({ offeringId: offering.id })
+    if (terms?.serviceType !== "scheduled_resource") throw new Error(`Catalog offering ${input.offeringId} is not a scheduled resource`)
+  }
 
   const links = manager.getRepository(CmsSourceLinkEntity)
   const existing = await links.findOneBy({ sourceKind: "catalog_offering", sourceId: offering.id })
@@ -135,7 +142,7 @@ export async function ensureCatalogOfferingEditorialDraft(
     WHERE offering_id = $1 AND role = 'primary' AND archived_at IS NULL AND resource_id IS NOT NULL
     ORDER BY id ASC
   `, [offering.id]) as Array<{ resourceId: string }>
-  if (offering.kind === "house" || offering.kind === "campground" || offering.kind === "venue") {
+  if (offering.kind === "house" || offering.kind === "campground" || offering.kind === "venue" || offering.kind === "addon") {
     if (primary.length !== 1) throw new Error(`Resource offering ${offering.id} requires one exact primary Resource binding`)
     const report = await inspectLegacyCatalogOfferingPromotion(manager, primary[0]!.resourceId, offering.kind)
     if (report.status === "eligible" && report.candidateOfferingIds[0] === offering.id && report.legacyLinkId) {
@@ -189,8 +196,8 @@ export async function ensureCatalogOfferingEditorialDraft(
   const link = await createCmsSourceDraft(manager, {
     sourceKind: "catalog_offering", sourceId: offering.id, sourceVersion: offering.version,
     title: offering.operationalName, summary: null, actorId: input.actorId, requestId: input.requestId,
-    pathPart: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : "domiki",
-    suggestedPrefix: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : "domiki",
+    pathPart: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : offering.kind === "addon" ? "dopy" : "domiki",
+    suggestedPrefix: offering.kind === "program" ? "programmy" : offering.kind === "campground" ? "kemping" : offering.kind === "venue" ? "poshadki" : offering.kind === "addon" ? "dopy" : "domiki",
     pageKind: offering.kind === "program" ? "program_detail" : "resource_detail",
     relations: [{ kind: "catalog_offering", entityId: offering.id }],
   })

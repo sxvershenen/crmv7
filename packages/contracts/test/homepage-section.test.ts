@@ -68,6 +68,13 @@ describe("homepage visual cards", () => {
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [card] } }).success).toBe(true)
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [{ ...card, imageUrl: "http://example.com/image.jpg" }] } }).success).toBe(false)
   })
+  it("links each sauna card to at most one CRM resource", () => {
+    const first = "33333333-3333-4333-8333-333333333333"
+    const second = "44444444-4444-4444-8444-444444444444"
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [{ ...card, selectedOfferingIds: [first] }] } }).success).toBe(true)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [{ ...card, selectedOfferingIds: [first, second] }] } }).success).toBe(false)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, cards: [{ ...card, selectedOfferingIds: [first] }] } }).success).toBe(false)
+  })
   it("accepts direct review videos with a poster and rejects page links or videos in other sections", () => {
     const videoCard = { ...card, videoUrl: "https://example.org/forest.mp4?token=demo" }
     expect(CmsHomeSectionSchema.safeParse({ ...section, key: "reviews", config: { ...config, cards: [videoCard] } }).success).toBe(true)

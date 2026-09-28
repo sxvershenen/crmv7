@@ -37,6 +37,7 @@ function row(overrides: Record<string, unknown> = {}) {
     dependencies: [{ type: "node_revision", id: revisionId, version: "2", contentHash: "a".repeat(64) }, dependency],
     offeringId,
     offeringVersion: 3,
+    offeringState: "active",
     offeringUpdatedAt: new Date("2026-09-02T08:10:00.000Z"),
     pricingVersion: 4,
     salesMode: "selectable",
@@ -59,6 +60,8 @@ function row(overrides: Record<string, unknown> = {}) {
     priceBookValidToExclusive: "2027-01-01",
     priceBookUpdatedAt: new Date("2026-09-02T08:09:00.000Z"),
     titleKey: "берёзовые дрова",
+    resourceActive: null,
+    resourceArchived: null,
     ...overrides,
   }
 }
@@ -76,6 +79,16 @@ function subject(projectionRows = [row()]) {
 }
 
 describe("PublicAddonOfferingService", () => {
+  it("shows CRM hourly bath tariffs on the existing resource page and marks a disabled resource unavailable", async () => {
+    const bathContent = { ...content, kind: "resource_detail", path: "/dopy/banya-kedr", title: "Баня Кедр" }
+    const test = subject([row({ resolvedContent: bathContent, resolvedContentHash: resolvedContentHash(bathContent), serviceType: "scheduled_resource", minimumQuantity: null, maximumQuantity: null, defaultQuantity: null, quantityStep: null, titleKey: "баня кедр", resourceActive: false, resourceArchived: false, priceDisplayMode: "from" })])
+    test.repositories.get(RatePlanEntity)!.findBy.mockResolvedValue([
+      { id: ratePlanId, priceBookId, key: "standard_6", label: "Стандарт · до 6 гостей", pricingBasis: "per_hour", quantityMetric: "guests", minimumQuantity: 1, maximumQuantity: 6, baseAmountMinor: 300_000, sortOrder: 0 },
+      { id: "77777777-7777-4777-8777-777777777777", priceBookId, key: "standard_10", label: "Стандарт · до 10 гостей", pricingBasis: "per_hour", quantityMetric: "guests", minimumQuantity: 7, maximumQuantity: 10, baseAmountMinor: 350_000, sortOrder: 1 },
+    ])
+    const result = await test.service.detail(offeringId)
+    expect(result.data).toMatchObject({ price: { mode: "from", amount: { amountMinor: 300_000 } }, priceBasisLabel: "за час", requestAvailable: false, readiness: "temporarily_unavailable", terms: { serviceType: "scheduled_resource", quantity: null }, scheduledTariffs: [{ key: "standard_6", amount: { amountMinor: 300_000 } }, { key: "standard_10", amount: { amountMinor: 350_000 } }] })
+  })
   it("serves a strict release-pinned detail with conservative public unit pricing", async () => {
     const test = subject()
     const result = await test.service.detail(offeringId)

@@ -1,7 +1,7 @@
 import "reflect-metadata"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { DataSource } from "typeorm"
-import { assertSafeTestDatabaseConnection, assertSafeTestDatabaseEnvironment, BusinessCalendarEntity, CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsSourceLinkEntity, CustomerEntity, databaseEntities, databaseMigrations, OfferingBindingEntity, ResourceGroupEntity, ResourceGroupMemberEntity, UserEntity } from "@crm/db"
+import { AddonOfferingTermsEntity, assertSafeTestDatabaseConnection, assertSafeTestDatabaseEnvironment, BusinessCalendarDateEntity, BusinessCalendarEntity, CatalogOfferingEntity, ChangeLogEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsSourceLinkEntity, CustomerEntity, databaseEntities, databaseMigrations, OfferingBindingEntity, ResourceGroupEntity, ResourceGroupMemberEntity, ScheduledResourceEditorialLink1788207200000, UserEntity } from "@crm/db"
 import { roleCapabilities } from "@crm/domain"
 import { CmsNodeMutationSchema, ResourceCreateSchema } from "@crm/contracts"
 import { CmsContentService } from "../cms/cms-content.service.js"
@@ -26,6 +26,7 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     environment = { APP_ENV: "development", DATABASE_URL: target.url }
     await ds.getRepository(UserEntity).insert({ id: demoId("test-actor"), email: "actor@example.invalid", displayName: "Демо тест", passwordHash: "not-a-login-password", role: "admin", status: "active", createdBy: null, updatedBy: null, archivedAt: null })
     await ds.getRepository(BusinessCalendarEntity).insert({ id: demoId("test-calendar"), code: "TEST-DEMO-CALENDAR", name: "Test calendar", timezone: "Europe/Moscow", countryCode: "RU", source: "official_ru", sourceVersion: "test", state: "active", importedAt: new Date(), coverageFrom: "2026-01-01", coverageToExclusive: "2028-01-01", contentHash: "0".repeat(64), createdBy: null, updatedBy: null, archivedAt: null })
+    await ds.getRepository(BusinessCalendarDateEntity).insert({ id: demoId("test-calendar-date"), calendarId: demoId("test-calendar"), localDate: "2026-09-12", officialClass: "weekend", officialLabel: null, sourceVersion: "test", createdBy: null, updatedBy: null, archivedAt: null })
   }, 120000)
   afterAll(async () => { if (ds?.isInitialized) await ds.destroy() })
 
@@ -45,14 +46,17 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     expect(await snapshot()).toEqual(baseline)
     const applied = await seedDemoWorkspace(ds, environment, { now: new Date("2026-09-12T10:00:00Z") })
     expect(applied.status).toBe("created")
-    expect(applied.report.counts.cmsSourceNodes).toBe(15)
+    expect(applied.report.counts.cmsSourceNodes).toBe(16)
     const afterCreation = await snapshot()
     for (const [table, rows] of Object.entries(baseline)) expect(afterCreation[table]).toEqual(expect.arrayContaining(rows as string[]))
-    expect(applied.report.counts).toMatchObject({ customers: 4, leads: 6, resources: 5, offerings: 8, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, cmsDrafts: 8, priceBooks: 8 })
+    expect(applied.report.counts).toMatchObject({ customers: 4, leads: 6, resources: 6, offerings: 10, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, cmsDrafts: 10, priceBooks: 10 })
     const [bath] = await ds.query("SELECT capacity_total FROM resources WHERE code = $1", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ capacity_total: number }>
     expect(bath?.capacity_total).toBe(15)
     const [bathBooking] = await ds.query("SELECT price_amount FROM booking_items WHERE booking_id = $1 AND type = 'bath'", [applied.report.ids.bookings![0]]) as Array<{ price_amount: number }>
     expect(bathBooking?.price_amount).toBe(600_000)
+    const [bathOffering] = await ds.query("SELECT offering.id FROM catalog_offerings offering JOIN offering_bindings binding ON binding.offering_id = offering.id JOIN resources resource ON resource.id = binding.resource_id WHERE resource.code = $1 AND offering.kind = 'addon'", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ id: string }>
+    const bathRates = await ds.query("SELECT plan.rate_key, plan.base_amount_minor FROM rate_plans plan JOIN price_books book ON book.id = plan.price_book_id WHERE book.offering_id = $1 ORDER BY plan.sort_order", [bathOffering!.id]) as Array<{ rate_key: string; base_amount_minor: number }>
+    expect(bathRates.map((row) => row.base_amount_minor)).toEqual([300_000, 350_000, 400_000, 600_000, 700_000, 800_000])
     expect((await ds.query("SELECT count(*)::int AS count FROM accepted_offering_quote_links"))[0].count).toBe(0)
     expect((await ds.query("SELECT count(*)::int AS count FROM cms_releases"))[0].count).toBe(0)
     const customerId = applied.report.ids.customers![0]!
@@ -89,13 +93,47 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     expect(promoted.id).toBe(originalLink.id)
     expect(promoted.nodeId).toBe(originalNode.id)
     expect(await ds.getRepository(CmsNodeEntity).count()).toBe(nodeCount)
-    expect(await ds.getRepository(CmsNodeEntity).findOneByOrFail({ id: originalNode.id })).toEqual(beforeNode)
-    expect(await ds.getRepository(CmsNodeRevisionEntity).find({ where: { nodeId: originalNode.id }, order: { revision: "ASC" } })).toEqual(beforeRevisions)
+    expect(await ds.getRepository(CmsNodeEntity).findOneByOrFail({ id: originalNode.id })).toMatchObject({ id: beforeNode.id, kind: beforeNode.kind, version: beforeNode.version + 1 })
+    const afterRevisions = await ds.getRepository(CmsNodeRevisionEntity).find({ where: { nodeId: originalNode.id }, order: { revision: "ASC" } })
+    expect(afterRevisions).toHaveLength(beforeRevisions.length + 1)
+    expect(afterRevisions.slice(0, -1).map((revision) => ({ ...revision, state: null }))).toEqual(beforeRevisions.map((revision) => ({ ...revision, state: null })))
+    expect(afterRevisions.at(-1)).toMatchObject({ path: beforeRevisions.at(-1)!.path, title: beforeRevisions.at(-1)!.title, summary: beforeRevisions.at(-1)!.summary, hero: beforeRevisions.at(-1)!.hero, sections: beforeRevisions.at(-1)!.sections, seo: beforeRevisions.at(-1)!.seo, relations: [...beforeRevisions.at(-1)!.relations, { kind: "catalog_offering", entityId: offering.offeringId }] })
     expect(await ds.getRepository(CmsSourceLinkEntity).countBy({ sourceKind: "resource", sourceId: resource.id })).toBe(0)
     const replay = await ds.transaction((manager) => ensureCatalogOfferingEditorialDraft(manager, { offeringId: offering.offeringId, actorId: actor.id, requestId: "promotion-replay" }))
     expect(replay.status).toBe("linked")
     expect(await ds.getRepository(CmsNodeEntity).count()).toBe(nodeCount)
     expect(await ds.getRepository(ChangeLogEntity).countBy({ entityId: originalNode.id, action: "catalog_offering_source_promoted" })).toBe(1)
+  })
+
+  it("prepares bath pricing on the existing CMS resource draft and replays without a duplicate page", async () => {
+    const actor = { id: demoId("test-actor"), name: "Демо тест", role: "admin" as const, capabilities: roleCapabilities("admin") }
+    const resource = await new ResourcesService(ds).create(ResourceCreateSchema.parse({ code: "TEST-BATH-PRICING", kind: "bath", name: "Баня Кедр", capacityMode: "fixed", capacityTotal: 15, settings: { active: true } }), actor, "bath-pricing-test")
+    const before = await ds.getRepository(CmsSourceLinkEntity).findOneByOrFail({ sourceKind: "resource", sourceId: resource.id })
+    const nodeCount = await ds.getRepository(CmsNodeEntity).count()
+    const editor = new OfferingEditorApplicationService(ds)
+    const operation = { operationId: demoId("bath-offering-create"), idempotencyKey: "test.bath-offering.create" }
+    const context = { actor, requestId: "bath-pricing-test", entrySurface: "internal" as const }
+    const result = await editor.createScheduledOfferingFromResource(resource.id, operation, context)
+    expect(result).toMatchObject({ kind: "addon", operationalName: "Баня Кедр", state: "draft" })
+    expect(await ds.getRepository(AddonOfferingTermsEntity).findOneByOrFail({ offeringId: result.offeringId })).toMatchObject({ serviceType: "scheduled_resource", standalone: true })
+    expect(await ds.getRepository(CmsSourceLinkEntity).findOneByOrFail({ sourceKind: "catalog_offering", sourceId: result.offeringId })).toMatchObject({ id: before.id, nodeId: before.nodeId })
+    expect(await ds.getRepository(CmsNodeEntity).count()).toBe(nodeCount)
+    expect(await editor.primaryScheduledOfferingForResource(resource.id, context)).toMatchObject({ resolution: "linked", offering: { offeringId: result.offeringId } })
+    expect(await editor.createScheduledOfferingFromResource(resource.id, operation, context)).toEqual(result)
+    await expect(editor.createScheduledOfferingFromResource(resource.id, { operationId: demoId("bath-offering-duplicate"), idempotencyKey: "test.bath-offering.duplicate" }, context)).rejects.toMatchObject({ response: { code: "RESOURCE_SCHEDULED_OFFERING_ALREADY_LINKED" } })
+    const initialEditor = await editor.editor(result.offeringId, context)
+    const priceDraft = await editor.createDraft(result.offeringId, {
+      operationId: demoId("bath-price-draft"), idempotencyKey: "test.bath-price.draft", expectedPricingVersion: initialEditor.ownerVersions.pricing,
+      supersedesPriceBookId: null, name: "Тарифы бани", validFrom: "2026-09-12", validToExclusive: null, changeReason: "Первый прайс",
+      ratePlans: [
+        { key: "standard_6", label: "Стандарт", pricingBasis: "per_hour", quantityMetric: "guests", baseAmount: 300_000, includedQuantity: null, baseExtraUnitAmount: null, minQuantity: 1, maxQuantity: 6, minDurationMinutes: null, maxDurationMinutes: null, isDefault: true, displayOrder: 0, rules: [] },
+        { key: "standard_10", label: "Стандарт", pricingBasis: "per_hour", quantityMetric: "guests", baseAmount: 350_000, includedQuantity: null, baseExtraUnitAmount: null, minQuantity: 7, maxQuantity: 10, minDurationMinutes: null, maxDurationMinutes: null, isDefault: false, displayOrder: 1, rules: [] },
+      ],
+    }, context)
+    const activePrice = await editor.activate(result.offeringId, priceDraft.priceBook.id, { operationId: demoId("bath-price-activate"), idempotencyKey: "test.bath-price.activate", expectedPricingVersion: priceDraft.pricingVersion, reason: "Первый прайс" }, context)
+    expect(activePrice.priceBook).toMatchObject({ state: "active", ratePlans: [{ baseAmount: 300_000 }, { baseAmount: 350_000 }] })
+    expect((await editor.editor(result.offeringId, context)).offering).toMatchObject({ state: "active", activePriceBookId: activePrice.priceBook.id })
+    await expect(ds.transaction((manager) => new ScheduledResourceEditorialLink1788207200000().down(manager.queryRunner!))).rejects.toThrow("rollback is unsafe")
   })
 
   it("refuses to take a venue resource draft from a competing legacy house binding", async () => {

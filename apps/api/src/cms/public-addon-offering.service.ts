@@ -34,6 +34,7 @@ type ProjectionRow = {
   dependencies: unknown
   offeringId: string
   offeringVersion: number
+  offeringState: string
   offeringUpdatedAt: Date
   pricingVersion: number
   salesMode: string
@@ -56,6 +57,8 @@ type ProjectionRow = {
   priceBookValidToExclusive: string | null
   priceBookUpdatedAt: Date | null
   titleKey: string
+  resourceActive: boolean | null
+  resourceArchived: boolean | null
 }
 
 type Cursor = { title: string; id: string }
@@ -110,7 +113,7 @@ export class PublicAddonOfferingService {
         release.published_at AS "releasePublishedAt", item.node_id AS "nodeId",
         item.revision_id AS "revisionId", item.resolved_content AS "resolvedContent",
         item.resolved_content_hash AS "resolvedContentHash", item.dependencies,
-        offering.id AS "offeringId", offering.version AS "offeringVersion",
+        offering.id AS "offeringId", offering.version AS "offeringVersion", offering.state AS "offeringState",
         offering.updated_at AS "offeringUpdatedAt", offering.pricing_version AS "pricingVersion",
         offering.sales_mode AS "salesMode", offering.price_display_mode AS "priceDisplayMode",
         offering.currency, offering.timezone, terms.category_key AS "categoryKey",
@@ -121,11 +124,12 @@ export class PublicAddonOfferingService {
         price_book.id AS "priceBookId", price_book.revision AS "priceBookRevision",
         price_book.state AS "priceBookState", TO_CHAR(price_book.valid_from, 'YYYY-MM-DD') AS "priceBookValidFrom",
         TO_CHAR(price_book.valid_to_exclusive, 'YYYY-MM-DD') AS "priceBookValidToExclusive", price_book.updated_at AS "priceBookUpdatedAt",
-        LOWER(COALESCE(item.resolved_content->>'title', '')) AS "titleKey"
+        LOWER(COALESCE(item.resolved_content->>'title', '')) AS "titleKey",
+        bath_resource.active AS "resourceActive", bath_resource.archived AS "resourceArchived"
       FROM cms_active_release active
       JOIN cms_releases release ON release.id = active.release_id AND release.state = 'published'
       JOIN cms_release_items item ON item.release_id = release.id
-      JOIN cms_nodes node ON node.id = item.node_id AND node.kind = 'addon_detail'
+      JOIN cms_nodes node ON node.id = item.node_id AND node.kind IN ('addon_detail', 'resource_detail')
         AND node.status = 'active' AND node.archived_at IS NULL
       JOIN cms_source_links source ON source.node_id = item.node_id
         AND source.source_kind = 'catalog_offering'
@@ -133,14 +137,25 @@ export class PublicAddonOfferingService {
         AND profile.kind = 'catalog_offering' AND profile.entity_id = source.source_id
         AND profile.archived_at IS NULL
       JOIN catalog_offerings offering ON offering.id = source.source_id
-        AND offering.kind = 'addon' AND offering.state = 'active' AND offering.archived_at IS NULL
+        AND offering.kind = 'addon' AND offering.state IN ('active', 'paused') AND offering.archived_at IS NULL
       JOIN addon_offering_terms terms ON terms.offering_id = offering.id
-        AND terms.offering_kind = 'addon' AND terms.service_type IN ('quantity_service', 'person_service')
+        AND terms.offering_kind = 'addon' AND terms.service_type IN ('quantity_service', 'person_service', 'scheduled_resource')
+      LEFT JOIN LATERAL (
+        SELECT COALESCE((resource.settings->>'active')::boolean, true) AS active,
+          (resource.archived_at IS NOT NULL) AS archived
+        FROM offering_bindings binding
+        JOIN resources resource ON resource.id = binding.resource_id AND resource.kind = 'bath'
+        WHERE binding.offering_id = offering.id AND binding.role = 'primary' AND binding.archived_at IS NULL
+        LIMIT 1
+      ) bath_resource ON true
       JOIN business_calendars calendar ON calendar.id = offering.business_calendar_id
         AND calendar.archived_at IS NULL
       LEFT JOIN price_books price_book ON price_book.id = offering.active_price_book_id
         AND price_book.offering_id = offering.id AND price_book.archived_at IS NULL
       WHERE active.singleton_key = 'public'
+        AND (offering.state = 'active' OR terms.service_type = 'scheduled_resource')
+        AND (node.kind = 'addon_detail' OR (node.kind = 'resource_detail' AND terms.service_type = 'scheduled_resource'))
+        AND (terms.service_type <> 'scheduled_resource' OR bath_resource.active IS NOT NULL)
         AND ($1::uuid IS NULL OR offering.id = $1::uuid)
         AND ($2::text IS NULL OR terms.category_key = $2::text)
         AND ($3::boolean IS NULL OR terms.standalone = $3::boolean)
@@ -169,7 +184,7 @@ export class PublicAddonOfferingService {
 
   private summary(row: ProjectionRow, plans: RatePlanEntity[], rulesByPlan: Map<string, PriceRuleEntity[]>): PublicAddOnSummary {
     const content = PublicReleasePageContentSchema.safeParse(row.resolvedContent)
-    if (!content.success || content.data.kind !== "addon_detail" || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
+    if (!content.success || (content.data.kind !== "addon_detail" && !(row.serviceType === "scheduled_resource" && content.data.kind === "resource_detail")) || resolvedContentHash(row.resolvedContent) !== row.resolvedContentHash) throw this.invalidProjection()
     const pin = PublicAddOnProjectionPinSchema.parse({
       contract: PUBLIC_ADDON_PROJECTION_CONTRACT,
       offeringId: row.offeringId,
@@ -186,7 +201,7 @@ export class PublicAddonOfferingService {
       serviceType: row.serviceType,
       standalone: row.standalone,
       categoryKey: row.categoryKey,
-      quantity: {
+      quantity: row.serviceType === "scheduled_resource" ? null : {
         unit: row.serviceType === "person_service" ? "participants" : "unit",
         minimum: row.minimumQuantity,
         maximum: row.maximumQuantity,
@@ -200,7 +215,24 @@ export class PublicAddonOfferingService {
     const activeBook = row.priceBookId !== null && row.priceBookState === "active"
       && row.priceBookValidFrom !== null && row.priceBookValidFrom <= localDate
       && (row.priceBookValidToExclusive === null || localDate < row.priceBookValidToExclusive)
-    const amounts = activeBook ? plans.flatMap((plan) => [
+    const scheduledPlans = row.serviceType === "scheduled_resource" ? plans.filter((plan) =>
+      (plan.pricingBasis === "per_hour" || plan.pricingBasis === "per_slot")
+      && plan.baseAmountMinor >= 0 && Number.isSafeInteger(plan.baseAmountMinor)
+      && (plan.quantityMetric === "guests" || plan.quantityMetric === null)
+      && (plan.minimumQuantity === null || plan.minimumQuantity > 0)
+      && (plan.maximumQuantity === null || (plan.minimumQuantity !== null && plan.maximumQuantity >= plan.minimumQuantity))
+      && (rulesByPlan.get(plan.id) ?? []).length === 0,
+    ) : []
+    const scheduledTariffs = row.serviceType === "scheduled_resource" ? (activeBook ? scheduledPlans : []).sort((left, right) => left.sortOrder - right.sortOrder).map((plan) => ({
+      key: plan.key,
+      label: plan.label,
+      pricingBasis: plan.pricingBasis,
+      minimumGuests: plan.minimumQuantity,
+      maximumGuests: plan.maximumQuantity,
+      amount: { amountMinor: plan.baseAmountMinor, currency: row.currency },
+    })) : undefined
+    const displayPlans = row.serviceType === "scheduled_resource" ? scheduledPlans : plans
+    const amounts = activeBook ? displayPlans.flatMap((plan) => [
       plan.baseAmountMinor,
       ...(rulesByPlan.get(plan.id) ?? []).flatMap((rule) => rule.amountMinor === null ? [] : [rule.amountMinor]),
     ]) : []
@@ -211,17 +243,19 @@ export class PublicAddonOfferingService {
         ? { mode: "from" as const, amount: { amountMinor: uniqueAmounts[0]!, currency: row.currency } }
         : { mode: "request" as const }
     const asOf = latestDate(row.releasePublishedAt, row.releaseCreatedAt, row.offeringUpdatedAt, row.calendarUpdatedAt, row.priceBookUpdatedAt).toISOString()
+    const unavailable = row.serviceType === "scheduled_resource" && (row.offeringState !== "active" || row.resourceActive === false || row.resourceArchived === true)
     return PublicAddOnSummarySchema.parse({
       offeringId: row.offeringId,
       kind: "addon",
+      path: content.data.path,
       title: content.data.title,
       summary: content.data.summary,
       price,
-      priceBasisLabel: row.serviceType === "person_service" ? "за человека" : "за единицу",
+      priceBasisLabel: row.serviceType === "scheduled_resource" ? scheduledPlans.length ? scheduledPlans.every((plan) => plan.pricingBasis === "per_slot") ? "за сеанс" : "за час" : null : row.serviceType === "person_service" ? "за человека" : "за единицу",
       quoteAvailable: false,
-      requestAvailable: true,
+      requestAvailable: !unavailable,
       capacity: null,
-      readiness: price.mode === "request" || row.salesMode === "request_only" ? "request_only" : "ready",
+      readiness: row.resourceArchived === true ? "archived" : unavailable ? "temporarily_unavailable" : price.mode === "request" || row.salesMode === "request_only" ? "request_only" : "ready",
       timezone: row.timezone,
       currency: row.currency,
       sourceVersions: {
@@ -234,6 +268,7 @@ export class PublicAddonOfferingService {
       },
       asOf,
       terms: terms.data,
+      ...(scheduledTariffs ? { scheduledTariffs } : {}),
     })
   }
 

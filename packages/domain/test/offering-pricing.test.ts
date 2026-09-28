@@ -330,6 +330,23 @@ describe("venue price-book activation validation", () => {
 });
 
 describe("add-on price-book activation validation", () => {
+  it("accepts direct hourly guest tiers and a session price but rejects mixed bases and rules", () => {
+    const original = snapshot();
+    const first = { ...original.ratePlans[0]!, pricingBasis: "per_hour", quantityMetric: "guests" as const,
+      baseAmountMinor: 300_000, includedQuantity: null, baseExtraUnitAmountMinor: null,
+      minQuantity: 1, maxQuantity: 6, rules: [] };
+    const hourly: HousePricingSnapshot = {
+      ...original, offering: { ...original.offering, id: "sauna", kind: "addon" },
+      priceBook: { ...original.priceBook, offeringId: "sauna" }, ratePlans: [first],
+    };
+    expect(validateAddOnPricingForActivation(hourly, { from: "2027-01-01", toExclusive: "2027-01-05" }, "scheduled_resource")).toEqual([]);
+    const session: HousePricingSnapshot = { ...hourly, ratePlans: [{ ...first, pricingBasis: "per_slot", quantityMetric: null, minQuantity: null, maxQuantity: null, baseAmountMinor: 560_000 }] };
+    expect(validateAddOnPricingForActivation(session, { from: "2027-01-01", toExclusive: "2027-01-05" }, "scheduled_resource")).toEqual([]);
+    const mixed: HousePricingSnapshot = { ...hourly, ratePlans: [first, { ...first, id: "session", key: "session", isDefault: false, pricingBasis: "per_slot" }] };
+    expect(validateAddOnPricingForActivation(mixed, { from: "2027-01-01", toExclusive: "2027-01-05" }, "scheduled_resource")).toContainEqual(expect.objectContaining({ code: "RATE_PLAN_BASIS_UNSUPPORTED" }));
+    const withRule: HousePricingSnapshot = { ...hourly, ratePlans: [{ ...first, rules: [rule()] }] };
+    expect(validateAddOnPricingForActivation(withRule, { from: "2027-01-01", toExclusive: "2027-01-05" }, "scheduled_resource")).toContainEqual(expect.objectContaining({ code: "UNSUPPORTED_PRICING_DIMENSION" }));
+  });
   it("accepts only direct unit and participant pricing for the first slice", () => {
     const original = snapshot();
     const quantity: HousePricingSnapshot = {

@@ -391,10 +391,24 @@ export function validateCampgroundPricingForActivation(
 export function validateAddOnPricingForActivation(
   snapshot: HousePricingSnapshot,
   coverageWindow: HousePricingCoverageWindow,
-  serviceType: "quantity_service" | "person_service",
+  serviceType: "quantity_service" | "person_service" | "scheduled_resource",
 ): readonly HousePricingValidationIssue[] {
   const issues = validateHousePricingForActivation(snapshot, coverageWindow)
     .filter((issue) => issue.code !== "RATE_PLAN_BASIS_UNSUPPORTED");
+  if (serviceType === "scheduled_resource") {
+    const plans = snapshot.ratePlans.filter((candidate) => !candidate.archived)
+    if (plans.length > 40) issues.push({ code: "UNSUPPORTED_PRICING_DIMENSION", path: "ratePlans", message: "Для бани и чана допускается до 40 тарифных строк" })
+    const bases = new Set(plans.map((plan) => plan.pricingBasis))
+    if (bases.size > 1) issues.push({ code: "RATE_PLAN_BASIS_UNSUPPORTED", path: "ratePlans", message: "Часовые и сеансовые тарифы нельзя смешивать в одном ресурсе" })
+    for (const plan of plans) {
+      if (plan.pricingBasis !== "per_hour" && plan.pricingBasis !== "per_slot") issues.push({ code: "RATE_PLAN_BASIS_UNSUPPORTED", path: `ratePlans.${plan.id}.pricingBasis`, message: "Баня использует цену за час, чан — за сеанс" })
+      if (plan.quantityMetric !== null && plan.quantityMetric !== "guests") issues.push({ code: "RATE_PLAN_QUANTITY_UNSUPPORTED", path: `ratePlans.${plan.id}.quantityMetric`, message: "Тариф может зависеть только от числа гостей" })
+      if (plan.quantityMetric === "guests" && (plan.minQuantity === null || plan.maxQuantity === null || plan.minQuantity <= 0 || plan.maxQuantity < plan.minQuantity)) issues.push({ code: "RATE_PLAN_QUANTITY_UNSUPPORTED", path: `ratePlans.${plan.id}`, message: "Укажите нижнюю и верхнюю границу числа гостей" })
+      if (plan.quantityMetric === null && (plan.minQuantity !== null || plan.maxQuantity !== null)) issues.push({ code: "RATE_PLAN_QUANTITY_UNSUPPORTED", path: `ratePlans.${plan.id}`, message: "Лимиты гостей требуют метрики guests" })
+      if (plan.includedQuantity !== null || plan.baseExtraUnitAmountMinor !== null || plan.minDurationMinutes !== null || plan.maxDurationMinutes !== null || plan.rules.some((rule) => rule.enabled && !rule.archived)) issues.push({ code: "UNSUPPORTED_PRICING_DIMENSION", path: `ratePlans.${plan.id}`, message: "Для бани и чана используйте прямые цены по числу гостей без дополнительных правил" })
+    }
+    return deepFreeze(issues)
+  }
   const expectedBasis = serviceType === "quantity_service" ? "per_unit" : "per_person";
   const expectedMetric = serviceType === "quantity_service" ? "units" : "participants";
   for (const plan of snapshot.ratePlans.filter((candidate) => !candidate.archived)) {

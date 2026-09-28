@@ -176,7 +176,7 @@ export async function resolveHomepageCommerce(source: ContentSource, sections: A
     sectionKeys.has("houses") || calculator ? source.houses() : null,
     sectionKeys.has("programs") || sectionKeys.has("events") || calculator ? source.programs() : null,
     sectionKeys.has("venues") || calculator ? source.venues() : null,
-    calculator ? source.addons() : null,
+    calculator || sectionKeys.has("sauna-chan") ? source.addons() : null,
   ])
   for (const result of [houses, programs, venues, addons]) {
     if (result && (result.status !== "published" || result.value.releaseId !== releaseId || result.value.items.some((item) => item.sourceVersions.contentReleaseId !== releaseId))) return { status: "unavailable" }
@@ -237,7 +237,7 @@ export async function resolvePublishedRoute(source: ContentSource, path: string,
     campground = result.value
   }
   let addon: PublicAddOnSummary | null = null
-  if (page.value.kind === "addon_detail" && path.startsWith("/dopy/")) {
+  if ((page.value.kind === "addon_detail" || page.value.kind === "resource_detail") && path.startsWith("/dopy/")) {
     const dependency = page.value.dependencies.find((candidate) => candidate.type === "crm_projection" && candidate.version === "public.addon-summary.v1")
     if (!dependency) return { status: "unavailable" }
     const result = await source.addon(dependency.id)

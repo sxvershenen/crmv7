@@ -75,8 +75,8 @@ const navigation = publishedSiteSettings ? toSiteNavigation(publishedSiteSetting
 const footerNavigation = publishedSiteSettings ? toFooterNavigation(publishedSiteSettings) : undefined
 const effectiveHero = page?.hero
 const profileKind = page?.kind === "resource_detail" ? "Ресурс" : page?.kind === "program_detail" ? "Программа" : page?.kind === "event_detail" ? "Мероприятие" : null
-const resourceReadiness = house?.readiness ?? campground?.readiness ?? venue?.readiness
-const resourceRequestAvailable = previewRequested ? false : house?.requestAvailable ?? campground?.requestAvailable ?? venue?.requestAvailable ?? true
+const resourceReadiness = house?.readiness ?? campground?.readiness ?? addon?.readiness ?? venue?.readiness
+const resourceRequestAvailable = previewRequested ? false : house?.requestAvailable ?? campground?.requestAvailable ?? addon?.requestAvailable ?? venue?.requestAvailable ?? true
 const resourceStatus = resourceReadiness === "archived" ? "Архив" : resourceReadiness === "temporarily_unavailable" ? "Временно недоступно" : null
 const originalHero = effectiveHero ? toSiteHero(effectiveHero) : undefined
 const hero = originalHero && !resourceRequestAvailable ? {

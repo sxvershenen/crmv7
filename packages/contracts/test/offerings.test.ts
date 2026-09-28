@@ -905,7 +905,7 @@ describe("P4.5A offering contracts", () => {
       asOf: timestamp,
       terms: { serviceType: "quantity_service", standalone: true, categoryKey: "wellness", quantity: { unit: "unit", minimum: 1, maximum: 10, default: 1, step: 1 } },
     });
-    expect(summary.terms.quantity.unit).toBe("unit");
+    expect(summary.terms.serviceType === "quantity_service" ? summary.terms.quantity.unit : null).toBe("unit");
     expect(PublicAddOnSummarySchema.safeParse({ ...summary, internalComment: "must not leak" }).success).toBe(false);
     expect(PublicAddOnSummarySchema.safeParse({ ...summary, terms: { ...summary.terms, rawRule: "must not leak" } }).success).toBe(false);
     expect(PublicAddOnSummaryParamsSchema.parse({ offeringId: id }).offeringId).toBe(id);

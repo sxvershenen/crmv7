@@ -73,12 +73,30 @@ export const PublicAddOnTermsSchema = z.discriminatedUnion("serviceType", [
     categoryKey: AddOnCategoryKeySchema,
     quantity: PublicAddOnQuantitySchema.safeExtend({ unit: z.literal("participants"), step: z.literal(1) }).strict(),
   }).strict(),
+  z.object({
+    serviceType: z.literal("scheduled_resource"),
+    standalone: z.boolean(),
+    categoryKey: AddOnCategoryKeySchema,
+    quantity: z.null(),
+  }).strict(),
 ]);
 export type PublicAddOnTerms = z.infer<typeof PublicAddOnTermsSchema>;
 
+export const PublicScheduledTariffSchema = z.object({
+  key: z.string().min(1).max(120),
+  label: z.string().min(1).max(240),
+  pricingBasis: z.enum(["per_hour", "per_slot"]),
+  minimumGuests: z.number().int().positive().nullable(),
+  maximumGuests: z.number().int().positive().nullable(),
+  amount: NonNegativeMoneySchema,
+}).strict();
+export type PublicScheduledTariff = z.infer<typeof PublicScheduledTariffSchema>;
+
 export const PublicAddOnSummarySchema = PublicOfferingSummarySchema.safeExtend({
   kind: z.literal("addon"),
+  path: CmsPathSchema.optional(),
   terms: PublicAddOnTermsSchema,
+  scheduledTariffs: z.array(PublicScheduledTariffSchema).max(40).optional(),
 }).strict();
 export type PublicAddOnSummary = z.infer<typeof PublicAddOnSummarySchema>;
 

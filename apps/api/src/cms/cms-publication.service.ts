@@ -664,7 +664,7 @@ export class CmsPublicationService {
   ): Promise<ReleaseDependencyRef | null> {
     const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: link.sourceId })
     if (!offering || offering.kind !== "addon" || offering.state !== "active" || offering.archivedAt !== null) return null
-    if (candidate.node.kind !== "addon_detail" || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
+    if ((candidate.node.kind !== "addon_detail" && candidate.node.kind !== "resource_detail") || candidate.node.status !== "active" || candidate.node.archivedAt !== null) return null
     if (!canonicalPublicPath(candidate.revision.path).startsWith("/dopy/")) return null
     const profile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({
       kind: "catalog_offering", entityId: offering.id, nodeId: candidate.node.id,
@@ -673,11 +673,21 @@ export class CmsPublicationService {
     const relations = candidate.revision.relations.filter((relation) => relation.kind === "catalog_offering")
     if (relations.length !== 1 || relations[0]?.entityId !== offering.id) return null
     const terms = await manager.getRepository(AddonOfferingTermsEntity).findOneBy({ offeringId: offering.id })
+    if (candidate.node.kind === "resource_detail" && terms?.serviceType !== "scheduled_resource") return null
+    if (terms?.serviceType === "scheduled_resource") {
+      const bindings = await manager.query(`
+        SELECT resource.id
+        FROM offering_bindings binding
+        JOIN resources resource ON resource.id = binding.resource_id AND resource.kind = 'bath'
+        WHERE binding.offering_id = $1 AND binding.role = 'primary' AND binding.archived_at IS NULL
+      `, [offering.id]) as Array<{ id: string }>
+      if (bindings.length !== 1) return null
+    }
     const publicTerms = terms ? PublicAddOnTermsSchema.safeParse({
       serviceType: terms.serviceType,
       standalone: terms.standalone,
       categoryKey: terms.categoryKey,
-      quantity: {
+      quantity: terms.serviceType === "scheduled_resource" ? null : {
         unit: terms.serviceType === "person_service" ? "participants" : "unit",
         minimum: terms.minimumQuantity,
         maximum: terms.maximumQuantity,
@@ -898,7 +908,7 @@ export function materializeRelease(candidates: Candidate[], siteDefaults?: { her
       issues.push(issue("CMS_EVENT_SERVICE_PUBLIC_PROJECTION_REQUIRED", "event_detail нельзя публиковать без явной event-service CatalogOffering и safe public projection", candidate.revision.path))
     } else if (candidate.sourceKind === blockedCatalogSourceKind) {
       const safeProjection = candidate.safeProjectionDependency?.type === "crm_projection"
-        && ((candidate.node.kind === "addon_detail" && candidate.safeProjectionDependency.version === "public.addon-summary.v1")
+        && (((candidate.node.kind === "addon_detail" || candidate.node.kind === "resource_detail") && candidate.safeProjectionDependency.version === "public.addon-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.house-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.campground-summary.v1")
           || (candidate.node.kind === "resource_detail" && candidate.safeProjectionDependency.version === "public.venue-summary.v1")

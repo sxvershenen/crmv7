@@ -39,6 +39,7 @@ import { AnalyticsConversionFacts1788205600000 } from "./migrations/178820560000
 import { AnalyticsDailyAggregates1788206000000 } from "./migrations/1788206000000-analytics-daily-aggregates.js"
 import { UserInvitations1788206400000 } from "./migrations/1788206400000-user-invitations.js"
 import { BathPreparationAfterSession1788206800000 } from "./migrations/1788206800000-bath-preparation-after-session.js"
+import { ScheduledResourceEditorialLink1788207200000 } from "./migrations/1788207200000-scheduled-resource-editorial-link.js"
 
 /** Canonical ordered migration registry shared by the CLI, seed and API runtime. */
 export const databaseMigrations = [
@@ -83,4 +84,5 @@ export const databaseMigrations = [
   AnalyticsDailyAggregates1788206000000,
   UserInvitations1788206400000,
   BathPreparationAfterSession1788206800000,
+  ScheduledResourceEditorialLink1788207200000,
 ]

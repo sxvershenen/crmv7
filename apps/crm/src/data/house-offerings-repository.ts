@@ -21,11 +21,13 @@ import {
   OfferingPricingMutationResultSchema,
   ResourcePrimaryStayOfferingLookupResponseSchema,
   ResourcePrimaryVenueOfferingLookupResponseSchema,
+  ResourcePrimaryScheduledOfferingLookupResponseSchema,
   ResourceStayOfferingQuotePreviewBodySchema,
   ResourceStayOfferingCreateBodySchema,
   ResourceStayOfferingCreateResultSchema,
   ResourceVenueOfferingCreateBodySchema,
   ResourceVenueOfferingCreateResultSchema,
+  ResourceScheduledOfferingCreateResultSchema,
   VenueOfferingListQuerySchema,
   VenueOfferingListResponseSchema,
   OfferingAddOnAssignmentsReplaceBodySchema,
@@ -56,6 +58,7 @@ import {
   type OfferingCustomAddOnCreateBody,
   type ResourceStayOfferingCreateBody,
   type ResourceVenueOfferingCreateBody,
+  type ResourceScheduledOfferingCreateBody,
   type VenueOfferingListQuery,
   type ResourceStayOfferingQuotePreviewBody,
   type StayOfferingListQuery,
@@ -173,6 +176,14 @@ export class ApiHouseOfferingGateway implements OfferingEditorGateway {
   createVenueOffering(resourceId: string, input: ResourceVenueOfferingCreateBody) {
     const body = ResourceVenueOfferingCreateBodySchema.parse(input)
     return this.client.post(`/offerings/venues/by-resource/${encodeURIComponent(resourceId)}`, body, ResourceVenueOfferingCreateResultSchema)
+  }
+
+  resolvePrimaryScheduledOffering(resourceId: string) {
+    return this.client.get(`/offerings/scheduled/by-resource/${encodeURIComponent(resourceId)}`, ResourcePrimaryScheduledOfferingLookupResponseSchema)
+  }
+
+  createScheduledOffering(resourceId: string, input: ResourceScheduledOfferingCreateBody) {
+    return this.client.post(`/offerings/scheduled/by-resource/${encodeURIComponent(resourceId)}`, input, ResourceScheduledOfferingCreateResultSchema)
   }
 
   previewResourceStayQuote(resourceId: string, input: ResourceStayOfferingQuotePreviewBody) {

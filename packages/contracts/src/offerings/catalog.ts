@@ -328,6 +328,25 @@ export type ResourceVenueOfferingCreateBody = z.infer<typeof ResourceVenueOfferi
 export const ResourceVenueOfferingCreateResultSchema = ResourcePrimaryVenueOfferingSummarySchema;
 export type ResourceVenueOfferingCreateResult = z.infer<typeof ResourceVenueOfferingCreateResultSchema>;
 
+export const ResourcePrimaryScheduledOfferingSummarySchema = z.object({
+  offeringId: IdSchema,
+  kind: z.literal("addon"),
+  code: z.string().min(1).max(120),
+  operationalName: z.string().min(1).max(500),
+  state: CatalogOfferingStateSchema,
+}).strict();
+export type ResourcePrimaryScheduledOfferingSummary = z.infer<typeof ResourcePrimaryScheduledOfferingSummarySchema>;
+export const ResourcePrimaryScheduledOfferingLookupResponseSchema = z.discriminatedUnion("resolution", [
+  z.object({ resolution: z.literal("none") }).strict(),
+  z.object({ resolution: z.literal("linked"), offering: ResourcePrimaryScheduledOfferingSummarySchema }).strict(),
+  z.object({ resolution: z.literal("ambiguous"), candidates: z.array(ResourcePrimaryScheduledOfferingSummarySchema).min(2).max(100) }).strict(),
+]);
+export type ResourcePrimaryScheduledOfferingLookupResponse = z.infer<typeof ResourcePrimaryScheduledOfferingLookupResponseSchema>;
+export const ResourceScheduledOfferingCreateBodySchema = ResourceStayOfferingCreateBodySchema;
+export type ResourceScheduledOfferingCreateBody = z.infer<typeof ResourceScheduledOfferingCreateBodySchema>;
+export const ResourceScheduledOfferingCreateResultSchema = ResourcePrimaryScheduledOfferingSummarySchema;
+export type ResourceScheduledOfferingCreateResult = z.infer<typeof ResourceScheduledOfferingCreateResultSchema>;
+
 /**
  * Read-only selector for typed fulfillment targets. The first delivery slice
  * intentionally supports only CRM Resources; adding another target type must

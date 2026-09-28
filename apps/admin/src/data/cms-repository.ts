@@ -192,8 +192,8 @@ export class FixtureCmsRepository implements CmsRepository {
   async getPromotions() { await pause(); return clone(promotionFixtures) }
   async getHomeOfferingChoices(kind: CmsHomeOfferingKind): Promise<CmsHomeOfferingChoice[]> {
     await pause()
-    const labels = { house: ["Сосновый домик", "Домик у озера"], program: ["Лесная прогулка", "Семейный мастер-класс"], venue: ["Большая беседка", "Площадка у воды"] }
-    const prefixes = { house: "1", program: "2", venue: "3" }
+    const labels = { house: ["Сосновый домик", "Домик у озера"], program: ["Лесная прогулка", "Семейный мастер-класс"], venue: ["Большая беседка", "Площадка у воды"], scheduled_resource: ["Русская баня", "Банный чан"] }
+    const prefixes = { house: "1", program: "2", venue: "3", scheduled_resource: "4" }
     return labels[kind].map((title, index) => ({ offeringId: `${prefixes[kind]}000000${index + 1}-0000-4000-8000-000000000001`, title, state: index ? "draft" as const : "active" as const }))
   }
   async uploadMedia(file: File) {

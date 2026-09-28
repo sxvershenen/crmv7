@@ -30,12 +30,13 @@ import {
   type IconBoxVariant,
 } from "@crm/ui"
 import { CampgroundOfferingWorkspace, HouseOfferingWorkspace, VenueOfferingWorkspace, type OfferingEditorGateway } from "@crm/offering-editor"
-import type { InternalOfferingEditor, ResourcePrimaryStayOfferingLookupResponse, ResourceStayOfferingCreateBody, ResourceStayOfferingCreateResult, ResourcePrimaryVenueOfferingLookupResponse, ResourceVenueOfferingCreateBody, ResourceVenueOfferingCreateResult } from "@crm/contracts"
+import type { InternalOfferingEditor, ResourcePrimaryStayOfferingLookupResponse, ResourceStayOfferingCreateBody, ResourceStayOfferingCreateResult, ResourcePrimaryVenueOfferingLookupResponse, ResourceVenueOfferingCreateBody, ResourceVenueOfferingCreateResult, ResourcePrimaryScheduledOfferingLookupResponse, ResourceScheduledOfferingCreateBody, ResourceScheduledOfferingCreateResult } from "@crm/contracts"
 
 import { useEditorLayoutChrome } from "@app/app/editor-layout-context"
 import { EditorPreviewHistory } from "@app/components/shared/editor-preview-tabs"
 import { formatResourceDate } from "@app/components/resources/resource-date"
 import { ResourceIdentityIcon } from "@app/components/resources/resource-presentation"
+import { ScheduledResourcePricing } from "@app/components/resources/scheduled-resource-pricing"
 import { resourceColorOptions, resourceIconOptions } from "@app/components/resources/resource-presentation-data"
 import { createEmptyResource, resourceRepository, type ResourceEditorRepository } from "@app/data/resources-repository"
 import { houseOfferingGateway } from "@app/data/house-offerings-repository"
@@ -65,6 +66,8 @@ export type ResourceOfferingLookupGateway = {
   createStayOffering(resourceId: string, input: ResourceStayOfferingCreateBody): Promise<ResourceStayOfferingCreateResult>
   resolvePrimaryVenueOffering(resourceId: string): Promise<ResourcePrimaryVenueOfferingLookupResponse>
   createVenueOffering(resourceId: string, input: ResourceVenueOfferingCreateBody): Promise<ResourceVenueOfferingCreateResult>
+  resolvePrimaryScheduledOffering(resourceId: string): Promise<ResourcePrimaryScheduledOfferingLookupResponse>
+  createScheduledOffering(resourceId: string, input: ResourceScheduledOfferingCreateBody): Promise<ResourceScheduledOfferingCreateResult>
 }
 
 export function ResourceEditorPage({ repository = resourceRepository, offeringGateway = houseOfferingGateway }: { repository?: ResourceEditorRepository; offeringGateway?: OfferingEditorGateway & ResourceOfferingLookupGateway }) {
@@ -83,7 +86,7 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
   const [archiveError, setArchiveError] = useState<string | null>(null)
 
   const validKind = isResourceKind(kind) ? kind : null
-  const supportsOffering = validKind === "houses" || validKind === "camping" || validKind === "venues"
+  const supportsOffering = validKind === "houses" || validKind === "camping" || validKind === "venues" || validKind === "bath"
   const tab = requestedTab === "offering" && !supportsOffering ? "main" : requestedTab
   const tabItems = supportsOffering ? [...baseTabItems, offeringTabItem] : baseTabItems
   const offeringNavigationGuard = useRef<(() => boolean) | null>(null)
@@ -122,10 +125,11 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
       setSaveState("saved")
       if (!wasNew || saved.id === "new") return
 
-      const createsSaleDossier = saved.kind === "houses" || saved.kind === "camping" || saved.kind === "venues"
+      const createsSaleDossier = saved.kind === "houses" || saved.kind === "camping" || saved.kind === "venues" || saved.kind === "bath"
       if (createsSaleDossier) {
         try {
           if (saved.kind === "venues") await offeringGateway.createVenueOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
+          else if (saved.kind === "bath") await offeringGateway.createScheduledOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
           else await offeringGateway.createStayOffering(saved.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })
         } catch (reason) {
           setSetupError(reason instanceof Error ? reason.message : "Ресурс сохранён, но цену и страницу не удалось подготовить.")
@@ -184,8 +188,35 @@ export function ResourceEditorPage({ repository = resourceRepository, offeringGa
 }
 
 function ResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
+  if (resource.kind === "bath") return <BathResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
   if (resource.kind === "venues") return <VenueResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
   return <StayResourceOfferingTab gateway={gateway} onNavigationGuardChange={onNavigationGuardChange} resource={resource} />
+}
+
+function BathResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {
+  const [lookup, setLookup] = useState<ResourcePrimaryScheduledOfferingLookupResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const load = useCallback(async () => {
+    if (resource.id === "new") return
+    setLookup(null); setError(null)
+    try { setLookup(await gateway.resolvePrimaryScheduledOffering(resource.id)) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось найти цену ресурса") }
+  }, [gateway, resource.id])
+  useEffect(() => { void load() }, [load])
+  const create = async () => {
+    if (creating) return
+    setCreating(true); setError(null)
+    try { const offering = await gateway.createScheduledOffering(resource.id, { operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() }); setLookup({ resolution: "linked", offering }) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось подготовить цену и страницу") }
+    finally { setCreating(false) }
+  }
+  if (resource.id === "new") return <PageState icon={IconHome} title="Сначала сохраните ресурс">При первом сохранении появятся тарифы и черновик страницы в CMS.</PageState>
+  if (!lookup && !error) return <ResourceEditorLoading />
+  if (!lookup) return <PageState icon={IconAlertTriangle} title="Цена и страница не загрузились" tone="danger" actionLabel="Повторить" onAction={() => void load()}>{error}</PageState>
+  if (lookup.resolution === "none") return <PageState icon={IconLinkOff} title="Цена и страница ещё не настроены" {...(!resource.archived && resource.permissions.canEdit ? { actionLabel: creating ? "Подготавливаем…" : "Подготовить", onAction: () => void create() } : {})}>Система подготовит тарифы и свяжет уже созданный CMS-черновик.{error && <span role="alert">{error}</span>}</PageState>
+  if (lookup.resolution === "ambiguous") return <PageState icon={IconAlertTriangle} title="Нужна проверка связей" tone="warning">Для ресурса найдено несколько условий продажи. Посоветуйтесь с техническим администратором.</PageState>
+  return <ScheduledResourcePricing gateway={gateway} offeringId={lookup.offering.offeringId} resourceName={resource.name} readOnly={resource.archived || !resource.permissions.canEdit} onNavigationGuardChange={onNavigationGuardChange} />
 }
 
 function StayResourceOfferingTab({ gateway, onNavigationGuardChange, resource }: { gateway: OfferingEditorGateway & ResourceOfferingLookupGateway; onNavigationGuardChange: (guard: (() => boolean) | null) => void; resource: ResourceEditorRecord }) {

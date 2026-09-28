@@ -158,10 +158,10 @@ export function assignmentDto(row: OfferingAddonAssignmentEntity) {
     }
   }
 
-export function resourcePrimaryOfferingSummary(offering: CatalogOfferingEntity, forcedKind?: "house" | "campground" | "venue") {
+export function resourcePrimaryOfferingSummary(offering: CatalogOfferingEntity, forcedKind?: "house" | "campground" | "venue" | "addon") {
     return {
       offeringId: offering.id,
-      kind: (forcedKind ?? offering.kind) as "house" | "campground" | "venue",
+      kind: (forcedKind ?? offering.kind) as "house" | "campground" | "venue" | "addon",
       code: offering.code,
       operationalName: offering.operationalName,
       state: offering.state as "draft" | "active" | "paused" | "archived",

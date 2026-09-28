@@ -25,7 +25,7 @@ export function demoId(key: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }
 const markerId = demoId("completion")
-export const DEMO_PLAN = { customers: 4, leads: 6, resources: 5, resourceGroups: 1, offerings: 8, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, priceBooks: 8, newLoginAccounts: 0, automaticPublications: 0 }
+export const DEMO_PLAN = { customers: 4, leads: 6, resources: 6, resourceGroups: 1, offerings: 10, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, priceBooks: 10, newLoginAccounts: 0, automaticPublications: 0 }
 
 export function assertDemoEnvironment(environment: NodeJS.ProcessEnv) {
   if (environment.APP_ENV !== "development" || environment.NODE_ENV === "production") throw new Error("seed:demo requires explicit APP_ENV=development and a nonproduction runtime")
@@ -121,14 +121,17 @@ async function createScenario(ds: DataSource, user: UserEntity, calendar: Busine
     { suffix: "PITCH", kind: "campground_own_tent_area", name: "Места для палаток", capacityMode: "shared", capacityTotal: 10 },
     { suffix: "BATH", kind: "bath", name: "Баня Кедр", capacityMode: "fixed", capacityTotal: 15 },
     { suffix: "VENUE", kind: "venue", name: "Поляна для праздника", capacityMode: "fixed", capacityTotal: 40 },
-  ]) resourceRows.push(keep("resources", await resources.create(C.ResourceCreateSchema.parse({ code: `${DEMO_NAMESPACE}-${item.suffix}`, kind: item.kind, name: `${DEMO_NAMESPACE} · ${item.name}`, capacityMode: item.capacityMode, capacityTotal: item.capacityTotal, settings: { active: true, demoNamespace: DEMO_NAMESPACE, description: item.kind === "bath" ? "Демо: public scheduled_resource ещё не поддерживается." : "Синтетический ресурс локальной CRM.", ...(item.kind === "venue" ? { spaceType: "outdoor" } : {}) } }), actor, DEMO_NAMESPACE)))
+    { suffix: "CHAN", kind: "bath", name: "Банный чан", capacityMode: "fixed", capacityTotal: 6 },
+  ]) resourceRows.push(keep("resources", await resources.create(C.ResourceCreateSchema.parse({ code: `${DEMO_NAMESPACE}-${item.suffix}`, kind: item.kind, name: `${DEMO_NAMESPACE} · ${item.name}`, capacityMode: item.capacityMode, capacityTotal: item.capacityTotal, settings: { active: true, demoNamespace: DEMO_NAMESPACE, description: item.kind === "bath" ? "Синтетический ресурс бани или чана для проверки тарифов и страницы." : "Синтетический ресурс локальной CRM.", ...(item.kind === "venue" ? { spaceType: "outdoor" } : {}) } }), actor, DEMO_NAMESPACE)))
   const attribution = { createdBy: actor.id, updatedBy: actor.id, archivedAt: null }
   const group = keep("resourceGroups", await ds.manager.save(ds.manager.create(ResourceGroupEntity, { id: demoId("campgroup"), code: `${DEMO_NAMESPACE}-CAMP`, name: `${DEMO_NAMESPACE} · Кемпинг`, kind: "campground", state: "active", ...attribution })))
   for (const [index, role] of ["owned_tent", "own_tent_area"].entries()) await ds.manager.insert(ResourceGroupMemberEntity, { id: demoId(`campmember-${index}`), groupId: group.id, resourceId: resourceRows[index + 1]!.id, role, sortOrder: index, ...attribution })
-  for (const index of [0, 1, 2, 4]) {
+  const scheduledOfferingIds = new Map<string, "sauna" | "chan">()
+  for (const index of [0, 1, 2, 3, 4, 5]) {
     const resource = resourceRows[index]!
-    const result = index === 4 ? await offerings.createVenueOfferingFromResource(resource.id, operation(`offering-${index}`), context) : await offerings.createStayOfferingFromResource(resource.id, operation(`offering-${index}`), context)
+    const result = index === 4 ? await offerings.createVenueOfferingFromResource(resource.id, operation(`offering-${index}`), context) : index === 3 || index === 5 ? await offerings.createScheduledOfferingFromResource(resource.id, operation(`offering-${index}`), context) : await offerings.createStayOfferingFromResource(resource.id, operation(`offering-${index}`), context)
     ;(ids.offerings ??= []).push(result.offeringId)
+    if (index === 3 || index === 5) scheduledOfferingIds.set(result.offeringId, index === 3 ? "sauna" : "chan")
   }
   for (const [index, categoryKey] of ["comfort", "catering"].entries()) {
     const result = await offerings.createAddOn(C.AddOnOfferingCreateBodySchema.parse({ ...operation(`addon-${index}`), code: `${DEMO_NAMESPACE}-ADDON-${index + 1}`, operationalName: `${DEMO_NAMESPACE} · ${index ? "Пикник-сет" : "Комплект для отдыха"}`, internalComment: "Синтетическое дополнение", businessCalendarId: calendar.id, timezone: calendar.timezone, standalone: true, terms: { serviceType: "quantity_service", categoryKey, applicableOfferingKinds: ["house", "campground", "venue"], quantity: { metric: "units", min: 1, max: 10, default: 1, step: 1 } } }), context)
@@ -163,7 +166,7 @@ async function createScenario(ds: DataSource, user: UserEntity, calendar: Busine
     const offering = await ds.manager.findOneByOrFail(CatalogOfferingEntity, { id: offeringId })
     const pricingBasis = offering.kind === "program" ? "per_person" : offering.kind === "addon" ? "per_unit" : offering.kind === "venue" ? "per_hour" : offering.kind === "event_service" ? "flat_package" : "per_night"
     const quantityMetric = offering.kind === "program" ? "participants" : offering.kind === "addon" || index === 2 ? "units" : offering.kind === "venue" || offering.kind === "event_service" ? "guests" : null
-    const result = await offerings.createDraft(offeringId, C.HousePriceBookDraftCreateBodySchema.parse({ ...operation(`pricing-${index}`), expectedPricingVersion: offering.pricingVersion, name: `${DEMO_NAMESPACE} · Демо-тариф`, validFrom: day(0, 0).slice(0, 10), validToExclusive: day(60, 0).slice(0, 10), changeReason: "Демо-черновик. Активация требует проверки условий.", ratePlans: [{ key: "demo_standard", label: "Демо · Базовый", pricingBasis, quantityMetric, baseAmount: offering.kind === "house" ? 800000 : offering.kind === "program" ? 150000 : offering.kind === "event_service" ? 1800000 : 200000, includedQuantity: offering.kind === "venue" ? 40 : offering.kind === "event_service" ? 20 : null, baseExtraUnitAmount: offering.kind === "venue" ? 0 : offering.kind === "event_service" ? 50000 : null, minQuantity: null, maxQuantity: null, minDurationMinutes: null, maxDurationMinutes: null, isDefault: true, displayOrder: 0 }] }), context)
+    const result = await offerings.createDraft(offeringId, C.HousePriceBookDraftCreateBodySchema.parse({ ...operation(`pricing-${index}`), expectedPricingVersion: offering.pricingVersion, name: `${DEMO_NAMESPACE} · Демо-тариф`, validFrom: day(0, 0).slice(0, 10), validToExclusive: day(60, 0).slice(0, 10), changeReason: "Демо-черновик. Активация требует проверки условий.", ratePlans: scheduledOfferingIds.has(offeringId) ? demoScheduledTariffs(scheduledOfferingIds.get(offeringId)!) : [{ key: "demo_standard", label: "Демо · Базовый", pricingBasis, quantityMetric, baseAmount: offering.kind === "house" ? 800000 : offering.kind === "program" ? 150000 : offering.kind === "event_service" ? 1800000 : 200000, includedQuantity: offering.kind === "venue" ? 40 : offering.kind === "event_service" ? 20 : null, baseExtraUnitAmount: offering.kind === "venue" ? 0 : offering.kind === "event_service" ? 50000 : null, minQuantity: null, maxQuantity: null, minDurationMinutes: null, maxDurationMinutes: null, isDefault: true, displayOrder: 0 }] }), context)
     keep("priceBooks", result.priceBook)
   }
   const links = await ds.manager.find(CmsSourceLinkEntity, { where: ids.offerings!.map((sourceId) => ({ sourceKind: "catalog_offering", sourceId })) })
@@ -172,4 +175,12 @@ async function createScenario(ds: DataSource, user: UserEntity, calendar: Busine
   const sourceLinks = await ds.manager.find(CmsSourceLinkEntity, { where: sourceGroups.flatMap(([sourceKind, group]) => ids[group]!.map((sourceId) => ({ sourceKind, sourceId }))) })
   ids.cmsSourceNodes = [...new Set(sourceLinks.map((link) => link.nodeId))]
   return { namespace: DEMO_NAMESPACE, anchorDate: now.toISOString(), ids, counts: Object.fromEntries(Object.entries(ids).map(([key, values]) => [key, values.length])) }
+}
+
+function demoScheduledTariffs(kind: "sauna" | "chan"): C.RatePlanDraft[] {
+  const row = (key: string, label: string, amount: number, min: number | null, max: number | null, order: number) => C.RatePlanDraftSchema.parse({ key, label, pricingBasis: kind === "sauna" ? "per_hour" : "per_slot", quantityMetric: min === null ? null : "guests", baseAmount: amount * 100, includedQuantity: null, baseExtraUnitAmount: null, minQuantity: min, maxQuantity: max, minDurationMinutes: null, maxDurationMinutes: null, isDefault: order === 0, displayOrder: order, rules: [] })
+  return kind === "chan" ? [row("pine_chan", "Чан с хвойным наполнением", 5600, null, null, 0)] : [
+    row("standard_6", "Стандарт", 3000, 1, 6, 0), row("standard_10", "Стандарт", 3500, 7, 10, 1), row("standard_15", "Стандарт", 4000, 11, 15, 2),
+    row("all_inclusive_6", "Всё включено", 6000, 1, 6, 3), row("all_inclusive_10", "Всё включено", 7000, 7, 10, 4), row("all_inclusive_15", "Всё включено", 8000, 11, 15, 5),
+  ]
 }

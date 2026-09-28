@@ -3,12 +3,14 @@ import { URL } from "node:url"
 
 const id = "11111111-1111-4111-8111-111111111111"
 const secondHouseId = "11111111-1111-4111-8111-111111111112"
+const bathId = "11111111-1111-4111-8111-111111111113"
 const releaseId = "22222222-2222-4222-8222-222222222222"
 const nextReleaseId = "33333333-3333-4333-8333-333333333333"
 const asOf = "2026-09-10T10:00:00.000Z"
 const definition = { id, entityKind: "resource", filters: [], sorts: [], defaultSortId: null, pageSize: 20 }
 let scenario = "published"
 let houseAmountMinor = 650000
+let bathAmountMinor = 300000
 
 createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:4398")
@@ -20,9 +22,11 @@ createServer(async (request, response) => {
   if (url.pathname === "/__scenario" && request.method === "POST") {
     scenario = url.searchParams.get("name")
     houseAmountMinor = 650000
+    bathAmountMinor = 300000
     return send({ scenario })
   }
   if (url.pathname === "/__house-price" && request.method === "POST") { houseAmountMinor = Number(url.searchParams.get("amountMinor")); return send({ houseAmountMinor, releaseId }) }
+  if (url.pathname === "/__bath-price" && request.method === "POST") { bathAmountMinor = Number(url.searchParams.get("amountMinor")); return send({ bathAmountMinor, releaseId }) }
   if (!url.pathname.startsWith("/api/public/v1/")) return send({ code: "NOT_FOUND" }, 404)
   if (scenario === "outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
   if (scenario === "timeout") return // Intentionally wait for the caller's abort.
@@ -334,6 +338,14 @@ createServer(async (request, response) => {
   }
   if (url.pathname.endsWith(`/offerings/addons/${id}`) || url.pathname.endsWith("/offerings/addons")) {
     const isList = url.pathname.endsWith("/offerings/addons")
+    if (isList && scenario === "commerce-sauna-priced") return send({ items: [{
+      offeringId: bathId, kind: "addon", path: "/dopy/sauna", title: "Баня из CMS", summary: "Парная",
+      price: { mode: "from", amount: { amountMinor: bathAmountMinor, currency: "RUB" } }, priceBasisLabel: "за час",
+      quoteAvailable: false, requestAvailable: true, capacity: null, readiness: "request_only", timezone: "Europe/Moscow", currency: "RUB",
+      sourceVersions: { offering: 3, pricing: 4, priceBook: 2, calendar: 2, contentReleaseId: releaseId, profileRevisionId: id }, asOf,
+      terms: { serviceType: "scheduled_resource", standalone: true, categoryKey: "wellness", quantity: null },
+      scheduledTariffs: [{ key: "standard_6", label: "Стандарт", pricingBasis: "per_hour", minimumGuests: 1, maximumGuests: 6, amount: { amountMinor: bathAmountMinor, currency: "RUB" } }],
+    }], nextCursor: null, releaseId, asOf })
     if (isList && scenario === "commerce-outage") return send({ code: "UNAVAILABLE" }, 503)
     if (scenario === "addon-missing") return send({ code: "NOT_FOUND" }, 404)
     if (scenario === "addon-outage") return send({ code: "UNAVAILABLE", message: "PRIVATE_BACKEND_DETAIL" }, 503)
@@ -443,6 +455,9 @@ createServer(async (request, response) => {
         { id: "photo-two", title: "Второе фото из CMS", description: "", imageUrl, imageAssetId: id },
       ]
     }
+    if (scenario === "commerce-sauna-priced") homepageConfigs["sauna-chan"].cards = [
+      { id: "sauna", title: "Баня из редактора", description: "Парная", imageUrl: "", selectedOfferingIds: [bathId] },
+    ]
     if (scenario === "review-video") {
       const imageUrl = `/api/public/v1/media/${id}/${releaseId}`
       homepageConfigs.reviews.cards = [

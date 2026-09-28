@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { CatalogOfferingEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity } from "@crm/db"
+import { AddonOfferingTermsEntity, CatalogOfferingEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity } from "@crm/db"
 import { ensureCatalogOfferingEditorialDraft, ensureCmsSourceDraft, inspectLegacyCatalogOfferingPromotion, suggestedCmsSlug } from "./cms-source-draft.js"
 
 function newResourceDraftManager(occupiedPaths: string[] = []) {
@@ -47,7 +47,7 @@ describe("CRM resource page draft", () => {
   })
 })
 
-function fixture(kind: "house" | "campground" | "venue", candidates = ["offering"], primary = [{ resourceId: "resource" }], affected = 1, legacyPresent = true) {
+function fixture(kind: "house" | "campground" | "venue" | "addon", candidates = ["offering"], primary = [{ resourceId: "resource" }], affected = 1, legacyPresent = true) {
   const offering = { id: "offering", kind, version: 7, archivedAt: null }
   const link = { id: "link", nodeId: "node", sourceKind: "resource", sourceId: "resource", sourceVersion: 2 }
   let profile: Record<string, unknown> | null = null
@@ -57,7 +57,7 @@ function fixture(kind: "house" | "campground" | "venue", candidates = ["offering
   const builder = { update: vi.fn((entity) => { target = entity; return builder }), set: vi.fn((value) => { patch = value; return builder }), where: vi.fn().mockReturnThis(), execute: vi.fn(async () => { if (affected && target === CmsSourceLinkEntity) Object.assign(link, patch); return { affected } }) }
   const manager = {
     getRepository: (entity: unknown) => ({
-      findOneBy: async (query: Record<string, string>) => entity === CatalogOfferingEntity ? offering : entity === CmsNodeEntity ? { id: "node", kind: "resource_detail" } : entity === CmsPublicProfileEntity ? profile : entity === CmsSourceLinkEntity && query.sourceKind === link.sourceKind && query.sourceId === link.sourceId && (legacyPresent || query.sourceKind !== "resource") ? link : null,
+      findOneBy: async (query: Record<string, string>) => entity === CatalogOfferingEntity ? offering : entity === AddonOfferingTermsEntity ? { serviceType: "scheduled_resource" } : entity === CmsNodeEntity ? { id: "node", kind: "resource_detail" } : entity === CmsPublicProfileEntity ? profile : entity === CmsSourceLinkEntity && query.sourceKind === link.sourceKind && query.sourceId === link.sourceId && (legacyPresent || query.sourceKind !== "resource") ? link : null,
       findOneByOrFail: async () => link,
       findOne: async () => entity === CmsNodeRevisionEntity ? revision : null,
       update: vi.fn(async (_where: unknown, patch: Record<string, unknown>) => { if (entity === CmsNodeRevisionEntity) Object.assign(revision, patch); return { affected: 1 } }),
@@ -84,7 +84,7 @@ describe("canonical resource offering CMS source", () => {
     expect(manager.save).toHaveBeenCalledTimes(saves)
   })
 
-  it.each(["house", "campground", "venue"] as const)("promotes the same %s page, preserves authored fields and replays without duplicates", async (kind) => {
+  it.each(["house", "campground", "venue", "addon"] as const)("promotes the same %s page, preserves authored fields and replays without duplicates", async (kind) => {
     const { manager, link, builder, getRevision, getProfile } = fixture(kind)
     expect(await ensureCatalogOfferingEditorialDraft(manager as never, input)).toMatchObject({ status: "promoted", link: { id: "link", nodeId: "node", sourceKind: "catalog_offering", sourceId: "offering", sourceVersion: 7 } })
     expect(manager.query).toHaveBeenLastCalledWith(expect.stringContaining("offering.kind = $2"), ["resource", kind])
