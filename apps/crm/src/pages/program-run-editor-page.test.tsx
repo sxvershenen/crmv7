@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom"
 import { describe, expect, it } from "vitest"
@@ -103,5 +103,14 @@ describe("ProgramRunEditorPage", () => {
     renderEditor("/programs/runs/new")
     expect(await screen.findByDisplayValue("Семейный день в лесу")).toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "Статус проведения" })).toHaveTextContent("Черновик")
+  })
+
+  it("opens the created run after saving", async () => {
+    const user = userEvent.setup()
+    renderEditor("/programs/runs/new")
+    await screen.findByDisplayValue("Семейный день в лесу")
+    await user.click(screen.getByRole("button", { name: "Сохранить" }))
+    await waitFor(() => expect(screen.getByLabelText("Текущий URL")).not.toHaveTextContent("/programs/runs/new"))
+    expect(screen.getByText("Сохранено")).toBeInTheDocument()
   })
 })

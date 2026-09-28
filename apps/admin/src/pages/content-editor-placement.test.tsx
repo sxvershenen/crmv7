@@ -53,4 +53,13 @@ describe("content editor route placement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Разместить в /domiki/" }))
     expect(update).toHaveBeenCalledWith({ url: "/domiki/legacy-house" })
   })
+
+  it("offers a canonical program route for an imported CRM draft", () => {
+    const update = vi.fn()
+    const draft = { ...editorFixtures["house-lesnoy"]!, id: "legacy-program", importedFromCrm: true, slug: "legacy-program", url: "/drafts/programmy/legacy-program", parentNodeId: null, hasPublishedRevision: false }
+    render(<EditorTabContent device="desktop" draft={draft} editable kind="profile" nodes={nodeFixtures} tab="content" update={update} updateSection={noopSection} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Разместить в /programmy/" }))
+    expect(update).toHaveBeenCalledWith({ url: "/programmy/legacy-program" })
+  })
 })

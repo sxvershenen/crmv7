@@ -323,8 +323,10 @@ export function ProgramRunEditorPage({
     if (!draft) return;
     setSaveState("saving");
     try {
-      await repository.saveRun(draft);
+      const saved = await repository.saveRun(draft);
+      setDraft(saved);
       setSaveState("saved");
+      if (draft.id === "new" && saved.id !== "new") navigate(`/programs/runs/${saved.id}`, { replace: true });
     } catch {
       setSaveState("conflict");
     }

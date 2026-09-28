@@ -326,7 +326,7 @@ export function ProgramTemplateEditorPage({
   const published = draft?.published;
   const statusControl = useMemo(
     () =>
-      published === undefined || prepared || draft?.capabilities?.canChangeStatus === false || draft?.capabilities?.canEdit === false ? undefined : (
+      published === undefined || draft?.capabilities?.canChangeStatus === false || draft?.capabilities?.canEdit === false ? undefined : (
         <FilterSelect
           className="w-28 max-w-28 sm:w-36 sm:max-w-36"
           label="Публикация программы"
@@ -335,7 +335,7 @@ export function ProgramTemplateEditorPage({
           value={published ? "published" : "draft"}
         />
       ),
-    [draft?.capabilities?.canChangeStatus, draft?.capabilities?.canEdit, prepared, published, setPublished],
+    [draft?.capabilities?.canChangeStatus, draft?.capabilities?.canEdit, published, setPublished],
   );
   const title = draft?.name ?? "Программа";
   const editorChrome = useMemo(

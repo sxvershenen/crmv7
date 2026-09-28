@@ -294,6 +294,7 @@ export class FixtureProgramsRepository implements ProgramsRepository, ProgramTem
 
   async saveRun(run: ProgramRunEditorRecord): Promise<ProgramRunEditorRecord> {
     const next = structuredClone(run)
+    if (next.id === "new") next.id = crypto.randomUUID()
     this.runEditorData.set(next.id, next)
     const flat = toListRun(next)
     const index = this.data.runs.findIndex((item) => item.id === next.id)

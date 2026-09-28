@@ -211,7 +211,7 @@ describe("ProgramsRepository API adapter", () => {
     expect(get).toHaveBeenNthCalledWith(2, `/offerings/${offeringId}/editor`, expect.anything())
     await repository.saveTemplate({ ...mapTestTemplate(), id: "template-1", version: 2, basePrice: 9999, published: false })
     expect(patchBody).not.toHaveProperty("basePrice")
-    expect(patchBody).not.toHaveProperty("publication")
+    expect(patchBody).toHaveProperty("publication", "draft")
   })
 
   it("keeps prepare idempotency metadata stable for an explicit retry and sends the UI-observed version", async () => {

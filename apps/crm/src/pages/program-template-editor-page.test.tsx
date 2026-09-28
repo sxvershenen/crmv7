@@ -106,7 +106,7 @@ describe("ProgramTemplateEditorPage", () => {
     await user.click(await screen.findByRole("button", { name: "Подготовить продажи и CMS-страницу" }))
 
     expect(await screen.findByText("Нужен активный тариф")).toBeInTheDocument()
-    expect(screen.queryByRole("combobox", { name: "Публикация программы" })).not.toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Публикация программы" })).toBeInTheDocument()
     await user.click(screen.getByRole("tab", { name: "Основное" }))
     expect(screen.getByLabelText("Название")).toHaveValue("Несохранённая программа")
     expect(screen.queryByLabelText("Legacy стоимость")).not.toBeInTheDocument()

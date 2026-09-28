@@ -192,8 +192,8 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
 
   async saveTemplate(record: ProgramTemplateEditorRecord): Promise<ProgramTemplateEditorRecord> {
     const money = { amountMinor: Math.round(record.basePrice * 100), currency: "RUB" }
-    const legacyFields = record.id === "new" || !this.preparedProgramTemplateIds.has(record.id)
-      ? { basePrice: money, publication: record.published ? "published" as const : "draft" as const }
+    const legacyPrice = record.id === "new" || !this.preparedProgramTemplateIds.has(record.id)
+      ? { basePrice: money }
       : {}
     const common = {
       name: record.name,
@@ -203,7 +203,8 @@ export class ApiProgramsRepository implements ProgramsRepository, ProgramTemplat
       participantLimit: record.participantLimit,
       registrationCloseHours: record.registrationCloseHours,
       description: record.description,
-      ...legacyFields,
+      ...legacyPrice,
+      publication: record.published ? "published" as const : "draft" as const,
       assigneeIds: record.assignees.map((assignee) => assignee.id),
       stages: record.stages.map(({ id, name, durationMinutes, comment }) => ({ ...(canonicalId(id) ? { id } : {}), name, durationMinutes, comment })),
     }
