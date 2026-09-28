@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { PublicReleasePageContentSchema } from "@crm/contracts"
 import { materializeRelease } from "./cms-publication.service.js"
 
 const id = "11111111-1111-4111-8111-111111111111"
@@ -37,7 +38,17 @@ describe("publication of homepage details", () => {
     ["reviews", { ...base, reviews: [{ ...reviews[0], rating: 6 }] }],
     ["faq", { ...base, faq: [{ ...faq[0], answer: " " }] }],
     ["faq", { ...base, faq: [{ ...faq[0], privateNote: "hidden" }] }],
+    ["reviews", { ...base, reviews, cards: [{ id: "image", title: "Фото", description: "", imageUrl: "javascript:alert(1)" }] }],
+    ["sauna-chan", { ...base, cards: [{ id: "sauna", title: "Баня", description: "", imageUrl: "", price: "2500 ₽" }] }],
   ])("blocks invalid %s content during publication", (key, config) => {
     expect(materializeRelease([candidate(config as Record<string, unknown>, key as string)] as never).issues).toEqual([expect.objectContaining({ code: "CMS_HOMEPAGE_SECTION_INVALID" })])
+  })
+  it("publishes visual cards while leaving operational prices outside CMS", () => {
+    const cards = [{ id: "sauna", title: "Баня", description: "Парная", imageUrl: "https://example.org/sauna.webp" }]
+    const config = { ...base, cards }
+    const result = materializeRelease([candidate(config, "sauna-chan")] as never)
+    expect(result.issues).toEqual([])
+    expect(result.routes[0]?.content.sections[0]?.config).toEqual(config)
+    expect(PublicReleasePageContentSchema.safeParse(result.routes[0]?.content).success).toBe(true)
   })
 })

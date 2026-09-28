@@ -3,8 +3,9 @@ import { Alert, AlertDescription, AlertTitle, FormField, Input, Textarea } from 
 
 import { HomepageDetailsFields } from "./homepage-details-fields"
 import { HomeOfferingsField } from "./home-offerings-field"
+import { HomepageCardsFields } from "./homepage-cards-fields"
 
-export function HomepageSectionFields({ id, value, editable, onChange, sectionKey }: { sectionKey?: string; id: string; value: CmsHomeSectionDraft; editable: boolean; onChange: (value: CmsHomeSectionDraft) => void }) {
+export function HomepageSectionFields({ id, value, editable, canUploadMedia = false, onChange, sectionKey }: { sectionKey?: string; id: string; value: CmsHomeSectionDraft; editable: boolean; canUploadMedia?: boolean; onChange: (value: CmsHomeSectionDraft) => void }) {
   const validation = CmsHomeSectionConfigSchema.safeParse(value)
   const updateAction = (patch: Partial<NonNullable<CmsHomeSectionDraft["action"]>>) => {
     const action = { label: value.action?.label ?? "", href: value.action?.href ?? "/", ...patch }
@@ -22,6 +23,7 @@ export function HomepageSectionFields({ id, value, editable, onChange, sectionKe
       <FormField htmlFor={`${id}-action-href`} label="Ссылка кнопки"><Input id={`${id}-action-href`} maxLength={2048} placeholder="/blog" value={value.action?.href ?? ""} onChange={(event) => updateAction({ href: event.target.value })} /></FormField>
     </div>
     <HomepageDetailsFields id={id} {...(sectionKey ? { sectionKey } : {})} value={value} onChange={onChange} />
+    {sectionKey && ["programs", "sauna-chan", "reviews"].includes(sectionKey) && <HomepageCardsFields id={id} sectionKey={sectionKey} value={value} editable={editable} canUploadMedia={canUploadMedia} onChange={onChange} />}
     {(sectionKey === "houses" || sectionKey === "programs" || sectionKey === "venues") && <HomeOfferingsField kind={sectionKey === "houses" ? "house" : sectionKey === "programs" ? "program" : "venue"} ids={value.selectedOfferingIds} editable={editable} onChange={(selectedOfferingIds) => onChange({ ...value, selectedOfferingIds })} />}
     {!validation.success && <Alert><AlertTitle>Перед публикацией</AlertTitle><AlertDescription>{validation.error.issues[0]?.message}. Черновик можно сохранить.</AlertDescription></Alert>}
   </fieldset>

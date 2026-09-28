@@ -37,6 +37,26 @@ test("renders release-owned reviews and FAQ in authored order and supports keybo
   }
 })
 
+test("renders CMS directions, sauna cards and review photos without editorial prices", async ({ request, page }) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=visual-cards")
+  const response = await page.goto("/")
+  expect(response?.status()).toBe(200)
+  const sauna = page.locator("#sauna")
+  await sauna.scrollIntoViewIfNeeded()
+  await expect(sauna).toContainText("Баня из редактора")
+  await expect(sauna).toContainText("Чан из редактора")
+  await expect(sauna).toContainText("Стоимость уточнит менеджер")
+  await expect(sauna).not.toContainText("2 500 ₽")
+  const programs = page.locator("#programs")
+  await programs.scrollIntoViewIfNeeded()
+  await programs.getByText("Семейное направление", { exact: true }).click()
+  await expect(programs).toContainText("Программа из CMS")
+  const reviews = page.locator("#reviews")
+  await reviews.scrollIntoViewIfNeeded()
+  await reviews.getByRole("button", { name: "Показать фото: Второе фото из CMS" }).click()
+  await expect(reviews.locator("figure figcaption")).toHaveText("Второе фото из CMS")
+})
+
 for (const scenario of ["empty", "absent"]) {
   test(`hides ${scenario} review and FAQ content without fixture fallback`, async ({ request, page }) => {
     await request.post(`http://127.0.0.1:4398/__scenario?name=details-${scenario}`)

@@ -83,3 +83,14 @@ it("loads the next ready-image page inside the picker", async () => {
   fireEvent.click(screen.getByRole("button", { name: new RegExp(older.title) }))
   expect(onChange).toHaveBeenCalledWith(older.id)
 })
+
+it("lets homepage cards choose the public image variant from the same picker", async () => {
+  getMedia.mockResolvedValue({ items: [ready], nextCursor: null })
+  const onSelectAsset = vi.fn()
+  const onChange = vi.fn()
+  render(<TooltipProvider><HeroMediaField assetId="" canUpload={false} editable label="Фото карточки" onChange={onChange} onSelectAsset={onSelectAsset} /></TooltipProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Выбрать: фото карточки" }))
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(ready.title) }))
+  expect(onSelectAsset).toHaveBeenCalledWith(ready)
+  expect(onChange).not.toHaveBeenCalled()
+})

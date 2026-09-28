@@ -199,27 +199,28 @@ export interface SiteSpaFeatureCardProps {
   activeTab?: string
   /** @deprecated SPA tabs are no longer rendered. */
   activeContent?: ReactNode
-  price: ReactNode
-  added: boolean
+  price?: ReactNode
+  priceBasisLabel?: ReactNode
+  added?: boolean
   onSelect: () => void
   /** @deprecated SPA tabs are no longer rendered. */
   onTabChange?: (id: string) => void
-  onAdd: () => void
+  onAdd?: () => void
 }
 
-export function SiteSpaFeatureCard({ added, description, media, onAdd, onSelect, price, title }: SiteSpaFeatureCardProps) {
-  const action = <button type="button" onClick={(event) => { event.stopPropagation(); onAdd() }} className={cn("btn", added ? "btn-primary" : "btn-soft")}><span>{added ? "Добавлено" : "Добавить"}</span><span className={cn("btn-arrow", !added && "plus")}>{added ? <Check size={14} /> : <Plus size={15} />}</span></button>
-  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} data-site-component="spa-card" className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform duration-[var(--site-motion-normal)] ease-[var(--site-ease)]"><div>{media}<div className="px-2 pt-4 pb-2 flex flex-col gap-3"><h3 className="text-[20px] leading-[1.2] font-semibold tracking-[-.5px]">{title}</h3><p className="site-spa-card__content min-h-[84px] text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="mt-auto pt-2 flex items-end justify-between gap-3"><div><div className="text-[11px] text-ink-3 mb-1">за час от</div><div className="text-[28px] leading-none font-semibold tracking-[-1px]">{price}</div></div>{action}</div></div></div></div>
+export function SiteSpaFeatureCard({ added, description, media, onAdd, onSelect, price, priceBasisLabel, title }: SiteSpaFeatureCardProps) {
+  const action = <button type="button" onClick={(event) => { event.stopPropagation(); (onAdd ?? onSelect)() }} className={cn("btn", added ? "btn-primary" : "btn-soft")}><span>{onAdd ? added ? "Добавлено" : "Добавить" : "Узнать условия"}</span><span className={cn("btn-arrow", !added && "plus")}>{added ? <Check size={14} /> : onAdd ? <Plus size={15} /> : <ArrowRight size={15} />}</span></button>
+  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} data-site-component="spa-card" className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform duration-[var(--site-motion-normal)] ease-[var(--site-ease)]"><div>{media}<div className="px-2 pt-4 pb-2 flex flex-col gap-3"><h3 className="text-[20px] leading-[1.2] font-semibold tracking-[-.5px]">{title}</h3><p className="site-spa-card__content min-h-[84px] text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="mt-auto pt-2 flex items-end justify-between gap-3">{price ? <div><div className="text-[11px] text-ink-3 mb-1">{priceBasisLabel ?? "за час от"}</div><div className="text-[28px] leading-none font-semibold tracking-[-1px]">{price}</div></div> : <span className="text-[12px] text-ink-3">Стоимость уточнит менеджер</span>}{action}</div></div></div></div>
 }
 
 export interface SiteImageCategoryCardProps {
-  image: string
+  image?: string
   title: ReactNode
   meta?: ReactNode
   selected?: boolean
-  onSelect: () => void
+  onSelect?: () => void
 }
 
 export function SiteImageCategoryCard({ image, meta, onSelect, selected = false, title }: SiteImageCategoryCardProps) {
-  return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} aria-pressed={selected} className={cn("site-motion-spring group relative rounded-xl overflow-hidden aspect-square text-left img-dim cursor-pointer hover:scale-[.985] transition-transform duration-300", selected && "outline outline-[3px] outline-green outline-offset-[-3px]")}><img src={image} alt={typeof title === "string" ? title : ""} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /><div className="absolute inset-0 z-10 p-4 flex flex-col justify-between"><span className={cn("arrow-bubble ml-auto max-sm:!w-8 max-sm:!h-8", selected && "!bg-green !text-white")}><ArrowRight size={14} /></span><span><span className="block text-white text-[17px] lg:text-[19px] font-semibold leading-[1.2]">{title}</span>{meta ? <span className="block text-white/80 text-[11px] mt-1">{meta}</span> : null}</span></div></div>
+  return <div onClick={onSelect} onKeyDown={onSelect ? (event) => { if (event.key === "Enter" || event.key === " ") onSelect() } : undefined} role={onSelect ? "button" : undefined} tabIndex={onSelect ? 0 : undefined} aria-pressed={onSelect ? selected : undefined} className={cn("site-motion-spring group relative rounded-xl overflow-hidden aspect-square text-left img-dim bg-green-deep", onSelect && "cursor-pointer hover:scale-[.985] transition-transform duration-300", selected && "outline outline-[3px] outline-green outline-offset-[-3px]")}>{image && <img src={image} alt={typeof title === "string" ? title : ""} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />}<div className="absolute inset-0 z-10 p-4 flex flex-col justify-between">{onSelect && <span className={cn("arrow-bubble ml-auto max-sm:!w-8 max-sm:!h-8", selected && "!bg-green !text-white")}><ArrowRight size={14} /></span>}<span><span className="block text-white text-[17px] lg:text-[19px] font-semibold leading-[1.2]">{title}</span>{meta ? <span className="block text-white/80 text-[11px] mt-1">{meta}</span> : null}</span></div></div>
 }

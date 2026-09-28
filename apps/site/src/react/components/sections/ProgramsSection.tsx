@@ -18,6 +18,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const directions = fixture ? PROGRAM_CATEGORIES : (config.cards ?? []);
 
   const programs: Array<Omit<ProgramItem, "category"> & { category: string; imageAlt?: string; priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? POPULAR_PROGRAMS : published.filter((item) => item.requestAvailable).map((item) => ({
     id: item.offeringId, title: item.title, description: item.summary ?? "", photo: offeringImageUrl(item) ?? "", category: "", categoryLabel: "",
@@ -27,7 +28,8 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
   }))
   const filteredPrograms = programs.filter((p) => {
     if (selectedCategory === 'all') return true;
-    return p.category === selectedCategory;
+    if (fixture) return p.category === selectedCategory;
+    return config.cards?.find((direction) => direction.id === selectedCategory)?.selectedOfferingIds?.includes(p.id) ?? false;
   }).sort((a, b) => sort === 'name' ? a.title.localeCompare(b.title, 'ru') : sort === 'short' ? parseFloat(a.duration) - parseFloat(b.duration) : programs.indexOf(a) - programs.indexOf(b));
 
   const pageSize = 4;
@@ -35,7 +37,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
   const displayedPrograms = showAll ? filteredPrograms : filteredPrograms.slice((page - 1) * pageSize, page * pageSize);
   const sortLabel = sort === 'name' ? 'По названию' : sort === 'short' ? 'Сначала короткие' : 'По популярности';
 
-  if (!programs.length) return <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8"><SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={null} /><EmptyState title="Пока нет доступных программ" description="Новые программы появятся здесь, когда откроется запись." /></section>
+  if (!programs.length && !directions.length) return <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8"><SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={null} /><EmptyState title="Пока нет доступных программ" description="Новые программы появятся здесь, когда откроется запись." /></section>
   return (
     <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8">
       <SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={<SiteFilterMenu label={sortLabel} icon={<ArrowUpDown className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={sortDropdownOpen} onToggle={() => setSortDropdownOpen(!sortDropdownOpen)} options={[{ id: 'popular', label: 'По популярности', selected: sort === 'popular', onSelect: () => { setSort('popular'); setPage(1); setSortDropdownOpen(false); } }, { id: 'name', label: 'По названию', selected: sort === 'name', onSelect: () => { setSort('name'); setPage(1); setSortDropdownOpen(false); } }, { id: 'short', label: 'Сначала короткие', selected: sort === 'short', onSelect: () => { setSort('short'); setPage(1); setSortDropdownOpen(false); } }]} />} />
@@ -43,17 +45,18 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
       {/* Main Grid: Left Programs Listing / Right 4 Square Categories (Top on Mobile) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Right Section Cards (4 cards 2x2 grid) - Shown first on mobile */}
-        {fixture && <div className="lg:col-span-5">
+        {directions.length > 0 && <div className="lg:col-span-5">
           <div className="grid grid-cols-2 gap-3">
-            {PROGRAM_CATEGORIES.map((cat) => {
+            {directions.map((cat) => {
               const isSelected = selectedCategory === cat.id;
+              const selectable = fixture || ('selectedOfferingIds' in cat && Boolean(cat.selectedOfferingIds?.length));
 
               return (
                 <SiteImageCategoryCard
                   key={cat.id}
-                  onSelect={() => { setSelectedCategory(isSelected ? 'all' : cat.id); setPage(1); setShowAll(false); }}
+                  {...(selectable ? { onSelect: () => { setSelectedCategory(isSelected ? 'all' : cat.id); setPage(1); setShowAll(false); } } : {})}
                   selected={isSelected}
-                  image={cat.photo}
+                  {...(fixture ? 'photo' in cat ? { image: cat.photo } : {} : 'imageUrl' in cat ? { image: cat.imageUrl } : {})}
                   title={cat.title}
                 />
               );
@@ -72,7 +75,8 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
 
         }
         {/* Left Section: Popular Programs Horizontal Cards (Order 2 on Mobile) */}
-        <div className={fixture ? "lg:col-span-7 space-y-3" : "lg:col-span-12 space-y-3"}>
+        <div className={directions.length > 0 ? "lg:col-span-7 space-y-3" : "lg:col-span-12 space-y-3"}>
+          {!filteredPrograms.length && <EmptyState title={selectedCategory === "all" ? "Пока нет доступных программ" : "В этом направлении пока нет программ"} description={selectedCategory === "all" ? "Новые программы появятся здесь, когда откроется запись." : "Выберите другое направление или вернитесь ко всем программам."} />}
           {displayedPrograms.map((prog) => (
             <SiteProgramFeatureCard
               key={prog.id}
@@ -89,10 +93,10 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
             />
           ))}
 
-          <div className="flex items-center justify-between gap-3 pt-1">
+          {programs.length > 0 && <div className="flex items-center justify-between gap-3 pt-1">
             <Pagination variant="feature" current={showAll ? 0 : page} total={pageCount} onPageChange={(pageNumber) => { setPage(pageNumber); setShowAll(false); }} />
             <SiteSecondaryAction onClick={() => { setSelectedCategory('all'); setPage(1); setShowAll(true); }}>Все программы</SiteSecondaryAction>
-          </div>
+          </div>}
         </div>
       </div>
     </section>

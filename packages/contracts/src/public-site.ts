@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CmsEditorialBlocksPatchValueSchema, CmsHeroConfigSchema, CmsHeroMediaSchema, CmsHeroPolicySchema, CmsPageKindSchema, CmsPathSchema, CmsSectionSchema } from "./content.js";
+import { CmsEditorialBlocksPatchValueSchema, CmsHeroConfigSchema, CmsHeroMediaSchema, CmsHeroPolicySchema, CmsHomeCardSchema, CmsPageKindSchema, CmsPathSchema, CmsSectionSchema } from "./content.js";
 import { ReleaseDependencyRefSchema } from "./publication.js";
 import { SeoMetadataSchema } from "./seo.js";
 import { BoundedJsonValueSchema, DateTimeSchema, IdSchema, MoneySchema } from "./primitives.js";
@@ -65,7 +65,7 @@ export const PublicResolvedSectionSchema = z.object({
   rendererVersion: z.string().min(1).max(40),
   schemaVersion: z.number().int().positive(),
   order: z.number().int().min(-100000).max(100000),
-  config: z.record(z.string().min(1).max(120), z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema])),
+  config: z.record(z.string().min(1).max(120), z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema, z.array(CmsHomeCardSchema).max(12)])),
   analyticsActionId: z.string().min(1).max(120).optional(),
 }).strict();
 

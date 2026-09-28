@@ -56,3 +56,11 @@ describe("manual homepage offerings", () => {
     expect(CmsHomeOfferingChoiceListSchema.safeParse({ items: [{ offeringId: id, title: "Домик", state: "draft" }], nextCursor: null }).success).toBe(true)
   })
 })
+
+describe("homepage visual cards", () => {
+  const card = { id: "card-1", title: "Баня", description: "Парная", imageUrl: "/api/public/v1/media/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222" }
+  it("accepts public CMS media URLs and rejects unsafe external URLs without throwing", () => {
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [card] } }).success).toBe(true)
+    expect(CmsHomeSectionSchema.safeParse({ ...section, key: "sauna-chan", config: { ...config, cards: [{ ...card, imageUrl: "http://example.com/image.jpg" }] } }).success).toBe(false)
+  })
+})

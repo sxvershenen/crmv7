@@ -31,7 +31,7 @@ createServer(async (request, response) => {
     response.writeHead(302, { Location: "/health" })
     return response.end()
   }
-  if (scenario === "commerce-media" && url.pathname === `/api/public/v1/media/${id}/${releaseId}`) {
+  if ((scenario === "commerce-media" || scenario === "visual-cards") && url.pathname === `/api/public/v1/media/${id}/${releaseId}`) {
     response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=60" })
     return response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/K1cAAAAASUVORK5CYII=", "base64"))
   }
@@ -431,6 +431,18 @@ createServer(async (request, response) => {
     if (scenario === "homepage-private") homepageConfigs.events.internalNotes = "PRIVATE_BACKEND_DETAIL"
     if (scenario === "details-empty") { homepageConfigs.reviews.reviews = []; homepageConfigs.faq.faq = [] }
     if (scenario === "details-absent") { delete homepageConfigs.reviews.reviews; delete homepageConfigs.faq.faq }
+    if (scenario === "visual-cards") {
+      const imageUrl = `/api/public/v1/media/${id}/${releaseId}`
+      homepageConfigs["sauna-chan"].cards = [
+        { id: "sauna", title: "Баня из редактора", description: "Парная", imageUrl, imageAssetId: id },
+        { id: "chan", title: "Чан из редактора", description: "Купель", imageUrl, imageAssetId: id },
+      ]
+      homepageConfigs.programs.cards = [{ id: "direction", title: "Семейное направление", description: "Для гостей", imageUrl, imageAssetId: id, selectedOfferingIds: [id] }]
+      homepageConfigs.reviews.cards = [
+        { id: "photo-one", title: "Первое фото из CMS", description: "", imageUrl, imageAssetId: id },
+        { id: "photo-two", title: "Второе фото из CMS", description: "", imageUrl, imageAssetId: id },
+      ]
+    }
     if (scenario === "details-blank") homepageConfigs.faq.faq[0].answer = " "
     if (scenario === "details-rating") homepageConfigs.reviews.reviews[0].rating = 6
     if (scenario === "details-duplicate") homepageConfigs.reviews.reviews[1].id = homepageConfigs.reviews.reviews[0].id
@@ -453,7 +465,7 @@ createServer(async (request, response) => {
       }] : scenario.startsWith("listing") ? [{
         id, key: "catalog", renderer: "listing", rendererVersion: "1", schemaVersion: 1,
         order: 10, config: { definition },
-      }] : (scenario.startsWith("homepage-") || scenario.startsWith("details-") || scenario.startsWith("commerce-")) ? homepageEntries.map(([key, config], index) => ({
+      }] : (scenario.startsWith("homepage-") || scenario.startsWith("details-") || scenario.startsWith("commerce-") || scenario === "visual-cards") ? homepageEntries.map(([key, config], index) => ({
         id: `${id.slice(0, -2)}${String(index + 10).padStart(2, "0")}`, key, renderer: scenario === "homepage-renderer" ? "unknown" : "homepage-section",
         rendererVersion: scenario === "homepage-version" ? "2" : "1", schemaVersion: 1, order: index * 10 + 10, config,
       })) : scenario.startsWith("partners-") ? [{

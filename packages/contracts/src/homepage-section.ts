@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { CmsPathSchema } from "./content.js"
+import { CmsHomeCardSchema, CmsPathSchema } from "./content.js"
 import { PublicResolvedSectionSchema } from "./public-site.js"
 import { IdSchema } from "./primitives.js"
 
@@ -31,6 +31,8 @@ export const CmsHomeSectionDraftSchema = z.object({
   faq: z.array(CmsHomeFaqDraftSchema).max(40).optional(),
   /** Undefined preserves old automatic collections; a saved array is a manual selection. */
   selectedOfferingIds: z.array(IdSchema).max(12).refine((ids) => new Set(ids).size === ids.length, "Карточки не должны повторяться").optional(),
+  /** Editorial visual cards for programs, sauna/chan and reviews. Prices remain CRM-owned. */
+  cards: z.array(CmsHomeCardSchema).max(12).optional(),
 }).strict()
 export type CmsHomeSectionDraft = z.infer<typeof CmsHomeSectionDraftSchema>
 
@@ -47,6 +49,14 @@ export const CmsHomeSectionConfigSchema = CmsHomeSectionDraftSchema.superRefine(
       }
     }
   }
+  const cardIds = new Set<string>()
+  for (const [index, card] of (value.cards ?? []).entries()) {
+    if (cardIds.has(card.id)) context.addIssue({ code: "custom", path: ["cards", index, "id"], message: "Карточка повторяется" })
+    cardIds.add(card.id)
+    if (!card.title.trim()) context.addIssue({ code: "custom", path: ["cards", index, "title"], message: "Укажите название карточки" })
+    if (card.imageAssetId && !card.imageUrl) context.addIssue({ code: "custom", path: ["cards", index, "imageUrl"], message: "Выберите готовый публичный вариант изображения" })
+    if (card.selectedOfferingIds && new Set(card.selectedOfferingIds).size !== card.selectedOfferingIds.length) context.addIssue({ code: "custom", path: ["cards", index, "selectedOfferingIds"], message: "Программа в направлении повторяется" })
+  }
 })
 export type CmsHomeSectionConfig = z.infer<typeof CmsHomeSectionConfigSchema>
 
@@ -60,6 +70,8 @@ export const CmsHomeSectionSchema = PublicResolvedSectionSchema.extend({
   if (value.config.reviews !== undefined && value.key !== "reviews") context.addIssue({ code: "custom", path: ["config", "reviews"], message: "Отзывы доступны только в секции отзывов" })
   if (value.config.faq !== undefined && value.key !== "faq" && value.key !== "directions") context.addIssue({ code: "custom", path: ["config", "faq"], message: "Вопросы доступны только в секции FAQ" })
   if (value.config.selectedOfferingIds !== undefined && !["houses", "programs", "venues"].includes(value.key)) context.addIssue({ code: "custom", path: ["config", "selectedOfferingIds"], message: "Ручной выбор доступен только для домиков, программ и площадок" })
+  if (value.config.cards !== undefined && !["programs", "sauna-chan", "reviews"].includes(value.key)) context.addIssue({ code: "custom", path: ["config", "cards"], message: "Карточки доступны только для программ, бани и отзывов" })
+  if (value.key !== "programs" && value.config.cards?.some((card) => card.selectedOfferingIds !== undefined)) context.addIssue({ code: "custom", path: ["config", "cards"], message: "Выбор программ доступен только в направлениях" })
 })
 
 export const CmsHomeOfferingKindSchema = z.enum(["house", "program", "venue"])

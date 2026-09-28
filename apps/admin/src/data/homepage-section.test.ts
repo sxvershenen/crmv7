@@ -24,6 +24,11 @@ describe("homepage details draft adapter", () => {
     expect(createHomepageSectionEditorSection("houses").homepageConfig?.selectedOfferingIds).toEqual([])
     expect(createHomepageSectionEditorSection("events").homepageConfig?.selectedOfferingIds).toBeUndefined()
   })
+  it("keeps editorial cards and their program bindings when saving the section", () => {
+    const cards = [{ id: "family", title: "Семейный отдых", description: "На природе", imageUrl: "https://example.org/family.webp", imageAssetId: "44444444-4444-4444-8444-444444444444", selectedOfferingIds: ["22222222-2222-4222-8222-222222222222"] }]
+    const program = { ...section, key: "programs", policy: homepageSectionPolicy({ eyebrow: null, title: "Программы", description: "", action: null, cards }) }
+    expect(homepageSectionDraft(program)?.cards).toEqual(cards)
+  })
   it("leaves unknown versions, fields and composed patches opaque and unmodified", () => {
     const policy = homepageSectionPolicy(config)
     if (policy.mode !== "override") throw new Error("expected override")

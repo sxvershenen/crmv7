@@ -42,8 +42,21 @@ export const CmsEditorialBlocksPatchValueSchema = z.array(z.discriminatedUnion("
   z.object({ type: z.literal("list"), items: z.array(z.string().max(1000)).max(50) }).strict(),
 ])).max(200);
 
+export const CmsHomeCardSchema = z.object({
+  id: z.string().min(1).max(160),
+  title: z.string().max(240),
+  description: z.string().max(1000),
+  imageUrl: z.union([
+    z.literal(""),
+    z.string().url().max(2048).refine((url) => URL.canParse(url) && new URL(url).protocol === "https:", "Изображение должно использовать HTTPS"),
+    z.string().startsWith("/api/public/v1/media/").max(2048),
+  ]),
+  imageAssetId: IdSchema.nullable().optional(),
+  selectedOfferingIds: z.array(IdSchema).max(12).optional(),
+}).strict();
+
 export const CmsScalarPatchSchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema]) }).strict(),
+  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema, z.array(CmsHomeCardSchema).max(12)]) }).strict(),
   z.object({ operation: z.literal("reset") }).strict(),
 ]);
 
