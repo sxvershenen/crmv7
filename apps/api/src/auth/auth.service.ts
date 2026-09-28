@@ -1,12 +1,12 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 
 import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { InjectRepository } from "@nestjs/typeorm"
 import { DataSource, Repository } from "typeorm"
 
-import type { ChangePasswordInput, LoginRequest, SessionUser } from "@crm/contracts"
-import { ChangeLogEntity, SessionEntity, UserEntity } from "@crm/db"
+import type { ChangePasswordInput, InvitationAccept, LoginRequest, SessionUser } from "@crm/contracts"
+import { ChangeLogEntity, SessionEntity, UserEntity, UserInvitationEntity } from "@crm/db"
 import { roleCapabilities } from "@crm/domain"
 
 import { hashPassword, verifyPassword } from "./password.js"
@@ -60,6 +60,34 @@ export class AuthService {
     await this.sessions.delete({ userId })
     await this.recordAuthAudit(user.id, "password_changed", requestId)
     return { ok: true }
+  }
+
+  async acceptInvitation(input: InvitationAccept, requestId: string): Promise<{ email: string }> {
+    const tokenHash = createHash("sha256").update(input.token).digest("hex")
+    const available = await this.dataSource.getRepository(UserInvitationEntity).findOneBy({ tokenHash })
+    if (!available || available.acceptedAt || available.expiresAt <= new Date()) {
+      throw new UnauthorizedException({ code: "INVITATION_INVALID", message: "Ссылка недействительна. Попросите администратора выдать новую." })
+    }
+    const passwordHash = await hashPassword(input.password)
+    return this.dataSource.transaction(async (manager) => {
+      const invitations = manager.getRepository(UserInvitationEntity)
+      const pending = await invitations.findOneBy({ tokenHash })
+      if (!pending) throw new UnauthorizedException({ code: "INVITATION_INVALID", message: "Ссылка недействительна. Попросите администратора выдать новую." })
+      const users = manager.getRepository(UserEntity)
+      const user = await users.findOne({ where: { id: pending.userId }, lock: { mode: "pessimistic_write" } })
+      const invitation = await invitations.findOne({ where: { id: pending.id }, lock: { mode: "pessimistic_write" } })
+      if (!user || user.status !== "invited" || !invitation || invitation.tokenHash !== tokenHash || invitation.acceptedAt || invitation.expiresAt <= new Date()) {
+        throw new UnauthorizedException({ code: "INVITATION_INVALID", message: "Ссылка истекла или уже использована. Попросите администратора выдать новую." })
+      }
+      user.passwordHash = passwordHash
+      user.status = "active"
+      user.updatedBy = user.id
+      await users.save(user)
+      invitation.acceptedAt = new Date()
+      await invitations.save(invitation)
+      await manager.getRepository(ChangeLogEntity).save({ id: randomUUID(), entityType: "user_invitation", entityId: user.id, action: "accepted", actorId: user.id, requestId, changes: {}, createdAt: new Date() })
+      return { email: user.email }
+    })
   }
 
   async resolveSession(cookies: Record<string, string> | undefined): Promise<SessionUser | null> {

@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs
 import { ConfigService } from "@nestjs/config"
 import type { Response } from "express"
 
-import { ChangePasswordInputSchema, LoginRequestSchema, type ChangePasswordInput, type LoginRequest } from "@crm/contracts"
+import { ChangePasswordInputSchema, InvitationAcceptSchema, LoginRequestSchema, type ChangePasswordInput, type InvitationAccept, type LoginRequest } from "@crm/contracts"
 
 import { Public } from "../common/public.decorator.js"
 import type { AuthenticatedRequest } from "../common/request-context.js"
@@ -34,6 +34,13 @@ export class AuthController {
       path: "/",
     })
     return { user: result.user }
+  }
+
+  @Public()
+  @Post("invitations/accept")
+  @HttpCode(200)
+  acceptInvitation(@Body(new ZodValidationPipe(InvitationAcceptSchema)) input: InvitationAccept, @Req() request: AuthenticatedRequest) {
+    return this.authService.acceptInvitation(input, request.requestId)
   }
 
   @Post("logout")

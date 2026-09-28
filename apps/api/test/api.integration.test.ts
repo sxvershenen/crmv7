@@ -49,6 +49,7 @@ import {
   ResourceGroupMemberEntity,
   TaskEntity,
   UserEntity,
+  UserInvitationEntity,
   assertSafeTestDatabaseConnection,
   assertSafeTestDatabaseEnvironment,
 } from "@crm/db"
@@ -132,7 +133,7 @@ describe.sequential("internal API + PostgreSQL", () => {
         business_calendar_date_overrides, business_calendar_dates, addon_offering_terms, campground_offering_terms,
         catalog_offerings, event_service_templates, resource_group_members, resource_groups, business_calendars,
         cms_public_profiles, cms_source_links, cms_active_release, cms_release_items, cms_releases, cms_site_settings_revisions, cms_site_settings, cms_node_revisions, cms_nodes,
-        sessions, change_log, outbox_events, idempotency_keys, saved_views, workspace_settings,
+        user_invitations, sessions, change_log, outbox_events, idempotency_keys, saved_views, workspace_settings,
         payments, resource_allocations, booking_lead_links, booking_items, bookings, resources, tasks,
         program_registrations, program_occurrences, program_templates, program_categories, events, event_categories, leads, customers, users RESTART IDENTITY CASCADE
     `)
@@ -905,6 +906,36 @@ describe.sequential("internal API + PostgreSQL", () => {
     }).expect(403)
     expect(await dataSource.getRepository(ChangeLogEntity).countBy({ entityType: "workspace_settings", entityId: settings.body.id })).toBe(1)
     expect(await dataSource.getRepository(OutboxEventEntity).countBy({ aggregateType: "workspace_settings", aggregateId: settings.body.id })).toBe(1)
+  })
+
+  it("creates one-use manual staff invitations with expiry, reissue and server-side permissions", async () => {
+    const input = { name: "Тестовый менеджер", email: "Invited@example.invalid", role: "manager" }
+    await request(app.getHttpServer()).post("/api/internal/v1/workspace/team/invitations").send(input).expect(401)
+    await readonlyAgent.post("/api/internal/v1/workspace/team/invitations").send(input).expect(403)
+
+    const first = await adminAgent.post("/api/internal/v1/workspace/team/invitations").send(input).expect(201)
+    expect(first.body.member).toMatchObject({ name: input.name, email: "invited@example.invalid", status: "invited" })
+    const invitation = await dataSource.getRepository(UserInvitationEntity).findOneByOrFail({ userId: first.body.member.id })
+    expect(invitation.tokenHash).toBe(createHash("sha256").update(first.body.token).digest("hex"))
+    expect(JSON.stringify(await dataSource.getRepository(ChangeLogEntity).findBy({ entityId: first.body.member.id }))).not.toContain(first.body.token)
+    await request(app.getHttpServer()).post("/api/internal/v1/auth/login").send({ email: input.email, password: "any-password" }).expect(401)
+    await adminAgent.post("/api/internal/v1/workspace/team/invitations").send({ ...input, role: "admin" }).expect(400)
+
+    const second = await adminAgent.post("/api/internal/v1/workspace/team/invitations").send(input).expect(201)
+    expect(second.body.member.id).toBe(first.body.member.id)
+    expect(second.body.token).not.toBe(first.body.token)
+    await request(app.getHttpServer()).post("/api/internal/v1/auth/invitations/accept").send({ token: first.body.token, password: "strong-new-password" }).expect(401)
+    const accepted = await request(app.getHttpServer()).post("/api/internal/v1/auth/invitations/accept").send({ token: second.body.token, password: "strong-new-password" }).expect(200)
+    expect(accepted.body).toEqual({ email: "invited@example.invalid" })
+    await request(app.getHttpServer()).post("/api/internal/v1/auth/invitations/accept").send({ token: second.body.token, password: "strong-new-password" }).expect(401)
+    await request(app.getHttpServer()).post("/api/internal/v1/auth/login").send({ email: input.email, password: "strong-new-password" }).expect(200)
+    expect((await adminAgent.get("/api/internal/v1/workspace/team").expect(200)).body).toEqual(expect.arrayContaining([expect.objectContaining({ id: first.body.member.id, status: "active" })]))
+    await adminAgent.post("/api/internal/v1/workspace/team/invitations").send(input).expect(409)
+
+    const expiring = await adminAgent.post("/api/internal/v1/workspace/team/invitations").send({ name: "Другой менеджер", email: "expired@example.invalid", role: "readonly" }).expect(201)
+    await dataSource.getRepository(UserInvitationEntity).update({ userId: expiring.body.member.id }, { expiresAt: new Date(Date.now() - 1000) })
+    await request(app.getHttpServer()).post("/api/internal/v1/auth/invitations/accept").send({ token: expiring.body.token, password: "strong-new-password" }).expect(401)
+    expect((await dataSource.getRepository(UserEntity).findOneByOrFail({ id: expiring.body.member.id })).status).toBe("invited")
   })
 
   it("rejects cross-site mutations and invalidates sessions after a password change", async () => {

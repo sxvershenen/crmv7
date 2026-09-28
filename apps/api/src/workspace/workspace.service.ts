@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common"
-import { Brackets, DataSource, type EntityManager } from "typeorm"
+import { Brackets, DataSource, QueryFailedError, type EntityManager } from "typeorm"
 
-import type { CrmSettings, SessionUser, TeamMember, WorkspaceProfile, WorkspaceProfileUpdate, WorkspaceSettingsUpdate, WorkspaceTeamListQuery } from "@crm/contracts"
-import { ChangeLogEntity, IdempotencyKeyEntity, OutboxEventEntity, WorkspaceSettingsEntity, UserEntity } from "@crm/db"
+import type { CrmSettings, SessionUser, TeamInvitationCreate, TeamInvitationCreated, TeamMember, WorkspaceProfile, WorkspaceProfileUpdate, WorkspaceSettingsUpdate, WorkspaceTeamListQuery } from "@crm/contracts"
+import { ChangeLogEntity, IdempotencyKeyEntity, OutboxEventEntity, UserInvitationEntity, WorkspaceSettingsEntity, UserEntity } from "@crm/db"
 import { assertCapability } from "@crm/domain"
 
 const settingsId = "00000000-0000-4000-8000-000000000001"
@@ -57,6 +57,39 @@ export class WorkspaceService {
     const lastActive = await this.dataSource.query<Array<{ user_id: string; last_active_at: Date }>>(`SELECT user_id, max(last_seen_at) AS last_active_at FROM sessions GROUP BY user_id`)
     const lastActiveById = new Map(lastActive.map((row) => [row.user_id, row.last_active_at]))
     return users.map((user) => ({ id: user.id, version: user.version, name: user.displayName, email: user.email, phone: user.phone, initials: initials(user.displayName), role: roleLabels[user.role] ?? user.role, status: user.status === "invited" ? "invited" : user.status === "archived" || user.status === "blocked" ? "archived" : "active", openItems: openItems.get(user.id) ?? 0, lastActiveAt: lastActiveById.get(user.id)?.toISOString() ?? null, schedule: { status: "unconfigured" }, leave: { status: "unconfigured" } }))
+  }
+
+  async inviteTeamMember(input: TeamInvitationCreate, actor: SessionUser, requestId: string): Promise<TeamInvitationCreated> {
+    assertCapability(actor.capabilities, "canManageUsers")
+    const email = input.email.trim().toLocaleLowerCase("ru-RU")
+    const name = input.name.trim()
+    const token = randomBytes(32).toString("base64url")
+    const tokenHash = createHash("sha256").update(token).digest("hex")
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60_000)
+    try { return await this.dataSource.transaction(async (manager) => {
+      const users = manager.getRepository(UserEntity)
+      const current = await users.findOne({ where: { email }, lock: { mode: "pessimistic_write" } })
+      if (current && current.status !== "invited") throw new ConflictException({ code: "USER_ALREADY_EXISTS", message: "Сотрудник с этой почтой уже существует" })
+      const user = current ? await users.save({ ...current, displayName: name, role: input.role, updatedBy: actor.id }) : await users.save(users.create({
+        id: randomUUID(), email, displayName: name, passwordHash: "invitation-pending", role: input.role, status: "invited", phone: "", createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
+      }))
+      const invitations = manager.getRepository(UserInvitationEntity)
+      const existing = await invitations.findOne({ where: { userId: user.id }, lock: { mode: "pessimistic_write" } })
+      await invitations.save(existing ? { ...existing, tokenHash, expiresAt, acceptedAt: null, createdAt: new Date(), createdBy: actor.id } : invitations.create({
+        id: randomUUID(), userId: user.id, tokenHash, expiresAt, acceptedAt: null, createdBy: actor.id,
+      }))
+      await this.recordMutation(manager, user.id, "user_invitation", current ? "renewed" : "created", actor.id, requestId, { email, role: input.role })
+      return { token, expiresAt: expiresAt.toISOString(), member: {
+        id: user.id, version: user.version, name: user.displayName, email: user.email, phone: user.phone, initials: initials(user.displayName), role: roleLabels[user.role] ?? user.role,
+        status: "invited", openItems: 0, lastActiveAt: null, schedule: { status: "unconfigured" }, leave: { status: "unconfigured" },
+      } }
+    }) } catch (error) {
+      const driverError = error instanceof QueryFailedError ? error.driverError as { code?: string; constraint?: string } : null
+      if (driverError?.code === "23505" && driverError.constraint === "users_email_unique") {
+        throw new ConflictException({ code: "USER_ALREADY_EXISTS", message: "Сотрудник с этой почтой уже существует. Обновите список команды." })
+      }
+      throw error
+    }
   }
 
   async getSettings(actor: SessionUser): Promise<CrmSettings> {

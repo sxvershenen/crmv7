@@ -37,6 +37,19 @@ export const TeamMemberSchema = z.object({
 }).strict()
 export type TeamMember = z.infer<typeof TeamMemberSchema>
 
+export const TeamInvitationCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  email: z.email().max(320),
+  role: z.enum(["manager", "lead_manager", "manager_supervisor", "readonly"]),
+}).strict()
+export type TeamInvitationCreate = z.infer<typeof TeamInvitationCreateSchema>
+export const TeamInvitationCreatedSchema = z.object({
+  member: TeamMemberSchema,
+  token: z.string().min(32).max(200),
+  expiresAt: DateTimeSchema,
+}).strict()
+export type TeamInvitationCreated = z.infer<typeof TeamInvitationCreatedSchema>
+
 const IntegrationStatusSchema = z.enum(["connected", "attention", "planned"])
 const IntegrationSchema = z.object({ id: z.string().min(1).max(64), name: z.string().min(1).max(200), description: z.string().max(1000), status: IntegrationStatusSchema, lastSyncAt: DateTimeSchema.nullable() }).strict()
 const SettingsCapabilitiesSchema = CapabilitiesSchema.pick({ canView: true, canEdit: true }).extend({ canManageSettings: z.boolean() }).strict()

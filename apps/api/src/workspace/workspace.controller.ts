@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Inject, Patch, Query, Req } from "@nestjs/common"
+import { Body, Controller, Get, Inject, Patch, Post, Query, Req } from "@nestjs/common"
 
-import { WorkspaceProfileUpdateSchema, WorkspaceSettingsUpdateSchema, WorkspaceTeamListQuerySchema, type WorkspaceProfileUpdate, type WorkspaceSettingsUpdate, type WorkspaceTeamListQuery } from "@crm/contracts"
+import { TeamInvitationCreateSchema, WorkspaceProfileUpdateSchema, WorkspaceSettingsUpdateSchema, WorkspaceTeamListQuerySchema, type TeamInvitationCreate, type WorkspaceProfileUpdate, type WorkspaceSettingsUpdate, type WorkspaceTeamListQuery } from "@crm/contracts"
 
 import { RequireCapabilities } from "../common/require-capability.decorator.js"
 import type { AuthenticatedRequest } from "../common/request-context.js"
@@ -27,6 +27,12 @@ export class WorkspaceController {
   @RequireCapabilities("canView")
   team(@Query(new ZodValidationPipe(WorkspaceTeamListQuerySchema)) query: WorkspaceTeamListQuery, @Req() request: AuthenticatedRequest) {
     return this.workspace.listTeam(query, request.sessionUser!)
+  }
+
+  @Post("team/invitations")
+  @RequireCapabilities("canManageUsers")
+  inviteTeamMember(@Body(new ZodValidationPipe(TeamInvitationCreateSchema)) input: TeamInvitationCreate, @Req() request: AuthenticatedRequest) {
+    return this.workspace.inviteTeamMember(input, request.sessionUser!, request.requestId)
   }
 
   @Get("settings")

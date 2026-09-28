@@ -33,6 +33,8 @@ Frontend должен уметь показать global + field errors и confl
 Внутренние приложения: secure cookie-based session; не хранить long-lived token в `localStorage`.
 Login/logout/session expiry/user block/password change/login audit.
 
+Администратор с `canManageUsers` создаёт сотрудника через `POST /api/internal/v1/workspace/team/invitations` и получает ссылку для ручной передачи. Ссылка действует 72 часа, выдаётся один раз, при перевыпуске прежняя теряет силу; в БД и аудите хранится только SHA-256 токена. До `POST /api/internal/v1/auth/invitations/accept` сотрудник имеет статус `invited` и войти не может. Принятие ссылки требует пароль не короче 12 символов, атомарно активирует пользователя и помечает приглашение использованным. Токен находится во фрагменте URL и не попадает в адрес HTTP-запроса; email переносится на экран входа только в `sessionStorage` браузера.
+
 ## Permissions
 
 Backend возвращает capabilities (`canEdit`, `canChangeStatus`, `canAddPayment`, `canRefund`, `canArchive`, `canOverrideConflict`...), frontend использует их для UI, backend повторно проверяет на операции.

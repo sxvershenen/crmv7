@@ -3,6 +3,7 @@ import type {
   TeamMember,
   WorkspaceProfile,
 } from "@app/entities/workspace";
+import type { TeamInvitationCreate, TeamInvitationCreated } from "@crm/contracts";
 import {
   crmSettingsFixture,
   teamMembersFixture,
@@ -10,14 +11,15 @@ import {
 } from "@app/fixtures/workspace";
 import { apiClient } from "@app/lib/api-client";
 import { useFixtureData } from "@app/lib/data-mode";
-import { CrmSettingsSchema, TeamMemberSchema, WorkspaceProfileSchema, WorkspaceTeamListQuerySchema } from "@crm/contracts";
+import { CrmSettingsSchema, TeamInvitationCreatedSchema, TeamMemberSchema, WorkspaceProfileSchema, WorkspaceTeamListQuerySchema } from "@crm/contracts";
 
-export type ApiWorkspaceRepositoryOptions = { client?: Pick<typeof apiClient, "get" | "patch"> };
+export type ApiWorkspaceRepositoryOptions = { client?: Pick<typeof apiClient, "get" | "patch" | "post"> };
 
 export interface WorkspaceRepository {
   getProfile(): Promise<WorkspaceProfile>;
   getSettings(): Promise<CrmSettings>;
   listTeam(): Promise<TeamMember[]>;
+  createTeamInvitation(input: TeamInvitationCreate): Promise<TeamInvitationCreated>;
   saveProfile(profile: WorkspaceProfile): Promise<WorkspaceProfile>;
   saveSettings(settings: CrmSettings): Promise<CrmSettings>;
 }
@@ -37,6 +39,10 @@ export class FixtureWorkspaceRepository implements WorkspaceRepository {
 
   async listTeam() {
     return Promise.resolve(structuredClone(this.team));
+  }
+
+  async createTeamInvitation(): Promise<TeamInvitationCreated> {
+    throw new Error("Приглашения доступны только при подключённом сервере CRM")
   }
 
   async saveProfile(profile: WorkspaceProfile) {
@@ -74,7 +80,7 @@ function settingsFromApi(value: import("@crm/contracts").CrmSettings): CrmSettin
 }
 
 export class ApiWorkspaceRepository implements WorkspaceRepository {
-  private readonly client: Pick<typeof apiClient, "get" | "patch">
+  private readonly client: Pick<typeof apiClient, "get" | "patch" | "post">
   constructor(options: ApiWorkspaceRepositoryOptions = {}) { this.client = options.client ?? apiClient }
 
   async getProfile() { return profileFromApi(await this.client.get("workspace/profile", WorkspaceProfileSchema)) }
@@ -82,6 +88,9 @@ export class ApiWorkspaceRepository implements WorkspaceRepository {
   async listTeam() {
     const query = WorkspaceTeamListQuerySchema.parse({ includeArchived: false })
     return teamFromApi(await this.client.get(`workspace/team?includeArchived=${query.includeArchived}`, TeamMemberSchema.array()), 0)
+  }
+  async createTeamInvitation(input: TeamInvitationCreate) {
+    return this.client.post("workspace/team/invitations", input, TeamInvitationCreatedSchema)
   }
   async saveProfile(profile: WorkspaceProfile) {
     const value = await this.client.patch("workspace/profile", { version: profile.version, name: profile.name, email: profile.email, phone: profile.phone, timezone: profile.timezone, browserNotifications: profile.browserNotifications, emailNotifications: profile.emailNotifications, telegramNotifications: profile.telegramNotifications, notifyConflicts: profile.notifyConflicts, notifyNewLeads: profile.notifyNewLeads, notifyOverdueTasks: profile.notifyOverdueTasks, operationId: operationId(), idempotencyKey: idempotencyKey() }, WorkspaceProfileSchema)

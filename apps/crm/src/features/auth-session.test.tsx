@@ -32,7 +32,7 @@ function renderProvider() {
 }
 
 describe("AuthSessionProvider", () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks(); window.sessionStorage.clear() })
 
   it("renders the authenticated application after session bootstrap", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValue({ user })
@@ -49,5 +49,15 @@ describe("AuthSessionProvider", () => {
     await userEvent.type(screen.getByLabelText("Пароль"), "change-me-in-local-env")
     await userEvent.click(screen.getByRole("button", { name: "Войти" }))
     expect(await screen.findByText("Администратор CRM")).toBeInTheDocument()
+  })
+
+  it("prefills the invited employee email for the first login", async () => {
+    window.sessionStorage.setItem("crm-invitation-email", "manager@example.invalid")
+    vi.spyOn(apiClient, "get").mockRejectedValue(new ApiClientError({ code: "AUTHENTICATION_REQUIRED", message: "Требуется вход", details: {} }, 401))
+    renderProvider()
+
+    expect(await screen.findByRole("heading", { name: "Вход в CRM" })).toBeInTheDocument()
+    expect(screen.getByLabelText("E-mail")).toHaveValue("manager@example.invalid")
+    expect(window.sessionStorage.getItem("crm-invitation-email")).toBeNull()
   })
 })

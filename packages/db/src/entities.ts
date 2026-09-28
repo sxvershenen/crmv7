@@ -82,6 +82,17 @@ export class UserEntity extends MutableEntity {
   notifyOverdueTasks!: boolean
 }
 
+@Entity({ name: "user_invitations" })
+export class UserInvitationEntity {
+  @PrimaryColumn({ type: "uuid" }) id!: string
+  @Column({ name: "user_id", type: "uuid" }) userId!: string
+  @Column({ name: "token_hash", type: "text" }) tokenHash!: string
+  @Column({ name: "expires_at", type: "timestamptz" }) expiresAt!: Date
+  @Column({ name: "accepted_at", type: "timestamptz", nullable: true }) acceptedAt!: Date | null
+  @CreateDateColumn({ name: "created_at", type: "timestamptz" }) createdAt!: Date
+  @Column({ name: "created_by", type: "uuid" }) createdBy!: string
+}
+
 @Entity({ name: "workspace_settings" })
 export class WorkspaceSettingsEntity extends MutableEntity {
   @Column({ type: "jsonb", default: () => "'{}'::jsonb" })
@@ -1567,6 +1578,7 @@ export class AcceptedOfferingQuoteLinkEntity {
 
 export const databaseEntities = [
   UserEntity,
+  UserInvitationEntity,
   WorkspaceSettingsEntity,
   SessionEntity,
   CustomerEntity,

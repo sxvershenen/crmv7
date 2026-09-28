@@ -47,6 +47,9 @@ import {
   type WorkspaceRepository,
 } from "@app/data/workspace-repository";
 import type { TeamMember, TeamMemberStatus } from "@app/entities/workspace";
+import type { TeamInvitationCreate, TeamInvitationCreated } from "@crm/contracts";
+import { useAuthSession } from "@app/features/auth-session-context";
+import { useFixtureData } from "@app/lib/data-mode";
 
 const sections = ["members", "roles", "workload"] as const;
 type TeamSection = (typeof sections)[number];
@@ -63,6 +66,7 @@ const statusLabels: Record<TeamMemberStatus, string> = {
 };
 
 export function TeamPage({ repository = workspaceRepository }: { repository?: WorkspaceRepository }) {
+  const session = useAuthSession();
   const [params, setParams] = useSearchParams();
   const rawSection = params.get("section");
   const section: TeamSection = sections.includes(rawSection as TeamSection) ? rawSection as TeamSection : "members";
@@ -71,9 +75,12 @@ export function TeamPage({ repository = workspaceRepository }: { repository?: Wo
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("current");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("Менеджер по броням");
-  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteRole, setInviteRole] = useState<TeamInvitationCreate["role"]>("manager");
+  const [invitation, setInvitation] = useState<TeamInvitationCreated>();
+  const [invitePending, setInvitePending] = useState(false);
+  const [inviteError, setInviteError] = useState<string>();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRequestKey, setLoadRequestKey] = useState(0);
 
@@ -97,16 +104,30 @@ export function TeamPage({ repository = workspaceRepository }: { repository?: Wo
     const matchesStatus = status === "all" || (status === "current" ? member.status !== "archived" : member.status === status);
     return matchesQuery && matchesRole && matchesStatus;
   }), [members, query, role, status]);
+  const canInvite = session?.user.capabilities.canManageUsers === true && !useFixtureData;
+  const createInvitation = async () => {
+    if (!canInvite || invitePending) return;
+    setInvitePending(true);
+    setInviteError(undefined);
+    try {
+      const created = await repository.createTeamInvitation({ name: inviteName.trim(), email: inviteEmail.trim(), role: inviteRole });
+      setInvitation(created);
+      try { setMembers(await repository.listTeam()); }
+      catch { setLoadError("Приглашение создано, но список сотрудников не обновился. Перезагрузите страницу."); }
+    } catch (cause) { setInviteError(cause instanceof Error ? cause.message : "Не удалось создать приглашение"); }
+    finally { setInvitePending(false); }
+  };
 
   if (!members) return <PageFrame className="space-y-3" width="wide">{loadError ? <div className="rounded-xl border bg-surface-raised"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={() => { setLoadError(null); setLoadRequestKey((value) => value + 1); }} title="Команда не загрузилась" tone="danger">{loadError}</PageState></div> : <div aria-label="Загрузка команды" aria-live="polite" className="space-y-3" role="status"><Skeleton className="h-10 rounded-lg" /><Skeleton className="h-80 rounded-xl" /></div>}</PageFrame>;
 
   return <PageFrame className="space-y-3" width="wide">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
       <p className="text-[11px] text-muted-foreground">Люди, их роли и текущая операционная нагрузка.</p>
-      <Button onClick={() => { setInviteOpen((value) => !value); setInviteSent(false); }} size="sm"><IconPlus aria-hidden="true" />Пригласить</Button>
+      <Button disabled={!canInvite} onClick={() => { setInviteOpen((value) => !value); setInvitation(undefined); setInviteError(undefined); }} size="sm" title={canInvite ? undefined : "Приглашение доступно администратору при подключённом сервере CRM"}><IconPlus aria-hidden="true" />Пригласить</Button>
     </div>
     <PageNav ariaLabel="Разделы команды" items={navItems} onValueChange={(value) => setParams(value === "members" ? {} : { section: value })} value={section} />
-    {inviteOpen ? <InvitePanel email={inviteEmail} onClose={() => setInviteOpen(false)} onEmailChange={setInviteEmail} onRoleChange={setInviteRole} onSend={() => setInviteSent(true)} role={inviteRole} sent={inviteSent} /> : null}
+    {loadError && <Alert variant="destructive"><IconAlertTriangle aria-hidden="true" /><AlertTitle>Список команды не обновился</AlertTitle><AlertDescription>{loadError}</AlertDescription></Alert>}
+    {inviteOpen && <InvitePanel email={inviteEmail} error={inviteError} invitation={invitation} name={inviteName} onClose={() => setInviteOpen(false)} onEmailChange={setInviteEmail} onNameChange={setInviteName} onRoleChange={setInviteRole} onSend={() => void createInvitation()} pending={invitePending} role={inviteRole} />}
     {section === "members" ? <><SummaryMetricStrip ariaLabel="Сводка команды"><SummaryMetric icon={IconUsersGroup} label="Всего" tone="info" value={members.length}>{members.filter((item) => item.status !== "archived").length} текущих</SummaryMetric><SummaryMetric icon={IconUserCheck} label="Активны сейчас" tone="success" value={members.filter((item) => item.status === "active").length}>Видны в рабочих очередях</SummaryMetric><SummaryMetric icon={IconClock} label="Открытая нагрузка" tone="warning" value={members.reduce((sum, item) => sum + item.openItems, 0)}>Заявки, брони и задачи</SummaryMetric></SummaryMetricStrip><TeamFilters query={query} role={role} roles={roles} setQuery={setQuery} setRole={setRole} setStatus={setStatus} status={status} /><MembersView members={filtered} /></> : null}
     {section === "roles" ? <RolesView members={members} /> : null}
     {section === "workload" ? <WorkloadView members={members.filter((item) => item.status !== "archived")} /> : null}
@@ -123,7 +144,7 @@ function MembersView({ members }: { members: TeamMember[] }) {
 
 function MemberIdentity({ member }: { member: TeamMember }) { return <div className="flex min-w-0 items-center gap-2.5"><Avatar className="size-8"><AvatarFallback className={`${member.colorClass} text-[10px]`}>{member.initials}</AvatarFallback></Avatar><div className="min-w-0"><p className="truncate text-xs">{member.name}</p><p className="truncate text-[10px] text-muted-foreground">{member.email}</p></div></div>; }
 function MemberStatus({ status }: { status: TeamMemberStatus }) { return <Badge variant={status === "active" ? "default" : status === "invited" ? "outline" : "secondary"}>{statusLabels[status]}</Badge>; }
-function MemberMenu({ member }: { member: TeamMember }) { return <DropdownMenu><DropdownMenuTrigger render={<Button aria-label={`Действия: ${member.name}`} size="icon-sm" variant="ghost" />}><IconDotsVertical aria-hidden="true" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled>Профиль недоступен в этом разделе</DropdownMenuItem><DropdownMenuItem disabled>Изменение роли требует права управления пользователями</DropdownMenuItem>{member.status === "invited" ? <DropdownMenuItem disabled><IconMailForward aria-hidden="true" />Повторная отправка не настроена</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>; }
+function MemberMenu({ member }: { member: TeamMember }) { return <DropdownMenu><DropdownMenuTrigger render={<Button aria-label={`Действия: ${member.name}`} size="icon-sm" variant="ghost" />}><IconDotsVertical aria-hidden="true" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled>Профиль недоступен в этом разделе</DropdownMenuItem><DropdownMenuItem disabled>Изменение роли требует права управления пользователями</DropdownMenuItem></DropdownMenuContent></DropdownMenu>; }
 function MemberCard({ member }: { member: TeamMember }) { return <article className="rounded-xl border bg-background p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><MemberIdentity member={member} /></div><MemberMenu member={member} /></div><div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3"><MemberStatus status={member.status} /><span className="text-[10px] text-muted-foreground">{member.role}</span><span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{member.openItems} открыто</span></div></article>; }
 
 function RolesView({ members }: { members: TeamMember[] }) { const roles = [...new Set(members.map((item) => item.role))]; return <div className="overflow-hidden rounded-xl border bg-background"><ListSection count={roles.length} icon={IconShield} title="Роли команды" tone="info">{roles.map((role) => <ListRow className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center" key={role}><div><p className="text-xs">{role}</p><p className="mt-1 text-[10px] text-muted-foreground">Права роли применяются сервером; здесь показана текущая структура.</p></div><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{members.filter((item) => item.role === role).length} чел.</span><Button disabled size="xs" variant="outline">Настроить права</Button></div></ListRow>)}</ListSection></div>; }
@@ -132,4 +153,18 @@ function WorkloadView({ members }: { members: TeamMember[] }) {
   return <div className="space-y-3"><Alert className="bg-background"><IconInfoCircle aria-hidden="true" /><AlertTitle className="text-xs">Как считается нагрузка</AlertTitle><AlertDescription className="text-[10px] leading-4">Считаем открытые заявки, брони и задачи из серверных очередей. Полоса показывает долю от максимума в текущем списке, а не процент занятости. Расписание и отпуск пока имеют статус «не настроено» и не меняют этот счётчик.</AlertDescription></Alert><div className="overflow-hidden rounded-xl border bg-background"><ListSection count={members.length} icon={IconActivity} title="Текущая нагрузка" tone="warning">{[...members].sort((a, b) => b.openItems - a.openItems).map((member) => <ListRow className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,240px)_minmax(160px,1fr)_150px_80px] sm:items-center" key={member.id}><MemberIdentity member={member} /><div><div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-label={`${member.name}: ${member.openItems} открытых`} role="img"><div className="h-full rounded-full bg-foreground/55" style={{ width: `${member.openItems / max * 100}%` }} /></div><p className="mt-1 text-[10px] text-muted-foreground">Относительно максимума: {Math.round(member.openItems / max * 100)}%</p></div><div className="text-[10px] leading-4 text-muted-foreground"><p>Расписание не настроено</p><p>{member.status === "away" ? "Нет на месте · причина не указана" : "Отпуск не настроен"}</p></div><span className="text-right text-xs tabular-nums">{member.openItems} открыто</span></ListRow>)}</ListSection></div></div>;
 }
 
-function InvitePanel({ email, onClose, onEmailChange, onRoleChange, onSend, role, sent }: { email: string; onClose: () => void; onEmailChange: (value: string) => void; onRoleChange: (value: string) => void; onSend: () => void; role: string; sent: boolean }) { return <section className="rounded-xl border bg-background p-4"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-[13px] font-semibold">Новый сотрудник</p><p className="mt-1 text-[10px] text-muted-foreground">Приглашение станет рабочим после подключения auth и e-mail.</p></div><Button onClick={onClose} size="xs" variant="ghost">Закрыть</Button></div><div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto]"><FormField htmlFor="invite-email" label="E-mail"><Input id="invite-email" onChange={(event) => onEmailChange(event.target.value)} placeholder="name@example.ru" type="email" value={email} /></FormField><FormField htmlFor="invite-role" label="Роль"><FormSelect id="invite-role" label="Роль" onValueChange={onRoleChange} options={["Менеджер по броням", "Администратор", "Координатор программ"].map((value) => ({ value, label: value }))} value={role} /></FormField><Button disabled={!email.includes("@") || sent} onClick={onSend} size="sm"><IconMailForward aria-hidden="true" />{sent ? "Отправлено" : "Отправить"}</Button></div></section>; }
+function InvitePanel({ email, error, invitation, name, onClose, onEmailChange, onNameChange, onRoleChange, onSend, pending, role }: {
+  email: string; error: string | undefined; invitation: TeamInvitationCreated | undefined; name: string; onClose: () => void; onEmailChange: (value: string) => void; onNameChange: (value: string) => void;
+  onRoleChange: (value: TeamInvitationCreate["role"]) => void; onSend: () => void; pending: boolean; role: TeamInvitationCreate["role"];
+}) {
+  const [copyStatus, setCopyStatus] = useState("");
+  const link = invitation ? `${window.location.origin}/invite#${invitation.token}` : "";
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(link); setCopyStatus("Ссылка скопирована"); }
+    catch { setCopyStatus("Скопируйте ссылку из поля вручную"); }
+  };
+  return <section className="rounded-xl border bg-background p-4"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-[13px] font-semibold">Новый сотрудник</p><p className="mt-1 text-[10px] text-muted-foreground">Создайте доступ и передайте ссылку сотруднику вручную. Она действует 72 часа и работает один раз.</p></div><Button onClick={onClose} size="xs" variant="ghost">Закрыть</Button></div>
+    {error && <Alert variant="destructive" className="mb-3"><IconAlertTriangle /><AlertTitle>Приглашение не создано</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    {invitation ? <div className="space-y-2"><p className="text-xs">Сотрудник «{invitation.member.name}» добавлен. Скопируйте ссылку сейчас: после закрытия она не показывается. Для новой ссылки повторите приглашение с тем же e-mail.</p><div className="flex flex-wrap gap-2"><Input aria-label="Ссылка-приглашение" className="min-w-[220px] flex-1" readOnly value={link} onFocus={(event) => event.target.select()} /><Button onClick={() => void copyLink()} size="sm" type="button">Скопировать</Button></div><p aria-live="polite" className="text-xs text-muted-foreground">{copyStatus || `Действует до ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(invitation.expiresAt))}`}</p></div> : <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(180px,0.8fr)_auto]"><FormField htmlFor="invite-name" label="Имя сотрудника"><Input id="invite-name" maxLength={200} onChange={(event) => onNameChange(event.target.value)} value={name} /></FormField><FormField htmlFor="invite-email" label="E-mail"><Input id="invite-email" onChange={(event) => onEmailChange(event.target.value)} placeholder="name@example.ru" type="email" value={email} /></FormField><FormField htmlFor="invite-role" label="Роль"><FormSelect id="invite-role" label="Роль" onValueChange={(value) => onRoleChange(value as TeamInvitationCreate["role"])} options={[{ value: "manager", label: "Менеджер" }, { value: "lead_manager", label: "Менеджер по заявкам" }, { value: "manager_supervisor", label: "Руководитель менеджеров" }, { value: "readonly", label: "Только просмотр" }]} value={role} /></FormField><Button disabled={!name.trim() || !email.includes("@") || pending} onClick={onSend} size="sm"><IconMailForward aria-hidden="true" />{pending ? "Создаём…" : "Создать ссылку"}</Button></div>}
+  </section>;
+}

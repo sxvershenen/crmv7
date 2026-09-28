@@ -48,3 +48,8 @@ export const ChangePasswordInputSchema = z.object({
   newPassword: z.string().min(12).max(1024),
 }).strict();
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInputSchema>;
+
+export const InvitationTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,200}$/);
+export const InvitationAcceptSchema = z.object({ token: InvitationTokenSchema, password: z.string().min(12).max(1024) }).strict();
+export const InvitationAcceptedSchema = z.object({ email: z.email() }).strict();
+export type InvitationAccept = z.infer<typeof InvitationAcceptSchema>;

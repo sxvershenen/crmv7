@@ -90,7 +90,13 @@ function AuthLoading() {
 }
 
 function LoginScreen({ initialError, onAuthenticated }: { initialError: string | null; onAuthenticated: (response: z.infer<typeof AuthUserResponseSchema>) => void }) {
-  const [email, setEmail] = useState("admin@svistoplyasovo.local")
+  const [email, setEmail] = useState(() => {
+    try {
+      const invitedEmail = window.sessionStorage.getItem("crm-invitation-email")
+      if (invitedEmail) window.sessionStorage.removeItem("crm-invitation-email")
+      return invitedEmail ?? (import.meta.env.DEV ? "admin@svistoplyasovo.local" : "")
+    } catch { return import.meta.env.DEV ? "admin@svistoplyasovo.local" : "" }
+  })
   const [password, setPassword] = useState("")
   const login = useMutation({
     mutationFn: () => {
