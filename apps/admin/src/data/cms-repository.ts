@@ -6,7 +6,7 @@ import { CmsMetrikaSettingsDetailSchema, CmsNavigationLinkSchema, CmsPreviewToke
 import { CmsPublicationPreviewSchema, type CmsPublicationPreview } from "@crm/contracts/publication"
 import { CmsReleaseDetailSchema, CmsReleaseListResponseSchema, type CmsReleaseListItem } from "@crm/contracts/publication"
 import { OutboxDeliveryReplayResultSchema } from "@crm/contracts/outbox"
-import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset } from "@crm/contracts"
+import { MediaAssetDetailSchema, MediaAssetListResponseSchema, MediaAssetSchema, MediaUploadGrantSchema, type MediaAsset as WireMediaAsset, type MediaAssetDetail as WireMediaAssetDetail } from "@crm/contracts"
 import { PublicRouteManifestSchema } from "@crm/contracts"
 import { CmsHomeOfferingChoiceListSchema, PromotionListSchema, type CmsHomeOfferingKind, type CmsHomeOfferingChoice } from "@crm/contracts"
 
@@ -466,7 +466,7 @@ export class ApiCmsRepository implements CmsRepository {
     }
   }
   async getMedia(query?: MediaAssetListQuery) { const search = new URLSearchParams({ limit: String(query?.limit ?? 30) }); if (query?.q) search.set("q", query.q); if (query?.state) search.set("state", query.state); if (query?.cursor) search.set("cursor", query.cursor); const response = await this.client.get(`/media/assets?${search.toString()}`, MediaAssetListResponseSchema); return { items: response.items.map((asset) => mediaView(asset)), nextCursor: response.nextCursor } }
-  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated), processing: response.processing } }
+  async getAsset(id: string, query?: MediaAssetUsageQuery) { const search = new URLSearchParams(); if (query?.pageId) search.set("pageId", query.pageId); if (query?.path) search.set("path", query.path); const suffix = search.size ? `?${search.toString()}` : ""; const response = await this.client.get(`/media/assets/${encodeURIComponent(id)}${suffix}`, MediaAssetDetailSchema); return mediaDetailView(response) }
   async getPublishedRedirects() {
     const base = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "/api/public/v1").replace(/\/$/, "")
     const response = await fetch(`${base}/pages/manifest`, { cache: "no-store" })
@@ -512,9 +512,9 @@ export class ApiCmsRepository implements CmsRepository {
       tags: asset.tags ?? [],
       focalPoint: asset.focalPoint ?? { x: 0.5, y: 0.5 },
     }, MediaAssetDetailSchema)
-    return { ...mediaView(response.asset, response.usages), processing: response.processing }
+    return mediaDetailView(response)
   }
-  async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return { ...mediaView(response.asset, response.usages), processing: response.processing } }
+  async archiveMedia(id: string, expectedVersion: number) { const response = await this.client.post(`/media/assets/${encodeURIComponent(id)}/archive`, { expectedVersion }, MediaAssetDetailSchema); return mediaDetailView(response) }
   async getReleases(): Promise<import("@admin/entities/cms").ReleaseRecord[]> {
     const response = await this.client.get("/releases", CmsReleaseListResponseSchema)
     return response.items.map((item) => releaseView(item, response.activeReleaseId, response.activeReleaseVersion))
@@ -847,6 +847,12 @@ function filterMediaUsages(asset: import("@admin/entities/cms").MediaAsset, quer
   if ((!pageId && !path) || !asset.usages) return { ...asset, usageTotal: asset.usageTotal ?? asset.usageCount, usagesTruncated: asset.usagesTruncated ?? (asset.usages?.length ?? 0) < asset.usageCount }
   const usages = asset.usages.filter((usage) => (!pageId || usage.pageId === pageId) && (!path || usage.path === path))
   return { ...asset, usages, usageTotal: usages.length, usagesTruncated: false }
+}
+
+function mediaDetailView(response: WireMediaAssetDetail): import("@admin/entities/cms").MediaAsset {
+  return { ...mediaView(response.asset, response.usages, response.usageTotal, response.usagesTruncated), processing: response.processing,
+    ...(response.fileVersions === undefined ? {} : { fileVersions: response.fileVersions }),
+    ...(response.fileVersionsTruncated === undefined ? {} : { fileVersionsTruncated: response.fileVersionsTruncated }) }
 }
 
 function mediaView(asset: WireMediaAsset, usages: Array<{ ownerType: string; ownerId: string; pageId?: string | null; path?: string | null; pointer: string; published: boolean }> = [], usageTotal?: number, usagesTruncated?: boolean): import("@admin/entities/cms").MediaAsset {

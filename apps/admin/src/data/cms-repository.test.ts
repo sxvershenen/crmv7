@@ -152,6 +152,15 @@ describe("ApiCmsRepository", () => {
     expect(client.get).toHaveBeenCalledWith(`/media/assets/${ids.node}?path=%2Ffamily`, expect.anything())
   })
 
+  it("passes server file history to the media editor", async () => {
+    const client = clientMock()
+    const fileVersion = { revision: 1, createdAt: "2026-09-27T10:00:00.000Z", mimeType: "image/jpeg", byteSize: 1200, current: true, previewUrl: "/api/public/v1/media/preview" }
+    client.get.mockResolvedValue({ asset: wireMediaAsset(), usages: [], usageTotal: 0, usagesTruncated: false, processing: null, fileVersions: [fileVersion], fileVersionsTruncated: false })
+    const result = await new ApiCmsRepository(client as never).getAsset(ids.node)
+    expect(result.fileVersions).toEqual([fileVersion])
+    expect(result.fileVersionsTruncated).toBe(false)
+  })
+
   it("uses current SEO fields from the node list without reading every page", async () => {
     const client = clientMock()
     client.get.mockResolvedValue({ items: [listItem(detail)], nextCursor: null })

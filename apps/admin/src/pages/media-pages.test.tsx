@@ -180,6 +180,18 @@ it("opens old media log and version URLs on the real metadata tab without invent
   }
 })
 
+it("shows server-backed file versions and marks the current upload", async () => {
+  getAsset.mockResolvedValue({ ...asset, fileVersions: [
+    { revision: 2, createdAt: "2026-09-28T10:00:00.000Z", mimeType: "image/png", byteSize: 2048, current: true, previewUrl: "/new.webp" },
+    { revision: 1, createdAt: "2026-09-27T10:00:00.000Z", mimeType: "image/jpeg", byteSize: 1024, current: false, previewUrl: "/old.webp" },
+  ], fileVersionsTruncated: false })
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1?tab=versions"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText("Версия 2")).toBeInTheDocument()
+  expect(screen.getByText("Версия 1")).toBeInTheDocument()
+  expect(screen.getByText("Действующая")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Открыть изображение" })).toHaveAttribute("href", "/old.webp")
+})
+
 it("shows processing after upload when the API has not marked the file ready", async () => {
   uploadMedia.mockResolvedValue({ ...asset, status: "converting" })
   const view = render(<TooltipProvider><MemoryRouter initialEntries={["/media?upload=1"]}><Routes><Route element={<MediaLibraryPage />} path="/media" /></Routes></MemoryRouter></TooltipProvider>)

@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException, UnprocessableEntityException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import sharp from "sharp"
-import { DataSource, LessThanOrEqual } from "typeorm"
+import { DataSource, In, LessThanOrEqual } from "typeorm"
 
 import {
   MediaAssetDetailSchema,
@@ -96,11 +96,25 @@ export class MediaService {
       && (query.published === undefined || usage.published === query.published)
     ))
     const usages = matchingUsages.slice(0, query.limit)
+    const blobs = await this.dataSource.getRepository(MediaBlobEntity).find({ where: { assetId }, order: { revision: "DESC" }, take: 101 })
+    const visibleBlobs = blobs.slice(0, 100)
+    const variants = visibleBlobs.length ? await this.dataSource.getRepository(MediaVariantEntity).find({
+      where: { assetId, blobId: In(visibleBlobs.map((blob) => blob.id)), format: "webp" }, order: { width: "DESC" },
+    }) : []
+    const previews = new Map<string, MediaVariantEntity>()
+    for (const variant of variants) if (!previews.has(variant.blobId)) previews.set(variant.blobId, variant)
     return MediaAssetDetailSchema.parse({
       asset: await this.asset(row, allUsages),
       usages,
       usageTotal: matchingUsages.length,
       usagesTruncated: matchingUsages.length > usages.length,
+      fileVersions: visibleBlobs.map((blob) => {
+        const preview = previews.get(blob.id)
+        return { revision: blob.revision, createdAt: blob.createdAt.toISOString(), mimeType: blob.mimeType, byteSize: blob.byteSize,
+          current: row.currentBlobId === blob.id,
+          previewUrl: row.state === "ready" && preview ? this.storage.publicUrl(`public/${preview.storageKey}`, `/api/public/v1/media/${row.id}/${preview.id}`) : null }
+      }),
+      fileVersionsTruncated: blobs.length > visibleBlobs.length,
       processing: await this.processingStatus(assetId),
     })
   }

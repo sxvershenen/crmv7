@@ -190,6 +190,8 @@ export type MediaAsset = {
   usageTotal?: number
   usagesTruncated?: boolean
   processing?: MediaAssetDetail["processing"]
+  fileVersions?: NonNullable<MediaAssetDetail["fileVersions"]>
+  fileVersionsTruncated?: boolean
 }
 
 export type MediaAssetUsageQuery = { pageId?: string; path?: string }

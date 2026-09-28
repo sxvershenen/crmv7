@@ -110,6 +110,15 @@ export const MediaAssetDetailSchema = z.object({
   usages: z.array(MediaUsageSchema).max(200),
   usageTotal: z.number().int().nonnegative(),
   usagesTruncated: z.boolean(),
+  fileVersions: z.array(z.object({
+    revision: z.number().int().positive(),
+    createdAt: DateTimeSchema,
+    mimeType: z.string().min(1).max(255),
+    byteSize: z.number().int().nonnegative().safe(),
+    current: z.boolean(),
+    previewUrl: z.string().url().or(z.string().startsWith("/")).nullable(),
+  }).strict()).max(100).optional(),
+  fileVersionsTruncated: z.boolean().optional(),
   processing: z.object({
     state: z.enum(["uploading", "queued", "processing", "failed"]),
     purpose: z.enum(["initial", "replacement"]),
