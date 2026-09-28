@@ -59,8 +59,18 @@ export const CmsHomeCardSchema = z.object({
   selectedOfferingIds: z.array(IdSchema).max(12).optional(),
 }).strict();
 
+export const CmsHomeReviewDraftSchema = z.object({
+  id: z.string().min(1).max(160),
+  name: z.string().max(160),
+  text: z.string().max(4000),
+  rating: z.number().int().min(1).max(5),
+  avatarUrl: CmsHomeCardSchema.shape.imageUrl.optional(),
+  date: z.string().max(80).optional(),
+  sourceLabel: z.string().max(80).optional(),
+}).strict();
+
 export const CmsScalarPatchSchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema, z.array(CmsHomeCardSchema).max(12)]) }).strict(),
+  z.object({ operation: z.literal("replace"), value: z.union([BoundedJsonValueSchema, ListingDefinitionSchema, CmsEditorialBlocksPatchValueSchema, z.array(CmsHomeCardSchema).max(12), z.array(CmsHomeReviewDraftSchema).max(40)]) }).strict(),
   z.object({ operation: z.literal("reset") }).strict(),
 ]);
 

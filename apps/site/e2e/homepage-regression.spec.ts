@@ -107,6 +107,26 @@ test("keeps the requested responsive presentation details", async ({ page }, tes
   }
 });
 
+test("keeps action circles stationary while their icons react", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium");
+  const saunaAction = page.locator("#sauna .btn").first();
+  await saunaAction.scrollIntoViewIfNeeded();
+  await saunaAction.hover();
+  await expect(saunaAction.locator(".btn-arrow")).toHaveCSS("transform", "none");
+  await expect(saunaAction.locator(".lucide-plus")).toHaveCSS("transform", "none");
+
+  const eventCard = page.locator("#events .group\\/card").first();
+  await eventCard.scrollIntoViewIfNeeded();
+  await eventCard.hover();
+  await expect(eventCard.locator(".arrow-bubble")).toHaveCSS("transform", "none");
+  await expect(eventCard.locator(".arrow-bubble .lucide-arrow-right")).not.toHaveCSS("transform", "none");
+
+  const faq = page.locator("#location .site-accordion").first();
+  await faq.scrollIntoViewIfNeeded();
+  await faq.locator("button").click();
+  await expect(faq.locator(".site-accordion__icon")).toHaveCSS("transform", "none");
+});
+
 test("has no mobile document overflow while the reusable swipe hint runs", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium");
   await page.setViewportSize({ width: 390, height: 844 });

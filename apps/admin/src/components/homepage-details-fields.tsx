@@ -22,6 +22,11 @@ export function HomepageDetailsFields({ id, sectionKey, value, onChange }: {
     <ol className="space-y-3">{items.map((item, index) => <li key={item.id} className="space-y-2 rounded-lg border p-3">
       {"name" in item ? <>
         <FormField htmlFor={`${id}-${item.id}-name`} label={`Имя автора ${index + 1}`}><Input id={`${id}-${item.id}-name`} maxLength={160} value={item.name} onChange={(event) => updateItem(index, { name: event.target.value })} /></FormField>
+        <FormField htmlFor={`${id}-${item.id}-avatar`} label={`Фото автора ${index + 1} (HTTPS-ссылка)`}><Input id={`${id}-${item.id}-avatar`} maxLength={2048} placeholder="https://…" value={item.avatarUrl ?? ""} onChange={(event) => updateItem(index, { avatarUrl: event.target.value })} /></FormField>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField htmlFor={`${id}-${item.id}-date`} label="Дата отзыва"><Input id={`${id}-${item.id}-date`} maxLength={80} placeholder="12 февраля 2025" value={item.date ?? ""} onChange={(event) => updateItem(index, { date: event.target.value })} /></FormField>
+          <FormField htmlFor={`${id}-${item.id}-source`} label="Источник (если подтверждён)"><Input id={`${id}-${item.id}-source`} maxLength={80} placeholder="Например, Яндекс Карты" value={item.sourceLabel ?? ""} onChange={(event) => updateItem(index, { sourceLabel: event.target.value })} /></FormField>
+        </div>
         <FormField htmlFor={`${id}-${item.id}-text`} label={`Текст отзыва ${index + 1}`}><Textarea id={`${id}-${item.id}-text`} maxLength={4000} value={item.text} onChange={(event) => updateItem(index, { text: event.target.value })} /></FormField>
         <FormField htmlFor={`${id}-${item.id}-rating`} label={`Оценка отзыва ${index + 1}`}><select id={`${id}-${item.id}-rating`} className="h-9 rounded-md border bg-background px-3 text-sm" value={item.rating} onChange={(event) => updateItem(index, { rating: Number(event.target.value) })}>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating}</option>)}</select></FormField>
       </> : <>

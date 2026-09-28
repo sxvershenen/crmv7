@@ -420,7 +420,7 @@ createServer(async (request, response) => {
       programs: { eyebrow: null, title: "Программы из CMS", description: "", action: null },
       venues: { eyebrow: null, title: "Площадки из CMS", description: "", action: null },
       blog: { eyebrow: null, title: "Материалы из CMS", description: "", action: { label: "Все материалы", href: "/blog" } },
-      reviews: { reviews: [{ id: "review-2", name: "Второй гость из CMS", text: "Второй отзыв из релиза", rating: 4 }, { id: "review-1", name: "Первый гость из CMS", text: "Первый отзыв из релиза", rating: 5 }], eyebrow: "CMS доверие", title: "Отзывы из CMS", description: "Редакционный текст отзывов из опубликованной редакции.", action: null },
+      reviews: { reviews: [{ id: "review-2", name: "Второй гость из CMS", text: "Второй отзыв из релиза", rating: 4, avatarUrl: "https://images.example.test/review-2.webp", date: "12 февраля 2025" }, { id: "review-1", name: "Первый гость из CMS", text: "Первый отзыв из релиза", rating: 5 }], eyebrow: "CMS доверие", title: "Отзывы из CMS", description: "Редакционный текст отзывов из опубликованной редакции.", action: null },
       map: { eyebrow: "CMS схема", title: "Карта из CMS", description: "Редакционный текст карты из опубликованной редакции.", action: null },
       faq: { faq: [{ id: "faq-2", question: "Второй вопрос из CMS?", answer: "Второй ответ из релиза" }, { id: "faq-1", question: "Первый вопрос из CMS?", answer: "Первый ответ из релиза" }], eyebrow: "CMS полезное", title: "FAQ из CMS", description: "Редакционный текст FAQ из опубликованной редакции.", action: null },
       calculator: { eyebrow: "CMS расчёт", title: "Калькулятор из CMS", description: "Редакционный текст калькулятора из опубликованной редакции.", action: null },

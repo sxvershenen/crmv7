@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ArrowRight, MessageSquare, Play, Star, Volume2, VolumeX } from 'lucide-react';
 import type { CmsHomeSectionConfig } from '@crm/contracts';
 import { SiteSectionHeader } from '@crm/site-ui';
-import { REVIEWS_DATA, VIDEO_REELS } from '../../data/resortData';
+import { VIDEO_REELS } from '../../data/resortData';
 
 export const ReviewsSection: React.FC<{ config: CmsHomeSectionConfig; fixture?: boolean }> = ({ config, fixture = false }) => {
   const [openReview, setOpenReview] = useState<string | null>(null);
@@ -15,6 +15,7 @@ export const ReviewsSection: React.FC<{ config: CmsHomeSectionConfig; fixture?: 
   const activeVideo = VIDEO_REELS[activeVideoIdx] ?? VIDEO_REELS[0]!;
 
   const reviews = config.reviews ?? [];
+  const averageRating = reviews.length ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length : 0;
   const photos = fixture ? [] : (config.cards ?? []).filter((card) => card.imageUrl);
   const activePhoto = photos.find((photo) => photo.id === activePhotoId) ?? photos[0];
   const selectMedia = (id: string) => { videoRef.current?.pause(); setPlaying(false); setVideoError(false); setActivePhotoId(id); };
@@ -36,11 +37,14 @@ export const ReviewsSection: React.FC<{ config: CmsHomeSectionConfig; fixture?: 
             <span className="flex-1 min-w-0"><span className="flex items-center gap-2"><span className="text-[22px] font-semibold tracking-[-.8px] leading-none">4.9 из 5.0</span><span className="flex gap-0.5 text-[var(--site-color-accent-amber)]">{Array.from({ length: 5 }).map((_, i) => <Star key={i} size={14} fill="currentColor" />)}</span></span><span className="block text-[12px] text-ink-2 mt-1">480+ проверенных отзывов на Яндекс Картах</span></span>
             <span className="btn btn-soft group-hover:bg-green-soft group-hover:text-green-deep max-sm:!px-0 max-sm:!w-11"><span className="max-sm:hidden">Смотреть</span><span className="btn-arrow max-sm:!bg-transparent max-sm:!text-ink"><ArrowRight size={15} /></span></span>
           </a>}
+          {!fixture && <div data-review-summary className="bg-surface rounded-[var(--site-radius-xl)] p-4 flex items-center gap-4">
+            <span className="w-12 h-12 rounded-[var(--site-radius-sm)] bg-green-soft text-green-deep inline-flex items-center justify-center shrink-0"><MessageSquare size={22} aria-hidden="true" /></span>
+            <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="text-[22px] font-semibold tracking-[-.8px] leading-none">{averageRating.toFixed(1)} из 5.0</span><span className="flex gap-0.5 text-[var(--site-color-accent-amber)]">{Array.from({ length: 5 }).map((_, index) => <Star key={index} size={14} fill={index < Math.round(averageRating) ? "currentColor" : "none"} />)}</span></span><span className="block text-[12px] text-ink-2 mt-1">Всего отзывов на сайте: {reviews.length}</span></span>
+          </div>}
           {reviews.map((review) => {
-            const presentation = fixture ? REVIEWS_DATA.find((item) => item.id === review.id) : undefined;
             const isOpen = openReview === review.id;
             return <button data-review-card type="button" key={review.id} onMouseEnter={() => setOpenReview(review.id)} onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) setOpenReview(review.id); }} onClick={() => setOpenReview(isOpen ? null : review.id)} aria-expanded={isOpen} aria-label={`Отзыв: ${review.name}`} className="bg-surface rounded-[var(--site-radius-xl)] p-3 cursor-pointer text-left transition-transform duration-[var(--site-motion-normal)] ease-[var(--ease-spring)] hover:-translate-y-px">
-              <span className="flex items-center gap-3"><span className="w-11 h-11 rounded-full bg-green-soft inline-flex items-center justify-center shrink-0">{presentation ? <img src={presentation.avatar} alt="" loading="lazy" className="w-11 h-11 rounded-full object-cover shrink-0" /> : <MessageSquare size={20} aria-hidden="true" />}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold tracking-[-.3px] leading-tight">{review.name}</span>{presentation && <span className="block text-[11px] text-ink-3 mt-0.5">{presentation.date} · Яндекс Карты</span>}</span><span className="flex items-center gap-1 text-[13px] font-semibold"><Star size={13} className="text-[var(--site-color-accent-amber)]" fill="currentColor" /> {review.rating}.0</span></span>
+              <span className="flex items-center gap-3"><span className="w-11 h-11 rounded-full bg-green-soft inline-flex items-center justify-center shrink-0">{review.avatarUrl ? <img src={review.avatarUrl} alt="" loading="lazy" className="w-11 h-11 rounded-full object-cover shrink-0" /> : <MessageSquare size={20} aria-hidden="true" />}</span><span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold tracking-[-.3px] leading-tight">{review.name}</span>{(review.date || review.sourceLabel) && <span className="block text-[11px] text-ink-3 mt-0.5">{[review.date, review.sourceLabel].filter(Boolean).join(" · ")}</span>}</span><span className="flex items-center gap-1 text-[13px] font-semibold"><Star size={13} className="text-[var(--site-color-accent-amber)]" fill="currentColor" /> {review.rating}.0</span></span>
               <span data-review-body className={`grid pl-[56px] overflow-hidden transition-[grid-template-rows,opacity,margin] duration-500 ease-[var(--site-ease)] text-[12px] ${isOpen ? 'grid-rows-[1fr] opacity-100 mt-2 text-ink-2' : 'grid-rows-[0fr] opacity-0 mt-0 text-ink-3'}`}><span className="min-h-0 overflow-hidden leading-relaxed">{review.text}</span></span>
               <span aria-hidden="true" className={`block pl-[56px] overflow-hidden whitespace-nowrap text-ellipsis text-[12px] text-ink-3 transition-[height,opacity,padding] duration-500 ease-[var(--site-ease)] ${isOpen ? 'h-0 opacity-0 pt-0' : 'h-5 opacity-70 pt-1'}`}>{review.text}</span>
             </button>;

@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { CmsHomeCardSchema, CmsPathSchema } from "./content.js"
+import { CmsHomeCardSchema, CmsHomeReviewDraftSchema, CmsPathSchema } from "./content.js"
 import { PublicResolvedSectionSchema } from "./public-site.js"
 import { IdSchema } from "./primitives.js"
 
@@ -9,9 +9,6 @@ export const CMS_HOME_SECTION_KEYS = [
 export type CmsHomeSectionKey = (typeof CMS_HOME_SECTION_KEYS)[number]
 
 const itemId = z.string().min(1).max(160)
-const CmsHomeReviewDraftSchema = z.object({
-  id: itemId, name: z.string().max(160), text: z.string().max(4000), rating: z.number().int().min(1).max(5),
-}).strict()
 const CmsHomeFaqDraftSchema = z.object({
   id: itemId, question: z.string().max(320), answer: z.string().max(4000),
 }).strict()

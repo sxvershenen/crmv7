@@ -31,6 +31,11 @@ describe("homepage reviews and FAQ", () => {
     expect(CmsHomeSectionConfigSchema.safeParse({ ...config, reviews: [], faq: [] }).success).toBe(true)
     expect(CmsHomeSectionDraftSchema.safeParse({ ...config, reviews: [{ ...review, name: "", text: "" }], faq: [{ ...faq, question: "", answer: "" }] }).success).toBe(true)
   })
+  it("preserves editable review portraits and attribution in the public contract", () => {
+    const presented = { ...review, avatarUrl: "https://images.example.org/guest.webp", date: "12 февраля 2025", sourceLabel: "Яндекс Карты" }
+    expect(CmsHomeSectionSchema.parse({ ...section, key: "reviews", config: { ...config, reviews: [presented] } }).config.reviews).toEqual([presented])
+    expect(CmsHomeSectionConfigSchema.safeParse({ ...config, reviews: [{ ...presented, avatarUrl: "http://images.example.org/guest.webp" }] }).success).toBe(false)
+  })
   it.each([
     { reviews: [{ ...review, name: " " }] }, { reviews: [{ ...review, text: " " }] },
     { reviews: [{ ...review, rating: 0 }] }, { reviews: [{ ...review, rating: 6 }] }, { reviews: [{ ...review, rating: 4.5 }] },

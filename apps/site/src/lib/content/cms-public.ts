@@ -33,7 +33,7 @@ export function toSitePromo(promotion: PublicPage["featuredPromotions"][number])
     ? `${promotion.value}%`
     : rubles(promotion.value)
   const conditions = [promotion.minimumAmountMinor ? `от ${rubles(promotion.minimumAmountMinor)}` : "", promotion.scope === "selected" ? "на выбранные предложения" : ""].filter(Boolean)
-  return { id: promotion.id, code: promotion.code, amount, desc: [promotion.name, ...conditions].join(" · "), emoji: "🎟️", colorBg: "" }
+  return { id: promotion.id, code: promotion.code, amount, desc: [promotion.name, ...conditions].join(" · "), emoji: "", colorBg: "" }
 }
 
 export function getPublishedRoute(pathname: string, searchParams = new URLSearchParams()) {

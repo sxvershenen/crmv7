@@ -202,14 +202,16 @@ export interface SiteSpaFeatureCardProps {
   price?: ReactNode
   priceBasisLabel?: ReactNode
   added?: boolean
+  actionIcon?: "arrow" | "plus"
   onSelect: () => void
   /** @deprecated SPA tabs are no longer rendered. */
   onTabChange?: (id: string) => void
   onAdd?: () => void
 }
 
-export function SiteSpaFeatureCard({ added, description, media, onAdd, onSelect, price, priceBasisLabel, title }: SiteSpaFeatureCardProps) {
-  const action = <button type="button" onClick={(event) => { event.stopPropagation(); (onAdd ?? onSelect)() }} className={cn("btn", added ? "btn-primary" : "btn-soft")}><span>{onAdd ? added ? "Добавлено" : "Добавить" : "Узнать условия"}</span><span className={cn("btn-arrow", !added && "plus")}>{added ? <Check size={14} /> : onAdd ? <Plus size={15} /> : <ArrowRight size={15} />}</span></button>
+export function SiteSpaFeatureCard({ actionIcon, added, description, media, onAdd, onSelect, price, priceBasisLabel, title }: SiteSpaFeatureCardProps) {
+  const icon = actionIcon ?? (onAdd ? "plus" : "arrow")
+  const action = <button type="button" onClick={(event) => { event.stopPropagation(); (onAdd ?? onSelect)() }} className={cn("btn", added ? "btn-primary" : "btn-soft")}><span>{onAdd ? added ? "Добавлено" : "Добавить" : "Узнать условия"}</span><span className="btn-arrow">{added ? <Check size={14} /> : icon === "plus" ? <Plus size={15} /> : <ArrowRight size={15} />}</span></button>
   return <div onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }} role="button" tabIndex={0} data-site-component="spa-card" className="card group/card flex flex-col cursor-pointer hover:-translate-y-1 transition-transform duration-[var(--site-motion-normal)] ease-[var(--site-ease)]"><div>{media}<div className="px-2 pt-4 pb-2 flex flex-col gap-3"><h3 className="text-[20px] leading-[1.2] font-semibold tracking-[-.5px]">{title}</h3><p className="site-spa-card__content min-h-[84px] text-[13px] leading-[1.5] text-ink-2">{description}</p><div className="mt-auto pt-2 flex items-end justify-between gap-3">{price ? <div><div className="text-[11px] text-ink-3 mb-1">{priceBasisLabel ?? "за час от"}</div><div className="text-[28px] leading-none font-semibold tracking-[-1px]">{price}</div></div> : <span className="text-[12px] text-ink-3">Стоимость уточнит менеджер</span>}{action}</div></div></div></div>
 }
 
