@@ -58,4 +58,6 @@ OpenAPI: `/api/internal/v1/openapi.json`, `/api/admin/v1/openapi.json`, `/api/pu
 
 Standalone site: `pnpm --filter @crm/site build`, затем `HOST=127.0.0.1 PORT=4329 node apps/site/dist/server/entry.mjs` из корня репозитория. `CMS_PUBLIC_API_BASE_URL` задаётся при сборке; `HOST`/`PORT` — при запуске. `pnpm --filter @crm/site test:e2e:cms:production` собирает и запускает приложение с HTTP contract stub, без БД. После теста для обычного запуска повторите build с нужным API-адресом.
 
+Сквозная проверка первого выпуска главной на реальном API/PostgreSQL: задайте **новую пустую disposable test DB** и ограниченную роль через `TEST_DATABASE_URL`, затем запустите `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @crm/site test:e2e:live-api`. Тест сам мигрирует и заполняет только эту БД, проверяет публикацию и откат через публичный SSR на desktop/mobile. Повторный запуск требует новую пустую тестовую БД; рабочую локальную БД он не использует.
+
 Полный release gate: `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`, `pnpm -r build`. Для локальной задачи сначала используйте targeted commands из testing matrix. UI galleries: `/dev/ui`, `/dev/ui/admin`, `/dev/site-ui-v2`.

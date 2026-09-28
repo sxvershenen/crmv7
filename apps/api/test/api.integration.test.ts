@@ -1565,6 +1565,9 @@ describe.sequential("internal API + PostgreSQL", () => {
     await adminAgent.post("/api/admin/v1/site-settings/publish").send({
       operationId: randomUUID(), idempotencyKey: `first-home-settings-publish-${randomUUID()}`, expectedVersion: savedSettings.body.version,
     }).expect(200)
+    const settingsOnlyReleases = await adminAgent.get("/api/admin/v1/releases").expect(200)
+    expect(settingsOnlyReleases.body.items).toHaveLength(1)
+    expect(settingsOnlyReleases.body.items[0].manifest.routes).toEqual([])
 
     const home = await adminAgent.post("/api/admin/v1/content/nodes").send({
       operationId: randomUUID(), idempotencyKey: `first-home-create-${randomUUID()}`, kind: "home",

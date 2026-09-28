@@ -25,7 +25,8 @@ export const ReleaseManifestSchema = z.object({
   sequence: VersionSchema,
   state: ReleaseStateSchema,
   baseReleaseId: IdSchema.nullable(),
-  routes: z.array(ReleaseRouteSchema).min(1).max(20_000),
+  // The first site-settings publication can precede every page.
+  routes: z.array(ReleaseRouteSchema).max(20_000),
   manifestHash: z.string().regex(/^[a-f0-9]{64}$/),
   createdBy: IdSchema,
   createdAt: DateTimeSchema,

@@ -34,7 +34,7 @@
 
 ## Следующий инкремент
 
-1. CMS: продолжить media lifecycle (usage/retry/processing) и оставшиеся C3–C10. Первый запуск главной и живые CRM-промокоды прошли HTTP/PostgreSQL integration; остаётся isolated browser → API → public renderer E2E, включая доставку и откат. Дальше — scheduled-resource contract бани/чана и остальные media flows по roadmap. Сохранность редактора, FAQ/отзывы, hero media и история редакций уже реализованы; новые формы переиспользуют этот flow.
+1. CMS: продолжить media lifecycle (usage/retry/processing) и оставшиеся C3–C10. Первый запуск главной и живые CRM-промокоды прошли HTTP/PostgreSQL integration; отдельный browser → API → public renderer E2E проверяет первый выпуск, изменение и откат главной на desktop/mobile. Остаётся пройти тот же путь через UI редактора и проверить delivery state/replay. Дальше — scheduled-resource contract бани/чана и остальные media flows по roadmap. Сохранность редактора, FAQ/отзывы, hero media и история редакций уже реализованы; новые формы переиспользуют этот flow.
 2. Параллельно закрыть go-live media decisions: provider/data-location/retention approval и rights/source review для approved media migration.
 3. После надёжного редакционного ядра расширять P4.7 attribution linkage/models; минимальная аналитика должна честно отражать уже поддержанные измерения.
 
