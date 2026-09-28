@@ -459,10 +459,24 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
       if (item.type === "bath" && resource.kind !== "bath" && resource.kind !== "sauna") {
         throw new ConflictException({ code: "BOOKING_RESOURCE_TYPE_MISMATCH", message: "Для бани или чана выберите SPA-ресурс" })
       }
+      let preparationMinutes = item.preparationMinutes
+      if (item.type === "bath") {
+        const configured = (resource.settings.rules as { preparationAfterMinutes?: unknown } | undefined)?.preparationAfterMinutes
+        if (configured !== undefined && configured !== "") {
+          if (typeof configured !== "string" || !/^\d+$/.test(configured) || Number(configured) > 1440) {
+            throw new ConflictException({ code: "RESOURCE_PREPARATION_INVALID", message: "Некорректное время подготовки бани или чана в правилах ресурса" })
+          }
+          preparationMinutes = Number(configured)
+        }
+        if (item.preparationMinutes !== preparationMinutes) {
+          item.preparationMinutes = preparationMinutes
+          await manager.getRepository(BookingItemEntity).update(item.id, { preparationMinutes, updatedBy: actor.id })
+        }
+      }
       const start = new Date(item.startAt)
       const end = new Date(item.endAt)
-      if (item.type === "bath") end.setMinutes(end.getMinutes() + item.preparationMinutes)
-      else start.setMinutes(start.getMinutes() - item.preparationMinutes)
+      if (item.type === "bath") end.setMinutes(end.getMinutes() + preparationMinutes)
+      else start.setMinutes(start.getMinutes() - preparationMinutes)
       const existing = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder("allocation").where("allocation.resource_id = :resourceId", { resourceId: resource.id }).andWhere("allocation.status IN (:...statuses)", { statuses: ["active", "tentative"] }).andWhere("allocation.archived_at IS NULL").andWhere("allocation.start_at < :endAt AND allocation.end_at > :startAt", { startAt: start, endAt: end }).getMany()
       const result = checkAvailability({ resourceId: resource.id, startAt: start, endAt: end, quantity: item.quantity }, existing.map(toAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})
       if (!result.available && overrideConflict && !actor.capabilities.canOverrideConflict) {

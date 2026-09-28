@@ -1276,13 +1276,15 @@ describe.sequential("internal API + PostgreSQL", () => {
     }))
     await dataSource.getRepository(ResourceEntity).save(dataSource.getRepository(ResourceEntity).create({
       id: bathId, code: "R-bath-preparation", kind: "bath", name: "Баня с подготовкой", capacityMode: "fixed", capacityTotal: 1,
-      settings: {}, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+      settings: { rules: { availableDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], bookingStepMinutes: "", defaultCheckIn: "", defaultCheckOut: "", maxDurationMinutes: "", minDurationMinutes: "", preparationAfterMinutes: "30", preparationBeforeMinutes: "" } },
+      createdBy: adminId, updatedBy: adminId, archivedAt: null,
     }))
     const create = (suffix: string, startAt: string, endAt: string, preparationMinutes = 0) => adminAgent.post("/api/internal/v1/bookings").send({
       operationId: randomUUID(), idempotencyKey: `booking-bath-preparation-${suffix}`, overrideConflict: false, customerId,
       items: [{ type: "bath", resourceId: bathId, startAt, endAt, quantity: 1, price: { amountMinor: 200000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes }], note: null,
     })
-    const prepared = await create("main", "2026-11-21T10:00:00.000Z", "2026-11-21T11:00:00.000Z", 30).expect(201)
+    const prepared = await create("main", "2026-11-21T10:00:00.000Z", "2026-11-21T11:00:00.000Z").expect(201)
+    expect(prepared.body.items[0].preparationMinutes).toBe(30)
     const allocations = dataSource.getRepository(ResourceAllocationEntity)
     const legacyAllocation = await allocations.findOneByOrFail({ sourceType: "booking_item", sourceId: prepared.body.items[0].id })
     await allocations.update(legacyAllocation.id, { startAt: new Date("2026-11-21T09:30:00.000Z"), endAt: new Date("2026-11-21T11:00:00.000Z") })
@@ -1306,9 +1308,17 @@ describe.sequential("internal API + PostgreSQL", () => {
     const allocation = await allocations.findOneByOrFail({ id: legacyAllocation.id })
     expect(allocation.startAt.toISOString()).toBe("2026-11-21T10:00:00.000Z")
     expect(allocation.endAt.toISOString()).toBe("2026-11-21T11:30:00.000Z")
-    await create("before", "2026-11-21T09:30:00.000Z", "2026-11-21T10:00:00.000Z").expect(201)
+    await create("before", "2026-11-21T09:00:00.000Z", "2026-11-21T09:30:00.000Z").expect(201)
     await create("preparation-conflict", "2026-11-21T11:00:00.000Z", "2026-11-21T11:30:00.000Z").expect(409)
     await create("after", "2026-11-21T11:30:00.000Z", "2026-11-21T12:00:00.000Z").expect(201)
+    const resources = dataSource.getRepository(ResourceEntity)
+    const resource = await resources.findOneByOrFail({ id: bathId })
+    resource.settings = { ...resource.settings, rules: { ...(resource.settings.rules as object), preparationAfterMinutes: "60" } }
+    await resources.save(resource)
+    expect((await allocations.findOneByOrFail({ id: legacyAllocation.id })).endAt.toISOString()).toBe("2026-11-21T11:30:00.000Z")
+    const next = await create("new-rule", "2026-11-21T13:00:00.000Z", "2026-11-21T14:00:00.000Z").expect(201)
+    expect(next.body.items[0].preparationMinutes).toBe(60)
+    expect((await allocations.findOneByOrFail({ sourceId: next.body.items[0].id, sourceType: "booking_item" })).endAt.toISOString()).toBe("2026-11-21T15:00:00.000Z")
   })
 
   it("creates normalized bookings, allocates resources and keeps payment operations immutable/idempotent", async () => {
