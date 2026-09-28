@@ -213,6 +213,8 @@ Subtype/capability, not a free-text bucket:
 
 Operational fields: pricing basis, duration/slot step, quantity/capacity, resource binding, availability requirement, standalone vs only-with-offering, applicability, tax/currency and price rules. CMS fields: public title/description, usage instructions, inclusions, restrictions, media, related offers and CTA.
 
+Для текущей бани стандартный почасовой тариф: 3 000 ₽ до 6 гостей, 3 500 ₽ до 10, 4 000 ₽ до 15. Тариф «Всё включено» для тех же групп: 6 000/7 000/8 000 ₽ в час; в него входят халаты, полотенца, веники, арома-масла, травяной чай и сушки. Чан — 5 600 ₽ за сеанс с хвойным наполнением и шестью простынями, без обещанной фиксированной длительности; большое полотенце — 250 ₽, халат — 500 ₽ дополнительно. Слот чана менеджер задаёт началом и окончанием в CRM, чтобы сохранить проверку пересечений. Цены принадлежат действующему CRM PriceBook; CMS редактирует описание, но не копию суммы. Public request не подтверждает бронь и не показывает выдуманную длительность.
+
 ### 4.4 Площадки
 
 Operational:
