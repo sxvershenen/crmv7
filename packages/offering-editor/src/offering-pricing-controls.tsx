@@ -31,8 +31,10 @@ const pricingWeekdays: Array<{ label: string; value: PriceWeekday }> = [
   { label: "Пт", value: "fri" }, { label: "Сб", value: "sat" }, { label: "Вс", value: "sun" },
 ]
 
-export function ResourceBasePrice({ disabled, editor, kind, onChange, plan }: { disabled: boolean; editor: InternalOfferingEditor; kind: "house" | "campground"; onChange: (patch: Partial<RatePlanDraft>) => void; plan: RatePlanDraft }) {
+export function ResourceBasePrice({ disabled, editor, kind, onChange, plan }: { disabled: boolean; editor: InternalOfferingEditor; kind: "house" | "campground" | "venue"; onChange: (patch: Partial<RatePlanDraft>) => void; plan: RatePlanDraft }) {
   const pitch = kind === "campground" && editor.offering.fulfillment.kind === "campground" && editor.offering.fulfillment.salesUnit === "own_tent_pitch"
+  const venue = kind === "venue"
+  const venueUnit = plan.pricingBasis === "per_day" ? "день" : plan.pricingBasis === "flat_package" ? "пакет" : "час"
   const updateIncluded = (value: string) => {
     const includedQuantity = numberOrNull(value)
     onChange({ includedQuantity, quantityMetric: includedQuantity === null && plan.baseExtraUnitAmount === null ? null : "guests" })
@@ -41,9 +43,10 @@ export function ResourceBasePrice({ disabled, editor, kind, onChange, plan }: { 
     const baseExtraUnitAmount = value.trim() === "" ? null : majorMoneyToMinor(value)
     onChange({ baseExtraUnitAmount, quantityMetric: baseExtraUnitAmount === null && plan.includedQuantity === null ? null : "guests" })
   }
-  return <EditorSection subtitle={pitch ? "Стоимость одного палаточного места за одну ночь." : "Одна понятная формула вместо набора тарифов."} title="Основная цена">
+  return <EditorSection subtitle={pitch ? "Стоимость одного палаточного места за одну ночь." : venue ? "Цена площадки и количество гостей в одном тарифе." : "Одна понятная формула вместо набора тарифов."} title="Основная цена">
     <div className={pitch ? "grid max-w-[220px] items-end" : "grid items-end gap-3 rounded-lg bg-muted/25 p-3 md:grid-cols-[minmax(180px,220px)_minmax(100px,130px)_minmax(180px,220px)]"} data-slot="resource-base-price-formula">
-      <FormField className="min-w-0" htmlFor="resource-base-price" label={pitch ? "Цена за место и ночь, ₽" : "Цена за ночь, ₽"}><Input disabled={disabled} id="resource-base-price" min="0" onChange={(event) => onChange({ baseAmount: majorMoneyToMinor(event.target.value), isDefault: true, pricingBasis: "per_night", ...(pitch ? { quantityMetric: "units", includedQuantity: null, baseExtraUnitAmount: null } : {}) })} step="0.01" type="number" value={minorMoneyToMajor(plan.baseAmount)} /></FormField>
+      {venue ? <FormField className="min-w-0" htmlFor="resource-price-basis" label="Основа цены"><FormSelect disabled={disabled} id="resource-price-basis" label="Основа цены площадки" onValueChange={(value) => onChange({ pricingBasis: value as RatePlanDraft["pricingBasis"] })} options={pricingBasisOptions.filter((option) => ["per_hour", "per_day", "flat_package"].includes(option.value))} value={plan.pricingBasis} /></FormField> : null}
+      <FormField className="min-w-0" htmlFor="resource-base-price" label={pitch ? "Цена за место и ночь, ₽" : venue ? `Цена за ${venueUnit}, ₽` : "Цена за ночь, ₽"}><Input disabled={disabled} id="resource-base-price" min="0" onChange={(event) => onChange({ baseAmount: majorMoneyToMinor(event.target.value), isDefault: true, ...(venue ? {} : { pricingBasis: "per_night" }), ...(pitch ? { quantityMetric: "units", includedQuantity: null, baseExtraUnitAmount: null } : {}) })} step="0.01" type="number" value={minorMoneyToMajor(plan.baseAmount)} /></FormField>
       {!pitch ? <><FormField className="min-w-0" htmlFor="resource-included-guests" label="Гостей включено"><Input disabled={disabled} id="resource-included-guests" min="0" onChange={(event) => updateIncluded(event.target.value)} placeholder="—" type="number" value={plan.includedQuantity ?? ""} /></FormField><FormField className="min-w-0" htmlFor="resource-extra-guest-price" label="За следующего гостя, ₽"><Input disabled={disabled} id="resource-extra-guest-price" min="0" onChange={(event) => updateExtra(event.target.value)} placeholder="Без доплаты" step="0.01" type="number" value={plan.baseExtraUnitAmount === null ? "" : minorMoneyToMajor(plan.baseExtraUnitAmount)} /></FormField></> : null}
     </div>
   </EditorSection>
@@ -57,7 +60,7 @@ function newSpecialPrice(type: "weekdays" | "holiday" | "period", amount: number
   return { ...common, dateSelector: { type: "custom_date_override", from: today, toExclusive: incrementDateOnly(today), label: "Особый период" } }
 }
 
-export function ResourceSpecialPrices({ disabled, onChange, plan, timezone }: { disabled: boolean; onChange: (rules: PriceRuleDraft[]) => void; plan: RatePlanDraft; timezone: string }) {
+export function ResourceSpecialPrices({ disabled, onChange, plan, timezone, unit = "ночь" }: { disabled: boolean; onChange: (rules: PriceRuleDraft[]) => void; plan: RatePlanDraft; timezone: string; unit?: string }) {
   const updateRule = (index: number, patch: Partial<PriceRuleDraft>) => onChange(plan.rules.map((rule, current) => current === index ? { ...rule, ...patch } : rule))
   const hasHoliday = plan.rules.some((rule) => rule.dateSelector.type === "calendar_holiday")
   const hasWeekdays = plan.rules.some((rule) => rule.dateSelector.type === "recurring_weekdays" || rule.dateSelector.type === "day_class")
@@ -66,12 +69,12 @@ export function ResourceSpecialPrices({ disabled, onChange, plan, timezone }: { 
     subtitle="Добавляйте только исключения из основной цены. Новый год можно задать отдельным периодом."
     title="Особые цены"
   >
-    {plan.rules.length ? <div className="space-y-2" data-slot="resource-special-price-list">{plan.rules.map((rule, index) => <ResourceSpecialPriceRow controlId={rule.id ?? `new-${index}`} disabled={disabled} key={rule.id ?? `${rule.dateSelector.type}-${index}`} onChange={(patch) => updateRule(index, patch)} onDelete={() => onChange(plan.rules.filter((_, current) => current !== index))} rule={rule} />)}</div> : <div className="rounded-lg border border-dashed px-4 py-5 text-center text-xs text-muted-foreground">Во все дни действует основная цена.</div>}
+    {plan.rules.length ? <div className="space-y-2" data-slot="resource-special-price-list">{plan.rules.map((rule, index) => <ResourceSpecialPriceRow controlId={rule.id ?? `new-${index}`} disabled={disabled} key={rule.id ?? `${rule.dateSelector.type}-${index}`} onChange={(patch) => updateRule(index, patch)} onDelete={() => onChange(plan.rules.filter((_, current) => current !== index))} rule={rule} unit={unit} />)}</div> : <div className="rounded-lg border border-dashed px-4 py-5 text-center text-xs text-muted-foreground">Во все дни действует основная цена.</div>}
     <p className="mt-3 text-[10px] text-muted-foreground">Приоритет: особый период → праздник → день недели → основная цена.</p>
   </EditorSection>
 }
 
-function ResourceSpecialPriceRow({ controlId, disabled, onChange, onDelete, rule }: { controlId: string; disabled: boolean; onChange: (patch: Partial<PriceRuleDraft>) => void; onDelete: () => void; rule: PriceRuleDraft }) {
+function ResourceSpecialPriceRow({ controlId, disabled, onChange, onDelete, rule, unit }: { controlId: string; disabled: boolean; onChange: (patch: Partial<PriceRuleDraft>) => void; onDelete: () => void; rule: PriceRuleDraft; unit: string }) {
   const selector = rule.dateSelector
   const selectedDays: PriceWeekday[] = selector.type === "recurring_weekdays" ? [...selector.days] : selector.type === "day_class" ? selector.dayClass === "weekend" ? ["sat", "sun"] : ["mon", "tue", "wed", "thu", "fri"] : []
   const toggleDay = (day: PriceWeekday) => {
@@ -84,7 +87,7 @@ function ResourceSpecialPriceRow({ controlId, disabled, onChange, onDelete, rule
     <div className="min-w-0">
       {selector.type === "recurring_weekdays" || selector.type === "day_class" ? <fieldset><legend className="sr-only">Выберите дни недели</legend><div className="flex flex-wrap gap-1">{pricingWeekdays.map((day) => <Button aria-pressed={selectedDays.includes(day.value)} disabled={disabled} key={day.value} onClick={() => toggleDay(day.value)} size="sm" variant={selectedDays.includes(day.value) ? "secondary" : "outline"}>{day.label}</Button>)}</div></fieldset> : selector.type === "calendar_holiday" ? <p className="break-words text-[11px] leading-4 text-muted-foreground">Все даты, отмеченные праздничными в производственном календаре.</p> : selector.type === "custom_date_override" ? <div className="grid min-w-0 gap-2 min-[420px]:grid-cols-[minmax(120px,1fr)_minmax(125px,0.8fr)_minmax(125px,0.8fr)]"><FormField className="min-w-0" htmlFor={`rule-label-${controlId}`} label="Название"><Input className="min-w-0" disabled={disabled} id={`rule-label-${controlId}`} onChange={(event) => onChange({ dateSelector: { ...selector, label: event.target.value } })} value={selector.label} /></FormField><FormField className="min-w-0" htmlFor={`rule-from-${controlId}`} label="С"><Input disabled={disabled} id={`rule-from-${controlId}`} onChange={(event) => onChange({ dateSelector: { ...selector, from: event.target.value } })} type="date" value={selector.from} /></FormField><FormField className="min-w-0" htmlFor={`rule-to-${controlId}`} label="По"><Input disabled={disabled} id={`rule-to-${controlId}`} onChange={(event) => onChange({ dateSelector: { ...selector, toExclusive: event.target.value ? incrementDateOnly(event.target.value) : "" } })} type="date" value={selector.toExclusive ? incrementDateOnly(selector.toExclusive, -1) : ""} /></FormField></div> : <p className="break-words text-[11px] text-muted-foreground">Системное условие сохранится без потерь.</p>}
     </div>
-    <FormField className="min-w-0" htmlFor={`rule-amount-${controlId}`} label="Цена за ночь, ₽"><Input disabled={disabled} id={`rule-amount-${controlId}`} min="0" onChange={(event) => onChange({ amount: majorMoneyToMinor(event.target.value) })} step="0.01" type="number" value={rule.amount === null ? "" : minorMoneyToMajor(rule.amount)} /></FormField>
+    <FormField className="min-w-0" htmlFor={`rule-amount-${controlId}`} label={`Цена за ${unit}, ₽`}><Input disabled={disabled} id={`rule-amount-${controlId}`} min="0" onChange={(event) => onChange({ amount: majorMoneyToMinor(event.target.value) })} step="0.01" type="number" value={rule.amount === null ? "" : minorMoneyToMajor(rule.amount)} /></FormField>
     <Button aria-label={`Удалить особую цену «${typeLabel}»`} className="justify-self-end lg:self-end" disabled={disabled} onClick={onDelete} size="icon-sm" variant="ghost"><IconTrash aria-hidden="true" /></Button>
   </div>
 }

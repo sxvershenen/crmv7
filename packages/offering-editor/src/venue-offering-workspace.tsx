@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
-import { IconAlertTriangle, IconBuildingCommunity, IconExternalLink, IconFileText, IconReceipt2 } from "@tabler/icons-react"
+import { IconAlertTriangle, IconBuildingCommunity, IconExternalLink, IconFileText } from "@tabler/icons-react"
 
 import type { InternalOfferingEditor } from "@crm/contracts"
-import { Button, EditorSection, PageState, StatusBadge } from "@crm/ui"
+import { Button, EditorSection, PageState } from "@crm/ui"
 
 import { isOfferingEditorConflict, offeringEditorErrorMessage, type OfferingEditorGateway } from "./gateway.js"
+import { OfferingPricingWorkspace } from "./offering-pricing-workspace.js"
+import type { SaveState } from "./house-offering-workspace-model.js"
 
 export type VenueOfferingWorkspaceProps = {
   gateway: OfferingEditorGateway
@@ -20,6 +22,9 @@ export function VenueOfferingWorkspace({ gateway, offeringId, onEditorChange, on
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState(false)
+  const [pricingSaveState, setPricingSaveState] = useState<SaveState>("saved")
+  const [pricingSaveDetail, setPricingSaveDetail] = useState("")
+  const [pricingSaveAction, setPricingSaveAction] = useState<(() => void) | null>(null)
   const load = useCallback(async () => {
     setLoading(true); setError(null); setConflict(false)
     try {
@@ -31,7 +36,20 @@ export function VenueOfferingWorkspace({ gateway, offeringId, onEditorChange, on
       setConflict(isOfferingEditorConflict(reason))
     } finally { setLoading(false) }
   }, [gateway, offeringId, onEditorChange])
-  useEffect(() => { void load(); onNavigationGuardChange?.(null); return () => onNavigationGuardChange?.(null) }, [load, onNavigationGuardChange])
+  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    onNavigationGuardChange?.(pricingSaveState === "saved" ? null : () => typeof window === "undefined" || window.confirm("Есть несохранённые изменения цены. Покинуть страницу?"))
+    return () => onNavigationGuardChange?.(null)
+  }, [onNavigationGuardChange, pricingSaveState])
+  useEffect(() => {
+    if (pricingSaveState === "saved") return
+    const preventUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = "" }
+    window.addEventListener("beforeunload", preventUnload)
+    return () => window.removeEventListener("beforeunload", preventUnload)
+  }, [pricingSaveState])
+  const onSaveActionChange = useCallback((action: (() => void) | null) => setPricingSaveAction(() => action), [])
+  const onSaveState = useCallback((state: SaveState, detail: string) => { setPricingSaveState(state); setPricingSaveDetail(detail) }, [])
+  const createCommandMeta = useCallback(() => ({ operationId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), expectedPricingVersion: editor?.ownerVersions.pricing ?? 1 }), [editor?.ownerVersions.pricing])
 
   if (loading && !editor) return <div aria-label="Загрузка досье площадки" className="space-y-3" role="status"><div className="h-28 animate-pulse rounded-xl bg-muted" /><div className="h-40 animate-pulse rounded-xl bg-muted" /></div>
   if (error) return <div className="rounded-xl border bg-background"><PageState actionLabel="Повторить" icon={IconAlertTriangle} onAction={() => void load()} title={conflict ? "Версия досье изменилась" : "Площадка не открылась"} tone="danger">{error}</PageState></div>
@@ -43,7 +61,9 @@ export function VenueOfferingWorkspace({ gateway, offeringId, onEditorChange, on
   const cmsHref = locator ? editorialHref?.(locator.node.id) ?? null : null
   return <div className="space-y-3">
     <EditorSection title="Досье площадки"><dl className="grid gap-3 text-xs sm:grid-cols-2"><Detail label="Название" value={editor.offering.operationalName} /><Detail label="Код" value={editor.offering.code} /><Detail label="Состояние" value={stateLabel[editor.offering.state] ?? editor.offering.state} /><Detail label="Политика" value="Exclusive Resource · гости · RatePlan" /><Detail label="Вместимость" value="Operational Resource" /><Detail label="Редактирование" value={editor.capabilities.subject.canEdit ? "Доступно в CRM" : "Только чтение"} /></dl></EditorSection>
-    <EditorSection title="PriceBook runtime" subtitle="Цена принадлежит существующему PriceBook API; interval availability здесь не отображается."><div className="flex items-center gap-3 rounded-lg border p-3"><IconReceipt2 aria-hidden="true" className="size-5 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="text-xs font-medium">{activeBook?.name ?? "Активный прайс-лист не задан"}</p><p className="text-[11px] text-muted-foreground">{activeBook ? `${activeBook.ratePlans.length} тариф(ов) · ${activeBook.currency}` : "Площадка доступна только по запросу до настройки цены."}</p></div><StatusBadge tone={activeBook ? "success" : "warning"}>{activeBook ? "Подключён" : "Не готов"}</StatusBadge></div>{!editor.capabilities.pricing.canEditDraft ? <p className="mt-3 text-xs text-muted-foreground">Прайс-лист доступен только для чтения: нет права изменять цены.</p> : <p className="mt-3 text-xs text-muted-foreground">Изменение draft/activation выполняется общим PriceBook runtime.</p>}</EditorSection>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">Цена площадки</h2><p className="text-xs text-muted-foreground">{activeBook ? `Действующий тариф: ${activeBook.name}` : "Цена ещё не введена в действие"}</p></div>{editor.capabilities.pricing.canEditDraft ? <Button disabled={!pricingSaveAction || (pricingSaveState !== "dirty" && pricingSaveState !== "conflict")} onClick={() => pricingSaveAction?.()} size="sm">{pricingSaveState === "conflict" ? "Обновить версию" : pricingSaveState === "saving" ? "Сохраняем…" : editor.capabilities.pricing.canActivate ? "Сохранить и применить" : "Сохранить черновик"}</Button> : null}</div>
+    {pricingSaveDetail ? <p className="text-xs text-muted-foreground" role="status">{pricingSaveDetail}</p> : null}
+    <OfferingPricingWorkspace createCommandMeta={createCommandMeta} editor={editor} gateway={gateway} kind="venue" onReload={load} onSaveActionChange={onSaveActionChange} onSaveState={onSaveState} resourceView />
     <EditorSection title="CMS-черновик"><div className="flex items-center gap-3"><IconFileText aria-hidden="true" className="size-4 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{locator?.currentRevision?.title ?? "Черновик не подготовлен"}</p><p className="text-[11px] text-muted-foreground">CMS владеет только editorial-контентом.</p></div>{cmsHref ? <Button nativeButton={false} render={<a href={cmsHref} />} size="sm" variant="outline"><IconExternalLink aria-hidden="true" />Открыть</Button> : null}</div></EditorSection>
   </div>
 }

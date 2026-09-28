@@ -30,7 +30,7 @@ import {
 import { PriceBookLifecycle, RatePlanEditor, ResourceBasePrice, ResourceSpecialPrices } from "./offering-pricing-controls.js"
 import { QuoteSimulator } from "./offering-quote-simulator.js"
 
-export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, kind, onReload, onSaveActionChange, onSaveState, resourceView = false }: { createCommandMeta: OfferingEditorCommandMetaFactory; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; kind: "house" | "campground" | "addon"; onReload: () => Promise<void>; onSaveActionChange?: (action: (() => void) | null) => void; onSaveState: (state: SaveState, detail: string) => void; resourceView?: boolean }) {
+export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, kind, onReload, onSaveActionChange, onSaveState, resourceView = false }: { createCommandMeta: OfferingEditorCommandMetaFactory; editor: InternalOfferingEditor; gateway: OfferingEditorGateway; kind: "house" | "campground" | "addon" | "venue"; onReload: () => Promise<void>; onSaveActionChange?: (action: (() => void) | null) => void; onSaveState: (state: SaveState, detail: string) => void; resourceView?: boolean }) {
   const draft = draftPriceBook(editor)
   const source = useMemo(() => draft ?? priceBookSource(editor), [draft, editor])
   const addOnConstraint = useMemo<AddOnPricingConstraint | null>(() => {
@@ -41,12 +41,13 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
         ? { basis: "per_person", metric: "participants" }
         : null
   }, [editor.addOnTerms, kind])
-  const initialForm = useMemo(() => constrainAddOnPricingForm(
-    draft ? priceBookToDraftForm(draft) : createDraftPriceBookForm(priceBookSource(editor), serviceDateInTimezone(editor.offering.timezone)),
-    addOnConstraint,
-  ), [addOnConstraint, draft, editor])
+  const initialForm = useMemo(() => {
+    const next = constrainAddOnPricingForm(draft ? priceBookToDraftForm(draft) : createDraftPriceBookForm(priceBookSource(editor), serviceDateInTimezone(editor.offering.timezone)), addOnConstraint)
+    return kind === "venue" && !source ? { ...next, ratePlans: next.ratePlans.map((plan) => ({ ...plan, pricingBasis: "per_hour" as const, quantityMetric: "guests" as const })) } : next
+  }, [addOnConstraint, draft, editor, kind, source])
   const [form, setForm] = useState<DraftPriceBookForm>(initialForm)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [activationError, setActivationError] = useState<string | null>(null)
   const [saveConflict, setSaveConflict] = useState(false)
   const commandMeta = useRef<ReturnType<OfferingEditorCommandMetaFactory> | null>(null)
   const localDraftDirty = useRef(false)
@@ -58,6 +59,9 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
     setSaveError(null)
     commandMeta.current = null
   }, [initialForm, saveConflict])
+  useEffect(() => {
+    if (kind === "venue" && !draft && editor.offering.activePriceBookId) setActivationError(null)
+  }, [draft, editor.offering.activePriceBookId, kind])
 
   const writable = editor.capabilities.pricing.canEditDraft
   const update = (patch: Partial<DraftPriceBookForm>) => {
@@ -66,6 +70,7 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
     commandMeta.current = null
     setForm((current) => ({ ...current, ...patch }))
     setSaveError(null)
+    setActivationError(null)
     onSaveState("dirty", "Черновик цен изменён")
   }
   const updateRatePlan = (index: number, patch: Partial<RatePlanDraft>) => {
@@ -74,11 +79,13 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
     commandMeta.current = null
     setForm((current) => ({ ...current, ratePlans: current.ratePlans.map((plan, currentIndex) => currentIndex === index ? { ...plan, ...patch } : plan) }))
     setSaveError(null)
+    setActivationError(null)
     onSaveState("dirty", "Черновик цен изменён")
   }
   const save = async () => {
-    if (!canEditPricingDraft(writable, saveConflict)) return
+    if (!canEditPricingDraft(writable, saveConflict) || (resourceView && kind !== "addon" && form.ratePlans.length > 1)) return
     setSaveError(null)
+    setActivationError(null)
     setSaveConflict(false)
     onSaveState("saving", "Проверяем и сохраняем правила")
     try {
@@ -87,17 +94,27 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
       const saved = draft
         ? await gateway.replaceDraftPriceBook(editor.offering.id, draft.id, buildReplaceDraftPriceBookBody(form, meta))
         : await gateway.createDraftPriceBook(editor.offering.id, buildCreateDraftPriceBookBody(form, meta, source?.id ?? null))
-      if (kind === "addon" && editor.capabilities.pricing.canActivate) {
+      if ((kind === "addon" || kind === "venue") && editor.capabilities.pricing.canActivate) {
         const activationMeta = createCommandMeta()
-        await gateway.activatePriceBook(editor.offering.id, saved.priceBook.id, {
-          ...activationMeta,
-          expectedPricingVersion: saved.pricingVersion,
-          reason: "Цена изменена в CRM",
-        })
+        try {
+          await gateway.activatePriceBook(editor.offering.id, saved.priceBook.id, {
+            ...activationMeta,
+            expectedPricingVersion: saved.pricingVersion,
+            reason: "Цена изменена в CRM",
+          })
+        } catch (activationError) {
+          if (kind !== "venue") throw activationError
+          localDraftDirty.current = false
+          commandMeta.current = null
+          await onReload()
+          setActivationError(`Черновик сохранён, но цена на сайте не изменилась. ${offeringEditorErrorMessage(activationError, "Не удалось применить цену.")}`)
+          onSaveState("saved", "Цена сохранена как черновик, но ещё не действует")
+          return
+        }
       }
       localDraftDirty.current = false
       commandMeta.current = null
-      onSaveState("saved", kind === "addon" && editor.capabilities.pricing.canActivate ? "Цена сохранена и уже действует" : "Черновик сохранён")
+      onSaveState("saved", (kind === "addon" || kind === "venue") && editor.capabilities.pricing.canActivate ? "Цена сохранена и уже действует" : "Черновик сохранён")
       await onReload()
     } catch (mutationError) {
       const message = offeringEditorErrorMessage(mutationError, "Не удалось сохранить черновик цен.")
@@ -109,16 +126,21 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
   }
   useEffect(() => {
     if (!onSaveActionChange) return
+    if (resourceView && kind !== "addon" && form.ratePlans.length > 1) {
+      onSaveActionChange(null)
+      return
+    }
     const action = () => { void saveRef.current() }
     onSaveActionChange(action)
     return () => onSaveActionChange(null)
-  }, [onSaveActionChange])
+  }, [form.ratePlans.length, kind, onSaveActionChange, resourceView])
 
   const reloadServer = async () => {
     try {
       await onReload()
       commandMeta.current = null
       setSaveError(null)
+      setActivationError(null)
       setSaveConflict(false)
       onSaveState("dirty", "Версия сервера обновлена; локальный черновик сохранён для сравнения")
     } catch (reloadError) {
@@ -133,19 +155,20 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
     const legacyMultiplePlans = form.ratePlans.length > 1
     const setPlan = (patch: Partial<RatePlanDraft>) => {
       if (plan) updateRatePlan(0, patch)
-      else update({ ratePlans: [{ ...createEmptyRatePlan(), ...patch }] })
+      else update({ ratePlans: [{ ...createEmptyRatePlan(), ...(kind === "venue" ? { pricingBasis: "per_hour" as const, quantityMetric: "guests" as const } : {}), ...patch }] })
     }
     return <div className="space-y-3" data-slot="resource-pricing-layout">
       {!writable ? <div className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning-subtle p-3 text-xs text-warning-foreground"><IconLock aria-hidden="true" className="mt-0.5 size-4" /><div><p className="font-semibold">Только просмотр</p><p className="mt-0.5">У вас нет права изменять цены.</p></div></div> : null}
       {saveError && !saveConflict ? <div className="rounded-xl border bg-background"><PageState icon={IconAlertTriangle} title="Цены не сохранены" tone="danger">{saveError}</PageState></div> : null}
+      {activationError ? <div className="rounded-xl border bg-background"><PageState icon={IconAlertTriangle} title="Цена не применена" tone="danger">{activationError}</PageState></div> : null}
       {saveConflict ? <div className="rounded-xl border border-danger/25 bg-danger-subtle/20 p-4 text-xs" data-slot="pricing-conflict-comparison"><p className="font-semibold">Цены уже изменил другой пользователь</p><p className="mt-1 text-muted-foreground">Обновите данные; введённые значения останутся в форме для сравнения.</p></div> : null}
       {legacyMultiplePlans ? <div className="rounded-xl border bg-background"><PageState icon={IconAlertTriangle} title="Нужно объединить старые цены" tone="danger">У ресурса найдено несколько устаревших тарифов. Обычное редактирование заблокировано, чтобы не потерять данные.</PageState></div> : <>
         <ResourceBasePrice editor={editor} disabled={!writable || saveConflict} kind={kind} onChange={setPlan} plan={plan ?? createEmptyRatePlan()} />
-        <ResourceSpecialPrices disabled={!writable || saveConflict} onChange={(rules) => setPlan({ rules })} plan={plan ?? createEmptyRatePlan()} timezone={editor.offering.timezone} />
-        <div className="grid items-start gap-3 xl:grid-cols-2" data-slot="resource-pricing-operations">
+        <ResourceSpecialPrices disabled={!writable || saveConflict} onChange={(rules) => setPlan({ rules })} plan={plan ?? createEmptyRatePlan()} timezone={editor.offering.timezone} unit={kind === "venue" ? plan?.pricingBasis === "per_day" ? "день" : plan?.pricingBasis === "flat_package" ? "пакет" : "час" : "ночь"} />
+        {kind !== "venue" || editor.priceBooks.some((book) => book.state === "draft" || book.state === "scheduled") ? <div className={kind === "venue" ? "grid items-start gap-3" : "grid items-start gap-3 xl:grid-cols-2"} data-slot="resource-pricing-operations">
           <PriceBookLifecycle compact createCommandMeta={createCommandMeta} draftDirty={localDraftDirty.current} editor={editor} gateway={gateway} onReload={onReload} />
-          <QuoteSimulator compact createCommandMeta={createCommandMeta} editor={editor} gateway={gateway} kind={kind} />
-        </div>
+          {kind !== "venue" ? <QuoteSimulator compact createCommandMeta={createCommandMeta} editor={editor} gateway={gateway} kind={kind} /> : null}
+        </div> : null}
       </>}
     </div>
   }
@@ -177,7 +200,7 @@ export function OfferingPricingWorkspace({ createCommandMeta, editor, gateway, k
       <div className="space-y-3">{form.ratePlans.map((plan, index) => <RatePlanEditor constraint={addOnConstraint} currency={editor.offering.currency} disabled={!writable || saveConflict} index={index} key={plan.id ?? `new-${index}`} onChange={(patch) => updateRatePlan(index, patch)} plan={plan} />)}</div>
     </EditorSection>
     <PriceBookLifecycle createCommandMeta={createCommandMeta} draftDirty={localDraftDirty.current} editor={editor} gateway={gateway} onReload={onReload} />
-    <QuoteSimulator createCommandMeta={createCommandMeta} editor={editor} gateway={gateway} kind={kind} />
+    {kind !== "venue" ? <QuoteSimulator createCommandMeta={createCommandMeta} editor={editor} gateway={gateway} kind={kind} /> : null}
   </div>
 }
 
