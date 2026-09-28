@@ -4,6 +4,7 @@ import type { CmsHomeSectionConfig, PublicVenueSummary } from '@crm/contracts';
 import { VENUES, VenueItem } from '../../data/resortData';
 import { useSwipeHint } from '../../utils/useSwipeHint';
 import { EmptyState, SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
+import { offeringPriceLabel } from '../../../lib/content/homepage-commerce';
 
 interface VenuesSectionProps {
   config: CmsHomeSectionConfig;
@@ -18,9 +19,10 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
   const [formatFilter, setFormatFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
   const [dropdownOpen, setDropdownOpen] = useState<'capacity' | 'format' | null>(null);
 
-  const venues: VenueItem[] = fixture ? VENUES : published.filter((item) => item.requestAvailable).map((item) => ({
+  const venues: Array<VenueItem & { priceLabel?: string; priceBasisLabel?: string | null }> = fixture ? VENUES : published.filter((item) => item.requestAvailable).map((item) => ({
     id: item.offeringId, title: item.title, capacity: `до ${item.fulfillment.capacityTotal} гостей`, capacityNumber: item.fulfillment.capacityTotal,
     shortDesc: item.summary ?? "", photo: "", suitableFor: [], area: "", features: [],
+    priceLabel: offeringPriceLabel(item), priceBasisLabel: item.priceBasisLabel,
   }))
   const filteredVenues = venues.filter((venue) => {
     const capacityOk = capacityFilter === 'small' ? venue.capacityNumber <= 30 : capacityFilter === 'medium' ? venue.capacityNumber > 30 && venue.capacityNumber <= 70 : capacityFilter === 'large' ? venue.capacityNumber > 70 : true;
@@ -53,7 +55,7 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
 
       {/* 5 Cards Row on Desktop / Swiper on Mobile */}
       <SiteResponsiveRail ref={swiperRef} variant="venues">
-        {filteredVenues.map((venue: VenueItem) => (
+        {filteredVenues.map((venue) => (
           <SiteVenueCard
             key={venue.id}
             onSelect={() => onOpenBookingModal(`Площадка: ${venue.title}`)}
@@ -63,6 +65,8 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
             capacity={venue.capacityNumber}
             description={venue.shortDesc}
             tags={venue.suitableFor}
+            price={venue.priceLabel}
+            priceBasisLabel={venue.priceBasisLabel}
           />
         ))}
       </SiteResponsiveRail>

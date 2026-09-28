@@ -7,6 +7,9 @@ test("reads changed CRM prices in the card, popup and request form without a new
   expect(initial.headers()["cache-control"]).toContain("no-store")
   await page.goto("/")
   await expect(page.locator("#houses")).toContainText(/6\s*500\s*₽/)
+  await expect(page.locator("#events")).toContainText(/от 2\s*500\s*₽\s*·\s*за участника/)
+  await expect(page.locator("#programs")).toContainText(/от 2\s*500\s*₽\s*·\s*за участника/)
+  await expect(page.locator("#venues")).toContainText(/от 3\s*200\s*₽\s*·\s*за час/)
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText(/от 6\s*500\s*₽/)
   const card = page.locator("#houses").getByRole("button").first()
   await card.scrollIntoViewIfNeeded()
@@ -44,6 +47,8 @@ test("shows request-only pricing without invented amounts", async ({ request, pa
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-request")
   await page.goto("/")
   await expect(page.locator("#houses")).toContainText("По запросу")
+  await expect(page.locator("#programs")).toContainText("По запросу")
+  await expect(page.locator("#venues")).toContainText("По запросу")
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText("По запросу")
 })
 
