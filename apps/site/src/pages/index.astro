@@ -102,7 +102,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
       })}
     </SitePageFrame>}
 
-    {contentAvailable && (fixture || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {contentAvailable && (fixture || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings ? { details: publishedSiteSettings.value.footerDetails, siteName: publishedSiteSettings.value.siteName } : {})} />}
   </SitePageShell>
 
   {contentAvailable && !previewRequested && <FloatingHelperIsland client:idle />}

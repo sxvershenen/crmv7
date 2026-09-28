@@ -147,14 +147,13 @@ export class FixtureCmsRepository implements CmsRepository {
     return clone(this.navigation)
   }
   async getSiteSettings() { await pause(); return clone(this.siteSettings) }
-  async saveSiteName(siteName: string, expectedVersion: number) {
+  async saveSiteSettings(value: CmsSiteSettingsValue, expectedVersion: number) {
     await pause()
     if (this.siteSettings.version !== expectedVersion) throw new CmsConflictError(this.siteSettings.version)
-    const base = this.siteSettings.draft?.value ?? this.siteSettings.published?.value ?? emptySiteSettingsValue(siteName)
-    const value = CmsSiteSettingsValueSchema.parse({ ...base, siteName })
+    const parsed = CmsSiteSettingsValueSchema.parse(value)
     this.siteSettings = { ...this.siteSettings, version: expectedVersion + 1, draft: {
       id: crypto.randomUUID(), revision: (this.siteSettings.draft?.revision ?? this.siteSettings.published?.revision ?? 0) + 1,
-      state: "draft", value, contentHash: "b".repeat(64), createdBy: "00000000-0000-4000-8000-000000000043", createdAt: new Date().toISOString(),
+      state: "draft", value: parsed, contentHash: "b".repeat(64), createdBy: "00000000-0000-4000-8000-000000000043", createdAt: new Date().toISOString(),
     } }
     return clone(this.siteSettings)
   }
@@ -392,11 +391,9 @@ export class ApiCmsRepository implements CmsRepository {
     this.settingsDetail = detail
     return detail
   }
-  async saveSiteName(siteName: string, expectedVersion: number): Promise<CmsSiteSettingsDetail> {
+  async saveSiteSettings(value: CmsSiteSettingsValue, expectedVersion: number): Promise<CmsSiteSettingsDetail> {
     try {
-      const current = this.settingsDetail ?? await this.client.get("/site-settings", CmsSiteSettingsDetailSchema)
-      const base = current.draft?.value ?? current.published?.value ?? emptySiteSettingsValue(siteName)
-      const detail = await this.client.patch("/site-settings", { ...operationMeta(), expectedVersion, value: { ...base, siteName } }, CmsSiteSettingsDetailSchema)
+      const detail = await this.client.patch("/site-settings", { ...operationMeta(), expectedVersion, value: CmsSiteSettingsValueSchema.parse(value) }, CmsSiteSettingsDetailSchema)
       this.settingsDetail = detail
       return detail
     } catch (error) { throw mapMutationError(error) }
@@ -851,9 +848,6 @@ function sameEditorContent(left: EditorRecord, right: EditorRecord) {
 }
 
 type WireNavigationItem = CmsSiteSettingsValue["headerNavigation"][number]
-function emptySiteSettingsValue(siteName: string): CmsSiteSettingsValue {
-  return { siteName, headerNavigation: [], mobileNavigation: [], footerNavigation: [], headerCta: null, heroDefault: null, sectionDefaults: [] }
-}
 type WireNavigationChild = WireNavigationItem["children"][number]
 type WireNavigationLeaf = WireNavigationChild["children"][number]
 type WireNavigationAny = WireNavigationItem | WireNavigationChild | WireNavigationLeaf
@@ -874,13 +868,14 @@ function otherSettingsDraftChanges(detail: CmsSiteSettingsDetail): string[] {
   const published = detail.published?.value
   const fields = [
     ["siteName", "Название сайта"],
+    ["footerDetails", "Контакты и реквизиты подвала"],
     ["headerCta", "Кнопка в шапке"],
     ["heroDefault", "Общий hero"],
     ["sectionDefaults", "Секции по умолчанию"],
   ] as const
   return fields.filter(([key]) => published
     ? JSON.stringify(draft[key]) !== JSON.stringify(published[key])
-    : key === "siteName" || (draft[key] !== null && (!Array.isArray(draft[key]) || draft[key].length > 0)))
+    : key === "siteName" || (draft[key] != null && (!Array.isArray(draft[key]) || draft[key].length > 0)))
     .map(([, label]) => label)
 }
 

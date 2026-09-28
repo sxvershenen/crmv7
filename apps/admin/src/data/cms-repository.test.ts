@@ -637,7 +637,7 @@ describe("ApiCmsRepository", () => {
     }), expect.anything())
   })
 
-  it("edits only the site name in the shared settings draft and publishes its saved version", async () => {
+  it("preserves shared settings while editing the site name and publishing the saved version", async () => {
     const settings = siteSettingsDetail()
     const current = { ...settings, draft: { ...settings.draft!, value: { ...settings.draft!.value,
       headerCta: { label: "Заявка", link: { kind: "internal" as const, path: "/contacts" }, enabled: true },
@@ -652,7 +652,7 @@ describe("ApiCmsRepository", () => {
     const repository = new ApiCmsRepository(client as never)
 
     expect((await repository.getSiteSettings()).draft?.value.siteName).toBe("Свистоплясово")
-    expect((await repository.saveSiteName("Новое название", 3)).draft?.value.siteName).toBe("Новое название")
+    expect((await repository.saveSiteSettings({ ...current.draft.value, siteName: "Новое название" }, 3)).draft?.value.siteName).toBe("Новое название")
     expect(client.patch).toHaveBeenCalledWith("/site-settings", expect.objectContaining({ expectedVersion: 3,
       value: expect.objectContaining({ siteName: "Новое название", headerNavigation: current.draft.value.headerNavigation, headerCta: current.draft.value.headerCta }),
     }), expect.anything())

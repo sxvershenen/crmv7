@@ -1,7 +1,8 @@
 import { ArrowUpRight, Leaf, Mail, MapPin, Phone } from "lucide-react";
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails } from "@crm/contracts";
 import { SiteFooterBrand, SiteFooterColumn, SiteFooterLegal, SiteFooterShell, type SiteNavigationChild, type SiteNavigationItem } from "@crm/site-ui";
 
-interface FooterProps { navigation?: SiteNavigationItem[] }
+interface FooterProps { navigation?: SiteNavigationItem[]; details?: CmsFooterDetails; siteName?: string }
 interface FooterColumn { label: string; href?: string; external?: boolean; children: Pick<SiteNavigationChild, 'label' | 'href' | 'external' | 'children'>[] }
 
 const fallback: FooterColumn[] = [
@@ -10,20 +11,21 @@ const fallback: FooterColumn[] = [
   { label: "Информация", children: [{ label: "Карта базы", href: "/#map" }, { label: "Вопросы", href: "/#location" }] },
 ];
 
-export default function Footer({ navigation }: FooterProps) {
+export default function Footer({ navigation, details = DEFAULT_CMS_FOOTER_DETAILS, siteName = "Свистоплясово" }: FooterProps) {
   const columns: FooterColumn[] = navigation ?? fallback;
+  const phoneHref = (value: string) => `tel:${value.replace(/[^+\d]/g, "")}`;
   return (
     <SiteFooterShell data-section-key="footer">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-6">
           <div className="lg:col-span-4 flex flex-col gap-5">
-            <SiteFooterBrand mark={<Leaf size={18} />} title="Свистоплясово" subtitle="глэмпинг · Киров" description={<>Глэмпинг и&nbsp;площадка для событий в&nbsp;сосновом лесу, в&nbsp;30&nbsp;минутах от&nbsp;Кирова. Приезжайте — чайник уже стоит.</>} />
+            <SiteFooterBrand mark={<Leaf size={18} />} title={siteName} subtitle={details.subtitle} description={details.description} />
             <div className="flex flex-col gap-2 text-[length:var(--site-text-body-sm)]">
-              <a href="tel:+78332745510" className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Phone size={14} className="text-[var(--site-color-brand-500)]" />+7 (8332) 74-55-10 <span className="text-[var(--site-color-text-inverse-muted)]">· бронь</span></a>
-              <a href="tel:+79229953322" className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Phone size={14} className="text-[var(--site-color-brand-500)]" />+7 (922) 995-33-22 <span className="text-[var(--site-color-text-inverse-muted)]">· мероприятия</span></a>
-              <a href="mailto:info@svistoplyasovo.ru" className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Mail size={14} className="text-[var(--site-color-brand-500)]" />info@svistoplyasovo.ru</a>
-              <span className="inline-flex items-center gap-2.5"><MapPin size={14} className="text-[var(--site-color-brand-500)]" />Кировская область, д. Свистоплясово</span>
+              {details.bookingPhone && <a href={phoneHref(details.bookingPhone)} className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Phone size={14} className="text-[var(--site-color-brand-500)]" />{details.bookingPhone} <span className="text-[var(--site-color-text-inverse-muted)]">· бронь</span></a>}
+              {details.eventsPhone && <a href={phoneHref(details.eventsPhone)} className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Phone size={14} className="text-[var(--site-color-brand-500)]" />{details.eventsPhone} <span className="text-[var(--site-color-text-inverse-muted)]">· мероприятия</span></a>}
+              {details.email && <a href={`mailto:${details.email}`} className="inline-flex items-center gap-2.5 hover:text-[var(--site-color-brand-500)] transition-colors"><Mail size={14} className="text-[var(--site-color-brand-500)]" />{details.email}</a>}
+              {details.address && <span className="inline-flex items-center gap-2.5"><MapPin size={14} className="text-[var(--site-color-brand-500)]" />{details.address}</span>}
             </div>
-            <a href="https://vk.com/svistoplyasovo" target="_blank" rel="noreferrer" className="btn btn-primary w-fit"><span>Мы ВКонтакте</span><span className="btn-arrow"><ArrowUpRight size={14} /></span></a>
+            {details.socialUrl && details.socialLabel && <a href={details.socialUrl} target="_blank" rel="noreferrer" className="btn btn-primary w-fit"><span>{details.socialLabel}</span><span className="btn-arrow"><ArrowUpRight size={14} /></span></a>}
           </div>
 
           <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-2 lg:gap-6">
@@ -39,9 +41,9 @@ export default function Footer({ navigation }: FooterProps) {
         </div>
 
         <SiteFooterLegal>
-          <div><span className="block">ИП Норсеева Ирина Михайловна</span><span className="block">ИНН: 431900639521</span></div>
+          <div>{details.legalName && <span className="block">{details.legalName}</span>}{details.inn && <span className="block">ИНН: {details.inn}</span>}</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 lg:ml-auto"><a href="/privacy" data-site-action="privacy" className="hover:text-[var(--site-color-text-inverse)] hover:underline underline-offset-4">Политика обработки персональных данных</a><a href="/privacy" data-site-action="privacy" className="hover:text-[var(--site-color-text-inverse)] hover:underline underline-offset-4">Согласие на обработку данных</a></div>
-          <span>© {new Date().getFullYear()} «Свистоплясово»</span>
+          <span>© {new Date().getFullYear()} «{siteName}»</span>
         </SiteFooterLegal>
     </SiteFooterShell>
   );

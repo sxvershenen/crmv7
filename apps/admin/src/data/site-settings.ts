@@ -4,7 +4,7 @@ export function siteSettingsChanges(detail: CmsSiteSettingsDetail): string[] {
   if (!detail.draft) return []
   if (!detail.published) return ["Первый выпуск настроек сайта"]
   const fields = [
-    ["siteName", "Название сайта"], ["headerNavigation", "Меню шапки"], ["mobileNavigation", "Меню телефона"],
+    ["siteName", "Название сайта"], ["footerDetails", "Контакты и реквизиты подвала"], ["headerNavigation", "Меню шапки"], ["mobileNavigation", "Меню телефона"],
     ["footerNavigation", "Нижнее меню"], ["headerCta", "Кнопка в шапке"],
     ["heroDefault", "Общий первый экран"], ["sectionDefaults", "Секции по умолчанию"],
   ] as const

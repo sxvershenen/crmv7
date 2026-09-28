@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { CmsSiteSettingsDetailSchema } from "@crm/contracts"
+import { CmsSiteSettingsDetailSchema, DEFAULT_CMS_FOOTER_DETAILS } from "@crm/contracts"
 import { TooltipProvider } from "@crm/ui"
 
 import { cmsRepository } from "@admin/data/cms-repository"
@@ -29,14 +29,14 @@ describe("SiteSettingsPage", () => {
     const saved = CmsSiteSettingsDetailSchema.parse({ ...published, version: 4, draft: { ...revision, id: "00000000-0000-4000-8000-000000000004", state: "draft", revision: 2, value: { ...value, siteName: "Новое название" } } })
     vi.spyOn(cmsRepository, "getSiteSettings").mockResolvedValue(published)
     vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
-    const save = vi.spyOn(cmsRepository, "saveSiteName").mockResolvedValue(saved)
+    const save = vi.spyOn(cmsRepository, "saveSiteSettings").mockResolvedValue(saved)
     const publish = vi.spyOn(cmsRepository, "publishSiteSettings").mockRejectedValueOnce(new Error("Delivery unavailable")).mockResolvedValueOnce({ ...saved, version: 5, published: { ...saved.draft!, state: "published" }, draft: null })
     view()
 
     fireEvent.change(await screen.findByLabelText("Название"), { target: { value: "Новое название" } })
     fireEvent.click(screen.getByRole("button", { name: "Сохранить и опубликовать" }))
     expect(await screen.findByText("Delivery unavailable")).toBeInTheDocument()
-    expect(save).toHaveBeenCalledWith("Новое название", 3)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ siteName: "Новое название", footerDetails: DEFAULT_CMS_FOOTER_DETAILS }), 3)
     expect(publish).toHaveBeenCalledWith(4)
 
     fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }))
@@ -50,6 +50,7 @@ describe("SiteSettingsPage", () => {
     view()
 
     expect(await screen.findByLabelText("Название")).toHaveAttribute("readonly")
+    expect(screen.getByLabelText("Телефон для бронирования")).toHaveAttribute("readonly")
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Опубликовать" })).toBeDisabled()
   })
@@ -58,7 +59,7 @@ describe("SiteSettingsPage", () => {
     const concurrent = CmsSiteSettingsDetailSchema.parse({ ...published, version: 4, published: { ...revision, value: { ...value, siteName: "Название коллеги" } } })
     vi.spyOn(cmsRepository, "getSiteSettings").mockResolvedValueOnce(published).mockResolvedValueOnce(concurrent)
     vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
-    const save = vi.spyOn(cmsRepository, "saveSiteName").mockRejectedValueOnce(new CmsConflictError(4))
+    const save = vi.spyOn(cmsRepository, "saveSiteSettings").mockRejectedValueOnce(new CmsConflictError(4))
     view()
 
     fireEvent.change(await screen.findByLabelText("Название"), { target: { value: "Моё название" } })
@@ -68,6 +69,21 @@ describe("SiteSettingsPage", () => {
     await screen.findByText(/Загружена серверная версия 4/)
     expect(screen.getByLabelText("Название")).toHaveValue("Моё название")
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled()
-    expect(save).toHaveBeenCalledWith("Моё название", 3)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ siteName: "Моё название" }), 3)
+  })
+
+  it("saves footer contacts with the shared settings draft", async () => {
+    const footerDetails = { ...DEFAULT_CMS_FOOTER_DETAILS, bookingPhone: "+7 (999) 123-45-67" }
+    const saved = CmsSiteSettingsDetailSchema.parse({ ...published, version: 4, draft: { ...revision, id: "00000000-0000-4000-8000-000000000004", state: "draft", revision: 2, value: { ...value, footerDetails } } })
+    vi.spyOn(cmsRepository, "getSiteSettings").mockResolvedValue(published)
+    vi.spyOn(cmsRepository, "getAccess").mockResolvedValue({ canViewContent: true, canEditContent: true, canReviewContent: true, canPublishContent: true })
+    const save = vi.spyOn(cmsRepository, "saveSiteSettings").mockResolvedValue(saved)
+    view()
+
+    fireEvent.change(await screen.findByLabelText("Телефон для бронирования"), { target: { value: footerDetails.bookingPhone } })
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }))
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ footerDetails }), 3))
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled()
+    expect(siteSettingsChanges(saved)).toContain("Контакты и реквизиты подвала")
   })
 })

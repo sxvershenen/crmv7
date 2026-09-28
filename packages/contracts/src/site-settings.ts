@@ -25,8 +25,37 @@ export const CmsNavigationLeafSchema = NavBase.extend({ children: z.tuple([]).de
 export const CmsNavigationChildSchema = NavBase.extend({ children: z.array(CmsNavigationLeafSchema).max(30).default([]) }).strict();
 export const CmsNavigationItemSchema = NavBase.extend({ children: z.array(CmsNavigationChildSchema).max(30).default([]) }).strict();
 
+export const DEFAULT_CMS_FOOTER_DETAILS = {
+  subtitle: "глэмпинг · Киров",
+  description: "Глэмпинг и площадка для событий в сосновом лесу, в 30 минутах от Кирова. Приезжайте — чайник уже стоит.",
+  bookingPhone: "+7 (8332) 74-55-10",
+  eventsPhone: "+7 (922) 995-33-22",
+  email: "info@svistoplyasovo.ru",
+  address: "Кировская область, д. Свистоплясово",
+  socialLabel: "Мы ВКонтакте",
+  socialUrl: "https://vk.com/svistoplyasovo",
+  legalName: "ИП Норсеева Ирина Михайловна",
+  inn: "431900639521",
+} as const;
+
+const PhoneSchema = z.string().trim().max(40).regex(/^$|^\+?[0-9()\s-]{5,40}$/);
+export const CmsFooterDetailsSchema = z.object({
+  subtitle: z.string().trim().max(160),
+  description: z.string().trim().max(600),
+  bookingPhone: PhoneSchema,
+  eventsPhone: PhoneSchema,
+  email: z.union([z.literal(""), z.email().max(254)]),
+  address: z.string().trim().max(300),
+  socialLabel: z.string().trim().max(120),
+  socialUrl: z.union([z.literal(""), z.url().max(2048).refine((url) => new URL(url).protocol === "https:")]),
+  legalName: z.string().trim().max(240),
+  inn: z.string().trim().regex(/^$|^\d{10}(?:\d{2})?$/),
+}).strict();
+export type CmsFooterDetails = z.infer<typeof CmsFooterDetailsSchema>;
+
 export const CmsSiteSettingsValueSchema = z.object({
   siteName: z.string().min(1).max(160),
+  footerDetails: CmsFooterDetailsSchema.optional(),
   headerNavigation: z.array(CmsNavigationItemSchema).max(30).default([]),
   mobileNavigation: z.array(CmsNavigationItemSchema).max(30).default([]),
   footerNavigation: z.array(CmsNavigationItemSchema).max(60).default([]),

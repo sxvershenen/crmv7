@@ -134,7 +134,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
         return null
       })}
     </SitePageFrame> : <ContentFailure status={failure!} />}
-    {page && (!previewRequested || footerNavigation) && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} />}
+    {page && (!previewRequested || footerNavigation) && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings ? { details: publishedSiteSettings.value.footerDetails, siteName: publishedSiteSettings.value.siteName } : {})} />}
   </SitePageShell>
   {page && !previewRequested && <FloatingHelperIsland client:idle />}
 </BaseLayout>
