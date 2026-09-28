@@ -49,6 +49,10 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     const afterCreation = await snapshot()
     for (const [table, rows] of Object.entries(baseline)) expect(afterCreation[table]).toEqual(expect.arrayContaining(rows as string[]))
     expect(applied.report.counts).toMatchObject({ customers: 4, leads: 6, resources: 5, offerings: 8, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, cmsDrafts: 8, priceBooks: 8 })
+    const [bath] = await ds.query("SELECT capacity_total FROM resources WHERE code = $1", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ capacity_total: number }>
+    expect(bath?.capacity_total).toBe(15)
+    const [bathBooking] = await ds.query("SELECT price_amount FROM booking_items WHERE booking_id = $1 AND type = 'bath'", [applied.report.ids.bookings![0]]) as Array<{ price_amount: number }>
+    expect(bathBooking?.price_amount).toBe(600_000)
     expect((await ds.query("SELECT count(*)::int AS count FROM accepted_offering_quote_links"))[0].count).toBe(0)
     expect((await ds.query("SELECT count(*)::int AS count FROM cms_releases"))[0].count).toBe(0)
     const customerId = applied.report.ids.customers![0]!
