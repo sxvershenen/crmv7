@@ -28,7 +28,6 @@ export default function SiteUiV2GalleryIsland() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [spaAdded, setSpaAdded] = useState(false)
   const sauna = SAUNA_CHAN_DATA.sauna
-  const saunaPrice = sauna.priceFrom.match(/\d[\d\s]*/)?.[0]?.trim() ?? sauna.priceFrom
 
   return <>
     <section aria-labelledby="v2-hero-title" className="site-section site-section--compact">
@@ -53,7 +52,7 @@ export default function SiteUiV2GalleryIsland() {
 
     <section aria-labelledby="v2-spa-title" className="site-section site-section--compact">
       <SiteSectionHeader eyebrow="СПА и здоровье" eyebrowIcon={<Flame className="w-3 h-3 text-[var(--site-color-accent-red)]" />} title="SPA-card: описание и add-state" description="Тот же shared component показывает единый content block и состояние добавления." titleId="v2-spa-title" />
-      <div className="max-w-[680px]"><SiteSpaFeatureCard title={sauna.title} description={sauna.description} price={<>{saunaPrice} ₽</>} added={spaAdded} onAdd={() => setSpaAdded((added) => !added)} onSelect={() => undefined} media={<SiteSpaMedia title={sauna.title} photos={sauna.photos} />} /></div>
+      <div className="max-w-[680px]"><SiteSpaFeatureCard title={sauna.title} description={sauna.description} price={sauna.priceFrom} priceBasisLabel={sauna.priceBasisLabel} added={spaAdded} onAdd={() => setSpaAdded((added) => !added)} onSelect={() => undefined} media={<SiteSpaMedia title={sauna.title} photos={sauna.photos} />} /></div>
     </section>
 
     <div data-gallery-component="programs"><ProgramsSection fixture config={DEFAULT_HOMEPAGE_SECTION_CONFIGS.programs} onOpenBookingModal={openBooking} /></div>

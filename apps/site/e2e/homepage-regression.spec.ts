@@ -107,6 +107,26 @@ test("keeps the requested responsive presentation details", async ({ page }, tes
   }
 });
 
+test("shows the agreed bath tariffs without inventing a fixed hot-tub duration", async ({ page }) => {
+  const sauna = page.locator("#sauna");
+  await expect(sauna).toContainText("3 000 ₽");
+  await expect(sauna).toContainText("3 500 ₽/час");
+  await expect(sauna).toContainText("8 000 ₽/час");
+  await expect(sauna).toContainText("5 600 ₽");
+  await expect(sauna.getByText("за сеанс", { exact: true })).toBeAttached();
+  await expect(sauna).not.toContainText("3 часа");
+
+  const quiz = page.locator("#quiz");
+  await quiz.scrollIntoViewIfNeeded();
+  await expect.poll(() => quiz.evaluate((element) => !element.closest("astro-island")?.hasAttribute("ssr"))).toBe(true);
+  await quiz.getByRole("button", { name: /^Далее/ }).click();
+  await quiz.getByRole("gridcell", { name: /доступно/ }).first().click();
+  await quiz.getByRole("button", { name: /^Далее/ }).click();
+  await expect(quiz).toContainText("5 600 ₽ за сеанс");
+  await quiz.getByRole("button", { name: /Кедровая русская баня/ }).click();
+  await expect(quiz).toContainText("Баню рассчитаем отдельно по числу гостей и часам.");
+});
+
 test("keeps action circles stationary while their icons react", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chromium");
   const saunaAction = page.locator("#sauna .btn").first();
