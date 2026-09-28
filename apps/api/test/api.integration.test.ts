@@ -3254,6 +3254,7 @@ describe.sequential("internal API + PostgreSQL", () => {
 
     const detail = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
     expect(detail.body.asset).toMatchObject({ usageCount: 2, publishedUsage: true })
+    expect(detail.body.fileVersions).toEqual([expect.objectContaining({ revision: 1, current: true, previewUrl: webp.url })])
     expect(detail.body).toMatchObject({ usageTotal: 2, usagesTruncated: false })
     expect(detail.body.usages[0]).toMatchObject({ ownerType: "cms_revision", ownerId: revisionId, pageId: nodeId, path: "/media-test", published: true })
     const filtered = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?path=%2Fmedia-test&published=true&limit=1`).expect(200)
@@ -3300,6 +3301,10 @@ describe.sequential("internal API + PostgreSQL", () => {
     expect(oldPublishedVariant.body).toEqual(delivered.body)
     const replacementWebp = replaced.body.variants.find((variant: { format: string }) => variant.format === "webp")
     await request(app.getHttpServer()).get(replacementWebp.url).expect(200).expect("content-type", "image/webp")
+    expect(afterStale.body.fileVersions).toEqual([
+      expect.objectContaining({ revision: 2, current: true, previewUrl: replacementWebp.url }),
+      expect.objectContaining({ revision: 1, current: false, previewUrl: webp.url }),
+    ])
     expect(await dataSource.query(`SELECT revision FROM media_blobs WHERE asset_id = $1 ORDER BY revision`, [assetId])).toEqual([{ revision: 1 }, { revision: 2 }])
     expect((await dataSource.query(`SELECT COUNT(*)::int AS count FROM media_variants WHERE asset_id = $1`, [assetId]))[0]?.count).toBe(4)
     const replacementUsage = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}?pageId=${nodeId}&published=true`).expect(200)
@@ -3318,6 +3323,7 @@ describe.sequential("internal API + PostgreSQL", () => {
       .set("content-type", "image/png").set("x-content-sha256", createHash("sha256").update("invalid").digest("hex")).send(Buffer.from("invalid")).expect(422)
     const afterBrokenReplacement = await adminAgent.get(`/api/admin/v1/media/assets/${assetId}`).expect(200)
     expect(afterBrokenReplacement.body.asset).toMatchObject({ state: "ready", version: replaced.body.version, width: 12, height: 8 })
+    expect(afterBrokenReplacement.body.fileVersions).toEqual(afterStale.body.fileVersions)
     expect(afterBrokenReplacement.body.asset.variants.map((variant: { id: string }) => variant.id).sort()).toEqual(replaced.body.variants.map((variant: { id: string }) => variant.id).sort())
     await adminAgent.post(`/api/admin/v1/media/assets/${assetId}/archive`).send({ expectedVersion: replaced.body.version }).expect(409)
 
