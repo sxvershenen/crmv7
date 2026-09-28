@@ -72,6 +72,18 @@ function fixture(kind: "house" | "campground" | "venue", candidates = ["offering
 const input = { offeringId: "offering", actorId: "actor", requestId: "request" }
 
 describe("canonical resource offering CMS source", () => {
+  it("repairs an incomplete existing link once without replacing the editorial page", async () => {
+    const { manager, link, getRevision, getProfile } = fixture("venue")
+    Object.assign(link, { sourceKind: "catalog_offering", sourceId: "offering" })
+    expect(await ensureCatalogOfferingEditorialDraft(manager as never, input)).toEqual({ status: "linked", link })
+    expect(getProfile()).toMatchObject({ kind: "catalog_offering", entityId: "offering", nodeId: "node" })
+    expect(getRevision()).toMatchObject({ revision: 2, title: "Авторский заголовок", relations: [{ kind: "catalog_offering", entityId: "offering" }] })
+    expect(manager.save).toHaveBeenCalledWith(expect.objectContaining({ action: "catalog_offering_source_repaired" }))
+    const saves = manager.save.mock.calls.length
+    expect(await ensureCatalogOfferingEditorialDraft(manager as never, input)).toEqual({ status: "linked", link })
+    expect(manager.save).toHaveBeenCalledTimes(saves)
+  })
+
   it.each(["house", "campground", "venue"] as const)("promotes the same %s page, preserves authored fields and replays without duplicates", async (kind) => {
     const { manager, link, builder, getRevision, getProfile } = fixture(kind)
     expect(await ensureCatalogOfferingEditorialDraft(manager as never, input)).toMatchObject({ status: "promoted", link: { id: "link", nodeId: "node", sourceKind: "catalog_offering", sourceId: "offering", sourceVersion: 7 } })

@@ -99,6 +99,16 @@ export async function ensureCatalogOfferingEditorialDraft(
   const existing = await links.findOneBy({ sourceKind: "catalog_offering", sourceId: offering.id })
   if (existing) {
     await assertEditorialNode(manager, existing, offering.kind === "program" ? "program_detail" : offering.kind === "event_service" ? "event_detail" : "resource_detail")
+    const hadProfile = await manager.getRepository(CmsPublicProfileEntity).findOneBy({ nodeId: existing.nodeId }) !== null
+    const revisionId = await bindOfferingToEditorialPage(manager, offering.id, existing.nodeId, input.actorId)
+    if (!hadProfile || revisionId) {
+      await manager.save(manager.create(ChangeLogEntity, {
+        id: randomUUID(), entityType: "cms_node", entityId: existing.nodeId, action: "catalog_offering_source_repaired",
+        actorId: input.actorId, requestId: input.requestId,
+        changes: { sourceKind: "catalog_offering", sourceId: offering.id, profileCreated: !hadProfile, revisionId },
+        createdAt: new Date(),
+      }))
+    }
     return { status: "linked", link: existing }
   }
 
