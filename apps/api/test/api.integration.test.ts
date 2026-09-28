@@ -66,6 +66,7 @@ import { OutboxDeliveryStore } from "../src/delivery/outbox-delivery.store.js"
 import { PublicOfferingProjectionConsumer } from "../src/delivery/public-offering-projection.consumer.js"
 import { normalizePublicOfferingInvalidation } from "../src/delivery/public-offering-invalidation.js"
 import { OutboxDispatcherService } from "../src/live/outbox-dispatcher.service.js"
+import { BathPreparationAfterSession1788206800000 } from "../../../packages/db/src/migrations/1788206800000-bath-preparation-after-session.js"
 
 const ADMIN_EMAIL = "admin.integration@svistoplyasovo.local"
 const READONLY_EMAIL = "readonly.integration@svistoplyasovo.local"
@@ -1263,6 +1264,51 @@ describe.sequential("internal API + PostgreSQL", () => {
       expect.objectContaining({ resourceId: bathId, startAt: "2026-11-20T09:00:00.000Z", endAt: "2026-11-20T10:00:00.000Z" }),
     ])
     await create("freed-slot", [item("bath", bathId, "2026-11-20T08:00:00.000Z", "2026-11-20T09:00:00.000Z")]).expect(201)
+  })
+
+  it("reserves bath preparation after the session without blocking the preceding slot", async () => {
+    const customerId = randomUUID()
+    const bathId = randomUUID()
+    await dataSource.getRepository(CustomerEntity).save(dataSource.getRepository(CustomerEntity).create({
+      id: customerId, type: "person", name: "Bath Preparation Customer", phones: [], channels: [], email: null, notes: "", consent: {}, duplicateRisk: "none", assignees: [],
+      leadCount: 0, activeLeadCount: 0, bookingCount: 0, futureBookingCount: 0, taskCount: 0, turnover: 0, debt: 0, nextContactAt: null, lastVisitAt: null,
+      createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    await dataSource.getRepository(ResourceEntity).save(dataSource.getRepository(ResourceEntity).create({
+      id: bathId, code: "R-bath-preparation", kind: "bath", name: "Баня с подготовкой", capacityMode: "fixed", capacityTotal: 1,
+      settings: {}, createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    const create = (suffix: string, startAt: string, endAt: string, preparationMinutes = 0) => adminAgent.post("/api/internal/v1/bookings").send({
+      operationId: randomUUID(), idempotencyKey: `booking-bath-preparation-${suffix}`, overrideConflict: false, customerId,
+      items: [{ type: "bath", resourceId: bathId, startAt, endAt, quantity: 1, price: { amountMinor: 200000, currency: "RUB" }, discount: { amountMinor: 0, currency: "RUB" }, preparationMinutes }], note: null,
+    })
+    const prepared = await create("main", "2026-11-21T10:00:00.000Z", "2026-11-21T11:00:00.000Z", 30).expect(201)
+    const allocations = dataSource.getRepository(ResourceAllocationEntity)
+    const legacyAllocation = await allocations.findOneByOrFail({ sourceType: "booking_item", sourceId: prepared.body.items[0].id })
+    await allocations.update(legacyAllocation.id, { startAt: new Date("2026-11-21T09:30:00.000Z"), endAt: new Date("2026-11-21T11:00:00.000Z") })
+    const conflictingAllocation = await allocations.save(allocations.create({
+      id: randomUUID(), resourceId: bathId, sourceType: "event", sourceId: randomUUID(),
+      startAt: new Date("2026-11-21T11:00:00.000Z"), endAt: new Date("2026-11-21T11:30:00.000Z"),
+      quantity: 1, capacityImpact: 1, exclusive: true, status: "tentative", createdBy: adminId, updatedBy: adminId, archivedAt: null,
+    }))
+    const runner = dataSource.createQueryRunner()
+    await runner.connect()
+    try {
+      const migration = new BathPreparationAfterSession1788206800000()
+      await expect(migration.up(runner)).rejects.toThrow("пересекаются слоты ресурса")
+      expect((await allocations.findOneByOrFail({ id: legacyAllocation.id })).startAt.toISOString()).toBe("2026-11-21T09:30:00.000Z")
+      await allocations.update(conflictingAllocation.id, { status: "cancelled", archivedAt: new Date() })
+      await migration.up(runner)
+      await migration.down(runner)
+      expect((await allocations.findOneByOrFail({ id: legacyAllocation.id })).startAt.toISOString()).toBe("2026-11-21T09:30:00.000Z")
+      await migration.up(runner)
+    } finally { await runner.release() }
+    const allocation = await allocations.findOneByOrFail({ id: legacyAllocation.id })
+    expect(allocation.startAt.toISOString()).toBe("2026-11-21T10:00:00.000Z")
+    expect(allocation.endAt.toISOString()).toBe("2026-11-21T11:30:00.000Z")
+    await create("before", "2026-11-21T09:30:00.000Z", "2026-11-21T10:00:00.000Z").expect(201)
+    await create("preparation-conflict", "2026-11-21T11:00:00.000Z", "2026-11-21T11:30:00.000Z").expect(409)
+    await create("after", "2026-11-21T11:30:00.000Z", "2026-11-21T12:00:00.000Z").expect(201)
   })
 
   it("creates normalized bookings, allocates resources and keeps payment operations immutable/idempotent", async () => {

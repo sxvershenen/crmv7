@@ -459,15 +459,18 @@ return { ...projection, promotion: storedPromotion(booking), sourceLeadId: leadL
       if (item.type === "bath" && resource.kind !== "bath" && resource.kind !== "sauna") {
         throw new ConflictException({ code: "BOOKING_RESOURCE_TYPE_MISMATCH", message: "Для бани или чана выберите SPA-ресурс" })
       }
-      const start = new Date(item.startAt); start.setMinutes(start.getMinutes() - item.preparationMinutes)
-      const existing = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder("allocation").where("allocation.resource_id = :resourceId", { resourceId: resource.id }).andWhere("allocation.status IN (:...statuses)", { statuses: ["active", "tentative"] }).andWhere("allocation.archived_at IS NULL").andWhere("allocation.start_at < :endAt AND allocation.end_at > :startAt", { startAt: start, endAt: new Date(item.endAt) }).getMany()
-      const result = checkAvailability({ resourceId: resource.id, startAt: start, endAt: new Date(item.endAt), quantity: item.quantity }, existing.map(toAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})
+      const start = new Date(item.startAt)
+      const end = new Date(item.endAt)
+      if (item.type === "bath") end.setMinutes(end.getMinutes() + item.preparationMinutes)
+      else start.setMinutes(start.getMinutes() - item.preparationMinutes)
+      const existing = await manager.getRepository(ResourceAllocationEntity).createQueryBuilder("allocation").where("allocation.resource_id = :resourceId", { resourceId: resource.id }).andWhere("allocation.status IN (:...statuses)", { statuses: ["active", "tentative"] }).andWhere("allocation.archived_at IS NULL").andWhere("allocation.start_at < :endAt AND allocation.end_at > :startAt", { startAt: start, endAt: end }).getMany()
+      const result = checkAvailability({ resourceId: resource.id, startAt: start, endAt: end, quantity: item.quantity }, existing.map(toAllocation), resource.capacityMode === "shared" ? { capacity: resource.capacityTotal } : {})
       if (!result.available && overrideConflict && !actor.capabilities.canOverrideConflict) {
         throw new ForbiddenException({ code: "PERMISSION_DENIED", message: "Недостаточно прав для переопределения конфликта" })
       }
       if (!result.available && !overrideConflict) assertAvailable(result)
       await manager.getRepository(ResourceAllocationEntity).save(manager.create(ResourceAllocationEntity, {
-        id: randomUUID(), resourceId: resource.id, sourceType: "booking_item", sourceId: item.id, startAt: start, endAt: new Date(item.endAt), quantity: item.quantity,
+        id: randomUUID(), resourceId: resource.id, sourceType: "booking_item", sourceId: item.id, startAt: start, endAt: end, quantity: item.quantity,
         capacityImpact: item.quantity, exclusive: resource.capacityMode === "fixed" && (result.available || !overrideConflict), status: booking.status === "draft" ? "tentative" : "active", createdBy: actor.id, updatedBy: actor.id, archivedAt: null,
       }))
     }
