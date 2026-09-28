@@ -126,10 +126,15 @@ export class FinanceService {
   }
 
   private category(booking: BookingRow): FinanceCategory {
+    const itemCategories: Record<string, FinanceCategory> = { accommodation: "houses", bath: "bath", venue: "venues", camping: "camping", program: "programs" }
+    const itemCategory = booking.item_type ? itemCategories[booking.item_type] : undefined
+    if (itemCategory) return itemCategory
+    const resourceCategories: Record<string, FinanceCategory> = { house: "houses", houses: "houses", bath: "bath", venue: "venues", venues: "venues", camping: "camping", campground: "camping", campground_owned_tent: "camping", campground_own_tent_area: "camping" }
+    const resourceCategory = booking.resource_kind ? resourceCategories[booking.resource_kind] : undefined
+    if (resourceCategory) return resourceCategory
     const snapshotCategory = booking.snapshot.category
     if (["houses", "bath", "venues", "camping", "programs", "events"].includes(String(snapshotCategory))) return snapshotCategory as FinanceCategory
-    if (["houses", "bath", "venues", "camping"].includes(booking.resource_kind ?? "")) return booking.resource_kind as FinanceCategory
-    return booking.item_type === "program" ? "programs" : "events"
+    return "events"
   }
 
   private method(method: string): FinanceOperationDto["method"] {

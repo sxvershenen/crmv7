@@ -23,4 +23,18 @@ describe("FinanceService", () => {
     const service = new FinanceService({ query: vi.fn() } as never)
     await expect(service.get(query, { ...actor, capabilities: { ...capabilities, canViewFinance: false } })).rejects.toMatchObject({ status: 403 })
   })
+
+  it("classifies booking revenue by the booked item instead of a stale category label", async () => {
+    const kinds = [
+      { id: "house", item_type: "accommodation", resource_kind: "house", category: "houses" },
+      { id: "bath", item_type: "bath", resource_kind: "bath", category: "bath" },
+      { id: "venue", item_type: "venue", resource_kind: "venue", category: "venues" },
+      { id: "camp", item_type: "camping", resource_kind: "campground_owned_tent", category: "camping" },
+      { id: "legacy-camp", item_type: null, resource_kind: "campground_own_tent_area", category: "camping" },
+    ]
+    const rows = kinds.map((kind) => ({ id: kind.id, code: kind.id, version: 1, total_amount: 10_000, currency: "RUB", created_at: new Date("2026-08-10T10:00:00Z"), snapshot: { category: "events" }, client_name: "Клиент", item_type: kind.item_type, starts_at: new Date("2026-08-11T10:00:00Z"), resource_id: kind.id, resource_kind: kind.resource_kind, resource_name: kind.id }))
+    const dataSource = { query: vi.fn().mockResolvedValueOnce(rows).mockResolvedValueOnce([]) }
+    const result = await new FinanceService(dataSource as never).get(query, actor)
+    expect(new Map(result.operations.map((operation) => [operation.bookingId, operation.category]))).toEqual(new Map(kinds.map((kind) => [kind.id, kind.category])))
+  })
 })
