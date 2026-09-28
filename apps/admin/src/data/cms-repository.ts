@@ -343,12 +343,24 @@ export class ApiCmsRepository implements CmsRepository {
   private async resolvedHeroPolicy(hero: HeroConfig): Promise<CmsHeroPolicy> {
     const policy = heroPolicy(hero)
     if (policy.mode !== "override") return policy
-    for (const binding of [{ id: policy.config.backgroundAssetId, media: policy.config.background, key: "background" as const }, { id: policy.config.mobileBackgroundAssetId, media: policy.config.mobileBackground, key: "mobileBackground" as const }]) {
-      if (!binding.id || binding.media?.assetId === binding.id) continue
-      const asset = await this.getAsset(binding.id)
+    const resolved = new Map<string, NonNullable<typeof policy.config.background>>()
+    const resolve = async (id: string, media: typeof policy.config.background) => {
+      if (media?.assetId === id) return media
+      const cached = resolved.get(id)
+      if (cached) return cached
+      const asset = await this.getAsset(id)
       const variants = asset.variants?.filter((variant) => (variant.format === "webp" || variant.format === "avif") && variant.url && variant.width && variant.height) ?? []
       if (asset.kind !== "image" || asset.status !== "ready" || variants.length === 0) throw new Error(`Изображение «${asset.title}» ещё не готово для публикации. Выберите готовый файл с WebP/AVIF.`)
-      policy.config[binding.key] = { assetId: asset.id, alt: asset.alt || null, variants: variants.slice(0, 20).map(({ url, format, width, height }) => ({ url, format, width: width!, height: height! })) }
+      const value = { assetId: asset.id, alt: asset.alt || null, variants: variants.slice(0, 20).map(({ url, format, width, height }) => ({ url, format, width: width!, height: height! })) }
+      resolved.set(id, value)
+      return value
+    }
+    if (policy.config.backgroundAssetId) policy.config.background = await resolve(policy.config.backgroundAssetId, policy.config.background)
+    if (policy.config.mobileBackgroundAssetId) policy.config.mobileBackground = await resolve(policy.config.mobileBackgroundAssetId, policy.config.mobileBackground ?? null)
+    for (const slide of policy.config.slides) slide.image = await resolve(slide.imageAssetId, slide.image)
+    for (const card of policy.config.featureCards) {
+      if (hrefToLink(card.href).kind !== "internal") throw new Error("Ссылка карточки первого экрана должна вести на страницу или раздел сайта")
+      card.image = await resolve(card.imageAssetId, card.image)
     }
     return policy
   }
@@ -712,6 +724,7 @@ function heroFromRevision(revision: CmsNodeRevision): HeroConfig {
     desktopImage: config?.backgroundAssetId ?? "", mobileImage: config?.mobileBackgroundAssetId ?? "",
     overlay: config?.overlay === "none" ? 0 : config?.overlay === "soft" ? 25 : config?.overlay === "strong" ? 70 : 45,
     focalPosition: focal < 0.34 ? "left" : focal > 0.66 ? "right" : "center", alignment: config?.align ?? "left", promotionIds: config?.promotionIds ?? [],
+    ...(config ? { badge: config.badge, slides: config.slides, featureCards: config.featureCards, autoplayMs: config.autoplayMs } : {}),
     sourcePolicy: clone(revision.hero),
   }
 }
@@ -732,8 +745,12 @@ function heroPolicy(hero: HeroConfig): CmsHeroPolicy {
   if (hero.mobileImage !== baseline.mobileImage) { if (hero.mobileImage && !isUuid(hero.mobileImage)) throw new Error("Выберите мобильное изображение из медиатеки"); base.mobileBackgroundAssetId = hero.mobileImage || null; base.mobileBackground = null }
   if (hero.overlay !== baseline.overlay) base.overlay = overlayPolicy(hero.overlay)
   if (hero.alignment !== baseline.alignment) base.align = hero.alignment
-  if (hero.focalPosition !== baseline.focalPosition && base.slides[0]) base.slides[0] = { ...base.slides[0], focalPoint: { ...base.slides[0].focalPoint, x: focalPoint(hero.focalPosition) } }
   base.actions = mergeHeroActions(base.actions, hero, baseline)
+  if (hero.badge !== undefined) base.badge = clone(hero.badge)
+  if (hero.slides !== undefined) base.slides = clone(hero.slides)
+  if (hero.focalPosition !== baseline.focalPosition && base.slides[0]) base.slides[0] = { ...base.slides[0], focalPoint: { ...base.slides[0].focalPoint, x: focalPoint(hero.focalPosition) } }
+  if (hero.featureCards !== undefined) base.featureCards = clone(hero.featureCards)
+  if (hero.autoplayMs !== undefined) base.autoplayMs = hero.autoplayMs
   if (JSON.stringify(hero.promotionIds) !== JSON.stringify(sourceConfig?.promotionIds ?? [])) base.promotionIds = [...hero.promotionIds]
   return { mode: "override", config: base }
 }

@@ -187,9 +187,9 @@ export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {
   const background = mediaUrl(hero.background)
   const mobileBackground = mediaUrl(hero.mobileBackground ?? null)
   const slides = hero.slides.length
-    ? hero.slides.map((slide, index) => ({
+    ? hero.slides.map((slide) => ({
         id: slide.id,
-        image: mediaUrl(slide.image) ?? DEFAULT_HERO_CONFIG.slides[index % DEFAULT_HERO_CONFIG.slides.length]!.image,
+        image: mediaUrl(slide.image) ?? "",
         ...(mobileBackground ? { mobileImage: mobileBackground } : {}),
         imageAlt: slide.image?.alt ?? slide.title,
         title: slide.title,
@@ -197,8 +197,8 @@ export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {
         focalPoint: { x: slide.focalPoint.x * 100, y: slide.focalPoint.y * 100 },
       }))
     : [{
-        ...DEFAULT_HERO_CONFIG.slides[0]!,
-        image: background ?? DEFAULT_HERO_CONFIG.slides[0]!.image,
+        id: "cms-primary",
+        image: background ?? "",
         ...(mobileBackground ? { mobileImage: mobileBackground } : {}),
         imageAlt: hero.background?.alt ?? hero.title,
         title: hero.title,
@@ -215,7 +215,7 @@ export function toSiteHero(hero: CmsHeroConfig): SiteHeroConfig {
       id: card.id,
       title: card.title,
       description: card.description ?? "",
-      image: mediaUrl(card.image) ?? DEFAULT_HERO_CONFIG.featureCards[index % DEFAULT_HERO_CONFIG.featureCards.length]!.image,
+      image: mediaUrl(card.image) ?? "",
       imageAlt: card.image?.alt ?? card.title,
       href: card.href,
       accent: index === 0 ? "brand" : "neutral",

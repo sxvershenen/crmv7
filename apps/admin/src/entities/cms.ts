@@ -1,4 +1,4 @@
-import type { CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
+import type { CmsHeroConfig, CmsHeroPolicy, CmsPageKind, CmsSourceKind } from "@crm/contracts/content"
 import type { CmsHomeSectionDraft, CmsPartnersSectionDraft, CmsSiteSettingsDetail, CmsSiteSettingsValue, CmsWhyUsSectionDraft, MediaAssetDetail, PublicEditorialContentConfig } from "@crm/contracts"
 import type { CmsPublicationPreview } from "@crm/contracts/publication"
 import type { CmsNodePublicationStatus } from "@crm/contracts/content"
@@ -88,6 +88,10 @@ export type HeroConfig = {
   focalPosition: "left" | "center" | "right"
   alignment: "left" | "center"
   promotionIds: string[]
+  badge?: CmsHeroConfig["badge"]
+  slides?: CmsHeroConfig["slides"]
+  featureCards?: CmsHeroConfig["featureCards"]
+  autoplayMs?: CmsHeroConfig["autoplayMs"]
   /** Original authoritative policy used to preserve fields this form does not edit. */
   sourcePolicy?: CmsHeroPolicy
 }

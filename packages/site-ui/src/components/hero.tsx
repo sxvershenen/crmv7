@@ -68,26 +68,26 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoSelecte
   return (
     <section id="hero" data-section-key="hero" data-site-component="hero" className="w-full pt-0 lg:pt-6">
       <div className="relative rounded-t-none rounded-b-2xl lg:rounded-2xl overflow-hidden h-[460px] lg:h-[520px] img-dim bg-ink">
-        {slides.map((slide, index) => (
+        {slides.map((slide, index) => slide.image || slide.mobileImage ? (
           <picture key={slide.id}>
             {slide.mobileImage ? <source media="(max-width: 767px)" srcSet={slide.mobileImage} /> : null}
             <img
-              src={slide.image}
+              src={slide.image || slide.mobileImage}
               alt={slide.imageAlt}
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[1200ms] ${index === currentSlide ? "opacity-100 scale-[1.04]" : "opacity-0 scale-100"}`}
               style={{ objectPosition: slide.focalPoint ? `${slide.focalPoint.x}% ${slide.focalPoint.y}%` : undefined, transition: "opacity 1.2s, transform 6s linear" }}
               loading={index === 0 ? "eager" : "lazy"}
             />
           </picture>
-        ))}
+        ) : null)}
 
         <div className="absolute inset-0 z-10 p-5 lg:p-10 flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <span className="site-hero__distance-badge chip on-img !h-9 !px-3.5 !text-[13px]">
+            {config.badge ? <span className="site-hero__distance-badge chip on-img !h-9 !px-3.5 !text-[13px]">
               <MapPin size={13} className="text-green" />
               {config.badge}
-            </span>
-            <div className="flex gap-1.5 items-center">
+            </span> : null}
+            <div className="ml-auto flex gap-1.5 items-center">
               {slides.map((slide, index) => (
                 <button
                   key={slide.id}
@@ -130,7 +130,7 @@ export function SiteHero({ config, onBooking, onCall, onNavigate, onPromoSelecte
         <div className="hidden lg:flex absolute right-8 bottom-8 z-20 flex-col gap-3 w-[300px]">
           {config.featureCards.slice(0, 2).map((card) => (
             <button key={card.id} type="button" onClick={() => card.href.startsWith("/#") ? onNavigate(card.href.slice(2)) : window.location.assign(card.href)} className="site-motion-spring group bg-surface rounded-xl p-2.5 flex items-center gap-3 text-left transition-colors hover:bg-white/95">
-              <span className="card-img w-[64px] h-[64px] shrink-0 !rounded-[16px]"><img src={card.image} alt={card.imageAlt} loading="lazy" /></span>
+              <span className="card-img w-[64px] h-[64px] shrink-0 !rounded-[16px]">{card.image ? <img src={card.image} alt={card.imageAlt} loading="lazy" /> : null}</span>
               <span className="flex-1 flex flex-col gap-0.5 min-w-0"><span className="text-[15px] font-semibold tracking-[-0.4px] leading-tight text-ink">{card.title}</span><span className="text-[12px] text-ink-2 leading-tight">{card.description}</span></span>
               <span className="arrow-bubble mr-1"><ArrowRight size={16} /></span>
             </button>

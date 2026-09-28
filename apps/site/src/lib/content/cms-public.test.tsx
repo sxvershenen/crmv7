@@ -29,6 +29,24 @@ it("leaves old published heroes without a mobile source", () => {
   expect(toSiteHero(hero).slides[0]).not.toHaveProperty("mobileImage")
 })
 
+it("does not put fixture photos into a published hero without media", () => {
+  const hero = CmsHeroConfigSchema.parse({ title: "Отдых без фото", slides: [{ id: desktopId, imageAssetId: desktopId, image: null, title: "Лес", tagline: null }] })
+  const mapped = toSiteHero(hero)
+  const html = renderToStaticMarkup(<SiteHero config={mapped} promos={[]} onBooking={() => {}} onCall={() => {}} onNavigate={() => {}} />)
+  expect(mapped.slides[0]?.image).toBe("")
+  expect(html).toContain("Лес")
+  expect(html).not.toContain("<img")
+})
+
+it("can render a published mobile-only hero without a fixture desktop photo", () => {
+  const hero = CmsHeroConfigSchema.parse({ title: "Отдых", mobileBackgroundAssetId: mobileId,
+    mobileBackground: { assetId: mobileId, alt: "Лес", variants: [{ url: "/mobile.webp", format: "webp", width: 720, height: 1080 }] },
+  })
+  const html = renderToStaticMarkup(<SiteHero config={toSiteHero(hero)} promos={[]} onBooking={() => {}} onCall={() => {}} onNavigate={() => {}} />)
+  expect(html).toContain('src="/mobile.webp"')
+  expect(html).not.toContain("images.pexels.com")
+})
+
 it("renders selected CRM promotion terms with scope and minimum spend", () => {
   const hero = CmsHeroConfigSchema.parse({ title: "Отдых" })
   const promo = toSitePromo({ id: desktopId, code: "WEEKDAY3000", name: "Будние дни", discountType: "fixed", value: 300000, minimumAmountMinor: 1000000, scope: "selected" })

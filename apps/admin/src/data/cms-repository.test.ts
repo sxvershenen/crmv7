@@ -499,9 +499,9 @@ describe("ApiCmsRepository", () => {
           { id: ids.revision, label: "Смотреть", href: "/old", target: "_blank" as const, style: "primary" as const, enabled: true },
           { id: ids.revision2, label: "Подробнее", href: "/details", target: "_self" as const, style: "link" as const, enabled: true },
         ],
-        slides: [{ id: ids.revision, imageAssetId: ids.node, image: null, title: "Зима", tagline: "Тихо", focalPoint: { x: 0.2, y: 0.8 } }],
+        slides: [{ id: ids.revision, imageAssetId: ids.node, image: { assetId: ids.node, alt: "Лес", variants: [{ url: "/media/hero.webp", format: "webp" as const, width: 1600, height: 900 }] }, title: "Зима", tagline: "Тихо", focalPoint: { x: 0.2, y: 0.8 } }],
         badge: { label: "Новинка", icon: "star" },
-        featureCards: [{ id: ids.revision2, imageAssetId: ids.node2, image: null, title: "Домики", description: "Уютно", href: "/houses", target: "_blank" as const }],
+        featureCards: [{ id: ids.revision2, imageAssetId: ids.node2, image: { assetId: ids.node2, alt: "Дом", variants: [{ url: "/media/house.webp", format: "webp" as const, width: 600, height: 800 }] }, title: "Домики", description: "Уютно", href: "/houses", target: "_blank" as const }],
         autoplayMs: 5000,
         promotionIds: [ids.node, ids.node2],
       },
@@ -526,6 +526,40 @@ describe("ApiCmsRepository", () => {
       { ...hero.config.actions[0], href: "/new" },
       hero.config.actions[1],
     ])
+  })
+
+  it("binds ready images for new hero slides and cards before saving", async () => {
+    const client = clientMock()
+    client.get.mockImplementation(async (path: string) => path.startsWith("/media/assets/") ? {
+      asset: { ...wireMediaAsset(), id: ids.node2, variants: [{ id: ids.revision, format: "webp", width: 1600, height: 900, byteSize: 1200, url: "/hero-card.webp", contentHash: "a".repeat(64) }] },
+      usages: [], usageTotal: 0, usagesTruncated: false, processing: null,
+    } : detail)
+    client.patch.mockImplementation(async (_path: string, body: { hero: unknown }) => ({ ...detail, currentRevision: { ...detail.currentRevision!, hero: body.hero } }))
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+    await repository.saveEditor({ ...editor, hero: {
+      ...editor.hero, mode: "override", badge: { label: "30 минут от Кирова", icon: null }, autoplayMs: 6000,
+      slides: [{ id: ids.revision, imageAssetId: ids.node2, image: null, title: "Лес", tagline: "Отдых", focalPoint: { x: 0.5, y: 0.5 } }],
+      featureCards: [{ id: ids.revision2, imageAssetId: ids.node2, image: null, title: "Домики", description: null, href: "/#houses", target: "_self" }],
+    } }, editor.version)
+
+    expect(client.patch.mock.calls[0]?.[1].hero.config).toMatchObject({
+      badge: { label: "30 минут от Кирова" }, autoplayMs: 6000,
+      slides: [{ image: { assetId: ids.node2, alt: "Лес", variants: [{ url: "/hero-card.webp" }] } }],
+      featureCards: [{ image: { assetId: ids.node2, alt: "Лес", variants: [{ url: "/hero-card.webp" }] }, href: "/#houses" }],
+    })
+    expect(client.get.mock.calls.filter(([path]) => path === `/media/assets/${ids.node2}`)).toHaveLength(1)
+  })
+
+  it.each(["javascript:alert(1)", "https://example.com/"])("rejects an unsafe or off-site hero card link %j", async (href) => {
+    const client = clientMock()
+    client.get.mockResolvedValue(detail)
+    const repository = new ApiCmsRepository(client as never)
+    const editor = await repository.getEditor(ids.node, "landing")
+    await expect(repository.saveEditor({ ...editor, hero: {
+      ...editor.hero, mode: "override", featureCards: [{ id: ids.revision, imageAssetId: ids.node2, image: null, title: "Домики", description: null, href, target: "_self" }],
+    } }, editor.version)).rejects.toThrow(/ссылк/i)
+    expect(client.patch).not.toHaveBeenCalled()
   })
 
   it.each([

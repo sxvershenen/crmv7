@@ -1,5 +1,5 @@
 import { useRef, useState, type MouseEvent } from "react";
-import { ArrowRight, CalendarCheck, ChevronLeft, Leaf, Phone, Send } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarCheck, ChevronLeft, Leaf, Phone, Send } from "lucide-react";
 import type { SiteBrandConfig, SiteNavigationItem } from "@crm/site-ui";
 import { DEFAULT_PUBLIC_NAVIGATION } from "../../../data/publicContentDefaults";
 import { NavigationIcon } from "./NavigationIcon";
@@ -78,7 +78,7 @@ export function Sidebar({
           {bookingOpen ? <div className={`dropdown-panel absolute z-[70] w-[240px] shadow-xl ${isCollapsed ? "left-full bottom-0 ml-3" : "left-0 bottom-[calc(100%+6px)]"}`}><div className="px-3 pt-2 pb-2 text-[11px] text-ink-3">Как удобнее забронировать?</div><button type="button" onClick={() => { setBookingOpen(false); onOpenBookingModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Send size={13} /></span>Выбрать способ связи</button><button type="button" onClick={() => { setBookingOpen(false); onOpenCallModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Phone size={13} /></span>Позвонить</button></div> : null}
         </div>
         <button type="button" onClick={onOpenCallModal} className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title="Позвонить">{isCollapsed ? <Phone size={17} /> : <><span>Позвонить</span><span className="btn-arrow"><Phone size={13} /></span></>}</button>
-        {socialUrl && socialLabel && <a href={socialUrl} target="_blank" rel="noreferrer" className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title={socialLabel}>{isCollapsed ? <span className="text-[11px] font-semibold">↗</span> : <><span>{socialLabel}</span><span className="btn-arrow text-[10px]">↗</span></>}</a>}
+        {socialUrl && socialLabel && <a href={socialUrl} target="_blank" rel="noreferrer" className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title={socialLabel}>{isCollapsed ? <ArrowUpRight size={17} aria-hidden="true" /> : <><span>{socialLabel}</span><span className="btn-arrow"><ArrowUpRight size={15} aria-hidden="true" /></span></>}</a>}
       </div>
     </aside>
   );
