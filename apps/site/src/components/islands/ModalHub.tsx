@@ -13,8 +13,9 @@ import {
   type AnalyticsConsentState,
 } from "../../lib/analytics-client";
 import { SITE_EVENTS, listenForSiteEvent } from "../../lib/site-events";
+import type { CmsFooterDetails } from "@crm/contracts";
 
-export function ModalHub() {
+export function ModalHub({ contactDetails, siteName }: { contactDetails?: CmsFooterDetails; siteName?: string }) {
   const [bookingItemName, setBookingItemName] = useState<string | undefined>();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isCallOpen, setIsCallOpen] = useState(false);
@@ -127,6 +128,7 @@ export function ModalHub() {
   return (
     <>
       <BookingModal
+        {...(contactDetails ? { contactDetails } : {})}
         isOpen={isBookingOpen}
         onClose={closeBooking}
         onOpenCallModal={() => {
@@ -136,6 +138,8 @@ export function ModalHub() {
         {...bookingItemProps}
       />
       <CallModal
+        {...(contactDetails ? { contactDetails } : {})}
+        {...(siteName ? { siteName } : {})}
         isOpen={isCallOpen}
         onClose={() => setIsCallOpen(false)}
         onToast={handleToast}

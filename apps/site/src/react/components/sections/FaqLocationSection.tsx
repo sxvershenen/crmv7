@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Car, Clock, HelpCircle, Mail, MapPin, Navigation, Phone, Send } from 'lucide-react';
-import type { CmsHomeSectionConfig } from '@crm/contracts';
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails, type CmsHomeSectionConfig } from '@crm/contracts';
 import { Accordion, SiteSectionHeader } from '@crm/site-ui';
 
-interface FaqLocationSectionProps { config: CmsHomeSectionConfig; onOpenCallModal: () => void; }
+interface FaqLocationSectionProps { config: CmsHomeSectionConfig; contactDetails?: CmsFooterDetails; onOpenCallModal: () => void; }
 const coords = { lat: 58.5532, lng: 49.6234 };
 const route = `https://yandex.ru/maps/?rtext=~${coords.lat}%2C${coords.lng}&rtt=auto`;
 const widget = `https://yandex.ru/map-widget/v1/?ll=${coords.lng}%2C${coords.lat}&z=12&pt=${coords.lng}%2C${coords.lat}%2Cpm2gnm`;
@@ -16,7 +16,7 @@ const ContactRow = ({ icon, label, value, href, onClick }: { icon: React.ReactNo
   return <div className={cls}>{content}</div>;
 };
 
-export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, onOpenCallModal }) => {
+export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, contactDetails = DEFAULT_CMS_FOOTER_DETAILS, onOpenCallModal }) => {
   const [mapOn, setMapOn] = useState(false);
   const items = config.faq ?? [];
   if (!items.length) return null;
@@ -32,7 +32,11 @@ export const FaqLocationSection: React.FC<FaqLocationSectionProps> = ({ config, 
           <div className="bg-surface rounded-[var(--site-radius-xl)] p-3 flex items-center gap-3"><span className="icon-tile"><Car size={17} /></span><span className="min-w-0"><span className="block text-[13px] font-semibold tracking-[-.3px]">30 минут</span><span className="block text-[11px] text-ink-3 truncate">38 км из Кирова</span></span></div>
         </div>
         <div className="bg-surface rounded-[var(--site-radius-xl)] p-2 flex flex-col">
-          <ContactRow icon={<MapPin size={16} />} label="Адрес" value="дер. Свистоплясово" /><ContactRow icon={<Phone size={16} />} label="Бронирование" value="+7 (8332) 74-55-10" onClick={onOpenCallModal} /><ContactRow icon={<Send size={16} />} label="ВКонтакте" value="vk.com/svistoplyasovo" href="https://vk.com" /><ContactRow icon={<Mail size={16} />} label="Почта" value="info@svistoplyasovo.ru" href="mailto:info@svistoplyasovo.ru" /><ContactRow icon={<Clock size={16} />} label="Заезд / выезд" value="15:00 / 12:00" />
+          {contactDetails.address && <ContactRow icon={<MapPin size={16} />} label="Адрес" value={contactDetails.address} />}
+          {contactDetails.bookingPhone && <ContactRow icon={<Phone size={16} />} label="Бронирование" value={contactDetails.bookingPhone} onClick={onOpenCallModal} />}
+          {contactDetails.socialUrl && contactDetails.socialLabel && <ContactRow icon={<Send size={16} />} label="Сообщество" value={contactDetails.socialLabel} href={contactDetails.socialUrl} />}
+          {contactDetails.email && <ContactRow icon={<Mail size={16} />} label="Почта" value={contactDetails.email} href={`mailto:${contactDetails.email}`} />}
+          <ContactRow icon={<Clock size={16} />} label="Заезд / выезд" value="15:00 / 12:00" />
         </div>
       </div>
       <Accordion className="lg:col-span-7" defaultOpenIds={items[0] ? [items[0].id] : []} items={items.map((faq) => ({ id: faq.id, title: faq.question, content: <p>{faq.answer}</p> }))} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SiteNavigationConfig } from "@crm/site-ui";
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails } from "@crm/contracts";
 import { MobileDrawer } from "../../react/components/navigation/MobileDrawer";
 import { MobileNavbar } from "../../react/components/navigation/MobileNavbar";
 import { Sidebar } from "../../react/components/navigation/Sidebar";
@@ -24,7 +25,7 @@ const TRACKED_SECTIONS = [
   "quiz"
 ];
 
-export function NavigationIsland({ navigation }: { navigation?: SiteNavigationConfig }) {
+export function NavigationIsland({ navigation, contactDetails = DEFAULT_CMS_FOOTER_DETAILS }: { navigation?: SiteNavigationConfig; contactDetails?: CmsFooterDetails }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
@@ -126,6 +127,8 @@ export function NavigationIsland({ navigation }: { navigation?: SiteNavigationCo
         brand={(navigation ?? DEFAULT_PUBLIC_NAVIGATION).brand}
         items={(navigation ?? DEFAULT_PUBLIC_NAVIGATION).items}
         configuredColors={Boolean(navigation)}
+        socialUrl={contactDetails.socialUrl}
+        socialLabel={contactDetails.socialLabel}
       />
       <MobileNavbar
         activeSection={activeSection}
@@ -141,6 +144,7 @@ export function NavigationIsland({ navigation }: { navigation?: SiteNavigationCo
         onOpenBookingModal={() => openBooking()}
         onOpenCallModal={openCall}
         {...(navigation ? { navigation } : {})}
+        contactDetails={contactDetails}
       />
     </>
   );

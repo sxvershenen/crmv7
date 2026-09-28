@@ -68,6 +68,18 @@ createServer(async (request, response) => {
       revisionId: id, contentVersion: "a".repeat(64), publishedAt: asOf,
       value: {
         siteName: "Тестовый опубликованный сайт",
+        ...(scenario === "homepage-contacts" ? { footerDetails: {
+          subtitle: "Тестовая подпись",
+          description: "Описание контактов из опубликованной CMS.",
+          bookingPhone: "+7 (999) 111-22-33",
+          eventsPhone: "+7 (999) 444-55-66",
+          email: "contacts@example.com",
+          address: "Адрес из опубликованной CMS",
+          socialLabel: "Тестовое сообщество",
+          socialUrl: "https://example.com/community",
+          legalName: "Тестовый правообладатель",
+          inn: "1234567890",
+        } } : {}),
         headerNavigation: scenario === "homepage-navigation-managed" ? [{ id, label: "Раздел из CMS", link: { kind: "internal", path: "/cms-test" }, children: [
           { id: "11111111-1111-4111-8111-111111111112", label: "Видимая ссылка", link: { kind: "internal", path: "/cms-test" } },
           { id: "11111111-1111-4111-8111-111111111113", label: "Скрытая ссылка", link: { kind: "internal", path: "/cms-test" }, enabled: false },

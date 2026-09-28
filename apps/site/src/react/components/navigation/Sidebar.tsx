@@ -14,6 +14,8 @@ interface SidebarProps {
   brand?: SiteBrandConfig;
   items?: SiteNavigationItem[];
   configuredColors?: boolean;
+  socialUrl?: string;
+  socialLabel?: string;
 }
 
 /** CMS-backed port of attached components/layout/Sidebar.tsx. */
@@ -26,6 +28,8 @@ export function Sidebar({
   brand = DEFAULT_PUBLIC_NAVIGATION.brand,
   items = DEFAULT_PUBLIC_NAVIGATION.items,
   configuredColors = false,
+  socialUrl,
+  socialLabel,
 }: SidebarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -71,10 +75,10 @@ export function Sidebar({
       <div className={`px-4 pb-5 pt-3 flex flex-col gap-2 ${isCollapsed ? "items-center" : ""}`}>
         <div className="relative w-full">
           <button type="button" onClick={() => setBookingOpen((value) => !value)} className={`btn btn-primary w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title="Забронировать">{isCollapsed ? <CalendarCheck size={17} /> : <><span>Забронировать</span><span className="btn-arrow"><ArrowRight size={15} /></span></>}</button>
-          {bookingOpen ? <div className={`dropdown-panel absolute z-[70] w-[240px] shadow-xl ${isCollapsed ? "left-full bottom-0 ml-3" : "left-0 bottom-[calc(100%+6px)]"}`}><div className="px-3 pt-2 pb-2 text-[11px] text-ink-3">Как удобнее забронировать?</div><button type="button" onClick={() => { setBookingOpen(false); onOpenBookingModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Send size={13} /></span>Написать ВКонтакте</button><button type="button" onClick={() => { setBookingOpen(false); onOpenCallModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Phone size={13} /></span>Позвонить</button></div> : null}
+          {bookingOpen ? <div className={`dropdown-panel absolute z-[70] w-[240px] shadow-xl ${isCollapsed ? "left-full bottom-0 ml-3" : "left-0 bottom-[calc(100%+6px)]"}`}><div className="px-3 pt-2 pb-2 text-[11px] text-ink-3">Как удобнее забронировать?</div><button type="button" onClick={() => { setBookingOpen(false); onOpenBookingModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Send size={13} /></span>Выбрать способ связи</button><button type="button" onClick={() => { setBookingOpen(false); onOpenCallModal(); }} className="dropdown-item"><span className="icon-tile !w-7 !h-7 !rounded-xs"><Phone size={13} /></span>Позвонить</button></div> : null}
         </div>
         <button type="button" onClick={onOpenCallModal} className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title="Позвонить">{isCollapsed ? <Phone size={17} /> : <><span>Позвонить</span><span className="btn-arrow"><Phone size={13} /></span></>}</button>
-        <a href="https://vk.com/svistoplyasovo" target="_blank" rel="noreferrer" className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title="Мы ВКонтакте">{isCollapsed ? <span className="text-[11px] font-semibold">VK</span> : <><span>Мы ВКонтакте</span><span className="btn-arrow text-[10px]">VK</span></>}</a>
+        {socialUrl && socialLabel && <a href={socialUrl} target="_blank" rel="noreferrer" className={`btn btn-soft w-full ${isCollapsed ? "!px-0 !w-11 mx-auto" : "justify-between"}`} title={socialLabel}>{isCollapsed ? <span className="text-[11px] font-semibold">↗</span> : <><span>{socialLabel}</span><span className="btn-arrow text-[10px]">↗</span></>}</a>}
       </div>
     </aside>
   );

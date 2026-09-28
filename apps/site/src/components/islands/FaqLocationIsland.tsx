@@ -1,9 +1,9 @@
-import type { CmsHomeSectionConfig } from "@crm/contracts"
+import type { CmsFooterDetails, CmsHomeSectionConfig } from "@crm/contracts"
 import { FaqLocationSection } from "../../react/components/sections/FaqLocationSection";
 import { openCall } from "../../lib/site-events";
 
-export function FaqLocationIsland({ config }: { config: CmsHomeSectionConfig }) {
-  return <FaqLocationSection config={config} onOpenCallModal={openCall} />;
+export function FaqLocationIsland({ config, contactDetails }: { config: CmsHomeSectionConfig; contactDetails?: CmsFooterDetails }) {
+  return <FaqLocationSection config={config} {...(contactDetails ? { contactDetails } : {})} onOpenCallModal={openCall} />;
 }
 
 export default FaqLocationIsland;

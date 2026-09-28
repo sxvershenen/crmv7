@@ -1,12 +1,15 @@
 ---
 import Footer from "./Footer";
 import type { SiteNavigationItem } from "@crm/site-ui";
+import type { CmsFooterDetails } from "@crm/contracts";
 
 interface Props {
   navigation?: SiteNavigationItem[];
+  details?: CmsFooterDetails;
+  siteName?: string;
 }
 
-const { navigation } = Astro.props;
+const { navigation, details, siteName } = Astro.props;
 ---
 
-<Footer {...(navigation ? { navigation } : {})} />
+<Footer {...(navigation ? { navigation } : {})} {...(details ? { details } : {})} {...(siteName ? { siteName } : {})} />

@@ -1,5 +1,6 @@
 ---
 import { siteIdentity } from "../lib/content"
+import type { CmsFooterDetails } from "@crm/contracts"
 import AnalyticsIsland from "../react/components/islands/AnalyticsIsland"
 import MetrikaIsland from "../react/components/islands/MetrikaIsland"
 import ModalHub from "../components/islands/ModalHub"
@@ -21,6 +22,8 @@ interface Props {
   structuredData?: Array<Record<string, unknown>>
   contentAvailable?: boolean
   metrika?: { enabled: boolean; counterId: string | null }
+  contactDetails?: CmsFooterDetails
+  publicSiteName?: string
 }
 
 const {
@@ -33,6 +36,8 @@ const {
   structuredData = [],
   contentAvailable = true,
   metrika,
+  contactDetails,
+  publicSiteName,
 } = Astro.props
 
 const robotsContent = robots === "noindex_follow" ? "noindex, follow" : robots === "noindex_nofollow" || noindex ? "noindex, nofollow" : null
@@ -89,6 +94,6 @@ const serializeJsonLd = (value: Record<string, unknown>) => JSON.stringify(value
     {contentAvailable && <ScrollRevealController />}
     {contentAvailable && <AnalyticsIsland client:load />}
     {metrika && <MetrikaIsland metrika={metrika} client:load />}
-    {contentAvailable && <ModalHub client:load />}
+    {contentAvailable && <ModalHub {...(contactDetails ? { contactDetails } : {})} {...(publicSiteName ? { siteName: publicSiteName } : {})} client:load />}
   </body>
 </html>

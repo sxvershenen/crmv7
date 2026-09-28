@@ -1,8 +1,8 @@
 import { FloatingHelper } from "../../react/components/common/FloatingHelper";
-import { openBooking } from "../../lib/site-events";
+import type { CmsFooterDetails } from "@crm/contracts";
 
-export function FloatingHelperIsland() {
-  return <FloatingHelper onOpenBookingModal={() => openBooking()} />;
+export function FloatingHelperIsland({ contactDetails }: { contactDetails?: CmsFooterDetails }) {
+  return <FloatingHelper {...(contactDetails ? { contactDetails } : {})} />;
 }
 
 export default FloatingHelperIsland;

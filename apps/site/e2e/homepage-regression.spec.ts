@@ -146,7 +146,7 @@ test("keeps the approved homepage presentation", async ({ page }) => {
     mask: [
       page.locator("img"),
       page.locator('astro-island[component-url*="FloatingHelperIsland"]'),
-      page.getByRole("button", { name: "Написать менеджеру в ВК" }),
+      page.getByRole("button", { name: "Открыть сообщество" }),
       page.locator('#hero [role="button"] > div > div:first-child'),
     ],
     maxDiffPixelRatio: 0.001,
@@ -169,7 +169,7 @@ test("keeps the approved full homepage presentation", async ({ page }) => {
     mask: [
       page.locator("img"),
       page.locator('astro-island[component-url*="FloatingHelperIsland"]'),
-      page.getByRole("button", { name: "Написать менеджеру в ВК" }),
+      page.getByRole("button", { name: "Открыть сообщество" }),
       page.locator('#hero [role="button"] > div > div:first-child'),
     ],
     maxDiffPixelRatio: 0.001,
@@ -282,7 +282,7 @@ test("reveals once, keeps partners inset and uses forgiving helper hover", async
   const helper = page.locator('[data-site-component="floating-helper"]');
   if (testInfo.project.name === "desktop-chromium") {
     await expect(helper).toBeVisible();
-    const button = helper.getByRole("button", { name: "Написать менеджеру в ВК" });
+    const button = helper.getByRole("button", { name: "Открыть сообщество" });
     await expect(button).toHaveAttribute("aria-expanded", "false");
     expect((await button.boundingBox())?.width).toBe(48);
     await helper.hover();
@@ -293,7 +293,7 @@ test("reveals once, keeps partners inset and uses forgiving helper hover", async
     await expect.poll(async () => Math.round((await button.boundingBox())?.width ?? 0)).toBe(48);
   } else {
     await expect(helper).toBeHidden();
-    const mobileHelper = page.getByRole("button", { name: "Написать менеджеру в ВК" });
+    const mobileHelper = page.getByRole("button", { name: "Открыть сообщество" });
     expect(Math.round((await mobileHelper.boundingBox())?.width ?? 0)).toBe(48);
   }
 });

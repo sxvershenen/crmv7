@@ -102,8 +102,10 @@ const failureTitle = failure === "not_found" ? "Страница не найде
   social={page?.seo.social}
   structuredData={!previewRequested && page ? toSiteStructuredData(page.seo.structuredData) : []}
   {...(!previewRequested && publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
+  {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})}
+  {...(publishedSiteSettings ? { publicSiteName: publishedSiteSettings.value.siteName } : {})}
 >
-  {page && (!previewRequested || navigation) && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
+  {page && (!previewRequested || navigation) && <NavigationIsland {...(navigation ? { navigation } : {})} {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:load />}
   <SitePageShell>
     {page ? <SitePageFrame>
       {previewRequested && <div class="site-section site-section--compact" role="status"><div class="site-alert"><div><strong>Предпросмотр черновика</strong><p>Страница ещё не опубликована. Цены, доступность, заявки и подборки CRM здесь не показываются.</p></div></div></div>}
@@ -128,13 +130,13 @@ const failureTitle = failure === "not_found" ? "Страница не найде
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
         if (section.key === "reviews") return <ReviewsIsland config={section.config} fixture={false} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
-        if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
+        if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:visible />
         if (section.key === "calculator") return previewRequested ? null : <BookingQuizIsland config={section.config} commerce={commerce} fixture={false} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}
     </SitePageFrame> : <ContentFailure status={failure!} />}
-    {page && (!previewRequested || footerNavigation) && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings ? { details: publishedSiteSettings.value.footerDetails, siteName: publishedSiteSettings.value.siteName } : {})} />}
+    {page && (!previewRequested || footerNavigation) && page.sections.some((section) => section.key === "footer") && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings?.value.footerDetails ? { details: publishedSiteSettings.value.footerDetails } : {})} {...(publishedSiteSettings ? { siteName: publishedSiteSettings.value.siteName } : {})} />}
   </SitePageShell>
-  {page && !previewRequested && <FloatingHelperIsland client:idle />}
+  {page && !previewRequested && <FloatingHelperIsland {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:idle />}
 </BaseLayout>

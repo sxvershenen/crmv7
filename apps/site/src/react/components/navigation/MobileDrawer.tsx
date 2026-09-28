@@ -1,6 +1,7 @@
 import React, { useState, type MouseEvent } from 'react';
 import { ChevronDown, X, Home, Flame, Sparkles, Layers, CalendarDays, Compass, MapPin, Phone, Send, Calculator } from 'lucide-react';
 import type { SiteNavigationChild, SiteNavigationConfig, SiteNavigationItem } from '@crm/site-ui';
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails } from '@crm/contracts';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
 import { NavigationIcon } from './NavigationIcon';
 
@@ -11,6 +12,7 @@ interface MobileDrawerProps {
   onOpenBookingModal: () => void;
   onOpenCallModal: () => void;
   navigation?: SiteNavigationConfig;
+  contactDetails?: CmsFooterDetails;
 }
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = ({
@@ -20,6 +22,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   onOpenBookingModal,
   onOpenCallModal,
   navigation,
+  contactDetails = DEFAULT_CMS_FOOTER_DETAILS,
 }) => {
   const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
@@ -112,18 +115,18 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             className="btn btn-soft w-full"
           >
             <Phone className="w-4 h-4" />
-            <span>Позвонить (2 номера)</span>
+            <span>Позвонить</span>
           </button>
 
-          <a
-            href="https://vk.com"
+          {contactDetails.socialUrl && contactDetails.socialLabel && <a
+            href={contactDetails.socialUrl}
             target="_blank"
             rel="noreferrer"
             className="btn btn-soft w-full"
           >
             <Send className="w-3.5 h-3.5 text-[#2B9E47] -rotate-12" />
-            <span>Сообщество ВКонтакте (14.8k)</span>
-          </a>
+            <span>{contactDetails.socialLabel}</span>
+          </a>}
         </div>
       </div>
     </div>

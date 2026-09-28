@@ -162,6 +162,36 @@ test("renders every published footer column and its third-level link", async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
+test("uses published CMS contacts across the footer, FAQ, navigation and call dialog", async ({ page, request }, testInfo) => {
+  await request.post("http://127.0.0.1:4398/__scenario?name=homepage-contacts")
+  await page.goto("/")
+
+  const footer = page.locator("footer")
+  await expect(footer.getByRole("link", { name: /\+7 \(999\) 111-22-33/ })).toHaveAttribute("href", "tel:+79991112233")
+  await expect(footer.getByRole("link", { name: "Тестовое сообщество" })).toHaveAttribute("href", "https://example.com/community")
+  await expect(footer).toContainText("Адрес из опубликованной CMS")
+  await expect(page.locator("#location")).toContainText("Адрес из опубликованной CMS")
+  await expect(page.locator("#location").getByRole("link", { name: /Тестовое сообщество/ })).toHaveAttribute("href", "https://example.com/community")
+
+  if (testInfo.project.name === "mobile-chromium") {
+    await page.getByRole("button", { name: "Меню", exact: true }).click()
+    const drawer = page.getByRole("dialog", { name: "Навигация по сайту" })
+    await expect(drawer.getByRole("link", { name: "Тестовое сообщество" })).toHaveAttribute("href", "https://example.com/community")
+    await drawer.getByRole("button", { name: "Позвонить" }).click()
+  } else {
+    const navigation = page.getByRole("complementary", { name: "Основная навигация" })
+    await expect(navigation.getByRole("link", { name: "Тестовое сообщество" })).toHaveAttribute("href", "https://example.com/community")
+    await navigation.getByRole("button", { name: "Позвонить" }).click()
+  }
+
+  const dialog = page.getByRole("dialog", { name: /Позвонить в/ })
+  await expect(dialog).toContainText("+7 (999) 111-22-33")
+  await expect(dialog).toContainText("+7 (999) 444-55-66")
+  await expect(dialog).not.toContainText("+7 (8332) 77-55-11")
+  await expect(dialog.getByRole("link", { name: "Тестовое сообщество" })).toHaveAttribute("href", "https://example.com/community")
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test("loads Metrika only after consent and destroys it on revoke", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=homepage-published")
   let scriptRequests = 0

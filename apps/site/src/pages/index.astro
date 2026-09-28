@@ -77,8 +77,10 @@ const failureTitle = failure === "not_found" ? "Страница не найде
   social={publishedPage?.seo.social}
   structuredData={!previewRequested && publishedPage ? toSiteStructuredData(publishedPage.seo.structuredData) : []}
   {...(!previewRequested && publishedSiteSettings ? { metrika: publishedSiteSettings.value.analytics.metrika } : {})}
+  {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})}
+  {...(publishedSiteSettings ? { publicSiteName: publishedSiteSettings.value.siteName } : {})}
 >
-  {contentAvailable && <NavigationIsland {...(navigation ? { navigation } : {})} client:load />}
+  {contentAvailable && <NavigationIsland {...(navigation ? { navigation } : {})} {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:load />}
 
   <SitePageShell>
     {failure ? <ContentFailure status={failure} /> : <SitePageFrame>
@@ -95,15 +97,15 @@ const failureTitle = failure === "not_found" ? "Страница не найде
         if (section.key === "why-us") return <WhyUsSection config={section.config} />
         if (section.key === "reviews") return <ReviewsIsland config={section.config} {fixture} client:visible />
         if (section.key === "map") return <TerritoryMapIsland config={section.config} client:visible />
-        if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} client:visible />
+        if (section.key === "faq" || section.key === "directions") return <FaqLocationIsland config={section.config} {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:visible />
         if (section.key === "calculator") return previewRequested ? null : <BookingQuizIsland config={section.config} commerce={commerce} {fixture} client:visible />
         if (section.key === "partners") return <PartnersMarquee config={section.config} />
         return null
       })}
     </SitePageFrame>}
 
-    {contentAvailable && (fixture || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings ? { details: publishedSiteSettings.value.footerDetails, siteName: publishedSiteSettings.value.siteName } : {})} />}
+    {contentAvailable && (fixture || publishedPage?.sections.some((section) => section.key === "footer")) && <Footer {...(footerNavigation ? { navigation: footerNavigation } : {})} {...(publishedSiteSettings?.value.footerDetails ? { details: publishedSiteSettings.value.footerDetails } : {})} {...(publishedSiteSettings ? { siteName: publishedSiteSettings.value.siteName } : {})} />}
   </SitePageShell>
 
-  {contentAvailable && !previewRequested && <FloatingHelperIsland client:idle />}
+  {contentAvailable && !previewRequested && <FloatingHelperIsland {...(publishedSiteSettings?.value.footerDetails ? { contactDetails: publishedSiteSettings.value.footerDetails } : {})} client:idle />}
 </BaseLayout>

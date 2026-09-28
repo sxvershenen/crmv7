@@ -1,30 +1,29 @@
 import React from 'react';
 import { X, Phone, ArrowUpRight, Sparkles, Send } from 'lucide-react';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails } from '@crm/contracts';
 
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenCallModal: () => void;
   initialItemName?: string;
+  contactDetails?: CmsFooterDetails;
 }
 
 export const BookingModal: React.FC<BookingModalProps> = ({
   isOpen,
   onClose,
   onOpenCallModal,
-  initialItemName
+  initialItemName,
+  contactDetails = DEFAULT_CMS_FOOTER_DETAILS,
 }) => {
   const dialogRef = useDialogBehavior(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleVkClick = () => {
-    const text = encodeURIComponent(
-      initialItemName 
-        ? `Здравствуйте! Хочу забронировать: ${initialItemName} в «Свистоплясово». Подскажите, пожалуйста, свободные даты.`
-        : `Здравствуйте! Хочу забронировать отдых в «Свистоплясово». Подскажите, пожалуйста, свободные даты.`
-    );
-    window.open(`https://vk.com/im?sel=-123456789&message=${text}`, '_blank');
+    if (!contactDetails.socialUrl) return;
+    window.open(contactDetails.socialUrl, '_blank', 'noopener,noreferrer');
     onClose();
   };
 
@@ -74,8 +73,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
         {/* Action Methods */}
         <div className="space-y-3">
-          {/* Method 1: VK */}
-          <button
+          {contactDetails.socialUrl && contactDetails.socialLabel && <button
             onClick={handleVkClick}
             className="w-full flex items-center justify-between p-4 rounded-2xl bg-[#f7f7f7] hover:bg-[#eaf5ec] text-left transition-colors group"
           >
@@ -85,18 +83,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
               <div>
                 <div className="text-[15px] font-semibold text-[#18191b] flex items-center gap-1.5">
-                  Написать ВКонтакте
-                  <span className="px-1.5 py-0.5 rounded-md bg-[#2B9E47]/10 text-[#2B9E47] text-[10px] font-medium">быстро</span>
+                  {contactDetails.socialLabel}
                 </div>
                 <div className="text-[12px] text-[#6b7280]">
-                  Ответим за 3 минуты в диалоге группы
+                  Открыть страницу сообщества
                 </div>
               </div>
             </div>
             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#18191b] group-hover:bg-[#2B9E47] group-hover:text-white transition-colors">
               <ArrowUpRight className="w-4 h-4" />
             </div>
-          </button>
+          </button>}
 
           {/* Method 2: Phone call */}
           <button
@@ -112,7 +109,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   Позвонить менеджеру
                 </div>
                 <div className="text-[12px] text-[#6b7280]">
-                  2 линии: бронь домиков или праздники
+                  Выберите нужный номер
                 </div>
               </div>
             </div>
@@ -122,11 +119,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           </button>
         </div>
 
-        {/* Guarantee note */}
-        <div className="mt-5 pt-4 border-t border-neutral-100 flex items-center gap-2 text-[11px] text-[#6b7280]">
-          <span className="w-2 h-2 rounded-full bg-[#2B9E47]"></span>
-          Работаем ежедневно с 09:00 до 21:00 без выходных
-        </div>
       </div>
     </div>
   );

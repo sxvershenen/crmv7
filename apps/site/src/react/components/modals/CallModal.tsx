@@ -1,18 +1,22 @@
 import React from 'react';
 import { X, Phone, Calendar, Sparkles, Copy, Check } from 'lucide-react';
 import { useDialogBehavior } from '../../utils/useDialogBehavior';
+import { DEFAULT_CMS_FOOTER_DETAILS, type CmsFooterDetails } from '@crm/contracts';
 
 interface CallModalProps {
   isOpen: boolean;
   onClose: () => void;
   onToast: (msg: string) => void;
+  contactDetails?: CmsFooterDetails;
+  siteName?: string;
 }
 
-export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }) => {
+export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast, contactDetails = DEFAULT_CMS_FOOTER_DETAILS, siteName = 'Свистоплясово' }) => {
   const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
   const dialogRef = useDialogBehavior(isOpen, onClose);
 
   if (!isOpen) return null;
+  const phoneHref = (value: string) => `tel:${value.replace(/[^+\d]/g, '')}`;
 
   const handleCopy = async (phone: string, index: number) => {
     try {
@@ -51,23 +55,22 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }
         </div>
 
         <h3 id="call-dialog-title" className="text-[24px] font-semibold text-[#18191b] leading-tight mb-2">
-          Позвонить в «Свистоплясово»
+          Позвонить в «{siteName}»
         </h3>
         <p className="text-[13px] text-[#6b7280] mb-6 leading-relaxed">
-          Выберите нужный отдел — мы на связи каждый день с 09:00 до 21:00 и с радостью ответим на все вопросы.
+          Выберите номер для связи.
         </p>
 
         {/* Numbers list */}
         <div className="space-y-3">
-          {/* Number 1: Glamping & Chan */}
-          <div className="p-4 rounded-2xl bg-[#f7f7f7] transition-all">
+          {contactDetails.bookingPhone && <div className="p-4 rounded-2xl bg-[#f7f7f7] transition-all">
             <div className="flex items-center justify-between mb-1.5">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#2B9E47]">
                 <Calendar className="w-3 h-3" />
                 Бронирование домиков и бани
               </span>
               <button
-                onClick={() => handleCopy("+7 (8332) 77-55-11", 1)}
+                onClick={() => handleCopy(contactDetails.bookingPhone, 1)}
                 className="text-[#6b7280] hover:text-[#18191b] p-1 text-xs flex items-center gap-1"
                 title="Скопировать"
               >
@@ -75,25 +78,25 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }
               </button>
             </div>
             <div className="text-[20px] font-semibold text-[#18191b] mb-2 tracking-tight">
-              +7 (8332) 77-55-11
+              {contactDetails.bookingPhone}
             </div>
             <a
-              href="tel:+78332775511"
+              href={phoneHref(contactDetails.bookingPhone)}
               className="inline-flex items-center justify-center w-full h-[40px] px-4 rounded-full bg-[#2B9E47] text-white text-[13px] font-medium hover:bg-[#23823a] transition-colors"
             >
               <span>Позвонить для бронирования</span>
             </a>
-          </div>
+          </div>}
 
           {/* Number 2: Events & Corporate */}
-          <div className="p-4 rounded-2xl bg-[#f7f7f7] transition-all">
+          {contactDetails.eventsPhone && <div className="p-4 rounded-2xl bg-[#f7f7f7] transition-all">
             <div className="flex items-center justify-between mb-1.5">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#FAAB2B]">
                 <Sparkles className="w-3 h-3 text-[#FAAB2B]" />
                 Организация праздников и свадеб
               </span>
               <button
-                onClick={() => handleCopy("+7 (922) 995-33-22", 2)}
+                onClick={() => handleCopy(contactDetails.eventsPhone, 2)}
                 className="text-[#6b7280] hover:text-[#18191b] p-1 text-xs flex items-center gap-1"
                 title="Скопировать"
               >
@@ -101,23 +104,24 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, onToast }
               </button>
             </div>
             <div className="text-[20px] font-semibold text-[#18191b] mb-2 tracking-tight">
-              +7 (922) 995-33-22
+              {contactDetails.eventsPhone}
             </div>
             <a
-              href="tel:+79229953322"
+              href={phoneHref(contactDetails.eventsPhone)}
               className="inline-flex items-center justify-center w-full h-[40px] px-4 rounded-full bg-[#18191b] text-white text-[13px] font-medium hover:bg-neutral-800 transition-colors"
             >
               <span>Связаться с event-отделом</span>
             </a>
-          </div>
+          </div>}
+          {!contactDetails.bookingPhone && !contactDetails.eventsPhone && <p className="text-sm text-[#6b7280]">Телефоны пока не указаны.</p>}
         </div>
 
         {/* Footer note */}
-        <div className="mt-4 text-center">
+        {contactDetails.socialUrl && contactDetails.socialLabel && <div className="mt-4 text-center">
           <p className="text-[11px] text-[#6b7280]">
-            Либо напишите нам в <a href="https://vk.com" target="_blank" rel="noreferrer" className="text-[#2B9E47] font-medium hover:underline">ВКонтакте</a> — отвечаем в течение 3 минут.
+            Также можно открыть <a href={contactDetails.socialUrl} target="_blank" rel="noreferrer" className="text-[#2B9E47] font-medium hover:underline">{contactDetails.socialLabel}</a>.
           </p>
-        </div>
+        </div>}
       </div>
     </div>
   );
