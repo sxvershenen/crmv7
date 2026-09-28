@@ -25,7 +25,7 @@ test("reads changed CRM prices in the card, popup and request form without a new
   await page.reload()
   await expect(page.locator("#houses")).toContainText(/8\s*750,25\s*₽/)
   await expect(page.locator("#quiz [data-calculated-price]").first()).toHaveText(/от 8\s*750,25\s*₽/)
-  await expect(page.locator("#sauna")).toHaveCount(0)
+  await expect(page.locator("#sauna")).toContainText("Подробности скоро")
   await expect(page.locator("#events")).toContainText("Программа из CMS")
   await expect(page.locator("#events [data-event-day]")).toHaveText("20")
   for (const text of ["Кедровая русская баня", "Фермерский сет", "Панорамный", "480+", "WINTER20"]) await expect(page.locator("body")).not.toContainText(text)
@@ -55,15 +55,21 @@ test("renders manually ordered CRM cards across cursor pages while events remain
   await expect(houses).toBeVisible()
   await expect(houses.getByRole("button").first()).toContainText("Второй домик из CMS")
   await expect(houses.getByRole("button").nth(1)).toContainText("Домик из CMS")
-  await expect(page.locator("#programs, #venues")).toHaveCount(0)
+  await expect(page.locator("#programs")).toContainText("Пока нет доступных программ")
+  await expect(page.locator("#venues")).toContainText("Пока нет доступных площадок")
   await expect(page.locator("#events")).toContainText("Программа из CMS")
 })
 
-test("hides empty published catalogs without fixture cards", async ({ request, page }) => {
+test("keeps authored sections visible without inventing cards for empty CRM catalogs", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-empty")
   const response = await page.goto("/")
   expect(response?.status()).toBe(200)
-  await expect(page.locator("#houses, #programs, #venues, #events, #quiz, #sauna")).toHaveCount(0)
+  await expect(page.locator("#houses, #quiz")).toHaveCount(0)
+  await expect(page.locator("#events")).toContainText("Пока нет ближайших событий")
+  await expect(page.locator("#programs")).toContainText("Пока нет доступных программ")
+  await expect(page.locator("#venues")).toContainText("Пока нет доступных площадок")
+  await expect(page.locator("#sauna")).toContainText("Подробности скоро")
+  await expect(page.locator("#events [data-event-day], #programs .site-program-card, #venues .site-venue-card, #sauna .site-spa-card__content")).toHaveCount(0)
 })
 
 for (const scenario of ["outage", "private", "mixed", "mixed-item"]) {
@@ -80,7 +86,10 @@ for (const scenario of ["outage", "private", "mixed", "mixed-item"]) {
 test("does not offer a request when the public projection disables it", async ({ request, page }) => {
   await request.post("http://127.0.0.1:4398/__scenario?name=commerce-unavailable")
   await page.goto("/")
-  await expect(page.locator("#quiz, #programs, #venues, #events")).toHaveCount(0)
+  await expect(page.locator("#quiz")).toHaveCount(0)
+  await expect(page.locator("#programs")).toContainText("Пока нет доступных программ")
+  await expect(page.locator("#venues")).toContainText("Пока нет доступных площадок")
+  await expect(page.locator("#events")).toContainText("Пока нет ближайших событий")
   const card = page.locator("#houses").getByRole("button").first()
   await card.scrollIntoViewIfNeeded()
   await expect(page.locator('astro-island[component-url*="HousesIsland"]')).not.toHaveAttribute("ssr", "")

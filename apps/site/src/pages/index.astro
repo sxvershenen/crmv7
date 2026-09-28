@@ -88,7 +88,7 @@ const failureTitle = failure === "not_found" ? "Страница не найде
         if (section.key === "body") return <EditorialContent config={section.config} sectionKey="body" />
         if (section.key === "events") return <EventsIsland config={section.config} published={commerce?.programs} {fixture} client:visible />
         if (section.key === "houses") return <HousesIsland config={section.config} published={curatedHomepageItems(commerce?.houses, section.config.selectedOfferingIds)} {fixture} client:visible />
-        if (section.key === "sauna-chan" && fixture) return <SaunaChanIsland config={section.config} client:visible />
+        if (section.key === "sauna-chan") return <SaunaChanIsland config={section.config} {fixture} client:visible />
         if (section.key === "programs") return <ProgramsIsland config={section.config} published={curatedHomepageItems(commerce?.programs, section.config.selectedOfferingIds)} {fixture} client:visible />
         if (section.key === "venues") return <VenuesIsland config={section.config} published={curatedHomepageItems(commerce?.venues, section.config.selectedOfferingIds)} {fixture} client:visible />
         if (section.key === "blog") return <BlogSection config={section.config} />

@@ -3,7 +3,7 @@ import { Layers, Users } from 'lucide-react';
 import type { CmsHomeSectionConfig, PublicVenueSummary } from '@crm/contracts';
 import { VENUES, VenueItem } from '../../data/resortData';
 import { useSwipeHint } from '../../utils/useSwipeHint';
-import { SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
+import { EmptyState, SiteActionSectionHeader, SiteFilterMenu, SiteResponsiveRail, SiteVenueCard } from '@crm/site-ui';
 
 interface VenuesSectionProps {
   config: CmsHomeSectionConfig;
@@ -29,7 +29,7 @@ export const VenuesSection: React.FC<VenuesSectionProps> = ({ config, onOpenBook
     return capacityOk && formatOk;
   });
 
-  if (!venues.length) return null
+  if (!venues.length) return <section id="venues" data-section-key="venues" data-analytics-id="home.venues.view" className="w-full py-8"><SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={null} /><EmptyState title="Пока нет доступных площадок" description="Новые площадки появятся здесь, когда будет открыта запись." /></section>
   return (
     <section id="venues" data-section-key="venues" data-analytics-id="home.venues.view" className="w-full py-8">
       <SiteActionSectionHeader

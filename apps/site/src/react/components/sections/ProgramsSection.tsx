@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import type { CmsHomeSectionConfig, PublicProgramSummary } from '@crm/contracts';
 import { POPULAR_PROGRAMS, PROGRAM_CATEGORIES, ProgramItem } from '../../data/resortData';
-import { Pagination, SiteActionSectionHeader, SiteFilterMenu, SiteImageCategoryCard, SiteProgramFeatureCard, SiteSecondaryAction } from '@crm/site-ui';
+import { EmptyState, Pagination, SiteActionSectionHeader, SiteFilterMenu, SiteImageCategoryCard, SiteProgramFeatureCard, SiteSecondaryAction } from '@crm/site-ui';
 
 interface ProgramsSectionProps {
   config: CmsHomeSectionConfig;
@@ -32,7 +32,7 @@ export const ProgramsSection: React.FC<ProgramsSectionProps> = ({ config, onOpen
   const displayedPrograms = showAll ? filteredPrograms : filteredPrograms.slice((page - 1) * pageSize, page * pageSize);
   const sortLabel = sort === 'name' ? 'По названию' : sort === 'short' ? 'Сначала короткие' : 'По популярности';
 
-  if (!programs.length) return null
+  if (!programs.length) return <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8"><SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={null} /><EmptyState title="Пока нет доступных программ" description="Новые программы появятся здесь, когда откроется запись." /></section>
   return (
     <section id="programs" data-section-key="programs" data-analytics-id="home.programs.view" className="w-full py-8">
       <SiteActionSectionHeader eyebrow={config.eyebrow ?? undefined} title={config.title} description={config.description || undefined} action={<SiteFilterMenu label={sortLabel} icon={<ArrowUpDown className="w-4 h-4 text-[var(--site-color-text-muted)]" />} open={sortDropdownOpen} onToggle={() => setSortDropdownOpen(!sortDropdownOpen)} options={[{ id: 'popular', label: 'По популярности', selected: sort === 'popular', onSelect: () => { setSort('popular'); setPage(1); setSortDropdownOpen(false); } }, { id: 'name', label: 'По названию', selected: sort === 'name', onSelect: () => { setSort('name'); setPage(1); setSortDropdownOpen(false); } }, { id: 'short', label: 'Сначала короткие', selected: sort === 'short', onSelect: () => { setSort('short'); setPage(1); setSortDropdownOpen(false); } }]} />} />
