@@ -46,10 +46,10 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     expect(await snapshot()).toEqual(baseline)
     const applied = await seedDemoWorkspace(ds, environment, { now: new Date("2026-09-12T10:00:00Z") })
     expect(applied.status).toBe("created")
-    expect(applied.report.counts.cmsSourceNodes).toBe(16)
+    expect(applied.report.counts.cmsSourceNodes).toBe(18)
     const afterCreation = await snapshot()
     for (const [table, rows] of Object.entries(baseline)) expect(afterCreation[table]).toEqual(expect.arrayContaining(rows as string[]))
-    expect(applied.report.counts).toMatchObject({ customers: 4, leads: 6, resources: 6, offerings: 10, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, cmsDrafts: 10, priceBooks: 10 })
+    expect(applied.report.counts).toMatchObject({ customers: 4, leads: 6, resources: 6, offerings: 12, programTemplates: 2, occurrences: 3, registrations: 3, events: 2, bookings: 3, payments: 2, promotions: 2, tasks: 4, cmsDrafts: 12, priceBooks: 12 })
     const [bath] = await ds.query("SELECT capacity_total FROM resources WHERE code = $1", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ capacity_total: number }>
     expect(bath?.capacity_total).toBe(15)
     const [bathBooking] = await ds.query("SELECT price_amount FROM booking_items WHERE booking_id = $1 AND type = 'bath'", [applied.report.ids.bookings![0]]) as Array<{ price_amount: number }>
@@ -57,6 +57,11 @@ describe.skipIf(process.env.DEMO_WORKSPACE_DB_TEST !== "1")("demo seed with real
     const [bathOffering] = await ds.query("SELECT offering.id FROM catalog_offerings offering JOIN offering_bindings binding ON binding.offering_id = offering.id JOIN resources resource ON resource.id = binding.resource_id WHERE resource.code = $1 AND offering.kind = 'addon'", [`${DEMO_NAMESPACE}-BATH`]) as Array<{ id: string }>
     const bathRates = await ds.query("SELECT plan.rate_key, plan.base_amount_minor FROM rate_plans plan JOIN price_books book ON book.id = plan.price_book_id WHERE book.offering_id = $1 ORDER BY plan.sort_order", [bathOffering!.id]) as Array<{ rate_key: string; base_amount_minor: number }>
     expect(bathRates.map((row) => row.base_amount_minor)).toEqual([300_000, 350_000, 400_000, 600_000, 700_000, 800_000])
+    const accessoryPrices = await ds.query("SELECT offering.operational_name, plan.base_amount_minor FROM catalog_offerings offering JOIN price_books book ON book.offering_id = offering.id JOIN rate_plans plan ON plan.price_book_id = book.id WHERE offering.code IN ($1, $2) ORDER BY offering.code", [`${DEMO_NAMESPACE}-ADDON-3`, `${DEMO_NAMESPACE}-ADDON-4`]) as Array<{ operational_name: string; base_amount_minor: number }>
+    expect(accessoryPrices).toEqual([
+      { operational_name: `${DEMO_NAMESPACE} · Аренда большого полотенца`, base_amount_minor: 25_000 },
+      { operational_name: `${DEMO_NAMESPACE} · Аренда халата`, base_amount_minor: 50_000 },
+    ])
     expect((await ds.query("SELECT count(*)::int AS count FROM accepted_offering_quote_links"))[0].count).toBe(0)
     expect((await ds.query("SELECT count(*)::int AS count FROM cms_releases"))[0].count).toBe(0)
     const customerId = applied.report.ids.customers![0]!
