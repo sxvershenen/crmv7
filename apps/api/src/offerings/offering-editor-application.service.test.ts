@@ -5,6 +5,7 @@ vi.mock("../cms/cms-source-draft.js", () => ({
 }))
 
 import { OfferingEditorApplicationService } from "./offering-editor-application.service.js"
+import { ensureCatalogOfferingEditorialDraft } from "../cms/cms-source-draft.js"
 import { BusinessCalendarEntity, CampgroundOfferingTermsEntity, CmsNodeEntity, CmsNodeRevisionEntity, CmsPublicProfileEntity, CmsSourceLinkEntity, OfferingBindingEntity, ResourceEntity } from "@crm/db"
 
 describe("OfferingEditorApplicationService binding target lookup guards", () => {
@@ -16,6 +17,23 @@ describe("OfferingEditorApplicationService binding target lookup guards", () => 
       requestId: "request-id",
       entrySurface: "admin",
     })).toThrow(/Недостаточно прав/)
+  })
+
+  it("repairs only an exact admin editorial link and reports ambiguous legacy mappings", async () => {
+    const offering = { id: "11111111-1111-4111-8111-111111111111", kind: "house", archivedAt: null }
+    const manager = { getRepository: () => ({ findOneBy: async () => offering }) }
+    const dataSource = { transaction: vi.fn(async (_level: string, operation: (manager: unknown) => Promise<unknown>) => operation(manager)) }
+    const service = new OfferingEditorApplicationService(dataSource as never)
+    const context = { actor: { id: "22222222-2222-4222-8222-222222222222", capabilities: { canEdit: true, canEditContent: true } }, requestId: "repair-demo", entrySurface: "admin" }
+    await expect(service.repairEditorialLink(offering.id, { ...context, entrySurface: "internal" } as never)).rejects.toThrow(/Недостаточно прав/)
+    expect(dataSource.transaction).not.toHaveBeenCalled()
+
+    vi.mocked(ensureCatalogOfferingEditorialDraft).mockResolvedValueOnce({ status: "linked", link: { nodeId: "33333333-3333-4333-8333-333333333333" } } as never)
+    await expect(service.repairEditorialLink(offering.id, context as never)).resolves.toEqual({ status: "linked", nodeId: "33333333-3333-4333-8333-333333333333" })
+    expect(ensureCatalogOfferingEditorialDraft).toHaveBeenCalledWith(manager, { offeringId: offering.id, actorId: context.actor.id, requestId: context.requestId })
+
+    vi.mocked(ensureCatalogOfferingEditorialDraft).mockResolvedValueOnce({ status: "report_only", report: { status: "ambiguous", candidateOfferingIds: [offering.id] } } as never)
+    await expect(service.repairEditorialLink(offering.id, context as never)).rejects.toThrow(/неоднозначна/)
   })
 
   it("returns an explicit ambiguous resolution instead of selecting one legacy primary binding", async () => {

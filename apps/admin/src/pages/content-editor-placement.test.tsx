@@ -44,4 +44,13 @@ describe("content editor route placement", () => {
 
     expect(update).toHaveBeenCalledWith({ slug: "dom-u-reki", url: "/domiki/dom-u-reki" })
   })
+
+  it("offers a canonical route for an unpublished legacy CRM draft", () => {
+    const update = vi.fn()
+    const draft = { ...editorFixtures["house-lesnoy"]!, id: "legacy-house", slug: "legacy-house", url: "/drafts/resources/legacy-house", parentNodeId: null, hasPublishedRevision: false }
+    render(<EditorTabContent canonicalPrefix="domiki" device="desktop" draft={draft} editable kind="profile" nodes={nodeFixtures} tab="content" update={update} updateSection={noopSection} workspace="offering" />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Разместить в /domiki/" }))
+    expect(update).toHaveBeenCalledWith({ url: "/domiki/legacy-house" })
+  })
 })

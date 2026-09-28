@@ -205,6 +205,22 @@ export class OfferingEditorApplicationService {
     return this.primaryStayOfferingForResourceInManager(this.dataSource, resourceId)
   }
 
+  async repairEditorialLink(offeringId: string, context: OfferingRequestContext): Promise<{ status: "linked" | "created" | "promoted"; nodeId: string }> {
+    if (context.entrySurface !== "admin" || !context.actor.capabilities.canEdit || context.actor.capabilities.canEditContent !== true) {
+      throw new ForbiddenException({ code: "PERMISSION_DENIED", message: "Недостаточно прав для подготовки страницы" })
+    }
+    return this.serializable(async (manager) => {
+      const offering = await manager.getRepository(CatalogOfferingEntity).findOneBy({ id: offeringId })
+      if (!offering || offering.archivedAt !== null) throw new NotFoundException({ code: "OFFERING_NOT_FOUND", message: "Предложение не найдено" })
+      if (offering.kind !== "house" && offering.kind !== "campground" && offering.kind !== "venue" && offering.kind !== "program" && offering.kind !== "event_service") {
+        throw conflict("OFFERING_EDITORIAL_UNSUPPORTED", "Для этого предложения подготовка страницы недоступна")
+      }
+      const result = await ensureCatalogOfferingEditorialDraft(manager, { offeringId, actorId: context.actor.id, requestId: context.requestId })
+      if (result.status === "report_only") throw conflict("OFFERING_EDITORIAL_RECONCILIATION_REQUIRED", "Связь со страницей неоднозначна; нужна проверка техническим администратором", result.report)
+      return { status: result.status, nodeId: result.link.nodeId }
+    })
+  }
+
   async createStayOfferingFromResource(resourceId: string, input: ResourceStayOfferingCreateBody, context: OfferingRequestContext): Promise<ResourceStayOfferingCreateResult> {
     this.assertStayOfferingCreate(context)
     const scope = `resource:${resourceId}:stay-offering:create`

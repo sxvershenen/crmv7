@@ -79,6 +79,12 @@ export class AdminOfferingsController {
     return this.offerings.editor(offeringId, this.context(request))
   }
 
+  @Post(":offeringId/editorial/repair")
+  @RequireCapabilities("canEdit", "canEditContent")
+  repairEditorialLink(@Param("offeringId", new ParseUUIDPipe({ version: "4" })) offeringId: string, @Req() request: AuthenticatedRequest) {
+    return this.offerings.repairEditorialLink(offeringId, this.context(request))
+  }
+
   @Post(":offeringId/price-books/drafts")
   @RequireCapabilities("canEdit", "canEditContent")
   createDraft(@Param("offeringId", new ParseUUIDPipe({ version: "4" })) offeringId: string, @Body(new ZodValidationPipe(HousePriceBookDraftCreateBodySchema)) body: HousePriceBookDraftCreateBody, @Req() request: AuthenticatedRequest) {

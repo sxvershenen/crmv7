@@ -247,6 +247,7 @@ export interface CmsRepository {
   getDashboard(): Promise<CmsDashboard>
   getNodes(query?: CmsNodeQuery): Promise<ContentNode[]>
   getEditor(id: string, kind: EditorRecord["kind"]): Promise<EditorRecord>
+  repairOfferingEditorialLink(offeringId: string): Promise<void>
   getRevisionHistory(id: string, before?: number): Promise<CmsRevisionHistoryPage>
   getRevisionEditor(id: string, revisionId: string): Promise<EditorRecord>
   restoreRevision(id: string, revisionId: string, expectedVersion: number): Promise<EditorRecord>

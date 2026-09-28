@@ -42,6 +42,7 @@ export class FixtureCmsRepository implements CmsRepository {
   private metrika: MetrikaSettingsRecord = { version: 1, status: "published", updatedLabel: "не настроено", metrika: { enabled: false, counterId: null } }
 
   async getAccess() { return fixtureAccess }
+  async repairOfferingEditorialLink(offeringId: string) { void offeringId; await pause() }
   async getDashboard() { await pause(); return clone(dashboardFixture) }
   async getNodes(query: CmsNodeQuery = {}) { await pause(); return clone(nodeFixtures).filter((node) => (!query.q || `${node.title} ${node.path}`.toLocaleLowerCase("ru-RU").includes(query.q.toLocaleLowerCase("ru-RU"))) && (!query.status || (query.status === "archived" ? node.status === "archived" : node.status !== "archived"))).map((node) => {
     const editor = this.editors[node.id]
@@ -257,6 +258,10 @@ export class ApiCmsRepository implements CmsRepository {
   async getAccess(): Promise<CmsAccess> {
     const { user } = await this.client.get("/auth/session", sessionResponseParser)
     return { canViewContent: user.capabilities.canViewContent === true, canEditContent: user.capabilities.canEditContent === true, canReviewContent: user.capabilities.canReviewContent === true, canPublishContent: user.capabilities.canPublishContent === true }
+  }
+
+  async repairOfferingEditorialLink(offeringId: string): Promise<void> {
+    await this.client.post(`/offerings/${encodeURIComponent(offeringId)}/editorial/repair`, {})
   }
 
   async getNodes(query: CmsNodeQuery = {}): Promise<ContentNode[]> {

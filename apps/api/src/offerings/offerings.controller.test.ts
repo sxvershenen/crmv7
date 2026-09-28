@@ -18,6 +18,8 @@ describe("offering binding target lookup controllers", () => {
     expect(typeof AdminOfferingsController.prototype.previewQuoteForResource).toBe("function")
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, InternalOfferingsController.prototype.createStayOfferingFromResource)).toEqual(["canCreate", "canEdit"])
     expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, AdminOfferingsController.prototype.createStayOfferingFromResource)).toEqual(["canCreate", "canEdit", "canEditContent"])
+    expect(Reflect.getMetadata(REQUIRED_CAPABILITIES, AdminOfferingsController.prototype.repairEditorialLink)).toEqual(["canEdit", "canEditContent"])
+    expect("repairEditorialLink" in InternalOfferingsController.prototype).toBe(false)
   })
 
   it("exposes the add-on registry, create and terms replacement on both private surfaces", () => {

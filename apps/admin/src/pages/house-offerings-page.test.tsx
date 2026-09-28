@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 import { InternalOfferingEditorSchema } from "@crm/contracts"
@@ -30,13 +30,18 @@ describe("CMS house page compatibility route", () => {
     expect(screen.getByText("Цена и работа ресурса — в CRM").closest("a")).toHaveAttribute("href", `http://localhost:5173/offers/houses/${editor.offering.id}`)
   })
 
-  it("fails closed when the CRM-created draft locator is missing", async () => {
+  it("lets an admin prepare a missing CRM-linked draft", async () => {
     const editor = InternalOfferingEditorSchema.parse({ ...houseEditor(), editorial: null, ownerVersions: { ...houseEditor().ownerVersions, editorial: null } })
-    const gateway = { getHouseEditor: vi.fn().mockResolvedValue(editor) } as unknown as OfferingEditorGateway
+    const gateway = { getHouseEditor: vi.fn().mockResolvedValueOnce(editor).mockResolvedValue(houseEditor()) } as unknown as OfferingEditorGateway
+    const repair = vi.spyOn(cmsRepository, "repairOfferingEditorialLink").mockResolvedValue(undefined)
+    vi.spyOn(cmsRepository, "getEditor").mockResolvedValue({ ...editorFixtures["house-lesnoy"]!, id: houseEditor().editorial!.node.id })
 
     renderWorkspace(gateway, `/offers/houses/${editor.offering.id}`)
 
     expect(await screen.findByText("Черновик страницы не подготовлен")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить страницу" }))
+    expect(await screen.findByRole("tab", { name: "Содержимое" })).toBeInTheDocument()
+    expect(repair).toHaveBeenCalledWith(editor.offering.id)
   })
 
   it("rejects a house locator pointing to an add-on page", async () => {
