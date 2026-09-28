@@ -67,6 +67,15 @@ it("shows published usage locations and narrows them by a page address", async (
   await waitFor(() => expect(getAsset).toHaveBeenLastCalledWith("asset-1", { path: "/family" }))
 })
 
+it("searches another page even when the asset was opened from a page filter", async () => {
+  render(<TooltipProvider><MemoryRouter initialEntries={["/media/asset-1?tab=usage&pageId=11111111-1111-4111-8111-111111111111"]}><Routes><Route element={<AssetPage />} path="/media/:assetId" /></Routes></MemoryRouter></TooltipProvider>)
+  expect(await screen.findByText(/Открыт фильтр по странице/)).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText("Адрес страницы"), { target: { value: "/domiki/lesnoy" } })
+  fireEvent.click(screen.getByRole("button", { name: "Найти" }))
+  await waitFor(() => expect(getAsset).toHaveBeenLastCalledWith("asset-1", { path: "/domiki/lesnoy" }))
+  expect(screen.queryByText(/Открыт фильтр по странице/)).not.toBeInTheDocument()
+})
+
 it("refreshes usage after a page is published in another tab", async () => {
   const usage = { ownerType: "cms_revision", ownerId: "revision-1", pageId: "page-1", path: "/family", pointer: "/hero/config/background/assetId" }
   getAsset.mockResolvedValueOnce({ ...asset, usageCount: 1, usageTotal: 1, usages: [{ ...usage, published: false }] })
